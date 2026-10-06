@@ -1,0 +1,21 @@
+{
+  // Depth 1 den creatures (docs/DEPTH1-BESTIARY.md). Telegraph is never under 0.45 s.
+  // hp/damage: bestiary table. noticeRange/giveUpRange: bestiary §2. noticeRangeAlt is the crabby's sight range away from surfaces.
+  "SpanishDancer": { "hp": 28, "radius": 0.7, "speed": 2, "sense": "Water", "noticeRange": 15, "noticeRangeAlt": 15, "giveUpRange": 45,
+    "damage": 10, "attackRange": 5, "telegraph": 0.9, "cooldown": 3, "recover": 1.2,
+    "shotCount": 6, "shotSpeed": 6, "shotDamage": 10, "shotRange": 18, "shotRadius": 0.25 },
+  "Pufferling": { "hp": 21, "radius": 0.45, "speed": 3, "sense": "Sight", "noticeRange": 22.5, "noticeRangeAlt": 22.5, "giveUpRange": 65,
+    "damage": 14, "attackRange": 4, "telegraph": 0.8, "cooldown": 4, "recover": 0.8, "burstSpeed": 4, "holdTime": 1.6,
+    "shotCount": 12, "shotSpeed": 8, "shotDamage": 8, "shotRange": 14, "shotRadius": 0.14 },
+  "Barracuda": { "hp": 18, "radius": 0.5, "speed": 6, "sense": "Sight", "noticeRange": 30, "noticeRangeAlt": 30, "giveUpRange": 90,
+    "damage": 16, "attackRange": 20, "telegraph": 0.8, "cooldown": 2.5, "recover": 1.5, "burstSpeed": 16, "reach": 25 },
+  "MoonJelly": { "hp": 4, "radius": 0.4, "speed": 1.6, "sense": "Water", "noticeRange": 10, "noticeRangeAlt": 10, "giveUpRange": 30,
+    "damage": 6, "attackRange": 7, "telegraph": 0.5, "cooldown": 3, "recover": 0.4, "burstSpeed": 10, "reach": 4 },
+  "SeaUrchin": { "hp": 28, "radius": 0.5, "speed": 0, "sense": "Sight", "noticeRange": 8, "noticeRangeAlt": 8, "giveUpRange": 22,
+    "damage": 12, "attackRange": 16, "telegraph": 0.9, "cooldown": 3.5,
+    "shotCount": 12, "shotSpeed": 7, "shotDamage": 12, "shotRange": 14, "shotRadius": 0.15 },
+  "Crabby": { "hp": 24, "radius": 0.55, "speed": 3.5, "sense": "Vibration", "noticeRange": 20, "noticeRangeAlt": 10, "giveUpRange": 55,
+    "damage": 12, "attackRange": 6, "telegraph": 0.7, "cooldown": 3, "recover": 2, "burstSpeed": 9, "reach": 7 },
+  "Moray": { "hp": 21, "radius": 0.45, "speed": 0, "sense": "Sight", "noticeRange": 5, "noticeRangeAlt": 5, "giveUpRange": 14,
+    "damage": 18, "attackRange": 8, "telegraph": 0.8, "cooldown": 3, "recover": 1, "burstSpeed": 14, "reach": 6 }
+}

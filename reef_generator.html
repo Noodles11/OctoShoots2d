@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ink Deep — Reef Generator Prototype</title>
+<style>
+  :root { --bg:#0b1020; --panel:#141b31; --ink:#dbe4ff; --dim:#8a97c2; --accent:#00e5ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  .wrap { display:flex; gap:14px; padding:14px; align-items:flex-start; }
+  .stage { position:relative; }
+  canvas { display:block; background:#05070f; border:1px solid #26315a;
+           border-radius:6px; cursor:crosshair; }
+  .panel { width:260px; background:var(--panel); border:1px solid #26315a;
+           border-radius:6px; padding:14px; }
+  h1 { font-size:16px; margin:0 0 2px; }
+  .sub { color:var(--dim); font-size:12px; margin-bottom:12px; }
+  label { display:block; font-size:12px; color:var(--dim); margin-top:10px; }
+  input[type=text] { width:100%; background:#0d1330; color:var(--ink);
+      border:1px solid #2c3a6b; border-radius:4px; padding:6px 8px; font:13px monospace; }
+  input[type=range] { width:100%; }
+  .row { display:flex; gap:8px; margin-top:10px; }
+  button { flex:1; background:#1d2a52; color:var(--ink); border:1px solid #35467e;
+           border-radius:4px; padding:7px 0; cursor:pointer; font-size:13px; }
+  button:hover { background:#26376b; }
+  .stats { margin-top:14px; font-size:12.5px; color:var(--dim);
+           border-top:1px solid #26315a; padding-top:10px; }
+  .stats b { color:var(--ink); font-weight:600; }
+  .legend { margin-top:12px; border-top:1px solid #26315a; padding-top:10px; }
+  .legend canvas { border:1px solid #26315a; border-radius:3px; }
+  .help { margin-top:12px; font-size:12px; color:var(--dim); }
+  .help kbd { background:#0d1330; border:1px solid #2c3a6b; border-radius:3px;
+              padding:0 5px; font:11px monospace; color:var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <canvas id="map" width="600" height="600"></canvas>
+  </div>
+  <div class="panel">
+    <h1>Reef Generator</h1>
+    <div class="sub">150×150 seeded topography · ≤40% above level 0</div>
+
+    <label>Seed</label>
+    <input type="text" id="seed" value="KELP 7Q2Z" spellcheck="false">
+    <div class="row">
+      <button id="regen">↻ Generate</button>
+      <button id="dice">🎲 Random</button>
+    </div>
+
+    <label>Brush radius: <span id="radV">9</span> cells &nbsp;·&nbsp; wheel</label>
+    <input type="range" id="radius" min="4" max="18" step="1" value="9">
+
+    <label>Step size: <span id="stepV">1.0</span> levels &nbsp;·&nbsp; shift+wheel</label>
+    <input type="range" id="step" min="0.5" max="3" step="0.5" value="1">
+
+    <label><input type="checkbox" id="shade" checked> hillshade relief</label>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="legend">
+      <label style="margin-top:0">Heatmap levels</label>
+      <canvas id="legend" width="60" height="260"></canvas>
+    </div>
+
+    <div class="help">
+      <kbd>LMB</kbd> raise &nbsp; <kbd>RMB</kbd> lower (drag to paint)<br>
+      <kbd>wheel</kbd> brush radius &nbsp; <kbd>shift+wheel</kbd> step<br>
+      Peaks marked <b style="color:#ff5f7a">+</b> · level-0 line in
+      <span style="color:var(--accent)">cyan</span>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= Ink Deep — Reef Generator Prototype =================
+   Phase-1 map core: seeded 150x150 heightfield, <=40% cells above level 0,
+   smooth brush editing, marching-squares contours, highlighted level 0. */
+
+const W = 150, H = 150;          // grid cells — the static square
+const MAX_ABOVE = 0.40;          // hard cap: fraction of cells with h > 0
+const H_MIN = -7, H_MAX = 14;    // clamp bounds
+
+const h = new Float32Array(W * H);       // continuous heightfield
+let curSeed = 0;
+
+/* ---------- deterministic RNG (mulberry32) + hash ---------- */
+function strToSeed(s){
+  let x = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++){ x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); }
+  return x >>> 0;
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash2(ix, iy, seed){
+  let n = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263) ^ Math.imul(seed, 2246822519);
+  n = Math.imul(n ^ n >>> 13, 1274126177);
+  return ((n ^ n >>> 16) >>> 0) / 4294967296;
+}
+const smooth = t => t * t * (3 - 2 * t);
+function vnoise(x, y, seed){
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = smooth(x - ix), fy = smooth(y - iy);
+  const a = hash2(ix, iy, seed),     b = hash2(ix + 1, iy, seed);
+  const c = hash2(ix, iy + 1, seed), d = hash2(ix + 1, iy + 1, seed);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+function fbm(x, y, seed){
+  let v = 0, amp = 0.5, f = 1, norm = 0;
+  for (let o = 0; o < 4; o++){
+    v += amp * vnoise(x * f, y * f, seed + o * 101);
+    norm += amp; amp *= 0.5; f *= 2.03;
+  }
+  return v / norm;   // ~[0,1]
+}
+
+/* ---------- generation: zero-level placed at the (1-MAX_ABOVE) quantile,
+   which guarantees exactly <=40% of cells end up above level 0 ---------- */
+function generate(seedStr){
+  curSeed = strToSeed(seedStr);
+  const samples = new Float64Array(W * H);
+  let lo = Infinity, hi = -Infinity;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const n = fbm(x * 0.045, y * 0.045, curSeed);
+    const i = y * W + x; samples[i] = n;
+    if (n < lo) lo = n; if (n > hi) hi = n;
+  }
+  const sorted = Array.from(samples).sort((a, b) => a - b);
+  const t = sorted[Math.floor((1 - MAX_ABOVE) * (sorted.length - 1))]; // ~60th pct
+  const scale = 14;   // (n - t) * scale: typical peaks ~5-9, trenches ~-4..-7
+  for (let i = 0; i < samples.length; i++)
+    h[i] = Math.max(H_MIN, Math.min(H_MAX, (samples[i] - t) * scale));
+  render();
+}
+
+/* ---------- editing: cosine-falloff bump — the whole neighbourhood,
+   including every contour level below the clicked point, moves smoothly */
+const falloff = d => d >= 1 ? 0 : 0.5 * (1 + Math.cos(Math.PI * d));
+function applyBrush(cx, cy, delta){
+  const R = +ui.radius.value;
+  const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W - 1, Math.ceil(cx + R));
+  const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H - 1, Math.ceil(cy + R));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++){
+    const d = Math.hypot(x - cx, y - cy) / R;
+    const w = falloff(d);
+    if (w <= 0) continue;
+    const i = y * W + x;
+    h[i] = Math.max(H_MIN, Math.min(H_MAX, h[i] + delta * w));
+  }
+  render();
+}
+
+/* ---------- heatmap LUT (continuous interpolation between level stops) --- */
+const STOPS = [
+  [-7,   6,  16,  44], [-5,  10,  37,  96], [-4,  16,  71, 148],
+  [-3,  24, 108, 178], [-2,  30, 140, 190], [-1,  38, 168, 185],
+  [ 0, 216, 198, 138], [ 1, 158, 176, 106], [ 2,  96, 158,  90],
+  [ 3, 176, 141,  87], [ 4, 138, 107,  77], [ 5, 112, 112, 122],
+  [ 6, 140, 140, 150], [ 7, 178, 178, 188], [ 9, 226, 228, 240],
+];
+function heightColor(v, out){          // out = [r,g,b]
+  if (v <= STOPS[0][0]){ out[0]=STOPS[0][1]; out[1]=STOPS[0][2]; out[2]=STOPS[0][3]; return; }
+  for (let s = 0; s < STOPS.length - 1; s++){
+    const A = STOPS[s], B = STOPS[s + 1];
+    if (v <= B[0]){
+      const t = (v - A[0]) / (B[0] - A[0]);
+      out[0] = A[1] + (B[1] - A[1]) * t;
+      out[1] = A[2] + (B[2] - A[2]) * t;
+      out[2] = A[3] + (B[3] - A[3]) * t;
+      return;
+    }
+  }
+  const L = STOPS[STOPS.length - 1];
+  out[0]=L[1]; out[1]=L[2]; out[2]=L[3];
+}
+
+/* ---------- rendering ---------- */
+const cv  = document.getElementById("map");
+const ctx = cv.getContext("2d");
+const off = document.createElement("canvas");
+off.width = W; off.height = H;
+const offCtx = off.getContext("2d");
+const img = offCtx.createImageData(W, H);
+const rgb = [0, 0, 0];
+
+function drawHeightfield(){
+  const d = img.data, shade = ui.shade.checked;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const i = y * W + x, v = h[i];
+    heightColor(v, rgb);
+    let m = 1;
+    if (shade && x > 0 && x < W-1 && y > 0 && y < H-1){
+      const gx = (h[i+1] - h[i-1]) * 0.5;      // slope toward +x
+      const gy = (h[i+W] - h[i-W]) * 0.5;      // slope toward +y
+      m = 0.82 + 0.18 * Math.max(-1, Math.min(1, (-gx - gy) * 0.35 + 0.55));
+    }
+    const p = i * 4;
+    d[p]   = rgb[0] * m;
+    d[p+1] = rgb[1] * m;
+    d[p+2] = rgb[2] * m;
+    d[p+3] = 255;
+  }
+  offCtx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, 0, 0, cv.width, cv.height);
+}
+
+/* marching squares: one pass per integer level */
+function traceLevel(iso, path){
+  const cs = cv.width / W;
+  for (let y = 0; y < H - 1; y++) for (let x = 0; x < W - 1; x++){
+    const i = y * W + x;
+    const a = h[i] - iso, b = h[i+1] - iso, c = h[i+W+1] - iso, dd = h[i+W] - iso;
+    let idx = 0;
+    if (a > 0) idx |= 8; if (b > 0) idx |= 4; if (c > 0) idx |= 2; if (dd > 0) idx |= 1;
+    if (idx === 0 || idx === 15) continue;
+    const t = (p, q) => Math.abs(p - q) < 1e-9 ? 0.5 : p / (p - q);
+    const T = [x + t(a, b), y],     Rr = [x+1, y + t(b, c)];
+    const B = [x + t(dd, c), y+1],  L = [x, y + t(a, dd)];
+    const seg = (p, q) => { path.moveTo(p[0]*cs, p[1]*cs); path.lineTo(q[0]*cs, q[1]*cs); };
+    switch (idx){
+      case 1: case 14: seg(L, B); break;
+      case 2: case 13: seg(Rr, B); break;
+      case 3: case 12: seg(L, Rr); break;
+      case 4: case 11: seg(T, Rr); break;
+      case 5:  seg(T, L); seg(Rr, B); break;   // saddle
+      case 6: case 9:  seg(T, B); break;
+      case 7: case 8:  seg(T, L); break;
+      case 10: seg(T, Rr); seg(L, B); break;   // saddle
+    }
+  }
+}
+
+function drawContours(){
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < h.length; i++){ if (h[i]<lo) lo=h[i]; if (h[i]>hi) hi=h[i]; }
+  for (let iso = Math.floor(lo); iso <= Math.ceil(hi); iso++){
+    const p = new Path2D();
+    traceLevel(iso, p);
+    if (iso === 0){                       // the highlighted reef-base line
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "#00e5ff";
+      ctx.shadowColor = "#00e5ff"; ctx.shadowBlur = 6;
+      ctx.stroke(p);
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(4,8,20,0.45)";
+      ctx.stroke(p);
+    }
+  }
+}
+
+/* peaks: local maxima, greedy suppression within 4 cells, h >= 3 */
+function findPeaks(){
+  const cand = [];
+  for (let y = 1; y < H-1; y++) for (let x = 1; x < W-1; x++){
+    const i = y * W + x, v = h[i];
+    if (v < 3) continue;
+    let max = true;
+    for (let dy = -1; dy <= 1 && max; dy++) for (let dx = -1; dx <= 1; dx++)
+      if ((dx || dy) && h[i + dy*W + dx] >= v){ max = false; break; }
+    if (max) cand.push([v, x, y]);
+  }
+  cand.sort((a, b) => b[0] - a[0]);
+  const picks = [];
+  for (const c of cand){
+    if (picks.every(p => Math.hypot(p[1]-c[1], p[2]-c[2]) > 4)) picks.push(c);
+  }
+  return picks;
+}
+
+function drawPeaks(peaks){
+  const cs = cv.width / W;
+  ctx.font = "bold 13px monospace";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (const [v, x, y] of peaks){
+    const px = (x + 0.5) * cs, py = (y + 0.5) * cs;
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(5,8,20,0.9)";
+    ctx.strokeText("+", px, py);
+    ctx.fillStyle = "#ff5f7a";
+    ctx.fillText("+", px, py);
+  }
+}
+
+function updateStats(peaks){
+  let above = 0, hi = -Infinity, lo = Infinity;
+  for (let i = 0; i < h.length; i++){
+    if (h[i] > 0) above++;
+    if (h[i] > hi) hi = h[i]; if (h[i] < lo) lo = h[i];
+  }
+  document.getElementById("stats").innerHTML =
+    `cells above level 0: <b>${(100*above/h.length).toFixed(1)}%</b> (cap 40%)<br>` +
+    `height range: <b>${lo.toFixed(1)} … ${hi.toFixed(1)}</b><br>` +
+    `peaks (h≥3): <b>${peaks.length}</b>`;
+}
+
+function render(){
+  drawHeightfield();
+  drawContours();
+  const peaks = findPeaks();
+  drawPeaks(peaks);
+  updateStats(peaks);
+  if (hover) drawBrush(hover[0], hover[1]);
+}
+
+function drawBrush(cx, cy){
+  const cs = cv.width / W, R = +ui.radius.value;
+  ctx.beginPath();
+  ctx.arc((cx+0.5)*cs, (cy+0.5)*cs, R*cs, 0, Math.PI*2);
+  ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 1.5;
+  ctx.setLineDash([5,4]); ctx.stroke(); ctx.setLineDash([]);
+}
+
+/* ---------- UI wiring ---------- */
+const ui = {
+  seed: document.getElementById("seed"),
+  radius: document.getElementById("radius"),
+  step: document.getElementById("step"),
+  shade: document.getElementById("shade"),
+};
+document.getElementById("regen").onclick = () => generate(ui.seed.value);
+document.getElementById("dice").onclick = () => {
+  ui.seed.value = Math.random().toString(36).slice(2, 8).toUpperCase();
+  generate(ui.seed.value);
+};
+ui.radius.oninput = () => { document.getElementById("radV").textContent = ui.radius.value; render(); };
+ui.step.oninput   = () => { document.getElementById("stepV").textContent = (+ui.step.value).toFixed(1); };
+ui.shade.onchange = render;
+
+let painting = 0, hover = null;
+const toCell = e => {
+  const r = cv.getBoundingClientRect();
+  return [ (e.clientX - r.left) / r.width * W - 0.5,
+           (e.clientY - r.top)  / r.height * H - 0.5 ];
+};
+cv.addEventListener("contextmenu", e => e.preventDefault());
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = toCell(e);
+  painting = e.button === 2 ? -1 : 1;   // RMB lowers, LMB raises
+  applyBrush(x, y, painting * +ui.step.value);
+});
+cv.addEventListener("pointermove", e => {
+  const [x, y] = toCell(e); hover = [x, y];
+  if (painting) applyBrush(x, y, painting * +ui.step.value);
+  else render();
+});
+cv.addEventListener("pointerup",     () => painting = 0);
+cv.addEventListener("pointerleave",  () => { painting = 0; hover = null; render(); });
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const t = e.shiftKey ? ui.step : ui.radius;
+  t.value = +t.value + (e.deltaY < 0 ? +t.step : -t.step);
+  t.oninput();
+}, { passive: false });
+
+/* legend bar */
+(function legend(){
+  const lc = document.getElementById("legend"), lctx = lc.getContext("2d");
+  const im = lctx.createImageData(1, lc.height);
+  const c = [0,0,0];
+  for (let y = 0; y < lc.height; y++){
+    const v = 9 - (y / lc.height) * 16;      // +9 top … -7 bottom
+    heightColor(v, c);
+    im.data[(lc.height-1-y)*4] = c[0]; im.data[(lc.height-1-y)*4+1] = c[1];
+    im.data[(lc.height-1-y)*4+2] = c[2]; im.data[(lc.height-1-y)*4+3] = 255;
+  }
+  const tmp = document.createElement("canvas"); tmp.width = 1; tmp.height = lc.height;
+  tmp.getContext("2d").putImageData(im, 0, 0);
+  lctx.drawImage(tmp, 0, 0, lc.width, lc.height);
+})();
+
+generate(ui.seed.value);
+</script>
+</body>
+</html>

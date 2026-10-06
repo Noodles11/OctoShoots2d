@@ -1,0 +1,15 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>OctoShoots.Game</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core and its tests are separate projects; the Godot assembly only compiles src/Game. -->
+    <Compile Remove="src/Core/**" />
+    <Compile Remove="src/Core.Tests/**" />
+    <ProjectReference Include="src/Core/Core.csproj" />
+  </ItemGroup>
+</Project>

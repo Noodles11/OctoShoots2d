@@ -1,0 +1,17 @@
+# Godot
+.godot/
+/android/
+*.translation
+export_presets.cfg
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+.idea/
+TestResults/
+
+# OS
+Thumbs.db
+.DS_Store

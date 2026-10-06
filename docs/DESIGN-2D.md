@@ -1,8 +1,8 @@
-# Clementine's Quest — Game Design Document (v0.1, draft for approval)
+# Ink Deep — Game Design Document (v0.1, draft for approval)
 
 > A twin-stick roguelite dungeon crawler in the spirit of *The Binding of Isaac*,
 > set in a funky, comic-book underwater realm. You play **Clementine**, a small
-> bioluminescent orange octopus on a quest to the bottom of the ocean.
+> bioluminescent orange octopus, the last of her kind, diving after her family to the bottom of the ocean.
 
 Status: **v1 vertical slice implemented** (see §17 for what shipped and what differs).
 Decisions are recorded in §0. Sections marked *(post-v1)* are future content.
@@ -18,8 +18,9 @@ Decisions are recorded in §0. Sections marked *(post-v1)* are future content.
 | Resolution | **Smooth HD 960×540** logical, scaled to window. |
 | Camera | **Side view — "fish tank"** (§11.1). Free 8-direction swimming, no platforming. Floor at the bottom, water surface/ceiling at the top. |
 | Buoyancy | Clementine **very slowly sinks** when no input is held (§4). |
-| Descent mood | The deeper she dives, the **darker the world and the more ruthless the mobs** (§5.3). |
-| Finale twist | Below the Abyss, a **pipe** in the Crack sucks Clementine into a **human's fish tank**. Final boss: **The Hand** (§5.4, §12.3). |
+| Descent mood | The deeper she dives, the **darker, sadder and lonelier the world and the more ruthless the mobs** (§5.3). |
+| Story | **"Ink Deep"**: the last octopus of a reef corrupted by the Leak, diving after her family (§1). No villain; corrupted creatures are freed, not killed. |
+| Finale twist | Below the Abyss, a **pipe** in the Crack sucks Clementine up into the **human's fish tank** that broke and leaked into the sea. Final boss: **The Hand** (§5.4, §12.3). |
 | Descending | The next depth is reached through **The Crack** — a fissure in the boss room floor, guarded by the boss (§5.2). |
 | Clementine | **Bioluminescent octopus**: breathing mantle + eight physically simulated arms (§20; was a jellyfish, §11.2). |
 | Glow | **Neon bloom** on shots, damage, pickups, synergies (§11.3). |
@@ -36,32 +37,40 @@ Decisions are recorded in §0. Sections marked *(post-v1)* are future content.
 
 ---
 
-## 1. Pitch & Lore
+## 1. Pitch & Lore — "Ink Deep"
 
-The **Great Current** — the warm song that keeps the reef alive — has gone
-silent. Something at the bottom of the Abyss is swallowing it. The grown-up sea
-creatures are too scared to dive. Clementine, a tiny tangerine-colored octopus
-who "glows a little too much," drifts down to find out why.
+One day **the Crack** opened in the sea floor, and the reef has never been the same.
+Out of it came fish in colours no reef had ever seen (neon, glossy, *wrong*), and from
+above, warm, too-bright water began to seep down into the reef: **the Leak**. Whatever the
+Leak touches changes. Familiar neighbours turn strange colours and lash out at anything
+that moves. And one by one, every octopus on the reef has been dragged down into the Crack.
 
-- **Tone arc:** starts upbeat, cheeky, Saturday-morning cartoon in the
-  shallows, then **gets darker and eerier with every depth** (§5.3) — and
-  snaps into absurd, bright, *artificial* comedy-horror for the finale.
-- **The villain (apparent):** **The Hollow Maw**, an ancient anglerfish-thing
-  that eats sound and color. Every boss is a creature it has "drained"
-  (washed-out palette), and defeating them restores their color.
-- **The twist (truth):** the Maw was guarding — and feeding — a **pipe**. Deep
-  in the Abyss Crack sits a rusty **intake pipe** that has been sucking sea
-  creatures (and the Great Current with them) up into a **human's home
-  aquarium**. The "drained" creatures were the ones that almost got taken.
-  Clementine is pulled in too and must face **The Hand** (§5.4).
-- **Foreshadowing:** the game has always been framed like a fish tank (the
-  comic border *is* an aquarium frame, §11.1). From Depth 4 on, odd things
-  appear: straight pipes in the far background, a plastic castle shard, a
-  fish-food flake, muffled *thump… thump…* (glass tapping) in the Abyss.
-- **Clementine's power:** she fires **Glow Bubbles** — little pulses of bioluminescence.
-  Items are "gifts of the sea" that change her glow, body, and tentacles.
-- **Meta-lore:** the **Tide Pool Hub** between runs fills with rescued friends
-  (unlocks), each adding NPCs, decorations, and dialogue.
+**Clementine**, a small tangerine octopus who glows a little too much, is **the last of her
+kind** on the reef. She dives after her family.
+
+- **No villain.** The sea life she fights is not evil: it is **corrupted** by the Leak.
+  Defeating a creature washes the corruption out of it: it bursts free in a "poof" of
+  bubbles, its true colours return, and it swims on, healed (DEPTH1-BESTIARY §8). She is not
+  killing her neighbours; she is setting them free on her way down. The only real adversary
+  is met at the very end: **The Hand** (§12.3).
+- **The truth (revealed at the end).** High above the sea stands a human's home **aquarium**,
+  joined to the ocean by a long pipe whose mouth lies at the bottom of the Crack. The tank
+  broke in one place: some of its fish found their way back to the ocean, but the tank had
+  already changed them, and its water bleeds down into the reef as the Leak. The pipe still
+  draws creatures up into the tank; the octopuses were taken that way. Clementine is pulled up
+  after them and must face **The Hand** (§5.4).
+- **Tone arc: the sadness grows with depth.** Depth 1 is bright and playful, with an ache
+  underneath: empty octopus dens, healthy fish still everywhere. Each depth down there are
+  fewer healthy neighbours and more corrupted ones, the light fades, and the reef grows quiet
+  and lonely. The finale snaps into absurd, bright, *artificial* comedy-horror.
+- **Foreshadowing:** the corrupted creatures carry bits of the tank with them (neon colours,
+  aquarium gravel, plastic plant scraps, DEPTH1-BESTIARY §8). From Depth 4 on, odder things
+  appear: straight pipes in the far background, a plastic castle shard, a fish-food flake,
+  muffled *thump… thump…* (glass tapping) in the Abyss.
+- **Clementine's power:** she throws **bubbles** from her tentacle and leaves **ink** when she
+  dashes. Items are "gifts of the sea" that change her glow, body and tentacles.
+- **Meta-lore:** the **Tide Pool Hub** between runs fills with the octopuses she rescues and
+  the creatures she frees (unlocks), each adding NPCs, decorations and dialogue.
 
 ## 2. Core Loop
 
@@ -193,7 +202,7 @@ sealed with a glowing "?" rune — a visible promise of what's below.
 - Each depth start room has a light shaft from the crack above her, so the
   descent reads visually across floors.
 
-### 5.3 The Descent Curve — darker and more ruthless
+### 5.3 The Descent Curve — darker, sadder and more ruthless
 
 One global parameter, **Menace** (0.0 at Depth 1 → 1.0 at Depth 6), drives
 mood, visuals and enemy behavior, so the tone shift is systemic, not just
@@ -225,6 +234,8 @@ grinning gumdrop; a Depth 6 one is a toothy shadow with red eyes.
 | Champion chance | 0% → 25% |
 | Room enemy budget | ×1.0 → ×1.8 |
 
+**Sadness:** the share of corrupted creatures rises with depth (Depth 1: most of the life around is healthy; Depth 6: almost none is), empty octopus dens become more common, and the reef grows quieter. Freed creatures still burst back into colour at every depth: small bright moments that matter more the darker it gets.
+
 **Presentation shifts:** comic panel borders go from clean to torn/inked;
 onomatopoeia turns from bubbly ("BLUB!") to jagged ("KRSSH!"); SFX pitch
 lowers; Clementine's own glow becomes the main light source, making glow
@@ -233,8 +244,8 @@ warm spot of color in the dark.
 
 ### 5.4 The Twist — The Tank
 
-1. **The Hollow Maw** (Depth 6) is fought over the Crack as usual. When it
-   dies it spits out a **rusty metal grate** — the Crack is a pipe.
+1. **The Hollow Maw** (Depth 6), the oldest and most corrupted of the tank's escapees, is
+   fought over the Crack as usual. Freed, it spits out a **rusty metal grate**: the Crack is a pipe.
 2. Cutscene (comic panels): the grate rattles, a **roar of suction**, all
    particles, fish and bubbles stream toward it, Clementine is pulled in —
    *"SHLUUUURP!"* — tumbling through a pipe with light at the end.
@@ -244,7 +255,7 @@ warm spot of color in the dark.
    uncanny against the living-water sim), a bubbling treasure-chest
    ornament, a plastic diver, a castle. Behind the glass: a giant blurry
    living room — lamp, TV glow, a cat's eye passing by.
-4. Other captured creatures (earlier bosses' kin) float listlessly here —
+4. **The octopuses** of Clementine's reef float listlessly here, among other captured creatures:
    rescued on victory.
 5. **Final boss: The Hand** (§12.3). Afterwards, the true ending (§12.3).
 
@@ -595,11 +606,11 @@ Champion variants (colored, with modifier) from depth 2+.
 | 3 | **The Rusty Admiral** (crab in a cannon hat) · **Treasure Mimic** |
 | 4 | **Ringmaster Octo** (juggles enemies) · **Jester Jellies** (trio) |
 | 5 | **Mother Angler** (light/dark phases) · **The Siphonophore** (long chain enemy) |
-| 6 | **The Hollow Maw** (3 phases; guards the pipe) |
+| 6 | **The Hollow Maw** (3 phases; the tank's oldest escapee, guards the pipe) |
 | 7 | **The Hand** (final, 3 phases) — §12.3 |
 
 Boss structure: 2–3 phases with telegraphed bullet patterns (colorful, readable).
-Every boss **guards The Crack** (§5.2) and its patterns use the side view:
+Every boss is a **corrupted** creature, freed (not killed) when it falls, and **guards The Crack** (§5.2) and its patterns use the side view:
 floor slams, sinking/rising projectiles, ceiling drops, sweeping from wall to wall.
 Boss designs also follow the Descent Curve: Depth 1 bosses are goofy,
 Depth 6 is genuinely menacing.
@@ -625,9 +636,9 @@ huge blurry face leans in.
 **Defeat:** Clementine delivers a final big sting — the Hand jerks back,
 the net falls in, a panicked voice (*"OW! It stings!"*). Ending panels:
 the aquarium is carried to the shore and **tipped back into the sea**;
-Clementine and every rescued creature pour out; the intake pipe is sealed;
-the **Great Current sings again** and color floods the reef. Credits over
-the Tide Pool, now full of friends.
+Clementine, her family and every rescued creature pour out; the pipe is sealed, the
+**Leak stops**, and true colour floods back into the reef. Credits over the Tide Pool,
+full of octopuses again.
 
 **Why it works:** after six depths of creeping darkness, the finale is a
 sudden bright, artificial, absurd-scary scale shift — the player realizes
