@@ -1,5 +1,5 @@
 using System;
-using OctoShoots.Core.Sim;
+using OctoShoots.Core.Creatures;
 
 namespace OctoShoots.Core.Gen.TopDown;
 

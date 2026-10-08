@@ -4,6 +4,9 @@ using Godot;
 
 namespace OctoShoots.Game.Fx;
 
+/// <summary>One plant or sessile animal on the reef.</summary>
+public readonly record struct FloraItem(FloraKind Kind, Transform3D Transform, Color Tint);
+
 /// <summary>
 /// Draws the reef's flora: one MultiMesh per species per 32 m tile, each fading out beyond the mist,
 /// so only the nearby reef costs anything. Sway, lattice, grooves and polyps are done in flora.gdshader.
@@ -16,7 +19,7 @@ public partial class FloraViews : Node3D
 
     static readonly Dictionary<FloraKind, Look> Looks = new()
     {
-        [FloraKind.TurtleGrass] = new(0.09f, 1.3f, 0f, 0f, 0f, 0.6f, 0.06f, 0.35f, 30f),
+        [FloraKind.TurtleGrass] = new(0.09f, 1.3f, 0f, 0f, 0f, 0.6f, 0.2f, 0.6f, 30f),
         [FloraKind.Halimeda] = new(0.03f, 1.1f, 0f, 0f, 0f, 0.6f, 0.05f, 0.2f, 28f),
         [FloraKind.Staghorn] = new(0f, 0f, 0f, 0f, 0.8f, 0.75f, 0.06f, 0f, 55f),
         [FloraKind.Elkhorn] = new(0f, 0f, 0f, 0f, 0.6f, 0.7f, 0.06f, 0f, 55f),
@@ -28,6 +31,22 @@ public partial class FloraViews : Node3D
     };
 
     readonly Dictionary<FloraKind, (Mesh Mesh, ShaderMaterial Material)> _species = new();
+
+    /// <summary>Draw at any distance (the top-down camera sees the whole view at once), and cast shadows.</summary>
+    public bool Unlimited { get; set; }
+
+    /// <summary>Repaints a species in two variants (low and high ends each), keeping its mesh's light and dark structure.</summary>
+    public void SetPalette(FloraKind kind, Color lowA, Color highA, Color lowB, Color highB, float sway = -1f)
+    {
+        if (!_species.TryGetValue(kind, out var s)) return;
+        var m = s.Material;
+        m.SetShaderParameter("recolor", 1f);
+        m.SetShaderParameter("low_a", lowA);
+        m.SetShaderParameter("high_a", highA);
+        m.SetShaderParameter("low_b", lowB);
+        m.SetShaderParameter("high_b", highB);
+        if (sway >= 0f) m.SetShaderParameter("sway", sway);
+    }
 
     public override void _Ready()
     {
@@ -85,9 +104,9 @@ public partial class FloraViews : Node3D
                 Position = centre,
                 Multimesh = multimesh,
                 MaterialOverride = material,
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                CastShadow = Unlimited ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off,
                 CustomAabb = new Aabb(new Vector3(-Tile * 0.5f - 3f, -half, -Tile * 0.5f - 3f), new Vector3(Tile + 6f, half * 2f, Tile + 6f)),
-                VisibilityRangeEnd = look.Range + Tile * 0.5f,
+                VisibilityRangeEnd = Unlimited ? 0f : look.Range + Tile * 0.5f,
                 VisibilityRangeEndMargin = 8f,
                 VisibilityRangeFadeMode = GeometryInstance3D.VisibilityRangeFadeModeEnum.Self,
             });

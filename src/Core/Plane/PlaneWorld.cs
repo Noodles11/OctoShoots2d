@@ -48,11 +48,17 @@ public sealed class PlaneInk
     public float MaxLife;
 }
 
-public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, PlayerHit, PlayerDefeated, GatewayEntered, PearlCollected, ShellCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped,
+public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, MobNoticed, PlayerHit, PlayerDefeated, GatewayEntered, PearlCollected, ShellCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped, BubbleFull,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
-/// <summary>Size: a popped bubble's radius (0 for other events).</summary>
-public readonly record struct PlaneEvent(PlaneEventType Type, Vector2 Position, Vector2 Direction, float Size = 0f);
+/// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
+public enum DamageSource { None, MobShot, BossPearl, RoyalPearl, BossSnap, BossContact }
+
+/// <summary>
+/// Size: a popped bubble's radius; the bubbles in a volley (Shot); the damage dealt or taken (MobHit, MobDefeated,
+/// BossHit, PlayerHit); 0 otherwise. Source: what hurt her (PlayerHit, PlayerDefeated).
+/// </summary>
+public readonly record struct PlaneEvent(PlaneEventType Type, Vector2 Position, Vector2 Direction, float Size = 0f, DamageSource Source = DamageSource.None);
 
 /// <summary>
 /// The plane-locked simulation (DESIGN-TOPDOWN §0, §11): fixed 60 Hz, deterministic, engine-free. Positions are 2D map

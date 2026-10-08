@@ -222,8 +222,8 @@ When a corrupted creature's health runs out:
    and sinks (the gravel scatters, the tag spins away, the bottle cap rolls).
 3. Its **true colours** come back, and it drops its **loot** (as now).
 4. It carries on **healthy**: the fish swims off, the jellies drift up, the urchin's spines lie down, the
-   crab scuttles away, the moray slides back into its hole. It is now part of the reef's healthy life: not
-   a target, harmless, and it stays healthy for the rest of the run.
+   crab scuttles away, the moray slides back into its hole. It goes slowly, and once it is out of the visible
+   screen it is gone. It is not a target, it is harmless, and it never helps Clementine.
 
 Freed creatures replace today's death burst, sound and despawn. Bosses free the same way, at a bigger scale
 (the boss's colour floods back, §5).
@@ -235,6 +235,7 @@ Freed creatures replace today's death burst, sound and despawn. Bosses free the 
   three might be one corrupted and two healthy). The share of corrupted creatures rises with depth, so the
   reef feels sadder the deeper she goes (DESIGN-2D §5.3): roughly 2 : 1 at Depth 1, 1 : 1 at Depth 3,
   1 : 3 at Depth 6.
+- **Healthy urchins are prickly** on touch: a small hazard, the reef defending itself (THEME-BIBLE §13).
 - **Not targets.** Bubbles pass through healthy creatures, aim assist ignores them, they never show on the
   minimap and they never attack. Like the neutral clownfish, they keep clear of Clementine's bubbles.
 - **Same models, new look.** Every creature keeps its current mesh and behaviour; corruption is a second
@@ -245,8 +246,5 @@ Freed creatures replace today's death burst, sound and despawn. Bosses free the 
 ### 8.4 Open questions
 
 1. **Ratios:** about 2 healthy to 1 corrupted at Depth 1, falling to 1 : 3 at Depth 6: right feel?
-2. **Healthy urchins:** keep them prickly on touch (realistic, a small hazard) or fully harmless?
-3. **Freed creatures:** should any of them ever help Clementine (for example a freed barracuda chasing her
-   attackers for a few seconds), or stay purely scenery?
-4. **The tank pieces:** happy with the list above (gravel, price tag, plastic plant, castle shard, bottle cap,
+2. **The tank pieces:** happy with the list above (gravel, price tag, plastic plant, castle shard, bottle cap,
    plastic leaves, LED colour cycling)?

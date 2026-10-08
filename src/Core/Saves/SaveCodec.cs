@@ -20,12 +20,21 @@ public sealed class SaveException : Exception
 /// </summary>
 public static class SaveCodec
 {
-    public const int CurrentVersion = 1;
-    public const string ExportPrefix = "CQ3D1:";
+    public const int CurrentVersion = 2;
+    public const string ExportPrefix = "INKD2:";
 
     /// <summary>Migration from version N to N+1, keyed by N. Add one whenever the format changes.</summary>
     public static readonly IReadOnlyDictionary<int, Func<JsonObject, JsonObject>> Migrations =
-        new Dictionary<int, Func<JsonObject, JsonObject>>();
+        new Dictionary<int, Func<JsonObject, JsonObject>>
+        {
+            // 1 → 2: the first-person game's suspended run (position, craters, bombs) has no meaning on the plane; the
+            // profile carries over.
+            [1] = root =>
+            {
+                root.Remove("run");
+                return root;
+            },
+        };
 
     static readonly JsonSerializerOptions Json = new()
     {
@@ -88,7 +97,7 @@ public static class SaveCodec
     public static SaveFile Import(string code)
     {
         code = code.Trim();
-        if (!code.StartsWith(ExportPrefix, StringComparison.Ordinal)) throw new SaveException("Not a Clementine's Quest 3D save code");
+        if (!code.StartsWith(ExportPrefix, StringComparison.Ordinal)) throw new SaveException("Not an Ink Deep save code");
         string b64 = code[ExportPrefix.Length..].Replace('-', '+').Replace('_', '/');
         b64 = b64.PadRight(b64.Length + (4 - b64.Length % 4) % 4, '=');
         try

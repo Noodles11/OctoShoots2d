@@ -15,6 +15,9 @@ public partial class CameraRig : Node3D
     /// <summary>Distance from the followed point; puts ~22 m of ground top to bottom and ~33 m across at 16:9.</summary>
     public const float Distance = 34f;
     const float Follow = 6f;
+    /// <summary>Verification: `--dbg-zoom=metres` brings the camera closer (to inspect Clementine).</summary>
+    readonly float _distance = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--dbg-zoom=")) is { } zoom
+        && float.TryParse(zoom["--dbg-zoom=".Length..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float d) ? d : Distance;
 
     public Camera3D Camera { get; private set; } = null!;
     Vector3 _focus;
@@ -23,7 +26,16 @@ public partial class CameraRig : Node3D
     float _shake, _shakeTime;
 
     /// <summary>A jolt (a boss landing, a slam): the view shakes, easing out over about half a second.</summary>
-    public void Shake(float amount) => _shake = Mathf.Max(_shake, amount);
+    public void Shake(float amount)
+    {
+        if (ShakeEnabled) _shake = Mathf.Max(_shake, amount);
+    }
+
+    /// <summary>The reduced-motion setting: no refraction wobble in the water.</summary>
+    public void SetReducedMotion(bool reduced) => _post.SetShaderParameter("wobble", reduced ? 0f : 1f);
+
+    /// <summary>The camera-shake setting.</summary>
+    public bool ShakeEnabled { get; set; } = true;
 
     public override void _Ready()
     {
@@ -56,7 +68,7 @@ public partial class CameraRig : Node3D
         }
         float tilt = Mathf.DegToRad(Tilt);
         // North is −Z: the camera sits south of the focus, looking north and down.
-        Vector3 offset = new(0f, Distance * Mathf.Sin(tilt), Distance * Mathf.Cos(tilt));
+        Vector3 offset = new Vector3(0f, Mathf.Sin(tilt), Mathf.Cos(tilt)) * _distance;
         _shakeTime += dt;
         _shake = Mathf.MoveToward(_shake, 0f, dt * 1.6f);
         Vector3 jolt = _shake > 0f ? new Vector3(Mathf.Sin(_shakeTime * 53f), Mathf.Sin(_shakeTime * 61f + 1f), Mathf.Sin(_shakeTime * 47f + 2f)) * _shake * _shake : Vector3.Zero;

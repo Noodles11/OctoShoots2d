@@ -9,7 +9,10 @@ namespace OctoShoots.Core.Tests;
 
 public class ItemTests
 {
-    static ItemCatalog Catalog => ItemWorlds.Catalog;
+    static readonly Lazy<ItemCatalog> Shared = new(() =>
+        ItemCatalog.FromJson(System.IO.File.ReadAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
+
+    static ItemCatalog Catalog => Shared.Value;
 
     [Fact]
     public void CatalogLoadsTheFullSet()

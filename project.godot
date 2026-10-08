@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Ink Deep"
 config/description="Ink Deep: a top-down action roguelite in a darkening ocean."
-run/main_scene="res://src/Game/TopDown/TopDownMain.tscn"
+run/main_scene="res://src/Game/Title/TitleMain.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 
 [display]
@@ -29,8 +29,8 @@ project/assembly_name="OctoShoots"
 [rendering]
 
 rendering_device/vsync/frame_queue_size=1
-anti_aliasing/quality/screen_space_aa=1
 environment/defaults/default_clear_color=Color(0.02, 0.06, 0.1, 1)
+anti_aliasing/quality/screen_space_aa=1
 
 [shader_globals]
 
@@ -40,11 +40,11 @@ sun_dir={
 }
 sea_surface_y={
 "type": "float",
-"value": 60.0
+"value": 18.0
 }
 reef_extent={
 "type": "vec2",
-"value": Vector2(224, 224)
+"value": Vector2(150, 150)
 }
 sun_has_shadow={
 "type": "float",
@@ -57,4 +57,84 @@ sun_shadow={
 light_strength={
 "type": "float",
 "value": 1.0
+}
+reef_water_shallow={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_water_deep={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_murk={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_sand={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_rock={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_coral={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_coral2={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_algae={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_sponge={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_butter={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_sun={
+"type": "vec3",
+"value": Vector3(0.5, 0.5, 0.5)
+}
+reef_caustics={
+"type": "float",
+"value": 1.0
+}
+reef_rays={
+"type": "float",
+"value": 1.0
+}
+reef_menace={
+"type": "float",
+"value": 0.0
+}
+reef_saturation={
+"type": "float",
+"value": 1.0
+}
+reef_vignette={
+"type": "float",
+"value": 0.4
+}
+reef_fog={
+"type": "float",
+"value": 0.4
+}
+reef_crack={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+reef_beneath={
+"type": "vec4",
+"value": Vector4(0, -14, 0, 0)
+}
+reef_beneath_tint={
+"type": "vec3",
+"value": Vector3(0.1, 0.2, 0.15)
 }

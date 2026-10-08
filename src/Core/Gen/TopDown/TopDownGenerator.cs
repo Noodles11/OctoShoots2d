@@ -4,8 +4,8 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using OctoShoots.Core.Run;
-using OctoShoots.Core.Sim;
-using static OctoShoots.Core.Terrain.SdfMath;
+using OctoShoots.Core.Creatures;
+using static OctoShoots.Core.Gen.SdfMath;
 
 namespace OctoShoots.Core.Gen.TopDown;
 

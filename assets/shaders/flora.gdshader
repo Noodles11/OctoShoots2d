@@ -1,5 +1,7 @@
 // Reef flora drawn with MultiMesh. Vertex colour rgb = paint, a = how freely that part sways (0 base → 1 tip).
-// Per instance (custom data): rgb = tint multiplier, a = random phase.
+// Per instance (custom data): r = palette variant (0 or 1), g = brightness, b = unused, a = random phase.
+// Recolouring keeps each mesh's light and dark structure but repaints it in the depth's palette (THEME-BIBLE §6.3):
+// the paint's lightness picks a colour between the variant's low and high ends.
 // Optional looks per species: a sea fan's lattice, a brain coral's meandering grooves, a coral's polyp dots.
 shader_type spatial;
 render_mode cull_disabled;
@@ -17,6 +19,11 @@ uniform float polyps = 0.0;
 uniform float rough = 0.7;
 uniform float glow = 0.05;
 uniform float backlight = 0.2;
+uniform float recolor = 0.0;
+uniform vec3 low_a : source_color = vec3(0.2);
+uniform vec3 high_a : source_color = vec3(0.8);
+uniform vec3 low_b : source_color = vec3(0.2);
+uniform vec3 high_b : source_color = vec3(0.8);
 
 varying vec3 tint;
 varying vec3 local;
@@ -52,7 +59,13 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 col = COLOR.rgb * tint;
+	vec3 col = COLOR.rgb;
+	if (recolor > 0.0) {
+		float l = clamp(dot(col, vec3(0.299, 0.587, 0.114)) * 1.5, 0.0, 1.0);
+		vec3 painted = tint.r > 0.5 ? mix(low_b, high_b, l) : mix(low_a, high_a, l);
+		col = mix(col, painted, recolor);
+	}
+	col *= tint.g;
 	col *= 0.85 + 0.3 * noise(local * 18.0);
 
 	if (lattice > 0.0) {

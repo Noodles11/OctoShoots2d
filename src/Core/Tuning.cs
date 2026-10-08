@@ -34,14 +34,11 @@ public sealed class Tuning
     [Tune("Movement", 0.01f, 0.5f)] public float AccelTime = 0.08f;
     [Tune("Movement", 0.01f, 1f)] public float StopTime = 0.12f;
     [Tune("Movement", 5f, 80f)] public float OverspeedDecel = 30f;
-    [Tune("Movement", 0f, 1f)] public float SinkSpeed = 0.15f;
-    [Tune("Movement", 0f, 2f)] public float SinkEaseIn = 0.5f;
     [Tune("Movement", 0f, 1f)] public float JetDuration = 0.38f;
     [Tune("Movement", 1f, 3f)] public float JetMultiplier = 1.8f;
     [Tune("Movement", 45f, 180f)] public float JetTurnAngle = 110f;
     [Tune("Movement", 0f, 1f)] public float JetRestFraction = 0.25f;
     [Tune("Movement", 0.1f, 0.6f)] public float PlayerRadius = 0.35f;
-    [Tune("Movement", 45f, 89f)] public float PitchLimit = 85f;
 
     // Ink dash (§2, 2D §30)
     [Tune("Dash", 1f, 6f)] public float DashMultiplier = 3.4f;

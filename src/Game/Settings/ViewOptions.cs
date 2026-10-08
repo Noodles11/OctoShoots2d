@@ -4,16 +4,13 @@ using OctoShoots.Core;
 
 namespace OctoShoots.Game.Settings;
 
-/// <summary>Presentation and comfort options (§3, §11). Not part of the simulation.</summary>
+/// <summary>Presentation and comfort options (DESIGN-TOPDOWN §3). Not part of the simulation.</summary>
 public sealed class ViewOptions
 {
-    [Tune("View", 70f, 110f)] public float Fov = 90f;
-    [Tune("View", 0.01f, 0.4f)] public float MouseSensitivity = 0.08f;
-    [Tune("View")] public bool InvertY = false;
     [Tune("View")] public bool CameraShake = true;
+    /// <summary>Menus and banners cross-fade instead of moving, popping and splashing.</summary>
+    [Tune("View")] public bool ReducedMotion = false;
     [Tune("View", 0f, 1f)] public float ShakeAmount = 0.5f;
-    [Tune("View", 2f, 40f)] public float MistStart = 14f;
-    [Tune("View", 8f, 80f)] public float MistEnd = 40f;
     [Tune("View", 10f, 80f)] public float MinimapRange = 32f;
     /// <summary>Frame-rate cap (0 = uncapped). Keeps the GPU cool; vsync caps it further on slower screens.</summary>
     [Tune("View", 0f, 240f)] public int MaxFps = 60;

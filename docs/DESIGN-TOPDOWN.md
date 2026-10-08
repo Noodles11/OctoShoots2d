@@ -9,6 +9,12 @@
 > This document defines the new game. **Everything not explicitly changed here
 > is inherited** from `DESIGN-3D.md` (current live rules) and, where noted,
 > `DESIGN-2D.md`. Inherited systems are referenced by section, not repeated.
+>
+> **The theme guideline is [`THEME-BIBLE.md`](THEME-BIBLE.md):**
+> - the pillars, the palettes, the corruption and freeing language, the audio identity, the tone of voice;
+> - the theme tests (§12) that every new feature must pass.
+>
+> This document stays authoritative for rules and numbers.
 
 ---
 
@@ -62,9 +68,19 @@ What changes is the protagonist's skin:
 ## 2. The Player — Clementine the Absorbent Jellyfish
 
 ### 2.1 Body
-- **Bell**: translucent dome, ~0.8 m across, breathing rhythm (slow contract/
-  relax cycle). Eight oral arms + marginal tentacles trail beneath, **verlet
-  chains** inherited from the octopus arm system (DESIGN-2D §11.2 tooling).
+- **Bell**: translucent tangerine dome, ~0.84 m across, with a scalloped
+  margin of sixteen lappets. Seen through it: four gold gonad horseshoes round
+  the stomach, radial and ring canals, warts of stinging cells, and eight rim
+  organs in the margin's notches. Breathing rhythm at rest; every stroke is a
+  contraction beat (quick squeeze, slow relax, a slight recoil flare) with a
+  light wave running base→rim. The bell leans into the swim on a critically
+  damped spring.
+- **Tentacles**: sixteen thin marginal tentacles (one per notch, 1.35–1.95 m)
+  and eight ruffled oral arms on **verlet chains** with a fixed 120 Hz step:
+  they stream behind her in travelling S-waves while she swims, swing through
+  turns, are pushed back by each stroke, and float out around her in a slow
+  current when she stops. Drawn as camera-facing ribbons, always over the
+  scene (never cut away). Presentation only: the sim never sees them.
 - **Bioluminescence**: a soft point light carried at the bell; the player's glow
   is the primary light source in dark depths (inherited rule: *Clementine is
   always the warm light in the scene*).
@@ -85,7 +101,7 @@ What changes is the protagonist's skin:
   plane (no floor settling — there is no floor contact at her depth band).
 - **Jet start** inherited (DESIGN-2D §20): first stroke from rest is a 1.8×
   burst over 0.38 s; sharp turns (>110°) re-trigger it.
-- **Ink dash** inherited (DESIGN-2D §30): Shift, ~3.4× speed, 0.32 s
+- **Ink dash** inherited (DESIGN-2D §30): Space, ~3.4× speed, 0.32 s
   untouchable, 0.85 s cooldown, leaves a slowing ink cloud. (Yes, a jellyfish
   inks — the Leak changed her. The Sea-pedia entry says so.)
 - Base swim speed 4.5 m/s equivalent, scaled by the `speed` stat.
@@ -141,8 +157,7 @@ What changes is the protagonist's skin:
   DESIGN-2D §9.4, §28 tags.)
 - **Capacity**: 16 motifs visible on the bell (inherited "8 pairs" spirit);
   pearls beyond 16 apply their effect but show as faint interior glow only.
-- Absorption is permanent for the run (Isaac rule: no un-absorbing). Drop/transfer
-  mechanics: none in v1.
+- Absorption is permanent for the run (Isaac rule: no un-absorbing). Pearls are never dropped or transferred.
 
 ### 2.5 Stats & health
 - Full Isaac-style stat block inherited (DESIGN-2D §4 table) with the 3D doc's
@@ -310,7 +325,8 @@ between the places, before any rock exists:
   portal after bosses.
 - **Landmark light language** inherited: gold (treasure), green (shop),
   red (curse), violet (secret, **no beacon** — found, not advertised),
-  orange (the Crack). In dark depths these lights are the level's signage —
+  orange (the Crack); and white (the start), teal (the item cache), coral (ambushes; warm but not gold, so
+  they never read as treasure). In dark depths these lights are the level's signage —
   Below's campfire principle.
 - **Sealed pockets** (4–6/level) and **buried coins** (8–12/level, scratched
   X marks) inherited (DESIGN-2D §26, DESIGN-3D §6.3) — bomb the floor, loot
@@ -323,9 +339,14 @@ between the places, before any rock exists:
   looking "down" you see, ~10 m below, a **dark, blurred, slow-moving shadow
   copy of the next depth** — its structures as vague silhouettes, and **the
   next biome's creatures as drifting shadows**.
-- Rendered as a cheap parallel pass: next-biome placeholder geometry at
-  10–15% opacity, heavy blur, slow independent drift, lit only by
-  bioluminescence and the crack-glow filtering up through the floor.
+- Rendered in the water pass (`beneath.gdshaderinc`), no geometry: each view
+  ray is carried on to a plane ~13 m below the swim level (y −14), so the layer
+  slides by with true parallax under the floor. There it reads a procedural
+  shadow field: broad ridges of the deeper reef, swaying forests of the next
+  biome, six large creatures gliding on long paths across the level, and a
+  drifting fish school. Shadows darken the floor toward the next depth's murk
+  (`reef_beneath_tint`); the strength is per depth (`ReefLook.Beneath`, the
+  `reef_beneath` global) and rises where the floor itself drops away.
 - **Escalates with depth:** in the Sunlit Shallows it's almost invisible
   (bright water hides it). In the Twilight Trench and Abyss, ambient light is
   near zero and **the beneath-layer becomes the scenery** — giant slow shapes
@@ -335,8 +356,8 @@ between the places, before any rock exists:
   the Crack **backlights both layers** around the arena; the Tank's LED light
   bleeds down into the Abyss below in the finale, inverted — the artificial
   light above is what reaches *down*.
-- Shadow mobs are cosmetic (no AI, wander paths, `cosmetic` RNG stream) —
-  determinism preserved (inherited §10 rule).
+- Shadow mobs are cosmetic: a function of position and time on the GPU, no
+  AI, no RNG — the sim never sees them (inherited §10 rule). Nothing in the beneath-layer ever reaches up through the floor.
 
 ### 4.4 Flow on a level (the open-floor pacing contract)
 1. Enter over the Crack's light-shaft from above (inherited start-room motif).
@@ -539,7 +560,7 @@ The pivot is mostly **deletion and constraint**:
 | Navigation | 3D flow field → 2D grid flow field (strict simplification). Walkers: floor contour following. |
 | Camera | New rig: tilted perspective, scroll smoothing, the two sanctioned breaks. |
 | Player presentation | New: bell soft-body (reuse verlet tooling), pulse propulsion, beneath-bell ammo orbs, pearl-consumption animation, bell pattern composer (motif×color instancing on the bell shader). |
-| Beneath-layer | New but cheap: separate low-detail instance pass, blurred, opacity by depth; shadow-mob wanderers on cosmetic stream. |
+| Beneath-layer | New but cheap: a procedural shadow plane in the water pass, parallax by view ray, strength by depth; shadow mobs are pure functions of time. |
 | Lighting | Re-aim inherited work: god rays cross-view, caustics on floor, pooled point lights (glows), fog by depth. Sun shadow map optional at top depths only. |
 | Water field | 2D version of inherited grid. |
 | Enemies/bosses | Behaviors/AI inherited; **presentation and bullet patterns reworked** to 2D. Hand fight rebuilt per §6.5. |
@@ -571,11 +592,8 @@ flora and shadow mobs fade at mist distance (inherited fade rule).
 ---
 
 ## 12. Open questions
-- Should the beneath-layer ever interact (a Depth-6 boss arm reaching *up*
-  through the floor)? Deferred — cosmetic in v1.
-- Hub format (free-swim tide pool vs menu) — inherited open question.
-- Drop any pearl? (Recommended: no — absorption is commitment, and commitment
-  is the Isaac feeling.)
+- Hub format: the title screen is a menu over the live sea for now; whether a free-swim Tide Pool replaces it
+  later is still open.
 
 ### 12.1 Conflicts found while implementing (unresolved — need a decision)
 1. **Cruise speed:** §2.2 says base swim speed "4.5 m/s equivalent"; §4.5 says cruise **6 m/s**. Built with 6 m/s
@@ -600,14 +618,12 @@ flora and shadow mobs fade at mist distance (inherited fade rule).
 6. **Arches on "peaks":** an arch spans 10–20 m and stands on "peak pairs", but peaks are 10–16 m and rise well
    beyond 5–10 m from a corridor's centre line. Built: footings at the first ground ≥ 6 m high (falling back to
    5 m, then 4 m), with steeper ridge walls (k = 0.9, a value the doc leaves open). Most levels get 1–2 arches.
-7. **Landmark colours** cover treasure, shop, curse, secret and the Crack only. The start (white), the item cache
-   (teal) and ambushes (coral) use placeholder colours.
-8. **Trench route** "at deeper depths": the depth it starts at is not given; not built (Depth 1 only so far).
-9. **Secret guards "trap-heavy (mimics)":** no mimic exists below Depth 3 (Treasure Mimic is a boss). Spawn rows
+7. **Trench route** "at deeper depths": the depth it starts at is not given; not built (Depth 1 only so far).
+8. **Secret guards "trap-heavy (mimics)":** no mimic exists below Depth 3 (Treasure Mimic is a boss). Spawn rows
     are marked as traps with urchin and moray placeholders.
-10. **Ambushers "8–12 m off corridor edges":** at that distance the ground is a ridge wall. Clingers fit, but
+9. **Ambushers "8–12 m off corridor edges":** at that distance the ground is a ridge wall. Clingers fit, but
     burrowers are meant to hide in sand.
-11. **CI:** the brief asks to keep the existing GitHub Actions (tests + headless export), but the repository has no
+10. **CI:** the brief asks to keep the existing GitHub Actions (tests + headless export), but the repository has no
     workflow and no export presets.
 
 ### 12.2 Implementation assumptions (where the doc is silent)
@@ -686,16 +702,88 @@ flora and shadow mobs fade at mist distance (inherited fade rule).
   splash waits for Enter or a click (not before), then fades out over the new room.
 - **Death:** at 0 HP the run is over. The world stops, and a splash of the same kind fades in with how far the run
   got (depth and room reached, rooms cleared, time, foes defeated, shells collected, pearls absorbed, seed). Enter
-  or a click starts a clean new run: a new random seed, room 1, no pearls or shells, full HP.
-- **Pause (Esc):** the sea stands still under a dimmed screen; the menu resumes, restarts the run (a new random
-  seed, room 1, no pearls, full HP), and lists every absorbed pearl, newest first, with its name, tagline and effects.
+  or a click starts a clean new run: a new random seed, room 1, no pearls or shells, full HP. Esc goes back to the
+  title screen.
+- **Pause (Esc):** the sea stands still under a dimmed screen. The menu:
+  - resumes;
+  - restarts the run (a new random seed, room 1, no pearls, full HP; the run left behind counts as abandoned);
+  - **saves and quits to the title** (she resumes at the start of the room);
+  - lists every absorbed pearl, newest first, with its name, tagline and effects.
 - **Rooms:** a gateway at the rift's centre leads to the next room, a fresh level of the same seed (room N is
-  generated as level N). She keeps her pearls and her HP through it; a new seed starts a fresh run. Every game,
-  and every restarted run, starts on a new random seed. The gateway is shut until the room's boss is freed.
-- **Depth focus** (the look, after Below): the swim level is the focal plane. Everything is judged by its height
-  against it — within about 0.6 m below and 1.6 m above stays sharp; below that the world blurs, fogs and darkens
-  with depth toward a dim blue-green; above it rock blurs and darkens into foreground silhouettes. Clementine's glow
-  scatters as a warm halo in the water around her; a heavy oval vignette and a cool grade sit on top.
-  Clementine, the gateway, pearls, shells and ink are drawn after the pass, always sharp. Places are not marked on
+  generated as level N). She keeps her pearls and her HP through it; a new seed starts a fresh run. A new run starts
+  on a random seed unless she types one on the title screen. The gateway is shut until the room's boss is freed.
+- **Title screen** (docs/TITLE-MENU-PROPOSAL.md has the full layout and motion):
+  - **The backdrop.** The game boots into a menu over the live sea. Clementine swims slowly back and forth along a
+    canyon of a fixed seed (KELP 7Q2Z), in the right third of the screen.
+  - **The menu:** Continue (only with a saved run), New run, Seeded run, Sea-pedia, Statistics, Save & load,
+    Settings, Quit. Each item has a detail line.
+  - **Seeded run** opens a seed box under the item. Typing is forgiving and paste works; there is a random dice and
+    the last five seeds as chips. Seeded runs never earn achievements.
+  - **Sea-pedia:**
+    - **Pearls:** each ported pearl is absorbed, seen (offered but never taken) or unknown. Its record: times
+      absorbed, runs it was in, runs lost holding it, rooms cleared with it.
+    - **Creatures:** the Pellet Dot and Queen Clam. Each record: defeated (bosses: freed), defeated you,
+      encounters, and best time for bosses.
+  - **Statistics:**
+    - four headline numbers (runs, best reach, foes defeated, time in the sea);
+    - runs, combat, treasure and feats rows, records marked "best";
+    - a bar per cause of death.
+    - Seeded runs are counted, and also counted on their own.
+  - **Save & load:**
+    - the saved run (continue or abandon);
+    - a backup save code to copy, or to import after a preview;
+    - erasing everything (type ERASE).
+  - **Settings:** frame-rate cap, sunlight, camera shake, reduced motion; the controls, read-only.
+  - **Motion.** Sub-screens are pearl cards that surface from the bottom right and dive away, and starting a run
+    fades into the loading splash.
+  - **The interface** is laid out on a 1600×900 page and scaled to the window.
+- **Saves:**
+  - **One profile and one run** (the save file, version 2, written atomically).
+  - **The run is saved at the start of every room.** Continuing regenerates that room from the seed with what she
+    carried in: pearls, HP, shells, the run clock and totals. Death clears the saved run.
+  - **The profile records:**
+    - the statistics;
+    - each pearl's and creature's record;
+    - what dealt the killing blow (every hit on her names its source).
+  - **Runs started straight from the game scene** with verification flags record and save nothing.
+- **The look of a depth** (THEME-BIBLE §6.2–6.3, §6.9). One look per depth (`ReefLook`) sets every reef shader at once:
+  - its water, sand, rock, coral, algae and sponge colours;
+  - its sun (pale gold, never Clementine's tangerine) and ambient light;
+  - its caustic and god-ray strength, and its saturation, vignette and murk;
+  - its Menace (0 in the Shallows → 1 at the Tank).
+  Depth 1 (Sunlit Shallows) is tuned; the other six carry the bible's palettes, ready to be tuned as they are built.
+- **The reef's skin** (one shader for the ground, arches, cave roofs, boulders and weak rock, worked out in world
+  space, so separate pieces meet seamlessly):
+  - **Seabed:** rippled sand in patchy fields with flat sand between, sinuous crests, shell grit, soft algae drifts,
+    and a shaded apron at the feet of walls.
+  - **Walls:** limestone with strata and dark crevices, crusted with lilac and pink coralline algae, with turf on
+    ledges.
+  - **Tops:** coral gardens of domed heads in colonies (brain, polyp, plate and soft textures).
+  - **Depth:** water steals red as the floor deepens; the rim wall darkens toward the edge of the world.
+  - **Caustics:** on everything facing up, sharp near the surface, fading with depth. They are sunlight, so they
+    fall only where the sun reaches; walls throw real shade across them.
+- **Canopy rock.** Arches are stone bridges springing from the ground, and overhangs are lumpy shelves. Canopy pieces
+  (arches, overhangs, cave roofs) dissolve with an ordered dither while she is underneath, staying opaque, so the
+  depth focus still blurs them.
+- **Life.** The generator's decoration is joined by cosmetic ground cover: seagrass meadows, crowds of small coral
+  and sponges at the feet of walls, lone coral heads and rubble. It is deterministic from the seed and touches no
+  play. Flora is repainted in the depth's palette, and soft things sway.
+- **The Crack** glows orange from inside its fissure, through the murk; warm light spills over the arena floor and
+  bubbles rise from it.
+- **Depth focus** (the look, after Below):
+  - **The focal plane** is the swim level. Within about 0.6 m below and 1.6 m above stays sharp.
+  - **Below** that, the world blurs and sinks into the depth's water: clear turquoise in the Shallows, murk further
+    down.
+  - **Above** it, rock blurs into soft foreground silhouettes tinted by the water. Their edges are softened, so the
+    mesh's steps never show.
+- **The water over everything:**
+  - Everything is seen through water: red fades and turquoise is scattered in with the water column.
+  - God rays rake across the view, marched along each view ray parallel to the sun and drifting with the swell.
+  - Marine snow drifts between the camera and the reef, glittering in the beams.
+  - A faint refraction wobble (off with reduced motion).
+  - Clementine's warm halo.
+  - A grade: the depth's saturation, shadows cooled toward the water's hue.
+  - A vignette tinted by the deep water, heavier as Menace rises.
+- **Drawn after the pass, always sharp:** Clementine, the gateway, pearls, shells and ink. Places are not marked on
   the level itself (no rings or beacons); a shop's price tags show only while she is inside it.
 

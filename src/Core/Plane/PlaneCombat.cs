@@ -188,6 +188,7 @@ public sealed partial class PlaneWorld
                         Aggro = true,
                         FireTimer = PlaneCombatTuning.AmbushFirstShot + spawned * PlaneCombatTuning.AmbushShotStagger,
                     });
+                    Events.Add(new PlaneEvent(PlaneEventType.MobNoticed, at, Vector2.Zero));
                     spawned++;
                     break;
                 }
@@ -278,8 +279,8 @@ public sealed partial class PlaneWorld
         if (input.Fire && p.ShotTimer <= 0f && p.Aim.LengthSquared() > 0.5f)
         {
             p.ShotTimer = PlaneCombatTuning.ShotInterval;
-            Volley(p.Aim);
-            Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim));
+            int thrown = Volley(p.Aim);
+            Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
         }
 
         // Pearls: swim over one to take it.
@@ -300,7 +301,7 @@ public sealed partial class PlaneWorld
             if (!mob.Alive) continue;
             Vector2 to = p.Position - mob.Position;
             float dist = to.Length();
-            if (!mob.Aggro && dist < PlaneCombatTuning.MobNotice) mob.Aggro = true;
+            if (!mob.Aggro && dist < PlaneCombatTuning.MobNotice) Notice(mob);
             else if (mob.Aggro && dist > PlaneCombatTuning.MobGiveUp) mob.Aggro = false;
 
             mob.HitFlash -= Dt;
@@ -363,10 +364,10 @@ public sealed partial class PlaneWorld
                     if (!mob.Alive || Vector2.Distance(mob.Position, shot.Position) > PlaneCombatTuning.MobRadius + shot.Radius) continue;
                     if (shot.Hit is not null && !shot.Hit.Add(mob)) continue;
                     mob.Hp -= shot.Damage;
-                    mob.Aggro = true;
+                    if (!mob.Aggro) Notice(mob);
                     mob.HitFlash = PlaneCombatTuning.HitFlash;
                     if (!shot.Pierce && !shot.Boomerang) Pop(shot);
-                    Events.Add(new PlaneEvent(mob.Alive ? PlaneEventType.MobHit : PlaneEventType.MobDefeated, mob.Position, shot.Velocity));
+                    Events.Add(new PlaneEvent(mob.Alive ? PlaneEventType.MobHit : PlaneEventType.MobDefeated, mob.Position, shot.Velocity, shot.Damage));
                     if (!mob.Alive)
                     {
                         Stats.MobsDefeated++;
@@ -378,7 +379,8 @@ public sealed partial class PlaneWorld
             else if (Vector2.Distance(p.Position, shot.Position) < Radius + shot.Radius)
             {
                 shot.Life = 0f;
-                if (HurtPlayer(shot.Damage, shot.Velocity) && shot.Royal) p.SlowTimer = PlaneBossTuning.SlowSeconds;
+                var source = shot.Royal ? DamageSource.RoyalPearl : shot.BossPearl ? DamageSource.BossPearl : DamageSource.MobShot;
+                if (HurtPlayer(shot.Damage, shot.Velocity, source) && shot.Royal) p.SlowTimer = PlaneBossTuning.SlowSeconds;
             }
         }
         MergeBubbles();
@@ -390,7 +392,7 @@ public sealed partial class PlaneWorld
             p.Hp = 0f;
             p.Velocity = Vector2.Zero;
             Defeated = true;
-            Events.Add(new PlaneEvent(PlaneEventType.PlayerDefeated, p.Position, Vector2.Zero));
+            Events.Add(new PlaneEvent(PlaneEventType.PlayerDefeated, p.Position, Vector2.Zero, 0f, LastHitSource));
         }
 
         Run.Hp = p.Hp;
@@ -399,20 +401,31 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(PlaneEventType.GatewayEntered, GatewayPosition, Vector2.Zero));
     }
 
+    /// <summary>What hurt her last (on her defeat: what ended the run).</summary>
+    public DamageSource LastHitSource { get; private set; }
+
+    /// <summary>A mob notices her: it hunts her from now on.</summary>
+    void Notice(PlaneMob mob)
+    {
+        mob.Aggro = true;
+        Events.Add(new PlaneEvent(PlaneEventType.MobNoticed, mob.Position, Vector2.Zero));
+    }
+
     /// <summary>She is hurt, unless dashing or still in the grace after the last hit.</summary>
-    bool HurtPlayer(float damage, Vector2 dir)
+    bool HurtPlayer(float damage, Vector2 dir, DamageSource source)
     {
         var p = Player;
         if (p.DashInvulnerableTimer > 0f || p.HurtTimer > 0f || Defeated) return false;
         p.Hp -= damage;
         Stats.DamageTaken += damage;
         p.HurtTimer = PlaneCombatTuning.PlayerHurtGrace;
-        Events.Add(new PlaneEvent(PlaneEventType.PlayerHit, p.Position, dir));
+        LastHitSource = source;
+        Events.Add(new PlaneEvent(PlaneEventType.PlayerHit, p.Position, dir, damage, source));
         return true;
     }
 
     /// <summary>One volley along the aim: her loadout's shot count, fan or cone, and every flag on each shot.</summary>
-    void Volley(Vector2 aim)
+    int Volley(Vector2 aim)
     {
         var p = Player;
         var spec = Run.Loadout.Shot;
@@ -448,6 +461,7 @@ public sealed partial class PlaneWorld
             if (shot.Pierce || shot.Boomerang) shot.Hit = new HashSet<PlaneMob>();
             Shots.Add(shot);
         }
+        return count;
     }
 
     int _volleys;
@@ -482,6 +496,7 @@ public sealed partial class PlaneWorld
                 if (added < 0) added = 0;
                 keep.Damage += gone.Damage * added / gone.Bubbles;
                 keep.Bubbles += added;
+                if (added > 0 && keep.Bubbles == PlaneCombatTuning.BubbleCap) Events.Add(new PlaneEvent(PlaneEventType.BubbleFull, keep.Position, keep.Velocity));
                 keep.BaseRadius = MathF.Max(keep.BaseRadius, gone.BaseRadius);
                 keep.Radius = keep.BaseRadius * (1f + PlaneCombatTuning.BubbleGrowth * (keep.Bubbles - 1));
                 // Absorbed, no pop.

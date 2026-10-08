@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
-using OctoShoots.Core.Sim;
+using OctoShoots.Core.Creatures;
 
 namespace OctoShoots.Core.Gen.TopDown;
 

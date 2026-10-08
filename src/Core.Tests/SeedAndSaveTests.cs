@@ -70,18 +70,20 @@ public class SaveTests
         Profile = new Profile
         {
             Achievements = new HashSet<string> { "untouchable" },
-            SeenItems = new HashSet<string> { "coral_crown", "mitosis" },
-            Stats = new ProfileStats { Runs = 3, Deaths = 2, DeathsByCause = new() { ["lanternfish"] = 2 } },
+            SeenItems = new HashSet<string> { "triple_tentacle", "hammerhead" },
+            Stats = new ProfileStats { Runs = 3, Deaths = 2, DeathsByCause = new() { ["mob_shot"] = 2 } },
+            Pearls = new() { ["triple_tentacle"] = new PearlRecord { Absorbed = 4, RunsLost = 1 } },
+            Creatures = new() { ["queen_clam"] = new CreatureRecord { Defeated = 1, BestSeconds = 21.5 } },
+            RecentSeeds = new() { "KELP 7Q2Z" },
         },
         Run = new SuspendedRun
         {
             Seed = "KELP 7Q2Z",
-            Items = new List<string> { "coral_crown", "conch_horn" },
+            Room = 3,
+            Items = new List<string> { "triple_tentacle", "hammerhead" },
             Hp = 87.5f,
-            Foam = 15f,
-            Coins = 12,
-            Position = new[] { 1f, 2f, 3f },
-            Ticks = 4321,
+            Shells = 12,
+            Elapsed = 431.5,
         },
     };
 
@@ -91,10 +93,12 @@ public class SaveTests
         var back = SaveCodec.Deserialize(SaveCodec.Serialize(Sample()));
         Assert.Equal(SaveCodec.CurrentVersion, back.Version);
         Assert.Contains("untouchable", back.Profile.Achievements);
-        Assert.Equal(2, back.Profile.Stats.DeathsByCause["lanternfish"]);
+        Assert.Equal(2, back.Profile.Stats.DeathsByCause["mob_shot"]);
+        Assert.Equal(4, back.Profile.Pearls["triple_tentacle"].Absorbed);
+        Assert.Equal(21.5, back.Profile.Creatures["queen_clam"].BestSeconds);
         Assert.Equal(87.5f, back.Run!.Hp);
-        Assert.Equal(new[] { "coral_crown", "conch_horn" }, back.Run.Items);
-        Assert.Equal(new[] { 1f, 2f, 3f }, back.Run.Position);
+        Assert.Equal(3, back.Run.Room);
+        Assert.Equal(new[] { "triple_tentacle", "hammerhead" }, back.Run.Items);
     }
 
     [Fact]
@@ -105,13 +109,14 @@ public class SaveTests
         Assert.DoesNotContain("+", code);
         Assert.DoesNotContain("/", code);
         var back = SaveCodec.Import("  " + code + "\n");
-        Assert.Equal(12, back.Run!.Coins);
+        Assert.Equal(12, back.Run!.Shells);
     }
 
     [Theory]
     [InlineData("hello")]
-    [InlineData("CQ3D1:not*base64")]
     [InlineData("CQ3D1:aGVsbG8")]
+    [InlineData("INKD2:not*base64")]
+    [InlineData("INKD2:aGVsbG8")]
     public void DamagedCodesAreRejected(string code)
     {
         Assert.Throws<SaveException>(() => SaveCodec.Import(code));
@@ -125,28 +130,39 @@ public class SaveTests
     }
 
     [Fact]
+    public void AFirstPersonSaveKeepsItsProfileAndDropsItsRun()
+    {
+        string v1 = """{ "version": 1, "profile": { "achievements": ["untouchable"], "stats": { "runs": 4, "itemPickups": { "x": 1 } } }, "run": { "seed": "AAAA AAAA", "coins": 7, "position": [1, 2, 3] } }""";
+        var save = SaveCodec.Deserialize(v1);
+        Assert.Equal(SaveCodec.CurrentVersion, save.Version);
+        Assert.Contains("untouchable", save.Profile.Achievements);
+        Assert.Equal(4, save.Profile.Stats.Runs);
+        Assert.Null(save.Run);
+    }
+
+    [Fact]
     public void OldSavesMigrateStepByStep()
     {
-        // Pretend the format is at version 3: v1 kept coins as "sandDollars", v2 had no foam.
+        // Pretend the format is at version 3: v1 kept shells as "coins", v2 had no elapsed time.
         var migrations = new Dictionary<int, Func<JsonObject, JsonObject>>
         {
             [1] = root =>
             {
                 var run = root["run"]!.AsObject();
-                run["coins"] = run["sandDollars"]!.GetValue<int>();
-                run.Remove("sandDollars");
+                run["shells"] = run["coins"]!.GetValue<int>();
+                run.Remove("coins");
                 return root;
             },
             [2] = root =>
             {
-                root["run"]!["foam"] = 5f;
+                root["run"]!["elapsed"] = 5.0;
                 return root;
             },
         };
-        string v1 = """{ "version": 1, "profile": {}, "run": { "seed": "AAAA AAAA", "sandDollars": 7 } }""";
+        string v1 = """{ "version": 1, "profile": {}, "run": { "seed": "AAAA AAAA", "coins": 7 } }""";
         var save = SaveCodec.Deserialize(v1, migrations, currentVersion: 3);
-        Assert.Equal(7, save.Run!.Coins);
-        Assert.Equal(5f, save.Run.Foam);
+        Assert.Equal(7, save.Run!.Shells);
+        Assert.Equal(5.0, save.Run.Elapsed);
     }
 
     [Fact]
@@ -156,26 +172,5 @@ public class SaveTests
         Assert.False(profile.Award("untouchable", customSeed: true));
         Assert.True(profile.Award("untouchable", customSeed: false));
         Assert.False(profile.Award("untouchable", customSeed: false));
-    }
-
-    [Fact]
-    public void WorldSnapshotRestores()
-    {
-        var world = ItemWorlds.Create(0);
-        world.GiveItem("coral_crown");
-        world.GiveItem("barnacle_armor");
-        world.GiveItem("pirates_doubloon");
-        world.Player.Hp = 61f;
-        world.Player.Position = new Vector3(20f, 13f, 18f);
-        var snapshot = world.Snapshot("KELP 7Q2Z", customSeed: false);
-
-        var restored = ItemWorlds.Create(0);
-        restored.Restore(SaveCodec.Deserialize(SaveCodec.Serialize(new SaveFile { Run = snapshot })).Run!);
-        Assert.Equal(world.Items, restored.Items);
-        Assert.Equal(61f, restored.Player.Hp);
-        Assert.Equal(30f, restored.Player.Foam);
-        Assert.Equal(15, restored.Coins);
-        Assert.Equal(new Vector3(20f, 13f, 18f), restored.Player.Position);
-        Assert.Equal(world.Loadout.Stats.MaxHp, restored.Loadout.Stats.MaxHp);
     }
 }

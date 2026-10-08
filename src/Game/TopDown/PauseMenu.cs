@@ -14,6 +14,7 @@ public partial class PauseMenu : Control
 {
     public event Action? ResumePressed;
     public event Action? RestartPressed;
+    public event Action? QuitPressed;
 
     VBoxContainer _pearls = null!;
     Label _summary = null!;
@@ -63,6 +64,9 @@ public partial class PauseMenu : Control
         var restart = new Button { Text = "Restart run", CustomMinimumSize = new Vector2(170f, 40f) };
         restart.Pressed += () => RestartPressed?.Invoke();
         buttons.AddChild(restart);
+        var quit = new Button { Text = "Save & quit to title", CustomMinimumSize = new Vector2(190f, 40f), TooltipText = "You'll resume at the start of this room." };
+        quit.Pressed += () => QuitPressed?.Invoke();
+        buttons.AddChild(quit);
 
         box.AddChild(new HSeparator());
         var heading = new Label { Text = "Absorbed pearls" };

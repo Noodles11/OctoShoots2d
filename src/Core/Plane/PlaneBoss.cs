@@ -211,7 +211,7 @@ public sealed partial class PlaneWorld
                 float vInto = Vector2.Dot(p.Velocity, n);
                 if (vInto < 0f) p.Velocity -= n * vInto;
                 // Touching her shell while she fights hurts and bounces her off.
-                if (boss.Stage == BossStage.Fight && boss.StageTime > Dt && HurtPlayer(PlaneBossTuning.ContactDamage, n))
+                if (boss.Stage == BossStage.Fight && boss.StageTime > Dt && HurtPlayer(PlaneBossTuning.ContactDamage, n, DamageSource.BossContact))
                     p.Velocity += n * PlaneBossTuning.ContactKnockback;
             }
         }
@@ -362,7 +362,7 @@ public sealed partial class PlaneWorld
             {
                 Events.Add(new PlaneEvent(PlaneEventType.BossSnap, boss.Position, boss.Facing));
                 if (Vector2.Distance(p.Position, boss.Position) < PlaneBossTuning.SnapRange)
-                    HurtPlayer(PlaneBossTuning.SnapDamage, SafeNormalize(p.Position - boss.Position));
+                    HurtPlayer(PlaneBossTuning.SnapDamage, SafeNormalize(p.Position - boss.Position), DamageSource.BossSnap);
             }
         }
     }
@@ -422,7 +422,7 @@ public sealed partial class PlaneWorld
         {
             boss.Hp -= shot.Damage;
             boss.HitFlash = PlaneCombatTuning.HitFlash;
-            Events.Add(new PlaneEvent(PlaneEventType.BossHit, boss.Position, shot.Velocity));
+            Events.Add(new PlaneEvent(PlaneEventType.BossHit, boss.Position, shot.Velocity, shot.Damage));
             if (boss.Hp <= 0f) FreeBoss(boss);
             else if (boss.Phase == 1 && boss.Hp <= PlaneBossTuning.Hp * 0.5f)
             {
