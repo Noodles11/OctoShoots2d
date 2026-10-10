@@ -44,6 +44,10 @@ public partial class TopoMap : Control
     public FogOfWar? Seen;
     /// <summary>Unvisited places she has come near enough to spot show as "?"; null shows every unvisited place.</summary>
     public IReadOnlySet<int>? Spotted;
+    /// <summary>The corruption's texture (null: none), and its Blightroots and valves (shown once seen through the fog).</summary>
+    public Texture2D? Corruption;
+    public readonly List<(System.Numerics.Vector2 At, bool Alive)> Blights = new();
+    public readonly List<(System.Numerics.Vector2 A, System.Numerics.Vector2 B, bool Seen, bool Cleared)> Valves = new();
     /// <summary>Clementine's arrow: size and fill.</summary>
     public float ArrowScale = 1f;
     public Color ArrowColor = Colors.White;
@@ -123,6 +127,8 @@ public partial class TopoMap : Control
         _terrain.SetShaderParameter("use_fog", Fog is not null);
         if (Fog is not null) _terrain.SetShaderParameter("fog", Fog.Texture);
         _terrain.SetShaderParameter("mud", Mud);
+        _terrain.SetShaderParameter("use_corruption", Corruption is not null);
+        if (Corruption is not null) _terrain.SetShaderParameter("corruption_tex", Corruption);
         QueueRedraw();
     }
 
@@ -133,9 +139,9 @@ public partial class TopoMap : Control
         float ppm = PixelsPerMetre;
         var font = ThemeDB.FallbackFont;
 
-        // Boulders and bommies as the little squares of a survey map.
+        // Boulders and bommies as the little squares of a survey map; under fog of war only once seen.
         foreach (var d in map.Decor)
-            if (d.Kind is DecorKind.Boulder or DecorKind.Bommie)
+            if (d.Kind is (DecorKind.Boulder or DecorKind.Bommie) && (Fog is null || Fog.At(d.Position) > 0.5f))
             {
                 float s = d.Kind == DecorKind.Bommie ? 4f : 2.5f;
                 DrawRect(new Rect2(P(d.Position) - Vector2.One * s * 0.5f, Vector2.One * s), Pebble);
@@ -206,14 +212,40 @@ public partial class TopoMap : Control
                 DrawString(font, p + new Vector2(-4f, 5f), "?", HorizontalAlignment.Left, -1, 14, Ink);
                 continue;
             }
-            if (poi.Kind == PoiKind.Rift && ShowDetail)
+            if (poi.Kind == PoiKind.Exit && ShowDetail)
             {
                 DrawCircle(p, poi.Radius * ppm, new Color(col, 0.18f));
                 DrawArc(p, poi.Radius * ppm, 0f, Mathf.Tau, 48, col, 2f, true);
             }
-            float r = poi.Kind is PoiKind.Rift or PoiKind.Start ? 6f : 4.5f;
+            float r = poi.Kind is PoiKind.Exit or PoiKind.Start ? 6f : 4.5f;
             DrawCircle(p, r + 1.2f, Ink);
             DrawCircle(p, r, col);
+        }
+
+        // The corruption's works, once seen: a valve as a dark bar across its neck; a Blightroot as an ink sac in a violet
+        // ring (a small gold star where one has burst).
+        foreach (var (a, b, seen, cleared) in Valves)
+            if (seen && !cleared)
+            {
+                DrawLine(P(a), P(b), new Color(0f, 0f, 0f, 0.7f), 7f, true);
+                DrawLine(P(a), P(b), new Color(0.3f, 0.12f, 0.45f), 4f, true);
+            }
+        foreach (var (at, alive) in Blights)
+        {
+            if (Fog is not null && Fog.At(at) < 0.5f) continue;
+            Vector2 q = P(at);
+            if (alive)
+            {
+                DrawCircle(q, 7.5f, new Color(0f, 0f, 0f, 0.6f));
+                DrawCircle(q, 6f, new Color(0.05f, 0.02f, 0.08f));
+                DrawArc(q, 6f, 0f, Mathf.Tau, 20, new Color(0.62f, 0.3f, 0.95f), 1.6f, true);
+            }
+            else
+            {
+                var gold = new Color(1f, 0.8f, 0.4f);
+                DrawLine(q - new Vector2(4f, 0f), q + new Vector2(4f, 0f), gold, 1.5f, true);
+                DrawLine(q - new Vector2(0f, 4f), q + new Vector2(0f, 4f), gold, 1.5f, true);
+            }
         }
 
         // Clementine: an arrow along her heading.
@@ -256,7 +288,7 @@ public partial class TopoMap : Control
     {
         var rows = new (PoiKind Kind, string Name)[]
         {
-            (PoiKind.Start, "Start"), (PoiKind.Rift, "The Crack"), (PoiKind.ItemSpawn, "Item cache"), (PoiKind.Shop, "Shop"),
+            (PoiKind.Start, "Start"), (PoiKind.Exit, "Way down"), (PoiKind.ShellCache, "Shell cache"), (PoiKind.Shop, "Shop"),
             (PoiKind.TreasureCave, "Treasure"), (PoiKind.CurseDen, "Curse den"), (PoiKind.Secret, "Secret"), (PoiKind.Ambush, "Ambush"),
         };
         var at = new Vector2(Size.X - 124f, Size.Y - rows.Length * 16f - 14f);

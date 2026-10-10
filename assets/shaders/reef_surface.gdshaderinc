@@ -9,6 +9,7 @@
 //   The Crack: an orange glow breathing up from the deepest fissure (reef_crack: x, z, radius, strength).
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
+#include "res://assets/shaders/level_frame.gdshaderinc"
 
 global uniform vec3 reef_water_shallow;
 global uniform vec3 reef_water_deep;
@@ -24,6 +25,12 @@ global uniform vec3 reef_sun;
 global uniform float reef_caustics;
 global uniform float reef_menace;
 global uniform vec4 reef_crack;
+/// 0 on a level drawn below the current one: the Crack (a global) belongs to the current level.
+uniform float crack_mask = 1.0;
+// The corruption (docs/CORRUPTION.md): this level's field, R = ink density, G = the gold of corruption dying (set per
+// material by LevelView; off on any level that is not the one she is on or diving into).
+uniform sampler2D corruption_map : filter_linear, repeat_disable;
+uniform float corruption_on = 0.0;
 
 struct ReefSkin {
 	vec3 albedo;
@@ -157,22 +164,28 @@ vec3 rs_garden(vec3 w, inout vec3 n) {
 	return c;
 }
 
-// px: how many metres one pixel spans here (from the caller's derivatives), to keep fine patterns from aliasing.
-ReefSkin reef_surface(vec3 w, vec3 n, float time, float px) {
+// local: the point in its level's own coordinates (level_frame.gdshaderinc); patterns are drawn at its absolute
+// position, so a level looks the same wherever it is placed. px: how many metres one pixel spans here (from the
+// caller's derivatives), to keep fine patterns from aliasing.
+ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 	ReefSkin s;
+	vec3 w = lf_pattern(local);
 	float up = n.y;
 	// Height relative to the swim level (0): the seabed lies at about -1, the walls rise above 0.
-	float h = w.y;
-
-	vec3 nn = n;
-	vec3 sand = rs_sand(w, nn, px);
-	vec3 rock = rs_rock(w, n);
-	vec3 gn = n;
-	vec3 garden = rs_garden(w, gn);
+	float h = local.y;
 
 	// Sand on the flat seabed (and a little way up the foot of the walls); gardens on flat tops; rock elsewhere.
+	// The weights come first, and each look is worked out only where it shows (most pixels need just one): the
+	// three noise stacks are the reef's main cost on a big screen.
 	float sandK = smoothstep(0.72, 0.92, up) * (1.0 - smoothstep(-0.4, 0.5 + rs_noise(w * 0.3) * 0.8, h));
-	float gardenK = smoothstep(0.55, 0.85, up) * smoothstep(1.2, 2.6, h) * smoothstep(0.3, 0.5, rs_fbm(w * 0.18 + 7.0));
+	float gardenK = smoothstep(0.55, 0.85, up) * smoothstep(1.2, 2.6, h);
+	if (gardenK > 0.0 && sandK < 0.999) gardenK *= smoothstep(0.3, 0.5, rs_fbm(w * 0.18 + 7.0));
+	else gardenK = 0.0;
+	vec3 nn = n;
+	vec3 sand = sandK > 0.001 ? rs_sand(w, nn, px) : vec3(0.0);
+	vec3 rock = (1.0 - gardenK) * (1.0 - sandK) > 0.001 ? rs_rock(w, n) : vec3(0.0);
+	vec3 gn = n;
+	vec3 garden = gardenK * (1.0 - sandK) > 0.001 ? rs_garden(w, gn) : vec3(0.0);
 	vec3 c = mix(rock, garden, gardenK);
 	float apron = (1.0 - smoothstep(0.8, 0.97, up)) * sandK;
 	sand = mix(sand, sand * mix(vec3(0.72), reef_algae * 1.1, 0.4), apron);
@@ -181,7 +194,7 @@ ReefSkin reef_surface(vec3 w, vec3 n, float time, float px) {
 	s.rough = mix(mix(0.82, 0.62, gardenK), 0.96, sandK);
 
 	// The impassable reef wall around the square: darker and cooler toward the edge of the world.
-	float edge = min(min(w.x, w.z), min(reef_extent.x - w.x, reef_extent.y - w.z));
+	float edge = min(min(local.x, local.z), min(reef_extent.x - local.x, reef_extent.y - local.z));
 	float rim = 1.0 - smoothstep(0.0, 9.0, edge);
 	c = mix(c, c * 0.55 + reef_murk * 0.2, rim * 0.6);
 
@@ -195,18 +208,39 @@ ReefSkin reef_surface(vec3 w, vec3 n, float time, float px) {
 	// Caustics on everything facing up (sharp near the surface, softer and fainter below). They are sunlight, so the
 	// light() pass adds them only where the sun reaches: the walls' shade cuts them off.
 	float face = pow(clamp(s.normal.y, 0.0, 1.0), 1.4);
-	s.caustic = sun_caustics(w, time) * reef_caustics * light_strength * face;
+	// The light's path is measured from the surface at the point's true height (the level's own height plus where the
+	// level sits now): during the dive the sea surface sinks with her, so the light on the level below is already what
+	// it will be once that level becomes the level — nothing jumps when the world is moved back.
+	vec3 lit_at = vec3(w.x, local.y + level_offset.y, w.z);
+	s.caustic = sun_caustics(lit_at, time) * reef_caustics * light_strength * face;
 	s.emission = vec3(0.0);
 
-	// The Crack: an orange glow breathing up out of the deepest fissure.
-	if (reef_crack.w > 0.0) {
-		float d = distance(w.xz, reef_crack.xy);
+	// The Crack: an orange glow breathing up out of the deepest fissure (only on the level it belongs to).
+	if (reef_crack.w > 0.0 && crack_mask > 0.0) {
+		float d = distance(local.xz, reef_crack.xy);
 		float inside = (1.0 - smoothstep(reef_crack.z * 0.4, reef_crack.z, d)) * (1.0 - smoothstep(-4.5, -1.6, h));
 		float breathe = 0.72 + 0.28 * sin(time * 1.1 + d * 0.4);
 		float flicker = 0.75 + 0.5 * rs_noise(vec3(w.xz * 0.9, time * 0.35));
 		vec3 ember = mix(vec3(1.0, 0.16, 0.02), vec3(1.0, 0.36, 0.06), smoothstep(-7.0, -3.0, h));
-		s.emission += ember * inside * breathe * flicker * reef_crack.w * 0.9;
+		s.emission += ember * inside * breathe * flicker * reef_crack.w * crack_mask * 0.9;
 		s.albedo = mix(s.albedo, vec3(0.05, 0.03, 0.03), inside * 0.8);
+	}
+	// The corruption on the floor: ink-black, glossy, drinking the caustics, threaded with faint violet veins. Where it
+	// dies it burns gold (light spreading, never erasing); its retreating edge keeps a warm fringe. Walls above the
+	// floor stay clean, the ink only licking their feet.
+	if (corruption_on > 0.0) {
+		vec2 cr = texture(corruption_map, local.xz / reef_extent).rg;
+		float floor_k = 1.0 - smoothstep(-0.2, 0.9, h);
+		float ink = smoothstep(0.03, 0.7, cr.r) * floor_k * corruption_on;
+		float vein = 1.0 - smoothstep(0.0, 0.07, abs(rs_noise(vec3(w.xz * 0.55, time * 0.05)) - 0.5));
+		vein *= 0.55 + 0.45 * sin(time * 0.9 + w.x * 0.31 + w.z * 0.23);
+		vec3 ink_col = vec3(0.016, 0.011, 0.026) + vec3(0.06, 0.012, 0.11) * vein;
+		s.albedo = mix(s.albedo, ink_col, ink * 0.95);
+		s.rough = mix(s.rough, 0.2, ink);
+		s.caustic *= 1.0 - ink * 0.9;
+		s.emission += vec3(0.14, 0.03, 0.24) * vein * ink * 0.22;
+		float fringe = smoothstep(0.02, 0.16, cr.r) * (1.0 - smoothstep(0.16, 0.42, cr.r));
+		s.emission += (vec3(1.0, 0.7, 0.3) * cr.g * 1.5 + vec3(1.0, 0.62, 0.26) * fringe * 0.07) * floor_k * corruption_on;
 	}
 	return s;
 }

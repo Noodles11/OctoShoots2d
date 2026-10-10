@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using OctoShoots.Core.Gen.TopDown;
 using OctoShoots.Core.Plane;
@@ -126,8 +127,83 @@ public partial class BossView : Node3D
     }
 
     /// <summary>A new level: her arena around its rift.</summary>
+    // The corruption's crust (docs/CORRUPTION.md): glossy ink lumps over her top valve, one fifth of them per layer; each
+    // layer cleansed from the arena breaks its lumps off, tumbling away in specks.
+    readonly List<(MeshInstance3D Mesh, int Layer)> _crust = new();
+    readonly List<(MeshInstance3D Mesh, Vector3 Velocity, float Age)> _falling = new();
+    ShaderMaterial? _crustMat;
+
+    void BuildCrust()
+    {
+        foreach (var (mesh, _) in _crust)
+            if (IsInstanceValid(mesh)) mesh.QueueFree();
+        foreach (var (mesh, _, _) in _falling) mesh.QueueFree();
+        // Lumps already broken off were moved to the view itself (and freed when they finished falling).
+        _crust.Clear();
+        _falling.Clear();
+        _crustMat ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader") };
+        var lump = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 14, Rings = 7 };
+        var rng = new RandomNumberGenerator { Seed = 7 };
+        for (int i = 0; i < 25; i++)
+        {
+            // Over the dome (unit radius, half as high), spread so every layer covers all of it.
+            float a = i * 2.39996f, rho = Mathf.Sqrt((i + 0.5f) / 25f) * 0.86f;
+            var at = new Vector3(Mathf.Cos(a) * rho, 0.5f * Mathf.Sqrt(Mathf.Max(0f, 1f - rho * rho)) + 0.02f, Mathf.Sin(a) * rho);
+            float size = rng.RandfRange(0.28f, 0.5f);
+            var mesh = new MeshInstance3D
+            {
+                Mesh = lump,
+                MaterialOverride = _crustMat,
+                Position = at,
+                // The valve is scaled (R, 0.95, 0.88 R): undo it so the lumps stay round, and flatten them onto the shell.
+                Scale = new Vector3(size / R, size * 0.55f / 0.95f, size / (R * 0.88f)),
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            };
+            mesh.SetInstanceShaderParameter("ember", 0.06f);
+            mesh.SetInstanceShaderParameter("wobble", 0.15f);
+            mesh.SetInstanceShaderParameter("seed", i * 1.3f);
+            _top.AddChild(mesh);
+            _crust.Add((mesh, i % 5));
+        }
+    }
+
+    void SyncCrust(PlaneWorld world, PlaneBoss boss, float dt)
+    {
+        int crust = world.Corruption is null ? 0 : boss.Crust;
+        for (int i = 0; i < _crust.Count; i++)
+        {
+            var (mesh, layer) = _crust[i];
+            if (!mesh.Visible || mesh.GetParent() != _top) continue;
+            if (layer < crust) continue;
+            // This layer is cleansed away: the lump breaks off and tumbles.
+            var at = mesh.GlobalTransform;
+            _top.RemoveChild(mesh);
+            AddChild(mesh);
+            mesh.GlobalTransform = at;
+            var out_ = (at.Origin - _clam.GlobalPosition) with { Y = 0f };
+            _falling.Add((mesh, out_.Normalized() * 3f + Vector3.Up * 2.5f, 0f));
+        }
+        for (int i = _falling.Count - 1; i >= 0; i--)
+        {
+            var (mesh, v, age) = _falling[i];
+            age += dt;
+            v += Vector3.Down * 6f * dt;
+            mesh.Position += v * dt;
+            mesh.Rotation += new Vector3(3f, 2f, 1f) * dt;
+            mesh.SetInstanceShaderParameter("fade", 1f - age / 0.9f);
+            if (age >= 0.9f)
+            {
+                mesh.QueueFree();
+                _falling.RemoveAt(i);
+                continue;
+            }
+            _falling[i] = (mesh, v, age);
+        }
+    }
+
     public void Show(PlaneWorld world)
     {
+        BuildCrust();
         var c = world.ArenaCenter;
         _mudRoot.Position = new Vector3(c.X, 0f, c.Y);
         foreach (var m in _mud)
@@ -210,6 +286,7 @@ public partial class BossView : Node3D
             valve.SetInstanceShaderParameter("drained", _drained);
             valve.SetInstanceShaderParameter("flash", boss.HitFlash > 0f ? 0.7f : 0f);
         }
+        SyncCrust(world, boss, dt);
         // Her crown jiggles after a thump.
         float jig = Mathf.Exp(-sinceLand * 3f) * Mathf.Sin(sinceLand * 30f) * 0.12f;
         for (int i = 0; i < _crown.Length; i++)

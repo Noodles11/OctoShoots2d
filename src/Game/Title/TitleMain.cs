@@ -10,6 +10,7 @@ using OctoShoots.Core.Items;
 using OctoShoots.Core.Plane;
 using OctoShoots.Core.Run;
 using OctoShoots.Core.Saves;
+using OctoShoots.Game.Controls;
 using OctoShoots.Game.Fx;
 using OctoShoots.Game.Settings;
 using OctoShoots.Game.TopDown;
@@ -37,10 +38,11 @@ public partial class TitleMain : Node3D
     // The backdrop.
     LevelView _level = null!;
     BellView _bell = null!;
+    PufferlingView _puffers = null!;
     CameraRig _camera = null!;
     MarineSnow _snow = null!;
     SunLight _sun = null!;
-    Task<LevelMap>? _backdrop;
+    Task<LevelShape>? _backdrop;
     PlaneWorld? _world;
     List<System.Numerics.Vector2> _route = new();
     int _routeAt, _routeDir = 1, _routeEnd;
@@ -75,6 +77,10 @@ public partial class TitleMain : Node3D
             CallDeferred(MethodName.SkipToGame);
             return;
         }
+        // The bindings (keyboard, mouse and controller), so menus answer the D-pad, A and B too.
+        InputSetup.Register();
+        AddChild(new PadMenus());
+        Input.MouseMode = Input.MouseModeEnum.Visible;
         foreach (string arg in args)
         {
             string Value(string prefix) => arg[prefix.Length..];
@@ -98,6 +104,8 @@ public partial class TitleMain : Node3D
         _sun.Configure(ReefLook.Shallows.Sun, ReefLook.Shallows.SunEnergy);
         _level = new LevelView();
         AddChild(_level);
+        _puffers = new PufferlingView();
+        AddChild(_puffers);
         _bell = new BellView();
         AddChild(_bell);
         _camera = new CameraRig();
@@ -108,7 +116,7 @@ public partial class TitleMain : Node3D
         _camera.SetReducedMotion(_view.ReducedMotion);
 
         var streams = new RunStreams(SeedCode.Parse(BackdropSeed));
-        _backdrop = Task.Run(() => TopDownGenerator.Generate(streams, 1, 1));
+        _backdrop = Task.Run(() => LevelShape.Prepare(TopDownGenerator.Generate(streams, LevelId.First)));
 
         BuildUi();
     }
@@ -152,13 +160,15 @@ public partial class TitleMain : Node3D
     // ───────────────────────── the backdrop ─────────────────────────
 
     /// <summary>The level is ready: show it, empty it of foes, and set Clementine swimming along a canyon.</summary>
-    void ShowBackdrop(LevelMap map)
+    void ShowBackdrop(LevelShape shape)
     {
-        _level.Show(map);
+        var map = shape.Map;
+        _level.Show(shape);
         _world = new PlaneWorld(map, _tuning, new PlaneRun(_catalog, _tuning));
         _world.Mobs.Clear();
         _world.Ambushes.Clear();
-        _route = LevelValidator.ShortestPath(map, map.Start.Position, map.Rift.Position, clearance: 1.5f);
+        _puffers.Show(_world);
+        _route = LevelValidator.ShortestPath(map, map.Start.Position, map.Exit.Position, clearance: 1.5f);
         // Back and forth along the first part of the way, well clear of the rift's arena.
         _routeEnd = Math.Max(2, (int)(_route.Count * 0.55f));
         _camera.Track(Focus(1f), 0f, snap: true);
@@ -214,6 +224,7 @@ public partial class TitleMain : Node3D
             if (steps == 4) _accumulator = 0;
             float alpha = (float)(_accumulator / PlaneWorld.Dt);
             _bell.Sync(_world, alpha, dt);
+            _puffers.Sync(_world, dt);
             _camera.Track(Focus(alpha), dt);
             _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
             _level.UpdateCanopy(_world.Player.Position, dt);
@@ -369,11 +380,11 @@ public partial class TitleMain : Node3D
         var p = save.Profile;
         var (cont, contDetail, _, _) = Item("continue");
         cont.GetParent<Control>().Visible = save.Run is not null;
-        if (save.Run is { } run) contDetail.Text = $"Depth {run.Depth} · Room {run.Room} · {run.Seed} · {TitleStyle.Clock(run.Elapsed)}";
+        if (save.Run is { } run) contDetail.Text = $"{run.Where} · {run.Seed} · {TitleStyle.Clock(run.Elapsed)}";
         Item("seeded").Detail.Text = p.RecentSeeds.Count > 0 ? $"last: {p.RecentSeeds[0]}" : "type a seed to share a reef";
-        Item("pedia").Detail.Text = $"{SeaPediaCard.PearlsFound(p)} / {PlaneRun.ShotPearls.Length} pearls · {SeaPediaCard.CreaturesMet(p)} / {SeaPediaCard.Creatures.Count} creatures";
+        Item("pedia").Detail.Text = $"{SeaPediaCard.PearlsFound(p)} / {PlaneRun.PortedPearls.Length} pearls · {SeaPediaCard.CreaturesMet(p)} / {SeaPediaCard.Creatures.Count} creatures";
         Item("stats").Detail.Text = p.Stats.Runs > 0 ? $"best: {StatsCard.Reach(p.Stats)} · {p.Stats.Runs} runs" : "no runs yet";
-        Item("save").Detail.Text = save.Run is { } r ? $"saved run: Room {r.Room}" : "no saved run";
+        Item("save").Detail.Text = save.Run is { } r ? $"saved run: {r.Where}" : "no saved run";
     }
 
     // ───────────────────────── runs ─────────────────────────
@@ -397,7 +408,7 @@ public partial class TitleMain : Node3D
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 10);
         card.AddChild(box);
-        box.AddChild(TitleStyle.Text($"Start a new run? Your saved run (Depth {run.Depth} · Room {run.Room}) will be lost.", 17, TitleStyle.Ink, TitleStyle.BodyBold));
+        box.AddChild(TitleStyle.Text($"Start a new run? Your saved run ({run.Where}) will be lost.", 17, TitleStyle.Ink, TitleStyle.BodyBold));
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
         box.AddChild(row);
@@ -555,16 +566,16 @@ public partial class TitleMain : Node3D
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (e is not InputEventKey { Pressed: true, Echo: false } key) return;
+        // B on a controller goes back like Esc: closes a card or the seed box.
+        bool padBack = e is (InputEventJoypadButton or InputEventJoypadMotion) && e.IsActionPressed(InputSetup.MenuBack);
+        if (e is not InputEventKey { Pressed: true, Echo: false } key)
+        {
+            if (padBack) GoBack();
+            return;
+        }
         if (key.PhysicalKeycode == Key.Escape)
         {
-            if (_card is not null) CloseCard();
-            else if (_inline is not null)
-            {
-                CloseInline();
-                _items.FirstOrDefault(it => it.Button.GetParent<Control>().Visible).Button?.GrabFocus();
-            }
-            GetViewport().SetInputAsHandled();
+            GoBack();
             return;
         }
         // W/S move through the menu like the arrow keys.
@@ -576,6 +587,18 @@ public partial class TitleMain : Node3D
             visible[next].GrabFocus();
             GetViewport().SetInputAsHandled();
         }
+    }
+
+    /// <summary>Esc or B: close the open card, or the seed box / prompt under a menu item.</summary>
+    void GoBack()
+    {
+        if (_card is not null) CloseCard();
+        else if (_inline is not null)
+        {
+            CloseInline();
+            _items.FirstOrDefault(it => it.Button.GetParent<Control>().Visible).Button?.GrabFocus();
+        }
+        GetViewport().SetInputAsHandled();
     }
 
     // ───────────────────────── review ─────────────────────────
@@ -628,7 +651,7 @@ public partial class TitleMain : Node3D
             Profile = p,
             Run = new SuspendedRun
             {
-                Seed = "KELP 7Q2Z", Depth = 1, Room = 3, Items = new List<string> { "triple_tentacle", "mirror_scale" },
+                Seed = "KELP 7Q2Z", Depth = 1, Level = 3, Items = new List<string> { "triple_tentacle", "mirror_scale" },
                 Hp = 74, Shells = 31, Elapsed = 761, Foes = 41, ShellsCollected = 88,
                 SavedAt = DateTime.Now.AddMinutes(-42).ToString("s", CultureInfo.InvariantCulture),
             },

@@ -4,7 +4,7 @@ using OctoShoots.Game.Settings;
 
 namespace OctoShoots.Game.Title;
 
-/// <summary>Settings (proposal §4.6): the view options that exist today, reduced motion, and the controls (read-only).</summary>
+/// <summary>Settings (proposal §4.6): the view options that exist today, reduced motion, and the controls (rebindable).</summary>
 public partial class SettingsCard : PanelContainer
 {
     readonly ViewOptions _view;
@@ -34,7 +34,7 @@ public partial class SettingsCard : PanelContainer
         var title = TitleStyle.Text("Settings", 40, TitleStyle.Ink, TitleStyle.Display);
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        var close = TitleStyle.Pill("Close  (Esc)", primary: false, size: 15);
+        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
@@ -80,21 +80,12 @@ public partial class SettingsCard : PanelContainer
         });
         box.AddChild(Row("Reduced motion", "Menus and banners cross-fade instead of rising, diving and splashing.", reduced));
 
+        // Controls: every binding, keyboard and mouse or controller, rebindable (saved at once).
         box.AddChild(Heading("Controls"));
-        var keys = new GridContainer { Columns = 2 };
-        keys.AddThemeConstantOverride("h_separation", 40);
-        keys.AddThemeConstantOverride("v_separation", 6);
-        foreach (var (what, key) in new[]
-                 {
-                     ("Swim", "W A S D"), ("Dash", "Space"), ("Aim and shoot", "Mouse (hold) or arrow keys"),
-                     ("Level map", "Tab"), ("Pause", "Esc"),
-                 })
-        {
-            keys.AddChild(TitleStyle.Text(what, 16, TitleStyle.InkSoft));
-            keys.AddChild(TitleStyle.Text(key, 16, TitleStyle.Ink, TitleStyle.Mono));
-        }
-        box.AddChild(keys);
-        box.AddChild(TitleStyle.Text("Rebinding comes later.", 14, TitleStyle.InkSoft));
+        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0f, 220f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        box.AddChild(scroll);
+        var binder = new ControlsBinder { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scroll.AddChild(binder);
     }
 
     void Save()

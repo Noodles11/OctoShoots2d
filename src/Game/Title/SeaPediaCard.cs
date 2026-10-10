@@ -18,9 +18,9 @@ public partial class SeaPediaCard : PanelContainer
     public static readonly IReadOnlyDictionary<string, (string Name, string Line, string Notes, bool Boss)> Creatures =
         new Dictionary<string, (string, string, string, bool)>
         {
-            [PlaneProfileRecorder.MobId] = ("Pellet Dot",
-                "A placeholder with opinions. Keeps its distance and spits.",
-                "Notices you within 14 m, closes to about 5 m, and spits a 10-damage pellet every 1.4 s when it can see you. 30 HP. Ambushes bring five to seven at once.",
+            [PlaneProfileRecorder.MobId] = ("Pufferling",
+                "Round, spotty and easily offended. The Leak dyed this one red and clipped a price tag to its tail.",
+                "Notices you within 10 m and drifts closer, facing you. Within 8 m it blows up into a spiny ball (0.8 s), fires eight needles in a ring, turned differently every time (8 each; hot pink, they pop your bubbles), and stays round for a moment. Then it backs off and shrinks for 3 s: your window. Its raised spines sting on touch (4). 60 HP. Freed, it swims off in its own sand-and-olive colours.",
                 false),
             [PlaneProfileRecorder.QueenClamId] = ("Queen Clam",
                 "Sits on the rift. Hates visitors. Loves pearls, as long as they are hers.",
@@ -45,7 +45,7 @@ public partial class SeaPediaCard : PanelContainer
         _close = close;
     }
 
-    public static int PearlsFound(Profile p) => PlaneRun.ShotPearls.Count(id => p.SeenItems.Contains(id));
+    public static int PearlsFound(Profile p) => PlaneRun.PortedPearls.Count(id => p.SeenItems.Contains(id));
     public static int CreaturesMet(Profile p) => Creatures.Keys.Count(id => p.SeenCreatures.Contains(id) || p.SeenBosses.Contains(id));
 
     public override void _Ready()
@@ -65,14 +65,14 @@ public partial class SeaPediaCard : PanelContainer
         var title = TitleStyle.Text("Sea-pedia", 40, TitleStyle.Ink, TitleStyle.Display);
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        var close = TitleStyle.Pill("Close  (Esc)", primary: false, size: 15);
+        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
         var tabs = new HBoxContainer();
         tabs.AddThemeConstantOverride("separation", 10);
         box.AddChild(tabs);
-        _pearlTab = TitleStyle.Pill($"Pearls  {PearlsFound(_profile)} / {PlaneRun.ShotPearls.Length}", size: 16);
+        _pearlTab = TitleStyle.Pill($"Pearls  {PearlsFound(_profile)} / {PlaneRun.PortedPearls.Length}", size: 16);
         _creatureTab = TitleStyle.Pill($"Creatures  {CreaturesMet(_profile)} / {Creatures.Count}", primary: false, size: 16);
         _pearlTab.Pressed += () => ShowTab(true);
         _creatureTab.Pressed += () => ShowTab(false);
@@ -116,7 +116,7 @@ public partial class SeaPediaCard : PanelContainer
         Button? first = null;
         if (pearls)
         {
-            foreach (string id in PlaneRun.ShotPearls)
+            foreach (string id in PlaneRun.PortedPearls)
             {
                 var tile = PearlTile(id);
                 _grid.AddChild(tile);
@@ -239,7 +239,7 @@ public partial class SeaPediaCard : PanelContainer
         _detail.AddChild(new HSeparator());
         var r = _profile.Pearls.GetValueOrDefault(id) ?? new PearlRecord();
         _detail.AddChild(Record(("Absorbed", r.Absorbed.ToString("N0")), ("Runs it was in", r.Runs.ToString("N0")),
-            ("Runs lost holding it", r.RunsLost.ToString("N0")), ("Rooms cleared with it", r.RoomsCleared.ToString("N0"))));
+            ("Runs lost holding it", r.RunsLost.ToString("N0")), ("Levels cleared with it", r.RoomsCleared.ToString("N0"))));
     }
 
     void ShowCreature(string id, bool known)
@@ -310,7 +310,7 @@ public partial class SeaPediaCard : PanelContainer
         return grid;
     }
 
-    /// <summary>A creature's portrait, drawn: the Pellet Dot as an angry red ball, Queen Clam as her crowned shell.</summary>
+    /// <summary>A creature's portrait, drawn: the Pufferling as a red, lime-spotted ball of spines, Queen Clam as her crowned shell.</summary>
     public partial class Portrait : Control
     {
         readonly string _id;
@@ -331,13 +331,29 @@ public partial class SeaPediaCard : PanelContainer
             DrawCircle(c, r, _known ? new Color(0.86f, 0.95f, 0.93f) : new Color(0.8f, 0.78f, 0.78f));
             if (_id == PlaneProfileRecorder.MobId)
             {
-                var body = _known ? new Color(0.92f, 0.22f, 0.26f) : dark;
-                DrawCircle(c + new Vector2(0f, r * 0.05f), r * 0.55f, body);
+                // Blown up: a red ball, spines all round, lime spots, a tail fin with its price tag.
+                var body = _known ? new Color(0.95f, 0.25f, 0.3f) : dark;
+                var at = c + new Vector2(-r * 0.05f, r * 0.04f);
+                float ball = r * 0.5f;
+                for (int i = 0; i < 18; i++)
+                {
+                    float a = i * Mathf.Tau / 18f;
+                    var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                    DrawLine(at + dir * ball * 0.9f, at + dir * ball * 1.32f, _known ? new Color(0.55f, 0.38f, 0.3f) : dark, r * 0.04f, true);
+                }
+                var tail = new[] { at + new Vector2(ball * 0.92f, 0f), at + new Vector2(ball * 1.35f, -ball * 0.38f), at + new Vector2(ball * 1.35f, ball * 0.38f) };
+                DrawColoredPolygon(tail, _known ? new Color(0.45f, 1f, 0.25f) : dark);
+                DrawCircle(at, ball, body);
                 if (!_known) return;
-                DrawCircle(c + new Vector2(-r * 0.18f, -r * 0.16f), r * 0.16f, new Color(1f, 0.6f, 0.62f));
-                DrawCircle(c + new Vector2(r * 0.12f, -r * 0.02f), r * 0.17f, Colors.White);
-                DrawCircle(c + new Vector2(r * 0.16f, 0f), r * 0.08f, new Color(0.08f, 0.04f, 0.06f));
-                DrawLine(c + new Vector2(-r * 0.04f, -r * 0.22f), c + new Vector2(r * 0.3f, -r * 0.12f), new Color(0.08f, 0.04f, 0.06f), r * 0.07f);
+                foreach (var (x, y) in new[] { (-0.45f, -0.3f), (0f, -0.55f), (0.4f, -0.25f), (-0.15f, 0.2f), (0.3f, 0.35f), (-0.5f, 0.45f), (0.55f, 0.05f) })
+                    DrawCircle(at + new Vector2(x, y) * ball, ball * 0.11f, new Color(0.5f, 1f, 0.25f));
+                DrawCircle(at + new Vector2(-ball * 0.45f, -ball * 0.05f), ball * 0.2f, new Color(0.45f, 1f, 0.2f));
+                DrawCircle(at + new Vector2(-ball * 0.48f, -ball * 0.05f), ball * 0.11f, new Color(0.05f, 0.04f, 0.04f));
+                DrawLine(at + new Vector2(-ball * 0.7f, -ball * 0.36f), at + new Vector2(-ball * 0.25f, -ball * 0.28f), new Color(0.3f, 0.02f, 0.05f), r * 0.045f, true);
+                // The price tag on the tail: a cream card with a pink edge.
+                var tag = new Rect2(at + new Vector2(ball * 1.2f, ball * 0.35f), new Vector2(r * 0.2f, r * 0.13f));
+                DrawRect(tag, new Color(1f, 0.42f, 0.8f));
+                DrawRect(tag.Grow(-r * 0.02f), new Color(0.98f, 0.95f, 0.86f));
             }
             else
             {

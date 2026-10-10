@@ -7,16 +7,16 @@ using OctoShoots.Core.Plane;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The plane HUD, bottom left: Clementine's HP bar (a lagging trail shows the damage just taken) and the pearls she
-/// carries, one dot each in its own colours. A pearl's name and tagline show for a moment when she takes it.
+/// The plane HUD, bottom left: the pearls she carries, one dot each in its own colours, and her shells. A pearl's name
+/// and tagline show for a moment when she takes it. Over the shaft, a prompt: Shift to dive, or why she cannot yet.
+/// Her health and her active pearl's charge are not here: they are on her bell (BellView, DESIGN-TOPDOWN §2.5).
 /// </summary>
 public partial class HudView : Control
 {
-    const float BarWidth = 300f, BarHeight = 18f, Margin = 18f;
+    const float Margin = 18f;
 
     PlaneRun? _run;
     ItemCatalog? _catalog;
-    float _hp, _max = 100f, _trail;
     string _caption = "";
     int _shells;
     /// <summary>1 when a shell has just been collected, easing back to 0: the counter brightens and swells.</summary>
@@ -32,8 +32,14 @@ public partial class HudView : Control
     /// <summary>The run's elapsed play time (it stands still while paused), shown at the top centre.</summary>
     public float Elapsed;
 
+    /// <summary>Where the run stands ("Depth 1 · Level 2"), always shown beside the clock.</summary>
+    public string LevelTitle = "";
+
     float _bossHp, _bossTrail, _bossShown;
     bool _bossFight;
+    string _prompt = "";
+    bool _promptReady;
+    float _promptShown;
 
     public void Track(PlaneWorld world, ItemCatalog? catalog, float dt)
     {
@@ -43,20 +49,27 @@ public partial class HudView : Control
         _bossShown = Mathf.MoveToward(_bossShown, _bossFight ? 1f : 0f, dt * 2f);
         if (boss is not null)
         {
-            _bossHp = boss.Hp / PlaneBossTuning.Hp;
+            _bossHp = boss.Hp / Mathf.Max(boss.MaxHp, 1f);
             _bossTrail = _bossTrail < _bossHp ? _bossHp : Mathf.MoveToward(_bossTrail, _bossHp, dt * 0.4f);
         }
         _run = world.Run;
         _catalog = catalog;
-        _hp = world.Player.Hp;
-        _max = world.Run.MaxHp;
-        // The trail eases down to the HP after a short wait; healing snaps it up.
-        _trail = _trail < _hp ? _hp : Mathf.MoveToward(_trail, _hp, dt * 40f);
         _captionTimer -= dt;
         _shells = world.Run.Shells;
         _pulse = Mathf.MoveToward(_pulse, 0f, dt * 2.5f);
+        // Over the shaft: how to dive, or why not yet.
+        bool over = world.OverShaft && !world.Defeated && !Diving;
+        if (over)
+        {
+            _promptReady = world.CanDive;
+            _prompt = world.CanDive ? "dive" : !world.ExitOpen ? "The Crack is sealed" : "Not while fighting";
+        }
+        _promptShown = Mathf.MoveToward(_promptShown, over ? 1f : 0f, dt * 4f);
         QueueRedraw();
     }
+
+    /// <summary>She is diving: no prompt.</summary>
+    public bool Diving { get; set; }
 
     /// <summary>A shell was just collected: the counter flashes and pulses.</summary>
     public void PulseShells() => _pulse = 1f;
@@ -99,17 +112,8 @@ public partial class HudView : Control
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
-        var at = new Vector2(Margin, Size.Y - Margin - BarHeight);
-
-        // HP bar.
-        float k = Mathf.Clamp(_hp / _max, 0f, 1f), trail = Mathf.Clamp(_trail / _max, 0f, 1f);
-        DrawRect(new Rect2(at - Vector2.One * 3f, new Vector2(BarWidth + 6f, BarHeight + 6f)), new Color(0f, 0f, 0f, 0.55f));
-        DrawRect(new Rect2(at, new Vector2(BarWidth, BarHeight)), new Color(0.12f, 0.05f, 0.07f, 0.9f));
-        DrawRect(new Rect2(at, new Vector2(BarWidth * trail, BarHeight)), new Color(1f, 0.85f, 0.7f, 0.85f));
-        var fill = k > 0.3f ? new Color(0.95f, 0.35f, 0.38f) : new Color(1f, 0.2f, 0.2f).Lerp(new Color(1f, 0.6f, 0.6f), 0.5f + 0.5f * Mathf.Sin((float)Time.GetTicksMsec() * 0.012f));
-        DrawRect(new Rect2(at, new Vector2(BarWidth * k, BarHeight)), fill);
-        DrawRect(new Rect2(at, new Vector2(BarWidth, BarHeight * 0.35f)), new Color(1f, 1f, 1f, 0.12f));
-        DrawString(font, at + new Vector2(8f, BarHeight - 4f), $"{Mathf.CeilToInt(_hp)} / {Mathf.RoundToInt(_max)}", HorizontalAlignment.Left, -1, 14, Colors.White);
+        // The bottom-left corner the pearls and shells stack up from.
+        var at = new Vector2(Margin, Size.Y - Margin - 4f);
 
         // The run's clock, top centre.
         var clock = TimeSpan.FromSeconds(Elapsed);
@@ -118,6 +122,14 @@ public partial class HudView : Control
         var tat = new Vector2((Size.X - tsize.X) * 0.5f, Margin + 4f);
         DrawRect(new Rect2(tat - new Vector2(10f, 4f), tsize + new Vector2(20f, 8f)), new Color(0f, 0f, 0f, 0.35f));
         DrawString(font, tat + new Vector2(0f, tsize.Y - 4f), text, HorizontalAlignment.Left, -1, 16, new Color(1f, 1f, 1f, 0.9f));
+        // Where the run stands, always on, just right of the clock.
+        if (LevelTitle.Length > 0)
+        {
+            var lsize = font.GetStringSize(LevelTitle, HorizontalAlignment.Left, -1, 16);
+            var lat = new Vector2(tat.X + tsize.X + 26f, tat.Y);
+            DrawRect(new Rect2(lat - new Vector2(10f, 4f), lsize + new Vector2(20f, 8f)), new Color(0f, 0f, 0f, 0.35f));
+            DrawString(font, lat + new Vector2(0f, lsize.Y - 4f), LevelTitle, HorizontalAlignment.Left, -1, 16, new Color(1f, 0.93f, 0.82f, 0.9f));
+        }
 
         // Queen Clam's health, under the clock.
         if (_bossShown > 0.01f)
@@ -138,7 +150,7 @@ public partial class HudView : Control
             DrawRect(new Rect2(b + new Vector2(bw * 0.5f - 1f, -2f), new Vector2(2f, bh + 4f)), new Color(0f, 0f, 0f, 0.7f * a));
         }
 
-        // Her pearls, above the bar.
+        // Her pearls, bottom left.
         if (_run is not null && _catalog is not null)
         {
             var dot = at + new Vector2(10f, -18f);
@@ -164,6 +176,29 @@ public partial class HudView : Control
             int fontSize = (int)(22f * (1f + 0.3f * k2));
             var col = new Color(1f, 0.9f, 0.8f).Lerp(new Color(1f, 1f, 0.75f), k2);
             DrawString(font, c + new Vector2(22f, 8f + 3f * k2), _shells.ToString(), HorizontalAlignment.Left, -1, fontSize, col);
+        }
+
+        // The dive prompt, low in the middle: a key cap and a word.
+        if (_promptShown > 0.01f)
+        {
+            float a = _promptShown;
+            const int fs = 18;
+            string key = "SHIFT";
+            var ks = font.GetStringSize(key, HorizontalAlignment.Left, -1, 14);
+            var ws = font.GetStringSize(_prompt, HorizontalAlignment.Left, -1, fs);
+            float w = (_promptReady ? ks.X + 22f : 0f) + ws.X + 28f;
+            var p = new Vector2((Size.X - w) * 0.5f, Size.Y * 0.7f);
+            DrawRect(new Rect2(p, new Vector2(w, 34f)), new Color(0.02f, 0.05f, 0.08f, 0.6f * a));
+            float x = p.X + 14f;
+            if (_promptReady)
+            {
+                var cap = new Rect2(new Vector2(x - 4f, p.Y + 7f), new Vector2(ks.X + 8f, 20f));
+                DrawRect(cap, new Color(1f, 0.93f, 0.82f, 0.9f * a));
+                DrawString(font, new Vector2(x, p.Y + 22f), key, HorizontalAlignment.Left, -1, 14, new Color(0.15f, 0.1f, 0.08f, a));
+                x += ks.X + 22f;
+            }
+            var col = _promptReady ? new Color(1f, 0.93f, 0.8f, a) : new Color(0.85f, 0.85f, 0.9f, 0.75f * a);
+            DrawString(font, new Vector2(x, p.Y + 24f), _prompt, HorizontalAlignment.Left, -1, fs, col);
         }
 
         if (_captionTimer > 0f)

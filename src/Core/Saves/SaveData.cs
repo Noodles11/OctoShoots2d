@@ -90,18 +90,24 @@ public sealed class CreatureRecord
 }
 
 /// <summary>
-/// A run saved at the start of a room (2D §13.1): continuing regenerates that room from the seed and puts her back in
-/// it with what she carried in.
+/// A run saved at the start of a level (2D §13.1): continuing regenerates that level from the seed (a level needs no
+/// other level generated first) and puts her back at its start with what she carried in.
 /// </summary>
 public sealed class SuspendedRun
 {
     public string Seed { get; set; } = "";
     public bool CustomSeed { get; set; }
+    public int Cycle { get; set; } = 1;
     public int Depth { get; set; } = 1;
-    public int Room { get; set; } = 1;
+    public int Level { get; set; } = 1;
+
+    /// <summary>Where the run stands, as the HUD names it.</summary>
+    public string Where => new OctoShoots.Core.Gen.TopDown.LevelId(Cycle, Depth, Level).ToString();
     public List<string> Items { get; set; } = new();
     public float Hp { get; set; }
     public int Shells { get; set; }
+    /// <summary>How charged her active pearl was (0–1).</summary>
+    public float ActiveCharge { get; set; } = 1f;
     /// <summary>Play time of the run so far (the HUD clock).</summary>
     public double Elapsed { get; set; }
     /// <summary>The run's totals so far, for the death splash.</summary>
@@ -111,14 +117,19 @@ public sealed class SuspendedRun
     public string SavedAt { get; set; } = "";
 }
 
-/// <summary>Achievement ids referenced by item unlocks.</summary>
+/// <summary>
+/// Achievement ids. The first five are the plane's (data/achievements.json; PlaneAchievements earns them); the rest
+/// are still named by the unlocks of pearls not on the plane yet, for bosses still to come.
+/// </summary>
 public static class Achievements
 {
-    public const string ThreeSynergies = "three_synergies";
+    public const string BigBubbleEnergy = "big_bubble_energy";
+    public const string BubbleBath = "bubble_bath";
+    public const string ShuckedInFifteen = "shucked_in_fifteen";
     public const string Untouchable = "untouchable";
-    public const string Ringmaster = "ringmaster";
+    public const string HermitHoarder = "hermit_hoarder";
+
     public const string Jesters = "jesters";
-    public const string MotherAngler = "mother_angler";
     public const string Siphonophore = "siphonophore";
     public const string HollowMaw = "hollow_maw";
 }

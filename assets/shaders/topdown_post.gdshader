@@ -11,7 +11,6 @@ shader_type spatial;
 render_mode unshaded, depth_test_disabled, depth_draw_never, cull_disabled, fog_disabled, shadows_disabled;
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
-#include "res://assets/shaders/beneath.gdshaderinc"
 
 global uniform vec3 reef_water_shallow;
 global uniform vec3 reef_water_deep;
@@ -23,6 +22,9 @@ global uniform float reef_saturation;
 global uniform float reef_vignette;
 global uniform float reef_fog;
 global uniform vec4 reef_crack;
+/// Clementine's bell in world space and her glow pool's radius; how strong her glow on the floor is (BellView).
+global uniform vec4 her_glow;
+global uniform float her_glow_strength;
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
@@ -38,7 +40,16 @@ uniform vec3 player_pos = vec3(0.0);
 uniform vec3 halo_color : source_color = vec3(1.0, 0.77, 0.42);
 uniform float halo_radius = 8.0;
 uniform float halo_strength = 0.16;
+/// Light bubbles (docs/LIGHT-BUBBLES.md): up to 16 small halos on the swim layer, from her bubbles and the blooms they
+/// leave where they pop: x, z (world), radius (metres), strength (a share of her halo's, ≤ 0.4).
+uniform vec4 bubble_lights[16];
+uniform int bubble_count = 0;
+uniform vec3 bubble_color : source_color = vec3(1.0, 0.769, 0.420);
+/// A big-merge kill: a white lift at the screen's edges only, 1 → 0 over 60 ms.
+uniform float edge_flash = 0.0;
 /// The faint refraction wobble (0 with reduced motion).
+/// The absolute position (xz) of the world's origin: the god rays never jump after a dive.
+uniform vec2 world_origin = vec2(0.0);
 uniform float wobble = 1.0;
 
 void vertex() {
@@ -119,20 +130,25 @@ void fragment() {
 	float fog = smoothstep(0.0, 1.8, below) * (veil + (0.85 - veil) * (1.0 - exp(-below * deep_fog * (0.6 + reef_fog))));
 	col = mix(col, water, fog);
 
+	// Her glow lands on the floor (DESIGN-TOPDOWN §5): in daylight bioluminescence reads not as brightness but as a
+	// warm tint on what is near, and as shadow contrast. A broad warm pool (her_glow.w metres, showing on pale sand
+	// too) lets the reef advertise her; a small soft dark blob straight under the bell (about 1.2× its radius) gives her
+	// bright body the dark anchor it needs to pop. Laid on after the water's veil so neither is washed out; only on what
+	// lies below her (never rock over her head), fading as the gap below her grows. She herself is drawn after this
+	// pass, so the shadow never darkens her.
+	if (her_glow_strength > 0.0 && !open_deep) {
+		float gap = her_glow.y - world.y;
+		float d = distance(world.xz, her_glow.xz);
+		float k = her_glow_strength * smoothstep(0.1, 0.5, gap) * (1.0 - smoothstep(5.0, 10.0, gap));
+		float pool = exp(-pow(d / (her_glow.w * 0.55), 2.0)) * k;
+		vec3 warm = vec3(1.0, 0.46, 0.18);
+		col = mix(col, col * warm * 1.15 + warm * 0.06, pool * 0.65);
+		float shadow = (1.0 - smoothstep(0.1, 0.62, d)) * k * (1.0 - smoothstep(2.0, 5.0, gap));
+		col *= 1.0 - 0.6 * shadow;
+	}
+
 	vec3 cam = CAMERA_POSITION_WORLD;
 	vec3 ray = normalize(world - cam);
-
-	// The beneath-layer, seen through the translucent floor: the next depth's shadows about 13 m down, faint through
-	// the Shallows' bright sand, clearer the deeper the reef, plain where the floor drops away. It sits deeper than the
-	// floor, so it slides by with parallax.
-	if (reef_beneath.x > 0.0 && !open_deep) {
-		float floor_seen = 0.2 + 0.6 * smoothstep(0.5, 1.0, reef_beneath.x);
-		float through = reef_beneath.x * (floor_seen + (1.0 - floor_seen) * smoothstep(1.0, 7.0, below)) * (1.0 - smoothstep(0.0, 1.0, above));
-		vec3 pb = cam + ray * ((reef_beneath.y - cam.y) / min(ray.y, -1e-3));
-		vec2 b = beneath(pb.xz, TIME, reef_crack);
-		col = mix(col, col * 0.3 + reef_beneath_tint * 0.1, min(b.x * through * 2.4, 0.8));
-		col += vec3(1.0, 0.36, 0.08) * b.y * through * 0.4;
-	}
 
 	// The Crack shines up through the murk: an orange glow breathing out of the fissure, a doorway in the floor.
 	if (reef_crack.w > 0.0 && !open_deep) {
@@ -154,7 +170,7 @@ void fragment() {
 		float jitter = hash12(FRAGCOORD.xy + fract(TIME) * 61.0);
 		for (int i = 0; i < 10; i++) {
 			vec3 q = cam + ray * (t0 + span * (float(i) + jitter) / 10.0);
-			shafts += sun_shafts(q, TIME);
+			shafts += sun_shafts(q + vec3(world_origin.x, 0.0, world_origin.y), TIME);
 		}
 		shafts /= 10.0;
 	}
@@ -167,6 +183,15 @@ void fragment() {
 	vec2 off = on_layer.xz - player_pos.xz;
 	float halo = exp(-dot(off, off) / (halo_radius * halo_radius)) * (0.35 + 0.65 * fog) * (1.0 - smoothstep(0.0, 4.0, above));
 	col += halo_color * halo * halo_strength * (0.6 + 0.8 * reef_menace);
+	// Her bubbles carry light: each a small halo of its own on the same layer, the same depth-darkness scaling as hers
+	// (subtle in the bright Shallows, glorious in the deep).
+	float bubbles = 0.0;
+	for (int i = 0; i < bubble_count; i++) {
+		vec4 b = bubble_lights[i];
+		vec2 ob = on_layer.xz - b.xy;
+		bubbles += exp(-dot(ob, ob) / (b.z * b.z)) * b.w;
+	}
+	col += bubble_color * bubbles * halo_strength * (0.35 + 0.65 * fog) * (1.0 - smoothstep(0.0, 4.0, above)) * (0.6 + 0.8 * reef_menace);
 
 	// Rock rising toward the camera: a soft silhouette in the water's colour, darker as the depths darken.
 	vec3 shade = mix(reef_murk * 0.45, vec3(0.01, 0.015, 0.02), reef_menace);
@@ -184,6 +209,8 @@ void fragment() {
 	vec2 d = (uv - 0.5) * vec2(VIEWPORT_SIZE.x / VIEWPORT_SIZE.y, 1.0);
 	float v = smoothstep(0.32, 1.05, length(d) * 1.3);
 	col = mix(col, reef_murk * 0.25, v * reef_vignette);
+	// A big-merge kill lifts the screen's edges toward white for an instant (never its middle).
+	col = mix(col, vec3(1.0, 0.97, 0.9), edge_flash * 0.55 * smoothstep(0.45, 1.15, length(d) * 1.3));
 
 	ALBEDO = max(col, vec3(0.0));
 }

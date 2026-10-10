@@ -27,7 +27,8 @@ public partial class StatsCard : PanelContainer
     /// <summary>How each cause of death reads.</summary>
     public static string CauseName(string id) => id switch
     {
-        "mob_shot" => "Pellet Dot's pellets",
+        "puffer_needle" => "A Pufferling's needles",
+        "puffer_spines" => "A Pufferling's spines",
         "boss_pearl" => "Queen Clam's pearls",
         "royal_pearl" => "Queen Clam's royal pearl",
         "boss_snap" => "Queen Clam's snap",
@@ -35,7 +36,7 @@ public partial class StatsCard : PanelContainer
         _ => "Something unseen",
     };
 
-    public static string Reach(ProfileStats s) => s.BestDepth > 0 ? $"Depth {s.BestDepth} · Room {s.BestRoom}" : "—";
+    public static string Reach(ProfileStats s) => s.BestDepth > 0 ? $"Depth {s.BestDepth} · Level {s.BestRoom}" : "—";
 
     public override void _Ready()
     {
@@ -57,7 +58,7 @@ public partial class StatsCard : PanelContainer
         var title = TitleStyle.Text("Statistics", 40, TitleStyle.Ink, TitleStyle.Display);
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        var close = TitleStyle.Pill("Close  (Esc)", primary: false, size: 15);
+        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
@@ -93,11 +94,11 @@ public partial class StatsCard : PanelContainer
         {
             ("Runs started", s.Runs.ToString("N0"), false),
             ("Seeded runs", s.SeededRuns.ToString("N0"), false),
-            ("Rooms cleared", s.RoomsCleared.ToString("N0"), false),
+            ("Levels cleared", s.RoomsCleared.ToString("N0"), false),
             ("Deaths", s.Deaths.ToString("N0"), false),
             ("Runs abandoned", s.Abandoned.ToString("N0"), false),
             ("Longest run", s.LongestRunSeconds > 0 ? TitleStyle.Clock(s.LongestRunSeconds) : "—", s.LongestRunSeconds > 0),
-            ("Fastest room", s.FastestRoomSeconds > 0 ? TitleStyle.Clock(s.FastestRoomSeconds) : "—", s.FastestRoomSeconds > 0),
+            ("Fastest level", s.FastestRoomSeconds > 0 ? TitleStyle.Clock(s.FastestRoomSeconds) : "—", s.FastestRoomSeconds > 0),
         }));
         double bossBest = _profile.Creatures.GetValueOrDefault(PlaneProfileRecorder.QueenClamId)?.BestSeconds ?? 0;
         groups.AddChild(Group("Combat", new()
@@ -122,8 +123,8 @@ public partial class StatsCard : PanelContainer
         groups.AddChild(Group("Feats", new()
         {
             ("Achievements earned", $"{_profile.Achievements.Count}", false),
-            ("Most shells in a room", s.MostShellsInRoom.ToString("N0"), s.MostShellsInRoom > 0),
-            ("Rooms without a scratch", s.UntouchableRooms.ToString("N0"), false),
+            ("Most shells on a level", s.MostShellsInRoom.ToString("N0"), s.MostShellsInRoom > 0),
+            ("Levels without a scratch", s.UntouchableRooms.ToString("N0"), false),
         }));
 
         // How runs ended.

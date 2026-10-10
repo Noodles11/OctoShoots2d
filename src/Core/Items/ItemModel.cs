@@ -23,6 +23,8 @@ public enum Stat
     BubblesPerThrow,
     /// <summary>How fast the held active item recharges (1 = its listed recharge time).</summary>
     ActiveRecharge,
+    /// <summary>How long a bubble hovers where it stopped before it pops (a factor on its own 0.8–1.2 s).</summary>
+    BubbleHover,
 }
 
 public enum StatOp { Add, Mult }

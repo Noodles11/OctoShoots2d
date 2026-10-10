@@ -79,7 +79,7 @@ public class SaveTests
         Run = new SuspendedRun
         {
             Seed = "KELP 7Q2Z",
-            Room = 3,
+            Level = 3,
             Items = new List<string> { "triple_tentacle", "hammerhead" },
             Hp = 87.5f,
             Shells = 12,
@@ -97,7 +97,7 @@ public class SaveTests
         Assert.Equal(4, back.Profile.Pearls["triple_tentacle"].Absorbed);
         Assert.Equal(21.5, back.Profile.Creatures["queen_clam"].BestSeconds);
         Assert.Equal(87.5f, back.Run!.Hp);
-        Assert.Equal(3, back.Run.Room);
+        Assert.Equal(3, back.Run.Level);
         Assert.Equal(new[] { "triple_tentacle", "hammerhead" }, back.Run.Items);
     }
 

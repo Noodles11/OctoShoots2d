@@ -7,6 +7,7 @@ shader_type spatial;
 render_mode cull_disabled;
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
+#include "res://assets/shaders/level_frame.gdshaderinc"
 
 varying vec3 sun_world;
 varying float sun_light;
@@ -27,6 +28,7 @@ uniform vec3 high_b : source_color = vec3(0.8);
 
 varying vec3 tint;
 varying vec3 local;
+varying vec3 world_pos;
 
 float hash(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -43,7 +45,8 @@ float noise(vec3 x) {
 
 void vertex() {
 	local = VERTEX;
-	vec3 origin = MODEL_MATRIX[3].xyz;
+	// Where the plant stands, in its level's absolute frame (the sway never jumps when the level is moved).
+	vec3 origin = lf_pattern(lf_local(MODEL_MATRIX[3].xyz));
 	float ph = INSTANCE_CUSTOM.a * 6.2831 + origin.x * 0.21 + origin.z * 0.17;
 	float w = COLOR.a;
 	// The surge: everything leans back and forth together, a little out of step.
@@ -51,7 +54,10 @@ void vertex() {
 	VERTEX.x += (sin(TIME * sway_speed + ph + VERTEX.y * 2.0) * 0.6 + surge * 0.6) * sway * w;
 	VERTEX.z += sin(TIME * sway_speed * 0.8 + ph * 1.3 + VERTEX.y * 1.7) * sway * 0.6 * w;
 	tint = INSTANCE_CUSTOM.rgb;
-	sun_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	sun_world = lf_pattern(lf_local(world_pos));
+	// The true height, so the light does not jump when the dive moves the level below up to the swim level.
+	sun_world.y = world_pos.y;
 	// Small things: sunlight is worked out per vertex, which is plenty and far cheaper.
 	vec3 sun_n = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	float sun_face = 0.35 + 0.65 * clamp(dot(sun_n, -normalize(sun_dir)), 0.0, 1.0);
@@ -59,6 +65,7 @@ void vertex() {
 }
 
 void fragment() {
+	if (lf_portal_cut(world_pos, FRAGCOORD.xy)) discard;
 	vec3 col = COLOR.rgb;
 	if (recolor > 0.0) {
 		float l = clamp(dot(col, vec3(0.299, 0.587, 0.114)) * 1.5, 0.0, 1.0);

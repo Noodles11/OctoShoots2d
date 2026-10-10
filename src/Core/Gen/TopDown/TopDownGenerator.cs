@@ -23,13 +23,21 @@ public static class TopDownGenerator
     const float Rim = LevelMap.RimWidth;
 
     // Stage 1
-    const float StartRadius = 8f;
-    const float RiftRadius = 15f;          // the ~30 m arena disc
-    const float RiftExclusion = 40f;       // only the rift inside its ~40 m zone
-    const float RiftMinStraight = 122f;    // rejection sampling; the ≥130 m geodesic rule is checked after the paths exist
-    const float PoiSpacing = 25f;
-    const float CaveSpacing = 30f;
-    const float EarlyMin = 20f, EarlyMax = 35f;
+    /// <summary>The start's clearing, and a blue hole's (the stamp's clearing).</summary>
+    const float StartRadius = Stamp.ClearingRadius;
+    /// <summary>The boss arena: a ~30 m disc with the Crack across its middle.</summary>
+    const float ArenaRadius = 15f;
+    /// <summary>A blue hole's shaft, inside its clearing.</summary>
+    const float ShaftRadius = 6.5f;
+    /// <summary>Places keep this far from the exit (and the start): their keep-out never reaches a stamp's pinned route.</summary>
+    const float ExitExclusion = 40f;
+    const float ExitMinStraight = 78f;     // rejection sampling; the ≥90 m geodesic rule is checked after the paths exist
+    /// <summary>A stamp's centre keeps this far from the square's edge, so its pinned rock stays clear of the rim.</summary>
+    const float StampInset = Rim + Stamp.Pin + 2f;
+    const float PoiSpacing = 21f;
+    const float CaveSpacing = 25f;
+    /// <summary>The early place: the first she meets, just past the start's stamp (no place comes closer).</summary>
+    const float EarlyMin = 39f, EarlyMax = 47f;
     const float ClearingRadius = 6f;       // open POIs (item spawn, ninja nests)
     const float PocketRadius = 6f;
     const float ChamberRadius = 6.5f;
@@ -40,7 +48,7 @@ public static class TopDownGenerator
     const float PlazaRadius = 7f;          // ~14 m plazas
     const float PlazaMerge = 16f;
     /// <summary>Centre lines of two routes keep at least this far apart away from where they meet, so a ridge stands between them.</summary>
-    const float RouteSpacing = 26f;
+    const float RouteSpacing = 22f;
 
     // Stage 3
     /// <summary>Open shapes are pinned flat this far past their edge, so bilinear sampling anywhere inside them reads exactly 0.</summary>
@@ -57,10 +65,6 @@ public static class TopDownGenerator
     const float WallMin = 3.5f;
     /// <summary>Side canyons grow until about this share of the interior is open water (the rest is wall, at most 40%).</summary>
     const float OpenTarget = 0.63f;
-    /// <summary>The rift at the heart of the boss arena: the deepest point of the level.</summary>
-    const float CrackDepth = 7f;
-    /// <summary>Trench floors stay above the rift, the level's deepest point (with their undulation).</summary>
-    const float TrenchMin = 3.5f, TrenchMax = 5.5f;
     // Cave floors are the one flat ground (between the chart's contours, so never on a contour line); passes undulate below theirs.
     const float CaveFloor = 3.5f, PassFloor = 2.5f;
     /// <summary>Rounded rock shoulders raised beside a corridor when no flank stands high enough to carry an arch.</summary>
@@ -70,53 +74,68 @@ public static class TopDownGenerator
     static readonly Vector2 Current = Vector2.Normalize(new Vector2(1f, 0.35f));
 
     /// <param name="cosmeticSalt">Test hook: changes only the cosmetic stream (decoration), to prove it never touches gameplay.</param>
-    public static LevelMap Generate(RunStreams streams, int depth, int reef, Action<string>? log = null, string cosmeticSalt = "")
+    /// <param name="background">Made while she plays (the level below): on one thread, leaving the rest to the game.</param>
+    public static LevelMap Generate(RunStreams streams, LevelId id, Action<string>? log = null, string cosmeticSalt = "", bool background = false)
     {
+        var parallel = new ParallelOptions { MaxDegreeOfParallelism = background ? 1 : -1 };
+        var plan = LevelPlan.For(streams.Seed, id);
+        var entry = Stamp.Generate(plan.EntryStamp, plan.EntryFromArena);
+        var exit = Stamp.Generate(plan.ExitStamp, plan.HasBoss);
         var reasons = new List<string>();
         for (int attempt = 0; attempt < MaxAttempts; attempt++)
         {
             // Every attempt starts from the bare seabed at level −1.
-            var map = new LevelMap { Seed = streams.Seed.Value, Depth = depth, Reef = reef, Attempt = attempt };
+            var map = new LevelMap
+            {
+                Seed = streams.Seed.Value, Id = id, Attempt = attempt, HasBoss = plan.HasBoss, Menace = plan.Menace,
+                EntryStampSeed = plan.EntryStamp, ExitStampSeed = plan.ExitStamp, EntryFromArena = plan.EntryFromArena,
+            };
             Array.Fill(map.Heights, -PathDepth);
-            // The wall tops come from the reef prototype's terrain for this text (room 1's first try: the seed itself).
-            string text = depth == 1 && reef == 1 && attempt == 0 ? streams.Seed.ToString() : $"{streams.Seed} {depth}-{reef}-{attempt}";
-            string? problem = Build(map, streams, depth, reef, attempt, cosmeticSalt, text) ?? LevelValidator.Validate(map);
-            log?.Invoke($"Top-down level {depth}/{reef} attempt {attempt + 1}: {problem ?? "ok"}");
+            // The wall tops come from the reef prototype's terrain for this text (the run's first try: the seed itself).
+            string text = id == LevelId.First && attempt == 0 ? streams.Seed.ToString() : $"{streams.Seed} {id.Cycle}-{id.Depth}-{id.Level}-{attempt}";
+            string? problem = Build(map, streams, plan, entry, exit, attempt, cosmeticSalt, text, parallel) ?? LevelValidator.Validate(map);
+            log?.Invoke($"Top-down level {id} attempt {attempt + 1}: {problem ?? "ok"}");
             if (problem is null) return map;
             reasons.Add(problem);
         }
-        throw new InvalidOperationException($"No valid top-down level for depth {depth} reef {reef} after {MaxAttempts} attempts: {string.Join("; ", reasons.Distinct())}");
+        throw new InvalidOperationException($"No valid top-down level for {id} after {MaxAttempts} attempts: {string.Join("; ", reasons.Distinct())}");
     }
 
     /// <summary>
-    /// Runs the stages — POIs on the bare seabed, the route canyons between them, the labyrinth of side canyons, the
-    /// walls raised around all of it, the boss arena's rift, trenches, then caves, passes, arches, decoration, loot and
+    /// Runs the stages — POIs on the bare seabed (the start and the exit where their stamps fit), the route canyons
+    /// between them out through the stamps' openings, the labyrinth of side canyons, the walls raised around all of it,
+    /// the stamps pinned in, caves, passes and arches, the stamps pinned again, the shaft cut, then decoration, loot and
     /// spawns — and returns why the attempt failed, or null.
     /// </summary>
-    static string? Build(LevelMap map, RunStreams streams, int depth, int reef, int attempt, string cosmeticSalt, string terrainText)
+    static string? Build(LevelMap map, RunStreams streams, LevelPlan plan, Stamp entry, Stamp exit, int attempt, string cosmeticSalt, string terrainText, ParallelOptions parallel)
     {
-        Rng Stage(string name) => streams.TopDown(depth, reef, attempt, name);
+        Rng Stage(string name) => streams.TopDown(plan.Id, attempt, name);
         uint noiseSeed = (uint)(Stage("noise").NextU64() >> 32);
 
-        string? pois = PlacePois(map, Stage("poi"));
+        string? pois = PlacePois(map, Stage("poi"), plan, entry, exit);
         if (pois is not null) return pois;
         var spurDirs = new Dictionary<int, Vector2>();
-        string? paths = BuildPaths(map, Stage("paths"), spurDirs);
+        string? paths = BuildPaths(map, Stage("paths"), spurDirs, entry, exit);
         if (paths is not null) return paths;
         GrowCanyons(map, Stage("canyons"));
-        RaiseWalls(map, terrainText, Stage("topo"));
+        RaiseWalls(map, terrainText, Stage("topo"), () => PinStamps(map, entry, exit), parallel);
         string? features = BuildFeatures(map, Stage("features"), spurDirs);
         if (features is not null) return features;
+        // Caves' mountains may reach into a stamp: the stamp wins.
+        PinStamps(map, entry, exit);
+        CutShaft(map, Stage("shaft"));
         ClampHeights(map);
         Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed);
         PlacePickups(map, Stage("pickups"));
-        PlaceSpawns(map, Stage("spawns"), depth);
+        PlaceSpawns(map, Stage("spawns"), plan.Menace);
         return null;
     }
 
     // ───────────────────────── helpers ─────────────────────────
 
     static bool Inside(Vector2 p, float inset) => p.X >= inset && p.Y >= inset && p.X <= Size - inset && p.Y <= Size - inset;
+
+    static Vector2 Round(Vector2 p) => new(MathF.Round(p.X), MathF.Round(p.Y));
 
     static Vector2 RandomIn(Rng rng, float inset) => new(rng.Range(inset, Size - inset), rng.Range(inset, Size - inset));
 
@@ -156,8 +175,8 @@ public static class TopDownGenerator
         return score + (water == float.MaxValue ? 40f : MathF.Abs(water - 6f));
     }
 
-    /// <summary>Places every POI; returns which one found no room, or null.</summary>
-    static string? PlacePois(LevelMap map, Rng rng)
+    /// <summary>Places every POI from the level's plan; returns which one found no room, or null.</summary>
+    static string? PlacePois(LevelMap map, Rng rng, LevelPlan plan, Stamp entry, Stamp exit)
     {
         // Each place is the best-scoring of a batch of candidates that keep the scatter rules: open places on low ground,
         // caves in rock flanks beside water. Where nothing low enough fits, the carving stage hollows the spot out.
@@ -182,45 +201,60 @@ public static class TopDownGenerator
             return best;
         }
 
-        // Only starts with room for the rift far enough away somewhere in the square.
-        const float riftInset = Rim + RiftRadius + 3f;
-        bool CanReachRift(Vector2 q) => new[] { new Vector2(riftInset), new Vector2(Size - riftInset, riftInset), new Vector2(riftInset, Size - riftInset), new Vector2(Size - riftInset) }
-            .Any(c => Vector2.Distance(c, q) >= RiftMinStraight + 4f);
+        // A stamp's canyons lead out of it: the route to the other end leaves through one that faces it (an arena is
+        // open all round).
+        static bool Faces(Stamp stamp, Vector2 direction) => stamp.Arena || stamp.Toward(direction).Off < 1.25f;
+        float startRadius = entry.Arena ? ArenaRadius : StartRadius;
+        float exitRadius = plan.HasBoss ? ArenaRadius : StartRadius;
+        float exitInset = MathF.Max(StampInset, Rim + exitRadius + 3f);
+        bool CanReachExit(Vector2 q) => new[] { new Vector2(exitInset), new Vector2(Size - exitInset, exitInset), new Vector2(exitInset, Size - exitInset), new Vector2(Size - exitInset) }
+            .Any(c => Vector2.Distance(c, q) >= ExitMinStraight + 4f && Faces(entry, c - q));
 
-        // Start: on the sunlit border zone just inside the rim, in the lowest water along the chosen side.
-        int side = rng.Int(4);
-        const float edge = Rim + 6f;
+        // Start: on a border band just inside the stamp inset, on whichever side its stamp opens toward the exit.
+        float edge = MathF.Max(StampInset, Rim + startRadius + 3f);
         Vector2? startAt = Best(() =>
         {
-            float along = rng.Range(30f, Size - 30f);
-            return side switch
+            float along = rng.Range(edge + 6f, Size - edge - 6f);
+            return rng.Int(4) switch
             {
                 0 => new Vector2(along, edge),
                 1 => new Vector2(Size - edge, along),
                 2 => new Vector2(along, Size - edge),
                 _ => new Vector2(edge, along),
             };
-        }, CanReachRift, q => LowScore(map, q, StartRadius), 60, jitter: 8f);
-        if (startAt is not { } start) return "no room for the start";
-        map.Pois.Add(new Poi { Kind = PoiKind.Start, Position = start, Radius = StartRadius });
+        }, CanReachExit, q => LowScore(map, q, startRadius), 60, jitter: 8f);
+        if (startAt is not { } startFound) return "no room for the start";
+        // On whole metres, as the exit: both levels then sample their shared stamp at the very same points.
+        var start = Round(startFound);
+        map.Pois.Add(new Poi { Kind = PoiKind.Start, Position = start, Radius = startRadius });
 
-        // Rift: far from the start, the arena disc clear of the rim, in the deepest water that fits.
-        Vector2? riftFound = Best(() => RandomIn(rng, Rim + RiftRadius + 3f), q => Vector2.Distance(q, start) >= RiftMinStraight, q => LowScore(map, q, RiftRadius), jitter: 6f);
-        if (riftFound is not { } riftAt) return "no room for the rift far enough from the start";
-        map.Pois.Add(new Poi { Kind = PoiKind.Rift, Position = riftAt, Radius = RiftRadius });
+        // Exit: far from the start, its stamp clear of the rim, each stamp opening toward the other; the deepest water that fits.
+        Vector2? exitFound = Best(() => RandomIn(rng, exitInset),
+            q => Vector2.Distance(q, start) >= ExitMinStraight && Faces(entry, q - start) && Faces(exit, start - q),
+            q => LowScore(map, q, exitRadius), jitter: 6f);
+        if (exitFound is not { } exitRaw) return "no room for the exit far enough from the start";
+        var exitAt = Round(exitRaw);
+        map.Pois.Add(new Poi { Kind = PoiKind.Exit, Position = exitAt, Radius = exitRadius });
 
-        Vector2 axis = riftAt - start;
-        Vector2 u = Vector2.Normalize(axis);
-        Vector2 n = Geo.Perp(u);
+        Vector2 axis = exitAt - start;
+        Vector2 n = Geo.Perp(Vector2.Normalize(axis));
         var placed = new List<Poi>();
+        // The stamps' canyons: routes run straight down them, so places keep off their lines.
+        var rays = new List<(Vector2 A, Vector2 B)>();
+        foreach (var (stamp, at) in new[] { (entry, start), (exit, exitAt) })
+            foreach (float a in stamp.Openings)
+                rays.Add((at, at + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (Stamp.Blend + 8f)));
 
         bool Fits(Vector2 p, PoiKind kind, float radius, bool early)
         {
             float inset = Rim + radius + (Poi.IsCaveHosted(kind) ? 10f : 6f);
             if (!Inside(p, inset)) return false;
+            float keep = radius + CorridorMaxWidth * 0.5f + (Poi.IsCaveHosted(kind) ? 4f : 2f) + 2f;
+            foreach (var (a, b) in rays)
+                if (Geo.SegmentDistance(p, a, b) < keep) return false;
             float fromStart = Vector2.Distance(p, start);
-            if (early ? fromStart < EarlyMin || fromStart > EarlyMax : fromStart <= EarlyMax + 1f) return false;
-            if (Vector2.Distance(p, riftAt) < RiftExclusion) return false;
+            if (fromStart < EarlyMin || early && fromStart > EarlyMax) return false;
+            if (Vector2.Distance(p, exitAt) < ExitExclusion) return false;
             foreach (var o in placed)
             {
                 float d = Vector2.Distance(p, o.Position);
@@ -233,23 +267,31 @@ public static class TopDownGenerator
         float RadiusOf(PoiKind kind) => Poi.IsCaveHosted(kind) ? (kind is PoiKind.TreasureCave or PoiKind.CurseDen ? ChamberRadius : PocketRadius) : ClearingRadius;
         float Score(PoiKind kind, Vector2 p) => Poi.IsCaveHosted(kind) ? FlankScore(map, p, RadiusOf(kind)) : LowScore(map, p, RadiusOf(kind));
 
-        // The guaranteed item cache: 40–60% along the start→rift axis, off to one side of it.
-        Vector2? item = Best(() => start + axis * rng.Range(0.4f, 0.6f) + n * (rng.Range(18f, 30f) * (rng.NextFloat() < 0.5f ? -1f : 1f)),
-            q => Fits(q, PoiKind.ItemSpawn, ClearingRadius, false), q => Score(PoiKind.ItemSpawn, q));
-        if (item is not { } itemAt) return "no room for the item cache";
-        placed.Add(new Poi { Kind = PoiKind.ItemSpawn, Position = itemAt, Radius = ClearingRadius });
+        // The shell cache (when the plan has one): 40–60% along the start→exit axis, off to one side of it.
+        for (int i = 0; i < plan.Caches; i++)
+        {
+            Vector2? cache = Best(() => start + axis * rng.Range(0.4f, 0.6f) + n * (rng.Range(15f, 25f) * (rng.NextFloat() < 0.5f ? -1f : 1f)),
+                q => Fits(q, PoiKind.ShellCache, ClearingRadius, false), q => Score(PoiKind.ShellCache, q));
+            if (cache is not { } cacheAt) return "no room for the shell cache";
+            placed.Add(new Poi { Kind = PoiKind.ShellCache, Position = cacheAt, Radius = ClearingRadius });
+        }
 
-        // Optional places: shop always, 1–2 secrets, 0–1 curse den, a treasure cave, 2–4 ninja nests.
-        var kinds = new List<PoiKind> { PoiKind.Shop, PoiKind.TreasureCave };
-        int secrets = 1 + rng.Int(2), curses = rng.Int(2), nests = 2 + rng.Int(3);
-        for (int i = 0; i < secrets; i++) kinds.Add(PoiKind.Secret);
-        for (int i = 0; i < curses; i++) kinds.Add(PoiKind.CurseDen);
-        for (int i = 0; i < nests; i++) kinds.Add(PoiKind.Ambush);
+        // The rest of the plan's places.
+        var kinds = new List<PoiKind>();
+        for (int i = 0; i < plan.Shops; i++) kinds.Add(PoiKind.Shop);
+        for (int i = 0; i < plan.Treasures; i++) kinds.Add(PoiKind.TreasureCave);
+        for (int i = 0; i < plan.Secrets; i++) kinds.Add(PoiKind.Secret);
+        for (int i = 0; i < plan.Curses; i++) kinds.Add(PoiKind.CurseDen);
+        for (int i = 0; i < plan.Ambushes; i++) kinds.Add(PoiKind.Ambush);
 
-        // Exactly one sits early, 20–35 m from the start: usually the shop, to teach the economy.
-        PoiKind earlyKind = rng.NextFloat() < 0.8f ? PoiKind.Shop : PoiKind.TreasureCave;
-        kinds.Remove(earlyKind);
-        kinds.Insert(0, earlyKind);
+        // One sits early, 25–35 m from the start: the shop when there is one (to teach the economy), else a treasure.
+        if (kinds.Count > 0)
+        {
+            PoiKind earlyKind = kinds.Contains(PoiKind.Shop) && (rng.NextFloat() < 0.8f || !kinds.Contains(PoiKind.TreasureCave)) ? PoiKind.Shop
+                : kinds.Contains(PoiKind.TreasureCave) ? PoiKind.TreasureCave : kinds[0];
+            kinds.Remove(earlyKind);
+            kinds.Insert(0, earlyKind);
+        }
 
         Vector2 inward = Vector2.Normalize(new Vector2(Size / 2f, Size / 2f) - start);
         for (int k = 0; k < kinds.Count; k++)
@@ -284,9 +326,10 @@ public static class TopDownGenerator
         public List<int> Hooked = new();
     }
 
-    static string? BuildPaths(LevelMap map, Rng rng, Dictionary<int, Vector2> spurDirs)
+    static string? BuildPaths(LevelMap map, Rng rng, Dictionary<int, Vector2> spurDirs, Stamp entry, Stamp exitStamp)
     {
-        Vector2 start = map.Start.Position, rift = map.Rift.Position;
+        Vector2 start = map.Start.Position, rift = map.Exit.Position;
+        float startRadius = map.Start.Radius, riftRadius = map.Exit.Radius;
         Vector2 axis = rift - start;
         float length = axis.Length();
         Vector2 u = axis / length, n = Geo.Perp(u);
@@ -294,14 +337,13 @@ public static class TopDownGenerator
         float T(Vector2 p) => Vector2.Dot(p - start, u) / length;
 
         var ground = new Ground(map);
-        int count = 3 + rng.Int(3);
+        int count = 3 + rng.Int(2);
         var routes = new List<Route> { Route.Direct, Route.ArcLeft, Route.ArcRight, Route.SCurve, Route.SCurveMirror };
-        // The trench route of deeper depths (DESIGN-TOPDOWN §4.1) is not built yet: Depth 1 has none.
         var plans = new List<Plan>();
         for (int i = 0; i < count; i++)
         {
             var plan = new Plan { Route = routes[i], Width = rng.Range(CorridorMinWidth, CorridorMaxWidth) };
-            float a1 = rng.Range(32f, 42f), a2 = rng.Range(32f, 42f), s1 = rng.Range(18f, 26f), s2 = rng.Range(18f, 26f);
+            float a1 = rng.Range(27f, 35f), a2 = rng.Range(27f, 35f), s1 = rng.Range(15f, 22f), s2 = rng.Range(15f, 22f);
             var controls = plan.Route switch
             {
                 Route.Direct => new[] { (0.5f, rng.Range(-6f, 6f)) },
@@ -314,6 +356,55 @@ public static class TopDownGenerator
             plans.Add(plan);
         }
 
+        // Each route leaves the start and reaches the exit straight down one of their stamps' canyons (those facing the
+        // other end, shared round-robin); the stamps' other canyons become dead-end side canyons.
+        var anchors = new List<Vector2>();
+        List<float> Through(Stamp stamp, Vector2 towards)
+        {
+            float want = MathF.Atan2(towards.Y, towards.X);
+            var facing = stamp.Openings.Where(a => MathF.Abs(Stamp.AngleBetween(a, want)) < 1.75f).OrderBy(a => MathF.Abs(Stamp.AngleBetween(a, want))).ToList();
+            return facing.Count > 0 ? facing : stamp.Openings.OrderBy(a => MathF.Abs(Stamp.AngleBetween(a, want))).Take(1).ToList();
+        }
+        var startWays = Through(entry, rift - start);
+        var exitWays = Through(exitStamp, start - rift);
+        for (int i = 0; i < plans.Count; i++)
+        {
+            // Anchors every few metres down the canyon keep the curve straight inside it.
+            if (!entry.Arena)
+            {
+                float a = startWays[i % startWays.Count];
+                Vector2 dir = new(MathF.Cos(a), MathF.Sin(a));
+                for (int k = 0; k < CanyonAnchors.Length; k++)
+                {
+                    Vector2 q = start + dir * CanyonAnchors[k];
+                    plans[i].Waypoints.Add((0.004f * (k + 1), q));
+                    anchors.Add(q);
+                }
+            }
+            if (!exitStamp.Arena)
+            {
+                float a = exitWays[i % exitWays.Count];
+                Vector2 dir = new(MathF.Cos(a), MathF.Sin(a));
+                for (int k = 0; k < CanyonAnchors.Length; k++)
+                {
+                    Vector2 q = rift + dir * CanyonAnchors[k];
+                    plans[i].Waypoints.Add((1f - 0.004f * (k + 1), q));
+                    anchors.Add(q);
+                }
+            }
+        }
+        // A stamp's rock is fixed: past its canyon a route keeps outside it.
+        Vector2 OffStamps(Vector2 q, float half)
+        {
+            foreach (var (stamp, at) in new[] { (entry, start), (exitStamp, rift) })
+            {
+                if (stamp.Arena) continue;
+                float keep = Stamp.Blend + half + 1f, d = Vector2.Distance(q, at);
+                if (d < keep) q = at + Geo.Normalize(q - at, Vector2.UnitX) * keep;
+            }
+            return q;
+        }
+
         // Crossing nodes: 2–4 points each shared by two routes, so the routes are guaranteed to meet there.
         int nodes = 2 + rng.Int(3);
         var nodePoints = new List<Vector2>();
@@ -324,7 +415,7 @@ public static class TopDownGenerator
             Vector2 pa = PlanPointAt(plans[a], t, start, rift), pb = PlanPointAt(plans[b], t, start, rift);
             Vector2 node = (pa + pb) * 0.5f + n * rng.Range(-3f, 3f);
             // A crossing never sits on a place (routes meet in the open and reach places by spurs).
-            var blocking = map.Pois.FirstOrDefault(poi => poi.Kind is not (PoiKind.Start or PoiKind.Rift)
+            var blocking = map.Pois.FirstOrDefault(poi => poi.Kind is not (PoiKind.Start or PoiKind.Exit)
                 && Vector2.Distance(poi.Position, node) < KeepOut(poi, CorridorMaxWidth * 0.5f) + 1f);
             if (blocking is not null)
             {
@@ -339,7 +430,7 @@ public static class TopDownGenerator
             {
                 var q = node + new Vector2(dx, dy);
                 if (dx * dx + dy * dy > 100f || !Inside(q, Rim + 12f)) continue;
-                if (map.Pois.Any(poi => poi.Kind is not (PoiKind.Start or PoiKind.Rift) && Vector2.Distance(poi.Position, q) < KeepOut(poi, CorridorMaxWidth * 0.5f) + 1f)) continue;
+                if (map.Pois.Any(poi => poi.Kind is not (PoiKind.Start or PoiKind.Exit) && Vector2.Distance(poi.Position, q) < KeepOut(poi, CorridorMaxWidth * 0.5f) + 1f)) continue;
                 float h = ground.Height(q);
                 if (h < lowH - 0.5f)
                 {
@@ -357,7 +448,7 @@ public static class TopDownGenerator
         }
 
         // Off-path POIs hook onto the nearest route through a spur of at most ~15–20 m.
-        var offPath = Enumerable.Range(0, map.Pois.Count).Where(i => map.Pois[i].Kind is not (PoiKind.Start or PoiKind.Rift)).ToList();
+        var offPath = Enumerable.Range(0, map.Pois.Count).Where(i => map.Pois[i].Kind is not (PoiKind.Start or PoiKind.Exit)).ToList();
         var hooks = new Dictionary<int, Vector2>();
         foreach (int pi in offPath)
         {
@@ -380,8 +471,10 @@ public static class TopDownGenerator
             Vector2 dir = Geo.Normalize(nearest - poi.Position, -u);
             float spur = rng.Range(9f, 12f);
             Vector2 hook = poi.Position + dir * (poi.Radius + spur + best!.Width * 0.5f);
-            best.Waypoints.RemoveAll(w => MathF.Abs(w.T - T(hook)) < 0.05f && !hooks.ContainsValue(w.At));
-            best.Waypoints.Add((T(hook), hook));
+            // Between the stamps' anchors, never before or after them.
+            float th = Math.Clamp(T(hook), 0.04f, 0.96f);
+            best.Waypoints.RemoveAll(w => MathF.Abs(w.T - th) < 0.05f && !hooks.ContainsValue(w.At) && !anchors.Contains(w.At));
+            best.Waypoints.Add((th, hook));
             hooks[pi] = hook;
             best.Hooked.Add(pi);
         }
@@ -390,10 +483,49 @@ public static class TopDownGenerator
         // spurs, not crossed) and, away from where they meet, keep a ridge's width apart instead of running side by side.
         var lines = plans.Select(plan => Polyline(plan, start, rift)).ToList();
         // Crossing nodes stay pinned so the routes really meet there.
-        var pinned = lines.Select(line => line.Select(q => nodePoints.Any(nd => Vector2.DistanceSquared(nd, q) < 0.01f)).ToArray()).ToList();
+        // Down a stamp's canyon (from an end to its last anchor) the line stays exactly where the canyon is.
+        var pinned = lines.Select(line =>
+        {
+            int head = 0, tail = line.Count - 1;
+            for (int i = 0; i < line.Count; i++)
+                if (anchors.Any(a => Vector2.DistanceSquared(a, line[i]) < 0.01f))
+                {
+                    if (Vector2.Distance(line[i], start) <= Stamp.Blend + 0.1f) head = Math.Max(head, i);
+                    else if (Vector2.Distance(line[i], rift) <= Stamp.Blend + 0.1f) tail = Math.Min(tail, i);
+                }
+            return line.Select((q, i) => i <= head || i >= tail || nodePoints.Any(nd => Vector2.DistanceSquared(nd, q) < 0.01f)).ToArray();
+        }).ToList();
+        // Each route passes each place on one side, the side its first draft already lies on: pushed out of a place's
+        // keep-out, its points all go round that side (pushed radially, a line through the middle would split in two).
+        // Places whose keep-outs overlap leave no room between them: a route passes such a group as one, on one side.
+        var group = offPath.ToDictionary(pi => pi, pi => pi);
+        int Root(int pi) => group[pi] == pi ? pi : group[pi] = Root(group[pi]);
+        foreach (int a in offPath)
+            foreach (int b in offPath)
+                if (a < b && Vector2.Distance(map.Pois[a].Position, map.Pois[b].Position) < KeepOut(map.Pois[a], CorridorMaxWidth * 0.5f) + KeepOut(map.Pois[b], CorridorMaxWidth * 0.5f) + 2f)
+                    group[Root(a)] = Root(b);
+        Vector2 Centre(int pi)
+        {
+            var members = offPath.Where(o => Root(o) == Root(pi)).ToList();
+            return members.Aggregate(Vector2.Zero, (sum, o) => sum + map.Pois[o].Position) / members.Count;
+        }
+        var passSide = lines.Select(line => offPath.ToDictionary(pi => pi, pi =>
+        {
+            Vector2 at = Centre(pi), near = NearestPoint(line, at, out Vector2 dir);
+            Vector2 side = Geo.Perp(dir);
+            return Vector2.Dot(at - near, side) > 0f ? -side : side;
+        })).ToList();
+        Vector2 Outside(int li, int pi, Vector2 q, float keep)
+        {
+            Vector2 at = map.Pois[pi].Position, away = q - at, side = passSide[li][pi];
+            if (away.Length() >= keep) return q;
+            float wrong = Vector2.Dot(away, side);
+            if (wrong < 0f) away -= 2f * wrong * side;
+            return at + Geo.Normalize(away, side) * keep;
+        }
         float Apart(Vector2 q)
         {
-            float w = Smooth(StartRadius + 2f, StartRadius + 12f, Vector2.Distance(q, start)) * Smooth(RiftRadius + 1f, RiftRadius + 8f, Vector2.Distance(q, rift));
+            float w = Smooth(startRadius + 2f, startRadius + 12f, Vector2.Distance(q, start)) * Smooth(riftRadius + 1f, riftRadius + 8f, Vector2.Distance(q, rift));
             foreach (var nd in nodePoints) w *= Smooth(4f, 12f, Vector2.Distance(q, nd));
             return w;
         }
@@ -471,14 +603,8 @@ public static class TopDownGenerator
                     Vector2 pushed = q + step;
                     // Never shove a route into a place it bends around (it could pop out on the far side).
                     if (step != Vector2.Zero && !offPath.Any(pi => Vector2.Distance(pushed, map.Pois[pi].Position) < KeepOut(map.Pois[pi], plan.Width * 0.5f) + 1f)) q = pushed;
-                    foreach (int pi in offPath)
-                    {
-                        var poi = map.Pois[pi];
-                        float keep = KeepOut(poi, plan.Width * 0.5f) + 0.5f;
-                        Vector2 away = q - poi.Position;
-                        float d = away.Length();
-                        if (d < keep) q = poi.Position + Geo.Normalize(away, n) * keep;
-                    }
+                    foreach (int pi in offPath) q = Outside(li, pi, q, KeepOut(map.Pois[pi], plan.Width * 0.5f) + 0.5f);
+                    if (!pinned[li][i]) q = OffStamps(q, plan.Width * 0.5f);
                     line[i] = Vector2.Clamp(q, new Vector2(lo), new Vector2(hi));
                 }
             }
@@ -497,20 +623,26 @@ public static class TopDownGenerator
             }
             for (int i = 1; i + 1 < line.Count; i++)
             {
+                if (pinned[li][i]) continue;
                 Vector2 q = line[i];
-                foreach (int pi in offPath)
-                {
-                    var poi = map.Pois[pi];
-                    float keep = KeepOut(poi, plans[li].Width * 0.5f) + 0.5f;
-                    Vector2 away = q - poi.Position;
-                    if (away.Length() < keep) q = poi.Position + Geo.Normalize(away, n) * keep;
-                }
+                foreach (int pi in offPath) q = Outside(li, pi, q, KeepOut(map.Pois[pi], plans[li].Width * 0.5f) + 0.5f);
+                q = OffStamps(q, plans[li].Width * 0.5f);
                 line[i] = Vector2.Clamp(q, new Vector2(lo), new Vector2(hi));
             }
             lines[li] = line;
         }
         for (int li = 0; li < plans.Count; li++)
             map.Corridors.Add(new Corridor { Kind = CorridorKind.Main, Points = lines[li], Width = plans[li].Width });
+        // The stamps' unused canyons: dead ends of the labyrinth.
+        foreach (var (stamp, at, used) in new[] { (entry, start, startWays), (exitStamp, rift, exitWays) })
+            foreach (float a in stamp.Openings.Where(o => !used.Take(plans.Count).Contains(o)))
+            {
+                Vector2 dir = new(MathF.Cos(a), MathF.Sin(a));
+                // As far as the stamp reaches, short of the rim.
+                float reach = Stamp.Blend + 5f;
+                while (reach > Stamp.ClearingRadius + 2f && !Inside(at + dir * reach, Rim + SideMaxWidth * 0.5f + 2f)) reach -= 1f;
+                map.Corridors.Add(new Corridor { Kind = CorridorKind.Side, Width = SideMaxWidth, Points = new List<Vector2> { at + dir * Stamp.ClearingRadius, at + dir * reach } });
+            }
 
         // Spurs from the network to each place.
         foreach (int pi in offPath)
@@ -541,7 +673,8 @@ public static class TopDownGenerator
             for (int i = 1; i < mains[a].Points.Count; i++)
             for (int j = 1; j < mains[b].Points.Count; j++)
                 if (Meet(mains[a].Points[i - 1], mains[a].Points[i], mains[b].Points[j - 1], mains[b].Points[j], out var x)
-                    && Vector2.Distance(x, start) > StartRadius + 16f && Vector2.Distance(x, rift) > RiftRadius + 7f)
+                    && Vector2.Distance(x, start) > MathF.Max(startRadius + 16f, Stamp.Blend + PlazaRadius + 2f)
+                    && Vector2.Distance(x, rift) > (exitStamp.Arena ? riftRadius + 7f : Stamp.Blend + PlazaRadius + 2f))
                     crossings.Add(x);
         var clusters = new List<List<Vector2>>();
         foreach (var x in crossings)
@@ -552,7 +685,7 @@ public static class TopDownGenerator
         }
         foreach (var c in clusters)
             map.Plazas.Add(new Plaza(c.Aggregate(Vector2.Zero, (s, p) => s + p) / c.Count, PlazaRadius));
-        if (map.Plazas.Count is < 2 or > 4) return $"{map.Plazas.Count} corridor crossings (want 2–4)";
+        if (map.Plazas.Count is < 1 or > 4) return $"{map.Plazas.Count} corridor crossings (want 1–4)";
         // Routes that cannot be spread (a cramped corner) would read as one wide lane: try the next layout.
         if (LevelValidator.LongestParallelRun(map) > LevelValidator.MaxSideBySide) return "two routes run side by side";
         return null;
@@ -576,6 +709,9 @@ public static class TopDownGenerator
     }
 
     /// <summary>How close a corridor's centre line may come to an off-path place.</summary>
+    /// <summary>Distances from a stamp's centre of the route anchors down its canyon.</summary>
+    static readonly float[] CanyonAnchors = { 6f, 11f, 16f, Stamp.Blend };
+
     static float KeepOut(Poi poi, float halfWidth) => poi.Radius + halfWidth + (Poi.IsCaveHosted(poi.Kind) ? 4f : 2f);
 
     static Vector2 PlanPointAt(Plan plan, float t, Vector2 start, Vector2 rift)
@@ -735,12 +871,12 @@ public static class TopDownGenerator
         return MathF.Max(d - FlatMargin, 0f);
     }
 
-    /// <summary>Every height back inside the prototype's bounds (−7…+14), roofs included.</summary>
+    /// <summary>Every height back inside the prototype's bounds (the shaft's bottom…+14), roofs included.</summary>
     static void ClampHeights(LevelMap map)
     {
         for (int i = 0; i < map.Heights.Length; i++)
         {
-            map.Heights[i] = Math.Clamp(map.Heights[i], ReefTerrain.HMin, ReefTerrain.HMax);
+            map.Heights[i] = Math.Clamp(map.Heights[i], LevelMap.ShaftBottom, ReefTerrain.HMax);
             if (!float.IsNaN(map.Lid[i])) map.Lid[i] = Math.Clamp(map.Lid[i], ReefTerrain.HMin, ReefTerrain.HMax);
         }
     }
@@ -815,7 +951,9 @@ public static class TopDownGenerator
                 }
                 foreach (var poi in map.Pois)
                 {
-                    float keep = poi.Kind == PoiKind.Rift ? poi.Radius + 6f : Poi.IsCaveHosted(poi.Kind) ? poi.Radius + 20f : poi.Radius + 4f;
+                    // Stamps keep their own rock: side canyons stay out of them.
+                    float keep = poi.Kind is PoiKind.Exit or PoiKind.Start ? MathF.Max(poi.Radius + 6f, Stamp.Blend + 2f)
+                        : Poi.IsCaveHosted(poi.Kind) ? poi.Radius + 20f : poi.Radius + 4f;
                     if (Vector2.Distance(next, poi.Position) < keep + half) { blocked = true; blocker = null; }
                 }
                 foreach (var z in map.Plazas)
@@ -828,7 +966,7 @@ public static class TopDownGenerator
                 if (blocked)
                 {
                     // Now and then the canyon breaks through into the one it met: a loop in the labyrinth.
-                    if (blocker is not null && walked >= 9f && rng.NextFloat() < 0.5f && Vector2.Distance(next, map.Rift.Position) > map.Rift.Radius + 25f)
+                    if (blocker is not null && walked >= 9f && rng.NextFloat() < 0.5f && Vector2.Distance(next, map.Exit.Position) > map.Exit.Radius + 25f)
                     {
                         points.Add(NearestPoint(blocker.Points, next));
                         joined = true;
@@ -858,17 +996,19 @@ public static class TopDownGenerator
     /// Raises the reef out of the seabed: everywhere but the open ground (canyons, plazas, clearings, the boss arena),
     /// walls climb from the floor over <see cref="WallSlope"/> metres with the prototype's cosine brush to tops taken
     /// from the prototype's terrain (<see cref="ReefTerrain"/>, mapped to 4–14 m). Canyon floors undulate just under
-    /// level −1; the boss arena is level, with its rift the deepest point of the map; then the trenches and the rim.
+    /// level −1; the boss arena is level; then the rim.
     /// </summary>
-    static void RaiseWalls(LevelMap map, string terrainText, Rng rng)
+    /// <param name="pin">Pins the stamps, before the shoals sink (their rock counts toward the cap but never sinks).</param>
+    static void RaiseWalls(LevelMap map, string terrainText, Rng rng, Action pin, ParallelOptions parallel)
     {
         const int N = LevelMap.Samples;
         var tops = new float[N * N];
         ReefTerrain.Generate(tops, N, terrainText);
         uint dipSeed = (uint)(rng.NextU64() >> 32);
-        var rift = map.Rift;
+        var rift = map.Exit;
+        bool arena = map.HasBoss;
         var toOpen = new float[N * N];
-        Parallel.For(0, N, y =>
+        Parallel.For(0, N, parallel, y =>
         {
             for (int x = 0; x < N; x++)
             {
@@ -876,7 +1016,7 @@ public static class TopDownGenerator
                 float d = toOpen[y * N + x] = DistanceToOpen(map, p);
                 float floor = -PathDepth - 0.6f * FloorDip(x, y, dipSeed);
                 // The boss arena is a level floor.
-                floor = MathUtil.Lerp(-PathDepth, floor, Smooth(rift.Radius, rift.Radius + 5f, Vector2.Distance(p, rift.Position)));
+                if (arena) floor = MathUtil.Lerp(-PathDepth, floor, Smooth(rift.Radius, rift.Radius + 5f, Vector2.Distance(p, rift.Position)));
                 float top = WallTopMin + (WallTopMax - WallTopMin) * (tops[y * N + x] - ReefTerrain.HMin) / (ReefTerrain.HMax - ReefTerrain.HMin);
                 float rise = 1f - ReefTerrain.Falloff(d / WallSlope);
                 float h = floor + rise * (top - floor);
@@ -890,26 +1030,71 @@ public static class TopDownGenerator
 
         // At most 40% may stand above the swim level: where the prototype's terrain is lowest, walls sink into shallow
         // reef plateaus under the swim level (open chambers in the labyrinth), just enough to keep under the cap.
+        pin();
         SinkShoals(map, tops, toOpen, dipSeed);
+    }
 
-        // The rift: a crack across the middle of the arena, its floor the lowest point of the level.
-        float angle = rng.Range(0f, MathF.PI);
-        Vector2 axis = new(MathF.Cos(angle), MathF.Sin(angle)), across = Geo.Perp(axis);
-        float halfLength = rng.Range(7f, 9f), halfWidth = rng.Range(2.5f, 3.5f);
-        for (int y = (int)(rift.Position.Y - halfLength - 1); y <= (int)(rift.Position.Y + halfLength + 1); y++)
-        for (int x = (int)(rift.Position.X - halfLength - 1); x <= (int)(rift.Position.X + halfLength + 1); x++)
+    /// <summary>
+    /// Pins both stamps into the terrain: exactly within <see cref="Stamp.Pin"/> of the start and the exit, blending into
+    /// the level's own rock by <see cref="Stamp.Blend"/>. The rim stays impassable through the blend.
+    /// </summary>
+    static void PinStamps(LevelMap map, Stamp entry, Stamp exit)
+    {
+        Pin(map, map.Start.Position, entry);
+        Pin(map, map.Exit.Position, exit);
+    }
+
+    /// <summary>Exactly the stamp within its pin; through the blend, never raising the level's open water.</summary>
+    static void Pin(LevelMap map, Vector2 at, Stamp stamp)
+    {
+        int x0 = Math.Max(0, (int)(at.X - Stamp.Blend - 1f)), x1 = Math.Min(LevelMap.Size, (int)(at.X + Stamp.Blend + 1f) + 1);
+        int y0 = Math.Max(0, (int)(at.Y - Stamp.Blend - 1f)), y1 = Math.Min(LevelMap.Size, (int)(at.Y + Stamp.Blend + 1f) + 1);
+        for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
         {
-            Vector2 rel = new Vector2(x, y) - rift.Position;
-            float a = Vector2.Dot(rel, axis) / halfLength, b = Vector2.Dot(rel, across) / halfWidth;
-            float k = ReefTerrain.Falloff(MathF.Sqrt(a * a + b * b));
-            if (k > 0f) map[x, y] = MathUtil.Lerp(map[x, y], -CrackDepth, k);
+            var p = new Vector2(x, y);
+            float w = Stamp.Weight(Vector2.Distance(p, at));
+            if (w <= 0f) continue;
+            float h = MathUtil.Lerp(map[x, y], stamp.HeightAt(p - at), w);
+            if (w < 1f && h > map[x, y] && DistanceToOpen(map, p) <= 0f) h = map[x, y];
+            float e = MathF.Min(MathF.Min(x, y), MathF.Min(Size - x, Size - y));
+            float rim = ReefTerrain.Falloff(e / (Rim + 1f));
+            if (rim > 0f) h += rim * (ReefTerrain.HMax - h);
+            map[x, y] = h;
         }
+    }
 
-        CutTrenches(map, rng, dipSeed);
+    /// <summary>
+    /// The shaft down to the next level (DESIGN-TOPDOWN §4.6): in a blue hole, a disc in the middle of the clearing; on a
+    /// boss level, the Crack, a fissure across the middle of the arena. Its floor is the next level's seabed.
+    /// </summary>
+    static void CutShaft(LevelMap map, Rng rng)
+    {
+        var exit = map.Exit.Position;
+        Shaft shaft;
+        if (map.HasBoss)
+        {
+            float angle = rng.Range(0f, MathF.PI);
+            shaft = new Shaft(exit, new Vector2(MathF.Cos(angle), MathF.Sin(angle)), rng.Range(7f, 9f), rng.Range(2.5f, 3.5f));
+        }
+        else shaft = new Shaft(exit, Vector2.UnitX, ShaftRadius, ShaftRadius);
+        map.Shaft = shaft;
+        // The lip rounds over into a sheer drop: full depth a metre and a half inside the rim, so the rim is smooth
+        // rather than stepped cell by cell.
+        int r = (int)MathF.Ceiling(shaft.HalfLength) + 2;
+        for (int y = (int)exit.Y - r; y <= (int)exit.Y + r; y++)
+        for (int x = (int)exit.X - r; x <= (int)exit.X + r; x++)
+        {
+            Vector2 d = new Vector2(x, y) - shaft.Center;
+            float a = Vector2.Dot(d, shaft.Axis) / shaft.HalfLength, b = Vector2.Dot(d, Geo.Perp(shaft.Axis)) / shaft.HalfWidth;
+            float beyond = (MathF.Sqrt(a * a + b * b) - 1f) * shaft.HalfWidth;
+            float w = 1f - Smooth(-1.5f, 0.3f, beyond);
+            if (w > 0f) map[x, y] = MathUtil.Lerp(map[x, y], LevelMap.ShaftBottom, w);
+        }
     }
 
     /// <summary>Share of the interior the walls may cover after sinking (a little under the 40% cap, for later carving).</summary>
-    const float WallShare = 0.33f;
+    const float WallShare = 0.27f;
 
     /// <summary>
     /// Sinks the cores of the biggest wall masses into shoals until at most <see cref="WallShare"/> of the interior stands
@@ -922,11 +1107,15 @@ public static class TopDownGenerator
         int lo = (int)Rim, hi = LevelMap.Size - lo;
         var walls = new List<float>();
         int interior = 0;
+        // A stamp's rock is fixed: it counts, but never sinks.
+        bool Stamped(int x, int y) => Vector2.Distance(new Vector2(x, y), map.Start.Position) < Stamp.Blend
+            || Vector2.Distance(new Vector2(x, y), map.Exit.Position) < Stamp.Blend;
+        float Score(int x, int y) => Stamped(x, y) ? float.MaxValue : SinkScore(tops[y * N + x], toOpen[y * N + x]);
         for (int y = lo; y <= hi; y++)
         for (int x = lo; x <= hi; x++)
         {
             interior++;
-            if (map[x, y] > 0f) walls.Add(SinkScore(tops[y * N + x], toOpen[y * N + x]));
+            if (map[x, y] > 0f) walls.Add(Score(x, y));
         }
         int excess = walls.Count - (int)(WallShare * interior);
         if (excess <= 0) return;
@@ -942,6 +1131,7 @@ public static class TopDownGenerator
             float h = map[x, y];
             float floor = -PathDepth - 0.6f * FloorDip(x, y, dipSeed);
             if (h <= floor + 0.01f) continue;
+            if (Stamped(x, y)) continue;
             float keep = Smooth(threshold - band, threshold + band, SinkScore(tops[y * N + x], toOpen[y * N + x]));
             if (keep >= 1f) continue;
             // A shoal plateau rolling a little under the swim level.
@@ -954,47 +1144,6 @@ public static class TopDownGenerator
     /// <summary>Lower sinks first: far from the canyons, then low on the prototype's terrain (0…1 each).</summary>
     static float SinkScore(float top, float toOpen) =>
         0.35f * (top - ReefTerrain.HMin) / (ReefTerrain.HMax - ReefTerrain.HMin) + (1f - Smooth(WallSlope + 2f, WallSlope + 12f, toOpen));
-
-    /// <summary>The deeps: 1–3 stretches of route canyon (30–60 m, away from the start and the arena) cut deeper.</summary>
-    static void CutTrenches(LevelMap map, Rng rng, uint dipSeed)
-    {
-        var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
-        int want = 1 + rng.Int(3);
-        for (int tries = 0; tries < 60 && map.Trenches.Count < want; tries++)
-        {
-            var c = mains[rng.Int(mains.Count)];
-            if (c.Points.Count < 12) continue;
-            int i0 = rng.Int(c.Points.Count - 10);
-            float length = rng.Range(30f, 60f), walked = 0f;
-            var points = new List<Vector2> { c.Points[i0] };
-            for (int i = i0 + 1; i < c.Points.Count && walked < length; i++)
-            {
-                walked += Vector2.Distance(c.Points[i - 1], c.Points[i]);
-                points.Add(c.Points[i]);
-            }
-            if (walked < 30f) continue;
-            if (points.Any(q => Vector2.Distance(q, map.Start.Position) < map.Start.Radius + 14f || Vector2.Distance(q, map.Rift.Position) < map.Rift.Radius + 8f)) continue;
-            if (map.Trenches.Any(t => points.Any(q => t.DistanceToCentre(q) < 20f))) continue;
-            map.Trenches.Add(new Trench { Points = points, Width = Math.Clamp(c.Width + rng.Range(0f, 2f), 8f, 14f), Depth = rng.Range(TrenchMin, TrenchMax) });
-        }
-        Parallel.For(0, LevelMap.Samples, y =>
-        {
-            for (int x = 0; x < LevelMap.Samples; x++)
-            {
-                var p = new Vector2(x, y);
-                float h = map[x, y];
-                foreach (var t in map.Trenches)
-                {
-                    float dc = t.DistanceToCentre(p), hw = t.Width * 0.5f;
-                    if (dc >= hw) continue;
-                    float profile = 1f - Smooth(hw * 0.4f, hw, dc);
-                    float bottom = -t.Depth - 0.8f * FloorDip(x, y, dipSeed + 91u);
-                    h = MathF.Min(h, MathUtil.Lerp(h, bottom, profile));
-                }
-                map[x, y] = h;
-            }
-        });
-    }
 
     /// <summary>The terrain smoothed over a few metres, for routing: its slopes show valleys rather than every bump.</summary>
     sealed class Ground
@@ -1176,9 +1325,8 @@ public static class TopDownGenerator
                         break;
                     }
                 }
-                // The curse den may settle for a pocket when the ridge behind it is too thin; the treasure cave may not.
-                if (cave.Chambers.Count == 1 && poi.Kind == PoiKind.CurseDen) cave.Kind = CaveKind.Pocket;
-                else if (cave.Chambers.Count == 1) return $"no room behind the {poi.Kind} for its chambers";
+                // Where the ridge behind is too thin for more chambers, the room is a single pocket.
+                if (cave.Chambers.Count == 1) cave.Kind = CaveKind.Pocket;
             }
             foreach (var (c, r) in cave.Chambers)
             {
@@ -1221,7 +1369,7 @@ public static class TopDownGenerator
             {
                 if (i > 0) along += Vector2.Distance(corridor.Points[i - 2 >= 0 ? i - 2 : 0], corridor.Points[i]);
                 Vector2 p = corridor.Points[i];
-                if (Vector2.Distance(p, map.Start.Position) < 22f || Vector2.Distance(p, map.Rift.Position) < 24f) continue;
+                if (NearEnds(map, p, 4f)) continue;
                 if (map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 14f)) continue;
                 samples.Add((p, c, along));
             }
@@ -1272,7 +1420,7 @@ public static class TopDownGenerator
                 for (int i = 2; i + 2 < corridor.Points.Count; i += 2)
                 {
                     Vector2 p = corridor.Points[i];
-                    if (Vector2.Distance(p, map.Start.Position) < 20f || Vector2.Distance(p, map.Rift.Position) < 24f) continue;
+                    if (NearEnds(map, p, 4f)) continue;
                     if (map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 12f)) continue;
                     Vector2 tangent = Geo.Normalize(corridor.Points[i + 2] - corridor.Points[i - 2], Vector2.UnitX);
                     Vector2 nrm = Geo.Perp(tangent);
@@ -1294,7 +1442,6 @@ public static class TopDownGenerator
         }
         // Where no flank stands high enough, a pair of rounded rock shoulders rises either side of a corridor to carry one.
         if (archCandidates.Count == 0 && RaiseShoulders(map, rng)) archCandidates = ArchCandidates(4f);
-        if (archCandidates.Count == 0) return "no peaks flank a corridor for an arch";
         int arches = 1 + rng.Int(5);
         var pool = archCandidates.ToList();
         while (map.Canopies.Count(c => c.Kind == CanopyKind.Arch) < arches && pool.Count > 0)
@@ -1324,6 +1471,7 @@ public static class TopDownGenerator
             if (corridor.Kind != CorridorKind.Main || corridor.Points.Count < 6) continue;
             int i = 2 + rng.Int(corridor.Points.Count - 4);
             Vector2 p = corridor.Points[i];
+            if (NearEnds(map, p, 6f)) continue;
             Vector2 tangent = Geo.Normalize(corridor.Points[i + 1] - corridor.Points[i - 1], Vector2.UnitX);
             Vector2 nrm = Geo.Perp(tangent) * (rng.NextFloat() < 0.5f ? -1f : 1f);
             if (map.HeightAt(p + nrm * (corridor.HalfWidth + 4f)) < 8f) continue;
@@ -1343,6 +1491,11 @@ public static class TopDownGenerator
         }
         return null;
     }
+
+    /// <summary>Within a stamp (plus a margin) or the boss arena: features keep out, the stamps' rock is fixed.</summary>
+    static bool NearEnds(LevelMap map, Vector2 p, float margin) =>
+        Vector2.Distance(p, map.Start.Position) < MathF.Max(Stamp.Blend, map.Start.Radius) + margin
+        || Vector2.Distance(p, map.Exit.Position) < MathF.Max(Stamp.Blend, map.Exit.Radius + 9f) + margin;
 
     static Vector2 Rotate(Vector2 v, float a) => new(v.X * MathF.Cos(a) - v.Y * MathF.Sin(a), v.X * MathF.Sin(a) + v.Y * MathF.Cos(a));
 
@@ -1367,7 +1520,7 @@ public static class TopDownGenerator
             if (c.Points.Count < 10) continue;
             int i = 4 + rng.Int(c.Points.Count - 8);
             Vector2 p = c.Points[i];
-            if (Vector2.Distance(p, map.Start.Position) < 24f || Vector2.Distance(p, map.Rift.Position) < 28f) continue;
+            if (NearEnds(map, p, 8f)) continue;
             if (map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 16f)) continue;
             Vector2 nrm = Geo.Perp(Geo.Normalize(c.Points[i + 2] - c.Points[i - 2], Vector2.UnitX));
             var shoulders = new[] { p + nrm * (c.HalfWidth + ShoulderRadius), p - nrm * (c.HalfWidth + ShoulderRadius) };
@@ -1420,13 +1573,9 @@ public static class TopDownGenerator
             float roll = rng.NextFloat();
             float scale = rng.Range(0.7f, 1.4f), yaw = rng.Range(0f, MathF.Tau);
             float zone = 0.5f + 0.5f * Noise(new Vector3(p.X * 0.08f, 3f, p.Y * 0.08f), seed + 31u);
-            if (h < -TrenchMin * 0.8f)
-            {
-                // The deeps: dark and quiet.
-                if (roll < 0.12f) map.Decor.Add(new DecorSpot(DecorKind.TrenchSponge, p, h, scale, yaw));
-                else if (roll < 0.2f) map.Decor.Add(new DecorSpot(DecorKind.BiolumAccent, p, h, scale, yaw));
-            }
-            else if (h < -0.5f)
+            // The shaft is open water all the way down.
+            if (map.Shaft.Contains(p, 1.5f)) continue;
+            if (h < -0.5f)
             {
                 // The seabed under open water: meadows and sand in the shallows, reef heads and boulders, flora on its slopes.
                 float meadow = Noise(new Vector3(p.X * 0.05f, 7f, p.Y * 0.05f), seed + 37u);
@@ -1482,21 +1631,21 @@ public static class TopDownGenerator
             Vector2 tangent = Geo.Normalize(c.Points[i + 1] - c.Points[i - 1], Vector2.UnitX);
             return c.Points[i] + Geo.Perp(tangent) * (rng.Range(-1f, 1f) * offset * c.HalfWidth);
         }
-        int coins = 8 + rng.Int(5);
+        int coins = 6 + rng.Int(5);
         for (int tries = 0; tries < 400 && map.Coins.Count < coins; tries++)
         {
             Vector2 p = OnFlat(0.8f);
             if (map.HeightAt(p) > -PathDepth || map.Coins.Any(c => Vector2.Distance(c.Position, p) < 10f)) continue;
-            if (Vector2.Distance(p, map.Start.Position) < 12f || Vector2.Distance(p, map.Rift.Position) < map.Rift.Radius) continue;
+            if (Vector2.Distance(p, map.Start.Position) < 12f || Vector2.Distance(p, map.Exit.Position) < map.Exit.Radius + 2f) continue;
             map.Coins.Add(new BuriedCoins(p, rng.NextFloat() < 0.1f ? 5 : 2 + rng.Int(2)));
         }
-        int pockets = 4 + rng.Int(3);
+        int pockets = 3 + rng.Int(3);
         for (int tries = 0; tries < 400 && map.Pockets.Count < pockets; tries++)
         {
             Vector2 p = OnFlat(0.9f);
             if (map.HeightAt(p) > -PathDepth || map.Pockets.Any(c => Vector2.Distance(c.Position, p) < 15f)) continue;
             if (map.Coins.Any(c => Vector2.Distance(c.Position, p) < 4f)) continue;
-            if (Vector2.Distance(p, map.Start.Position) < 15f || Vector2.Distance(p, map.Rift.Position) < map.Rift.Radius + 4f) continue;
+            if (Vector2.Distance(p, map.Start.Position) < 15f || Vector2.Distance(p, map.Exit.Position) < map.Exit.Radius + 4f) continue;
             map.Pockets.Add(new SealedPocket(p, 1.6f));
         }
     }
@@ -1513,14 +1662,14 @@ public static class TopDownGenerator
         _ => MoveClass.Swimmer,
     };
 
-    static void PlaceSpawns(LevelMap map, Rng rng, int depth)
+    static void PlaceSpawns(LevelMap map, Rng rng, float menace)
     {
-        float menace = MathUtil.Clamp01((depth - 1) / 5f);
-        float budget = 1f + 0.8f * menace;
+        // Menace (DESIGN-TOPDOWN §6.2): the spawn budget grows ×1.0 → ×1.8 over the depths, and on with every loop.
+        float budget = 1f + 0.8f * MathF.Min(menace, 3f);
         int Scaled(int n) => Math.Max(1, (int)MathF.Round(n * budget));
 
         // Landmark lights are breathing room: ambient spawns keep out of their radius (curse dens excepted).
-        var beacons = map.Pois.Where(p => p.Kind is PoiKind.Start or PoiKind.Shop or PoiKind.TreasureCave or PoiKind.Rift).ToList();
+        var beacons = map.Pois.Where(p => p.Kind is PoiKind.Start or PoiKind.Shop or PoiKind.TreasureCave or PoiKind.Exit).ToList();
         bool NearBeacon(Vector2 p) => beacons.Any(b => Vector2.Distance(b.Position, p) < b.Radius + 12f);
 
         void Add(SpawnRole role, EnemyKind kind, int count, Vector2 at, int poi = -1, bool trap = false, List<Vector2>? path = null) =>
@@ -1536,7 +1685,7 @@ public static class TopDownGenerator
             if (poi.Kind is PoiKind.TreasureCave && poi.Cave >= 0 && map.Caves[poi.Cave].Chambers.Count > 1)
                 Add(SpawnRole.Den, DenKind(), Scaled(2 + rng.Int(2)), map.Caves[poi.Cave].Chambers[^1].Center, pi);
         }
-        int ridgeDens = 3 + rng.Int(3);
+        int ridgeDens = 2 + rng.Int(3);
         var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
         for (int tries = 0; tries < 300 && map.Spawns.Count(s => s.Role == SpawnRole.Den && s.Poi < 0) < ridgeDens; tries++)
         {
@@ -1557,7 +1706,7 @@ public static class TopDownGenerator
             anchors.Add(arch.Center + tangent * (arch.HalfWidth + 3f));
             anchors.Add(arch.Center - tangent * (arch.HalfWidth + 3f));
         }
-        int ambushers = 4 + rng.Int(5);
+        int ambushers = 3 + rng.Int(4);
         for (int tries = 0; tries < 300 && map.Spawns.Count(s => s.Role == SpawnRole.Ambush) < ambushers && anchors.Count > 0; tries++)
         {
             Vector2 anchor = anchors[rng.Int(anchors.Count)];
@@ -1610,7 +1759,7 @@ public static class TopDownGenerator
                 case PoiKind.TreasureCave:
                     Add(SpawnRole.Guardian, Swimmers[rng.Int(Swimmers.Length)], Scaled(2 + rng.Int(2)), poi.Position, pi);
                     break;
-                case PoiKind.ItemSpawn:
+                case PoiKind.ShellCache:
                     Add(SpawnRole.Guardian, Swimmers[rng.Int(Swimmers.Length)], Scaled(3 + rng.Int(2)), poi.Position, pi);
                     Add(SpawnRole.Guardian, rng.NextFloat() < 0.5f ? EnemyKind.Crabby : EnemyKind.SeaUrchin, Scaled(1 + rng.Int(2)), poi.Position, pi);
                     break;

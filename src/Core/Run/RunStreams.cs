@@ -1,3 +1,5 @@
+using OctoShoots.Core.Gen.TopDown;
+
 namespace OctoShoots.Core.Run;
 
 /// <summary>
@@ -31,7 +33,17 @@ public sealed class RunStreams
     public Rng Dens(int depth, int reef) => _root.Stream($"dens/{depth}/{reef}");
     public Rng Critters(int depth, int reef) => _root.Stream($"critters/{depth}/{reef}");
     /// <summary>One stage of the top-down level generator (DESIGN-TOPDOWN §4.1); each attempt gets fresh streams.</summary>
-    public Rng TopDown(int depth, int reef, int attempt, string stage) => _root.Stream($"topdown/{depth}/{reef}/{attempt}/{stage}");
+    public Rng TopDown(LevelId id, int attempt, string stage) => _root.Stream($"topdown/{id.Cycle}/{id.Depth}/{id.Level}/{attempt}/{stage}");
+    /// <summary>What a level holds (LevelPlan).</summary>
+    public Rng Plan(LevelId id) => _root.Stream($"plan/{id.Cycle}/{id.Depth}/{id.Level}");
+    /// <summary>Which level of a depth its boss stands on.</summary>
+    public Rng BossRoll(int cycle, int depth) => _root.Stream($"boss/{cycle}/{depth}");
+    /// <summary>Whether a depth has its second treasure room, and on which level.</summary>
+    public Rng TreasureRoll(int cycle, int depth) => _root.Stream($"treasure/{cycle}/{depth}");
+    /// <summary>The reef director's schedule of world events on a level (currents, …).</summary>
+    public Rng Events(LevelId id) => _root.Stream($"events/{id.Cycle}/{id.Depth}/{id.Level}");
+    /// <summary>The stamp of rock around the start of a level (and around the hole above it).</summary>
+    public ulong StampSeed(LevelId entered) => _root.Stream($"stamp/{entered.Cycle}/{entered.Depth}/{entered.Level}").NextU64();
     public Rng Snacks() => _root.Stream("snacks");
     public Rng EnemyAi() => _root.Stream("enemyAI");
     public Rng Combat() => _root.Stream("combat");

@@ -16,17 +16,16 @@ public class PlaneEconomyTests
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
         ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
 
-    static readonly Lazy<LevelMap> Room1 = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
-
-    static PlaneWorld World() => new(Room1.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
+    /// <summary>A level with a shop (level 1 of a depth never has one).</summary>
+    static PlaneWorld World() => new(TestLevels.WithShop(), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
 
     [Fact]
-    public void ShellCachesLieAtTheItemCacheAndSecrets()
+    public void ShellCachesLieAtTheShellCacheAndSecrets()
     {
         var w = World();
         int expectedMin = w.Map.Pois.Sum(p => p.Kind switch
         {
-            PoiKind.ItemSpawn => PlaneEconomyTuning.CacheMin,
+            PoiKind.ShellCache => PlaneEconomyTuning.CacheMin,
             PoiKind.Secret => PlaneEconomyTuning.SecretMin,
             _ => 0,
         });
@@ -37,7 +36,8 @@ public class PlaneEconomyTests
     [Fact]
     public void SwimmingOverShellsCollectsThem()
     {
-        var w = World();
+        // A level with a shell cache, so there are shells lying about.
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Caches > 0 && !p.HasBoss)), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
         var shell = w.Shells[0];
         w.Player.Position = w.Player.PrevPosition = shell.Position;
         w.Step(default);
@@ -47,23 +47,79 @@ public class PlaneEconomyTests
     }
 
     [Fact]
-    public void EveryDefeatedMobDropsShells()
+    public void FreedMobsDropAHeartShellsOrNothing()
+    {
+        // Free every mob of several levels: each leaves a heart, one or two shells, or nothing, in about the tuned shares.
+        int mobs = 0, hearts = 0, shellDrops = 0, nothing = 0;
+        foreach (var id in TestLevels.All(p => !p.HasBoss).Take(6))
+        {
+            var w = new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
+            foreach (var mob in w.Mobs.ToList())
+            {
+                int shellsBefore = w.Shells.Count, heartsBefore = w.Hearts.Count;
+                mob.Hp = 0.001f;
+                w.Shots.Add(new PlaneShot { Position = mob.Position, Line = mob.Position, Velocity = Vector2.UnitX, Life = 1f, FromPlayer = true, Damage = 1f });
+                w.Step(default);
+                if (mob.Alive) continue;
+                mobs++;
+                int newShells = w.Shells.Count - shellsBefore, newHearts = w.Hearts.Count - heartsBefore;
+                Assert.True(newHearts == 0 || newShells == 0, "a heart or shells, never both");
+                Assert.InRange(newShells, 0, 2);
+                if (newHearts > 0) hearts++;
+                else if (newShells > 0) shellDrops++;
+                else nothing++;
+            }
+        }
+        Assert.True(mobs >= 60, $"{mobs} mobs");
+        Assert.InRange(hearts / (float)mobs, 0f, 0.16f);
+        Assert.InRange(shellDrops / (float)mobs, 0.15f, 0.45f);
+        Assert.True(nothing > shellDrops, $"{nothing} empty, {shellDrops} shells, {hearts} hearts");
+    }
+
+    [Fact]
+    public void AHeartHealsHerOnlyWhenHurt()
     {
         var w = World();
-        int before = w.Shells.Count;
-        var mob = w.Mobs[0];
-        w.Shots.Add(new PlaneShot { Position = mob.Position, Line = mob.Position, Velocity = Vector2.UnitX, Life = 1f, FromPlayer = true, Damage = 999f });
+        w.Mobs.Clear();
+        var heart = new PlaneHeart { Position = w.Player.Position };
+        w.Hearts.Add(heart);
         w.Step(default);
-        Assert.False(mob.Alive);
-        Assert.Equal(1, w.Stats.MobsDefeated);
-        int dropped = w.Shells.Count - before;
-        Assert.InRange(dropped, PlaneEconomyTuning.MobDropMin, PlaneEconomyTuning.MobDropMax);
+        Assert.False(heart.Taken);
+        Assert.Single(w.Hearts);
+
+        w.Player.Hp = 50f;
+        w.Step(default);
+        Assert.True(heart.Taken);
+        Assert.Empty(w.Hearts);
+        Assert.Equal(50f + PlaneEconomyTuning.HeartHeal, w.Player.Hp);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.HeartCollected);
+    }
+
+    /// <summary>The first shop level whose shop rolled a pearl.</summary>
+    static PlaneWorld WorldWithShopPearl() => TestLevels.All(p => p.Shops > 0 && !p.HasBoss)
+        .Select(id => new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(Catalog.Value, new Tuning())))
+        .First(w => w.Stands.Any(s => s.Kind == StandKind.Pearl));
+
+    [Fact]
+    public void EveryShopHasOneHeartAndAtMostOnePearlAt30()
+    {
+        int shops = 0;
+        foreach (var id in TestLevels.All(p => p.Shops > 0 && !p.HasBoss).Take(8))
+        {
+            var w = new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
+            shops++;
+            Assert.Single(w.Stands, s => s.Kind == StandKind.Health);
+            var pearls = w.Stands.Where(s => s.Kind == StandKind.Pearl).ToList();
+            Assert.InRange(pearls.Count, 0, 1);
+            Assert.All(pearls, s => Assert.Equal(30, s.Price));
+        }
+        Assert.True(shops > 0);
     }
 
     [Fact]
     public void TheShopSellsPearlsAndATopUpForShells()
     {
-        var w = World();
+        var w = WorldWithShopPearl();
         Assert.Contains(w.Stands, s => s.Kind == StandKind.Health);
         var pearl = w.Stands.First(s => s.Kind == StandKind.Pearl);
         Assert.DoesNotContain(w.Pearls, p => p.ItemId == pearl.ItemId);
@@ -98,11 +154,10 @@ public class PlaneEconomyTests
     }
 
     [Fact]
-    public void ShellsCarryThroughTheRift()
+    public void ShellsCarryDownTheHole()
     {
         var run = new PlaneRun(Catalog.Value, new Tuning()) { Shells = 12 };
-        var room2 = TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 2);
-        var w = new PlaneWorld(room2, new Tuning(), run);
+        var w = new PlaneWorld(TestLevels.After(TestLevels.WithShop()), new Tuning(), run);
         Assert.Equal(12, w.Run.Shells);
     }
 }

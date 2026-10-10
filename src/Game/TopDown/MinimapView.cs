@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using OctoShoots.Core.Gen.TopDown;
+using OctoShoots.Core.Plane;
 
 namespace OctoShoots.Game.TopDown;
 
@@ -23,6 +24,7 @@ public partial class MinimapView : Control
     public const float SpotRadius = Span / 2f / 2f;
 
     TopoMap _map = null!;
+    Frame _frame = null!;
     Label _place = null!;
     float _placeAlpha;
     bool _placeShown;
@@ -55,7 +57,7 @@ public partial class MinimapView : Control
             MouseFilter = MouseFilterEnum.Ignore,
             Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/minimap_mask.gdshader") },
         });
-        AddChild(new Frame { Size = new Vector2(Diameter, Diameter) });
+        AddChild(_frame = new Frame { Size = new Vector2(Diameter, Diameter) });
 
         // The place Clementine is in, named under the map.
         _place = new Label
@@ -89,6 +91,20 @@ public partial class MinimapView : Control
 
     public void SetMap(LevelMap map) => _map.SetMap(map);
 
+    /// <summary>The corruption's texture and works on the minimap (docs/CORRUPTION.md).</summary>
+    public void SetCorruption(Texture2D? texture) => _map.Corruption = texture;
+
+    public void SetBlight(PlaneWorld world) => FillBlight(_map, world);
+
+    /// <summary>Copies the world's Blightroots and valves onto a map.</summary>
+    public static void FillBlight(TopoMap map, PlaneWorld world)
+    {
+        map.Blights.Clear();
+        foreach (var b in world.Blightroots) map.Blights.Add((b.Position, b.Alive));
+        map.Valves.Clear();
+        foreach (var v in world.Valves) map.Valves.Add((v.Center - v.Across * v.HalfWidth, v.Center + v.Across * v.HalfWidth, v.Seen, v.Cleared));
+    }
+
     public void SetVisited(IReadOnlySet<int> visited) => _map.Visited = visited;
 
     public void SetFog(FogOfWar fog, IReadOnlySet<int> spotted)
@@ -101,6 +117,13 @@ public partial class MinimapView : Control
     /// <summary>The mud cloud around the boss arena (0: none).</summary>
     public void SetMud(System.Numerics.Vector2 center, float rim, float amount) => _map.Mud = new Vector4(center.X, center.Y, rim, amount);
 
+    /// <summary>Her health as a share of her max (0..1): the bezel's four segments (§2.5, the gonad rings).</summary>
+    public void SetHealth(float health)
+    {
+        _frame.Health = Mathf.Clamp(health, 0f, 1f);
+        _frame.QueueRedraw();
+    }
+
     public void Track(System.Numerics.Vector2 player, System.Numerics.Vector2 velocity)
     {
         _map.Center = player;
@@ -108,10 +131,26 @@ public partial class MinimapView : Control
         if (velocity.LengthSquared() > 0.04f) _map.PlayerHeading = velocity;
     }
 
-    /// <summary>The bezel and the north mark.</summary>
+    /// <summary>
+    /// The bezel and the north mark. The bezel is also her health: four thick red segments, one for each gonad ring on
+    /// her bell (§2.5), parted at north, east, south and west. Each fills along its length as its quarter of her HP is
+    /// full, over a dark track. They go from the top-left round to the top-right; the last one left pulses when she is
+    /// critical.
+    /// </summary>
     partial class Frame : Control
     {
+        public float Health = 1f;
+        /// <summary>The health shown (eased: a lost quarter fades out rather than blinking off).</summary>
+        float _shown = 1f;
+
         public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
+
+        public override void _Process(double delta)
+        {
+            float before = _shown;
+            _shown = Mathf.MoveToward(_shown, Health, (float)delta * (Health < _shown ? 0.8f : 1.5f));
+            if (_shown != before || _shown < 0.25f) QueueRedraw();
+        }
 
         public override void _Draw()
         {
@@ -119,6 +158,27 @@ public partial class MinimapView : Control
             float r = Size.X * 0.5f;
             // A thin outline.
             DrawArc(c, r - 0.75f, 0f, Mathf.Tau, 128, new Color(0.85f, 0.88f, 0.9f, 0.9f), 1.5f, true);
+            // The health segments just inside it: quadrants centred on the diagonals, a small gap at each compass point.
+            // Godot's angles run clockwise on screen from east; segment k is centred at -135° + 90°·k (top-left first),
+            // and the first to empty is the last in that order (top-right... back to top-left), like the rings.
+            // Thick and red: a dark track under each, the red filling it along its length as its quarter is full.
+            const float gap = 0.1f, width = 9f;
+            float rr = r - 7f;
+            float pulse = 0.35f + 0.65f * (0.5f + 0.5f * Mathf.Sin((float)Time.GetTicksMsec() * 0.006f));
+            var red = new Color(0.95f, 0.16f, 0.18f);
+            for (int k = 0; k < 4; k++)
+            {
+                float mid = -0.75f * Mathf.Pi + k * Mathf.Pi * 0.5f;
+                float from = mid - Mathf.Pi * 0.25f + gap, to = mid + Mathf.Pi * 0.25f - gap;
+                float lit = Mathf.Clamp(_shown * 4f - (3 - k), 0f, 1f);
+                DrawArc(c, rr, from, to, 24, new Color(0f, 0f, 0f, 0.65f), width + 3f, true);
+                DrawArc(c, rr, from, to, 24, new Color(0.3f, 0.04f, 0.06f, 0.85f), width, true);
+                if (lit <= 0f) continue;
+                // The last quarter left pulses when she is critical.
+                var fill = k == 3 && _shown < 0.25f ? red.Lerp(new Color(1f, 0.55f, 0.5f), 1f - pulse) : red;
+                DrawArc(c, rr, from, from + (to - from) * lit, 24, fill, width, true);
+                DrawArc(c, rr + width * 0.28f, from, from + (to - from) * lit, 24, new Color(1f, 0.6f, 0.55f, 0.45f), width * 0.25f, true);
+            }
             var top = new Vector2(c.X, 3f);
             DrawColoredPolygon(new[] { top + new Vector2(0f, -1f), top + new Vector2(5f, 8f), top + new Vector2(-5f, 8f) }, new Color(0.85f, 0.88f, 0.9f));
             DrawString(ThemeDB.FallbackFont, top + new Vector2(-4.5f, 22f), "N", HorizontalAlignment.Left, -1, 12, new Color(0.85f, 0.88f, 0.9f));

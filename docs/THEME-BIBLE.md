@@ -139,7 +139,7 @@ Per-depth light budget drives palette, mood, and difficulty readability:
 | 3 Galleon | Amber, dusty | Through wreck holes only | Medium | Lanternfish, loot glints |
 | 4 Carnival | Neon but flickering | None — “stage lights” | Medium | Corrupted neon, bounce pads |
 | 5 Trench | Near zero | None | Large — she is the lantern | Bioluminescent flora specks |
-| 6 Abyss | Black | None | Large, bloom-heavy | Neon outlines + beneath-layer eyes |
+| 6 Abyss | Black | None | Large, bloom-heavy | Neon outlines + distant glowing eyes |
 | 7 Tank | Flat fluorescent LED | None — wrong | Irrelevant — everything is lit | Harsh, shadowless, artificial |
 
 Rules: fog density, saturation falloff and glow reach all scale with Menace. Fog is also a fairness tool — creature shots glow in their own colour with short trails; telegraphs add rim-light flares. Readability never drowns in mood.
@@ -183,9 +183,9 @@ This replaces every death burst. It must read as relief, not victory.
 
 Same archetype, re-parameterized per depth: round eyes → glowing slit pupils; smile → teeth (count scales); smooth silhouette → jagged; saturation down; darker body with bright rim light. A Depth-1 gumdrop is a Depth-6 toothy shadow. Behaviour ramps in lockstep (aggression 40→100%, speed ×1.0→1.5, telegraph 0.8→0.35 s and never lower).
 
-### 6.7 The beneath-layer (fixed)
+### 6.7 The floor (fixed)
 
-The floor is translucent water, not ground glass: ~10 m down, a blurred, slow-drifting shadow copy of the next depth — structures as silhouettes, next biome’s creatures as drifting shadows. Escalates with depth until, in Trench and Abyss, the beneath-layer becomes the scenery: giant slow shapes crossing underfoot, eyes opening and closing below. Gameplay tells glow through: sealed pockets shimmer, the Crack backlights both layers, and in the finale the Tank’s LED bleeds down — the inversion tells the story before the cutscene does. Shadow mobs are cosmetic only (determinism preserved).
+The floor is solid seabed: nothing of the depths below shows through it. The way down is the shaft — through it, and only through it, she sees the level below in plain water. Depth is told by the light, the palette and the murk of each depth, and by the dive.
 
 ### 6.8 Typography & logo (▸)
 
@@ -226,7 +226,7 @@ Near-zero ambient; Clementine’s glow radius is the level design. Bioluminescen
 
 ### Depth 6 — The Abyss · Eyes Below
 
-Black + neon outlines; heavy marine snow; only distant glowing eyes. The beneath-layer is the scenery; currents push along tunnels. Ruthless mobs, minimal telegraphs. Bosses: The Frilled Shark, The Sea Spider, and always last — The Hollow Maw, the tank’s oldest escapee, guarding the pipe grate.
+Black + neon outlines; heavy marine snow; only distant glowing eyes. Currents push along tunnels. Ruthless mobs, minimal telegraphs. Bosses: The Frilled Shark, The Sea Spider, and always last — The Hollow Maw, the tank’s oldest escapee, guarding the pipe grate.
 
 ### Depth 7 — The Tank · Kept
 
@@ -270,9 +270,9 @@ Sparse warm pads in the Shallows thinning to single-instrument drones by the Tre
 Rule one: diegetic first. The HUD exists only where the body can’t carry the information.
 
 - Ammo is diegetic: bubble orbs orbit beneath the bell — no ammo counter.
-- Status is diegetic: rim organs pulse magenta (hurt) / gold (active ready); absorption is a chromatic ripple.
-- HUD: health bar with drain trail (bottom left), run clock (top centre, stops while paused), active slot with recharge bar, shells counter that brightens and swells on pickup, absorbed pearls as dots above the HP bar, circular minimap top-right.
-- Minimap: north-up, fog of war revealed in a 15 m radius that persists; unvisited places show “?” once approached, visited ones as dots in their landmark colour; shop $ and treasure trophy appear when fog lifts. Beneath-layer shadows never appear — the map shows your floor only.
+- Vitals are diegetic (DESIGN-TOPDOWN §2.5): the four gonad rings at the centre of the bell are her health, a quarter each — warm gold, fading ever more transparent (never changing colour) as their quarters go, the last one pulsing slowly when critical; the bell's rim is her active pearl's charge — a light sweeping clockwise from the top, breathing gold when ready, snuffing out counter-clockwise on use. The magenta hurt flash washes the whole bell for a beat; absorption is a chromatic ripple.
+- HUD: run clock (top centre, stops while paused) with where the run stands always beside it ("Depth 1 · Level 2"), shells counter that brightens and swells on pickup, absorbed pearls as dots bottom left, circular minimap top-right whose bezel quietly echoes her health in four segments (one per gonad ring). No health bar, no active slot.
+- Minimap: north-up, fog of war revealed in a 15 m radius that persists; unvisited places show “?” once approached, visited ones as dots in their landmark colour; shop $ and treasure trophy appear when fog lifts. The map shows your floor only.
 - Tab map: the full chart, crater-accurate, no fog, with legend.
 - Splashes: dark, quiet, typographic. Room-clear splash: time, foes freed, shells collected and spent, pearls found, places visited, damage taken, what she carries. Death splash: how far the run got, and the seed — because a seed is the run’s epitaph and its invitation to a friend.
 - Captions (fixed voice): name, tagline, one line per effect with numbers — “+0.8 damage”, “20% chance to freeze foes for 1.6 s”. No comic onomatopoeia anywhere. Neon event language is light, not text.
@@ -294,7 +294,7 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
   - Store short: “A roguelite about what you carry inside.”
   - Trailer card: “The reef wasn’t being watched. It was being kept.”
 - Iconography (three marks, in priority order): ① the glowing bell with one pearl-motif ring; ② the Crack — a hairline of orange light in dark water; ③ the pearl, dissolving into light.
-- Key art: top-down, near-black water; Clementine small and warm at centre, bell bright with motifs; beneath her, through the translucent floor, the faint neon grid of tank gravel — the entire game in one image, spoiler hidden in plain sight.
+- Key art: top-down, near-black water; Clementine small and warm at centre, bell bright with motifs; down the shaft beneath her, the faint neon grid of tank gravel — the entire game in one image, spoiler hidden in plain sight.
 - Store capsule: the bell mark on the Depth-6 black; title in display face; no characters fighting, no enemies — the promise is descent, not combat.
 
 ## 12. Theme tests — run every new idea through these
@@ -312,8 +312,6 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
 
 ## 13. Theme decisions
 
-- **Beneath-layer interaction:** none for now. The beneath-layer stays cosmetic; no boss reaches up through the
-  floor.
 - **Hub format:** unchanged for now. The title screen stays a menu over the live sea; the free-swim Tide Pool is
   not planned yet.
 - **Freed creatures:** they swim away slowly and disappear once they are out of the visible screen. They never

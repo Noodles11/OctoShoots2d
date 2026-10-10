@@ -11,7 +11,7 @@ namespace OctoShoots.Core.Tests;
 /// <summary>Plane-locked movement and heightfield collision (DESIGN-TOPDOWN §2.2, §4.5).</summary>
 public class PlaneWorldTests
 {
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
+    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), LevelId.First));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 
@@ -103,10 +103,10 @@ public class PlaneWorldTests
         // Swim the shortest route to the rift: every step stays in open water and she gets there.
         var w = World();
         // A route with a body-width margin, as a player would swim it (not grazing every lip).
-        var path = LevelValidator.ShortestPath(w.Map, w.Map.Start.Position, w.Map.Rift.Position, clearance: 1f);
+        var path = LevelValidator.ShortestPath(w.Map, w.Map.Start.Position, w.Map.Exit.Position, clearance: 1f);
         Assert.NotEmpty(path);
         int target = 0, progress = 0;
-        for (int tick = 0; tick < 60 * 120 && Vector2.Distance(w.Player.Position, w.Map.Rift.Position) > 3f; tick++)
+        for (int tick = 0; tick < 60 * 120 && Vector2.Distance(w.Player.Position, w.Map.Exit.Position) > 3f; tick++)
         {
             // Steer a couple of cells ahead of the nearest point of the route.
             for (int i = progress; i < Math.Min(path.Count, progress + 12); i++)
@@ -116,7 +116,7 @@ public class PlaneWorldTests
             w.Step(new PlaneInput { Move = to.LengthSquared() > 1e-4f ? Vector2.Normalize(to) : Vector2.Zero });
             Assert.True(w.Clear(w.Player.Position, w.Radius));
         }
-        Assert.True(Vector2.Distance(w.Player.Position, w.Map.Rift.Position) <= 3f, $"she stopped at {w.Player.Position} (waypoint {target}/{path.Count} at {path[target]}, h {w.Map.HeightAt(w.Player.Position):0.00}, start {w.Map.Start.Position}, rift {w.Map.Rift.Position})");
+        Assert.True(Vector2.Distance(w.Player.Position, w.Map.Exit.Position) <= 3f, $"she stopped at {w.Player.Position} (waypoint {target}/{path.Count} at {path[target]}, h {w.Map.HeightAt(w.Player.Position):0.00}, start {w.Map.Start.Position}, rift {w.Map.Exit.Position})");
     }
 
     [Fact]

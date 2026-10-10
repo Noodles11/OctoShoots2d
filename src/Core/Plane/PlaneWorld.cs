@@ -12,8 +12,12 @@ public struct PlaneInput
     public bool Dash;
     /// <summary>Unit aim direction on the plane (mouse or arrow keys).</summary>
     public Vector2 Aim;
-    /// <summary>Held: shoot along Aim.</summary>
+    /// <summary>Held: shoot along Aim (with Pearl Diver, held charges a pearl and letting go throws it).</summary>
     public bool Fire;
+    /// <summary>Pressed: use the active pearl (F).</summary>
+    public bool UseActive;
+    /// <summary>Pressed: dive down the shaft (when she is over it and the way is open).</summary>
+    public bool Dive;
 }
 
 /// <summary>Clementine on the locked depth band: a 2D body (DESIGN-TOPDOWN §2.2).</summary>
@@ -35,6 +39,14 @@ public sealed class PlaneBody
     public float HurtTimer;
     /// <summary>Slowed (Queen Clam's royal pearl) while this counts down.</summary>
     public float SlowTimer;
+    /// <summary>Pearl Diver: how long fire has been held, charging the next pearl (capped at ChargeSeconds).</summary>
+    public float Charge;
+    /// <summary>Fire was held last tick (letting go throws a charged pearl).</summary>
+    public bool WasFiring;
+    /// <summary>Bubble Shield: untouchable inside it while this counts down.</summary>
+    public float ShieldTimer;
+    /// <summary>Held by a coiling gloomvine (no swimming; a dash frees her).</summary>
+    public float RootTimer;
 
     public bool IsDashing => DashTimer > 0f;
 }
@@ -48,15 +60,21 @@ public sealed class PlaneInk
     public float MaxLife;
 }
 
-public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, MobNoticed, PlayerHit, PlayerDefeated, GatewayEntered, PearlCollected, ShellCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped, BubbleFull,
+public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, MobNoticed, PlayerHit, PlayerDefeated, Dived, PufferSwells, NeedlesFired, PearlCollected, ShellCollected, HeartCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped, BubbleFull,
+    ChargeFull, InkBlast, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
+    SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
+    BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
+    MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
-public enum DamageSource { None, MobShot, BossPearl, RoyalPearl, BossSnap, BossContact }
+public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Valve }
 
 /// <summary>
-/// Size: a popped bubble's radius; the bubbles in a volley (Shot); the damage dealt or taken (MobHit, MobDefeated,
-/// BossHit, PlayerHit); 0 otherwise. Source: what hurt her (PlayerHit, PlayerDefeated).
+/// Direction: for ShotPopped, the unit direction from the bubble's centre to where its film gave way. Size: a popped
+/// bubble's radius; an ink blast's radius (InkBlast); the bubbles in a volley (Shot); the damage dealt
+/// or taken (MobHit, MobDefeated, BossHit, PlayerHit); HP healed (ActiveUsed by Whale Song); 0 otherwise. Source: what
+/// hurt her (PlayerHit, PlayerDefeated).
 /// </summary>
 public readonly record struct PlaneEvent(PlaneEventType Type, Vector2 Position, Vector2 Direction, float Size = 0f, DamageSource Source = DamageSource.None);
 
@@ -64,8 +82,8 @@ public readonly record struct PlaneEvent(PlaneEventType Type, Vector2 Position, 
 /// The plane-locked simulation (DESIGN-TOPDOWN §0, §11): fixed 60 Hz, deterministic, engine-free. Positions are 2D map
 /// coordinates on the fixed swim band; there is no vertical movement, buoyancy, sinking or surface. Collision is a
 /// circle against the level's heightfield: terrain above the swim band blocks, and the body slides along the slope.
-/// Movement, placeholder combat (shots, one shooting mob) and the gateway (PlaneCombat.cs); the real creatures and items
-/// are ported onto it next (DESIGN-TOPDOWN §11.1).
+/// Movement, combat (her bubbles and pearls, the pufferlings, Queen Clam) and the way down (PlaneCombat.cs); the rest of
+/// the creatures and items are ported onto it next (DESIGN-TOPDOWN §11.1).
 /// </summary>
 public sealed partial class PlaneWorld
 {
@@ -73,25 +91,36 @@ public sealed partial class PlaneWorld
     public const float Dt = 1f / TickRate;
 
     /// <param name="run">What she carries in from the last room (HP, pearls); a fresh run when null.</param>
-    public PlaneWorld(LevelMap map, Tuning tuning, PlaneRun? run = null)
+    /// <param name="options">What the world runs with (the game's <see cref="PlaneOptions.Default"/> when null).</param>
+    public PlaneWorld(LevelMap map, Tuning tuning, PlaneRun? run = null, PlaneOptions? options = null)
     {
         Map = map;
+        Options = options ?? PlaneOptions.Default;
         Tuning = tuning;
         Run = run ?? new PlaneRun(null, tuning);
         Player.Position = Player.PrevPosition = map.Start.Position;
         Player.Hp = Run.Hp;
         _rocks = new List<WeakRock>(map.WeakRocks);
-        PlaceMobs();
+        _bubbleRng = new Rng(map.Seed ^ 0xB0BB1EUL ^ ((ulong)map.Level << 24) ^ ((ulong)map.Depth << 32) ^ ((ulong)map.Attempt << 48));
+        Director = new ReefDirector(map);
+        if (Options.Pufferlings) PlaceMobs();
+        PlaceFish();
         PlacePearls();
         PlaceShop();
         PlaceShells();
         PlaceAmbushes();
         PlaceBoss();
+        PlaceVases();
+        if (Options.Corruption) PlaceCorruption();
     }
 
     public LevelMap Map { get; }
     public Tuning Tuning { get; set; }
     public long Tick { get; private set; }
+    /// <summary>Time on this level (s), from when it was entered.</summary>
+    public float Time => Tick * Dt;
+    /// <summary>The reef director: world events on their own timers (§4.7), whether she is near or not.</summary>
+    public ReefDirector Director { get; }
     public PlaneBody Player { get; } = new();
     public List<PlaneInk> Clouds { get; } = new();
     public List<PlaneEvent> Events { get; } = new();
@@ -140,6 +169,7 @@ public sealed partial class PlaneWorld
             p.JetTimer = 0f;
             Clouds.Add(new PlaneInk { Position = p.Position, Radius = t.InkCloudRadius, Life = t.InkCloudLife, MaxLife = t.InkCloudLife });
             Events.Add(new PlaneEvent(PlaneEventType.DashStarted, p.Position, dir));
+            DashFreed();
         }
 
         if (p.DashTimer > 0f)
@@ -188,14 +218,72 @@ public sealed partial class PlaneWorld
         }
         p.JetTimer -= Dt;
 
+        // Coiled by a gloomvine: held in place (a dash frees her).
+        if (p.RootTimer > 0f && p.DashTimer <= 0f) p.Velocity = Vector2.Zero;
         Move(ref p.Position, ref p.Velocity, Radius, barrier: ArenaBarrier.Inside);
+
+        StepReef();
+        StepVases();
 
         foreach (var c in Clouds) c.Life -= Dt;
         Clouds.RemoveAll(c => c.Life <= 0f);
 
         StepBoss();
         StepCombat(input);
+        StepCorruption();
+        StepFish();
         StepEconomy();
+    }
+
+    readonly List<ReefEvent> _started = new(), _ended = new();
+
+    /// <summary>
+    /// The reef director's turn: events whose time has come start (and finished ones end), and while a surge runs its
+    /// current carries everything not fixed to the reef — Clementine, mobs and fish, every shot, shells, hearts and
+    /// loose pearls, ink clouds — sliding along rock as they swim. Shop stands and Queen Clam hold fast.
+    /// </summary>
+    void StepReef()
+    {
+        _started.Clear();
+        _ended.Clear();
+        Director.Step(Time, _started, _ended);
+        foreach (var e in _started) Events.Add(new PlaneEvent(PlaneEventType.SurgeStarted, Vector2.Zero, Vector2.Zero, e.Speed));
+        foreach (var e in _ended) Events.Add(new PlaneEvent(PlaneEventType.SurgeEnded, Vector2.Zero, Vector2.Zero, e.Speed));
+        if (Director.Active.Count == 0) return;
+
+        var p = Player;
+        Vector2 flow = Director.FlowAt(p.Position, Time);
+        if (flow != Vector2.Zero) Move(ref p.Position, ref flow, Radius, report: false, barrier: ArenaBarrier.Inside);
+        foreach (var mob in Mobs)
+        {
+            if (!mob.Alive) continue;
+            flow = Director.FlowAt(mob.Position, Time);
+            if (flow != Vector2.Zero) Move(ref mob.Position, ref flow, PufferlingTuning.CalmRadius, report: false, barrier: ArenaBarrier.Outside);
+        }
+        foreach (var fish in Fish)
+        {
+            flow = Director.FlowAt(fish.Position, Time);
+            if (flow != Vector2.Zero) Move(ref fish.Position, ref flow, PufferlingTuning.CalmRadius, report: false, barrier: ArenaBarrier.Outside);
+        }
+        // Light things drift where there is water to drift into.
+        foreach (var shot in Shots)
+        {
+            Vector2 d = Director.FlowAt(shot.Position, Time) * Dt;
+            if (d == Vector2.Zero || !Map.IsOpen(shot.Position + d)) continue;
+            shot.Position += d;
+            shot.Line += d;
+        }
+        foreach (var shell in Shells) Carry(ref shell.Position);
+        foreach (var heart in Hearts) Carry(ref heart.Position);
+        foreach (var pearl in Pearls)
+            if (!pearl.Taken) Carry(ref pearl.Position);
+        foreach (var cloud in Clouds) Carry(ref cloud.Position);
+    }
+
+    void Carry(ref Vector2 at)
+    {
+        Vector2 d = Director.FlowAt(at, Time) * Dt;
+        if (d != Vector2.Zero && Map.IsOpen(at + d)) at += d;
     }
 
     /// <summary>True when a circle of the given radius at p sits wholly in open water.</summary>
@@ -209,7 +297,7 @@ public sealed partial class PlaneWorld
         }
         foreach (var rock in _rocks)
             if (Vector2.Distance(p, rock.Center) < rock.Radius + radius) return false;
-        return true;
+        return VaseAt(p, radius) is null;
     }
 
     /// <summary>Clear water that the arena's wall (if sealed) also allows.</summary>
@@ -222,6 +310,7 @@ public sealed partial class PlaneWorld
         foreach (var rock in _rocks)
             if (Vector2.Distance(p, rock.Center) < rock.Radius + radius)
                 return SafeNormalize(rock.Center - p);
+        if (VaseAt(p, radius) is { } vase) return SafeNormalize(vase.Position - p);
         // The wall lies where the rim of the circle meets high ground (a trench's downhill slope beside it must not count).
         Vector2 blocked = Vector2.Zero;
         for (int i = 0; i < 16; i++)
@@ -258,7 +347,32 @@ public sealed partial class PlaneWorld
             float vInto = Vector2.Dot(velocity, n);
             if (vInto > 0f) velocity -= n * vInto;
             next = position + step;
-            if (Fits(next, radius, barrier)) position = next;
+            if (Fits(next, radius, barrier))
+            {
+                position = next;
+                continue;
+            }
+            // In a bend the averaged wall normal can come out square to the push, leaving nothing to slide along: try
+            // the step's two axis parts and its slide along the wall, and take what goes furthest her way.
+            Vector2 wish = delta / steps;
+            Vector2 tangent = new(-n.Y, n.X);
+            Vector2 best = Vector2.Zero;
+            float bestGain = 1e-5f;
+            foreach (var t in new[] { new Vector2(wish.X, 0f), new Vector2(0f, wish.Y), tangent * Vector2.Dot(wish, tangent) })
+            {
+                float gain = Vector2.Dot(t, wish);
+                if (gain <= bestGain || !Fits(position + t, radius, barrier)) continue;
+                best = t;
+                bestGain = gain;
+            }
+            if (best != Vector2.Zero)
+            {
+                position += best;
+                step = best;
+                // Keep only the velocity along the way she could go.
+                Vector2 dir = Vector2.Normalize(best);
+                velocity = dir * MathF.Max(Vector2.Dot(velocity, dir), 0f);
+            }
             else
             {
                 velocity = Vector2.Zero;
@@ -301,7 +415,15 @@ public sealed partial class PlaneWorld
         {
             Mix(m.Position.X);
             Mix(m.Position.Y);
+            Mix(m.Heading);
+            Mix(m.Inflate);
             Mix(m.Hp);
+        }
+        foreach (var f in Fish)
+        {
+            Mix(f.Position.X);
+            Mix(f.Position.Y);
+            Mix(f.Heading);
         }
         foreach (var s in Shots)
         {

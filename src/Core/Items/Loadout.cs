@@ -45,6 +45,7 @@ public sealed class StatBlock
         s[Stat.BubbleRegrow] = 1f;
         s[Stat.BubblesPerThrow] = 1f;
         s[Stat.ActiveRecharge] = 1f;
+        s[Stat.BubbleHover] = 1f;
         return s;
     }
 
@@ -68,6 +69,7 @@ public sealed class StatBlock
         this[Stat.BubbleRegrow] = Math.Clamp(this[Stat.BubbleRegrow], 0.25f, 4f);
         this[Stat.BubblesPerThrow] = MathF.Round(Math.Clamp(this[Stat.BubblesPerThrow], 1f, 6f));
         this[Stat.ActiveRecharge] = Math.Clamp(this[Stat.ActiveRecharge], 0.25f, 4f);
+        this[Stat.BubbleHover] = Math.Clamp(this[Stat.BubbleHover], 0.25f, 4f);
     }
 }
 

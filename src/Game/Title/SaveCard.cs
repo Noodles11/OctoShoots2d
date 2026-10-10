@@ -71,7 +71,7 @@ public partial class SaveCard : PanelContainer
         head.AddChild(title);
         _toast = TitleStyle.Text("", 15, new Color(0.1f, 0.45f, 0.36f), TitleStyle.BodyBold);
         head.AddChild(_toast);
-        var close = TitleStyle.Pill("Close  (Esc)", primary: false, size: 15);
+        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
@@ -135,7 +135,7 @@ public partial class SaveCard : PanelContainer
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         info.AddThemeConstantOverride("separation", 4);
         row.AddChild(info);
-        info.AddChild(TitleStyle.Text($"Depth {run.Depth} · Room {run.Room}", 30, TitleStyle.Ink, TitleStyle.Display));
+        info.AddChild(TitleStyle.Text(run.Where, 30, TitleStyle.Ink, TitleStyle.Display));
         info.AddChild(TitleStyle.Text($"{run.Seed}{(run.CustomSeed ? "  (seeded)" : "")}", 18, TitleStyle.Ink, TitleStyle.Mono));
         info.AddChild(TitleStyle.Text($"{Mathf.CeilToInt(run.Hp)} HP  ·  {run.Shells} shells  ·  {TitleStyle.Clock(run.Elapsed)} played  ·  saved {When(run.SavedAt)}", 15, TitleStyle.InkSoft));
         var pearls = new HBoxContainer();
@@ -230,8 +230,8 @@ public partial class SaveCard : PanelContainer
                 return;
             }
             var s = incoming.Profile.Stats;
-            int pearls = PlaneRun.ShotPearls.Count(id => incoming.Profile.SeenItems.Contains(id));
-            string run = incoming.Run is { } r ? $"a saved run at Depth {r.Depth} · Room {r.Room}" : "no saved run";
+            int pearls = PlaneRun.PortedPearls.Count(id => incoming.Profile.SeenItems.Contains(id));
+            string run = incoming.Run is { } r ? $"a saved run at {r.Where}" : "no saved run";
             result.AddChild(TitleStyle.Text($"This save has {s.Runs} runs, {pearls} pearls found, {incoming.Profile.Achievements.Count} achievements and {run}.", 15, TitleStyle.Ink, TitleStyle.BodyBold));
             var replace = TitleStyle.Pill("Replace my save", size: 15);
             replace.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;

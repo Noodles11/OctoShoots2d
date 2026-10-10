@@ -1,7 +1,7 @@
 # Achievements that unlock pearls — proposal
 
-> A proposal, not built yet. It plans pearl unlocks through achievements and the banner that announces them.
-> Open questions are in §7. A playable motion prototype of the banner accompanies it.
+> **Built.** The rules now live in DESIGN-TOPDOWN §8 (achievements and their pearls) and §9 (the banner, the pause
+> menu); this page keeps the design and its reasoning. Where the build differs, §9 below says how.
 
 ## 1. The idea
 
@@ -68,7 +68,7 @@ awarded once per profile; a run on a custom seed never awards one.
 
 ### 4.1 Layout
 
-The card is a ticket with a tear-off stub, at the bottom centre of the screen, clear of the HP bar, the shells and
+The card is a ticket with a tear-off stub, at the bottom centre of the screen, clear of the pearls, the shells and
 the minimap. At 1600×900 it is about 760 × 170 px. Play does not pause behind it.
 
 ```
@@ -206,3 +206,20 @@ achievement.
    from the next run?
 5. **Seeded runs:** keep the rule that custom seeds earn nothing? It means verification runs with `--seed` never
    award anything.
+
+## 9. As built — where it differs
+
+- **The profile already existed.** The plane game reads and writes the saved profile (`GameSave`, with the Sea-pedia
+  and the statistics), so there is no separate `ProfileStore`. An achievement is saved the moment it is earned.
+- **Starfish Arm** was already on the plane (and offered to everyone) when this was built; it is now locked behind
+  Big Bubble Energy, as planned.
+- **Big Bubble Energy needs Bubble Coral.** Bubbles merge only with that pearl now, so a full bubble needs it. Bubble
+  Coral is in the basic set, so the achievement stays reachable.
+- **Hermit Hoarder is not reachable yet (open).** Since this was written, freed foes drop shells only 30% of the
+  time. A fully cleared level yields about 25–40 shells; with Lucky Sea Glass (+2 a foe) about 53–90 (measured over
+  14 levels of Depths 1–3). The threshold stays at 100 as decided, pending a new number.
+- **The banner** is drawn in one control rather than built of nodes: the title's per-letter drop is drawn letter by
+  letter instead of a `RichTextEffect`, and the card is 800 px wide (not 760) so the pearl's lines fit the stub.
+  Banners keep running during the dive (there is no rift splash any more); they wait while paused and under the
+  death splash.
+- **`--reset-profile`** clears the saved profile's achievements (and so its unlocks), not the whole profile.

@@ -20,7 +20,7 @@ The mist hides the sea past ~14–40 m (DESIGN-3D §9). **Creatures are not blin
 | Creature | Notice | How it notices | Gives up at |
 |---|---|---|---|
 | Barracuda | **30 m** | Sharp sight along open water (needs line of sight) | 90 m |
-| Pufferling | **22.5 m** | Sight | 65 m |
+| Pufferling | **10 m** | Sight | 16 m |
 | Crabby | **20 m** within 6 m of a surface, else 10 m | Feels vibrations through the seabed and reef | 55 m |
 | Spanish Dancer | 15 m | Poor sight, but tastes the water (no line of sight needed) | 45 m |
 | Jelly swarm | 10 m | Feels the water move | 30 m |
@@ -44,7 +44,7 @@ HP assumes 3.5 damage per bubble. Damage is per hit; Clementine is then invulner
 |---|---|---|---|---|
 | **Clownfish ninja** (built) | Swimmer | 14 | 8 star | Ambusher hiding in a school |
 | **Spanish Dancer** | Swimmer, slow | 28 | 10 | Tank; teaches dodging rings |
-| **Pufferling** | Swimmer | 21 | 14 | Area denial; shoot it before it swells |
+| **Pufferling** (built, top-down) | Swimmer | 60 | 8 needle, 4 spines | Area denial; strike in its cooldown |
 | **Barracuda** | Swimmer, fast | 18 | 16 | Charger; teaches the ink dash |
 | **Jelly swarm** (moon jellies) | Swimmer, group | 4 each × 6–9 | 6 | Crowd; likes area damage |
 | **Sea Urchin** | Clinger | 28 | 12 | Turret on any surface; teaches reading gaps |
@@ -58,11 +58,17 @@ A red-orange sea slug with a white-edged ruffled mantle and two feathery gills, 
 - **Contact** also hurts (10). After the burst it spins for 1.2 s: free hits.
 - **Why:** the first time the player meets a ring pattern, from a slow, forgiving enemy.
 
-### Pufferling — swimmer
-A round yellow puffer with big eyes and tiny fins, in groups of 1–3 near reef formations.
-- **Behaviour:** bobs about; on noticing, chases at 3 m/s.
-- **Attack — Swell:** within 4 m it **inflates** (0.8 s, squeaky sound) from 1× to 2.4× its size, spines out. Inflated, it keeps chasing at 4 m/s for 1.6 s (spines hurt on touch, 14), then **bursts into 12 spines** in all directions (8 m/s, 8 damage each).
-- **Counterplay:** pop it while small; or keep distance so it swells and bursts at nothing; or dash through the burst. Shooting it while swollen makes it burst immediately.
+### Pufferling — swimmer (built for the top-down game; the full design is docs/PUFFERLING-PROPOSAL.md)
+A plump pufferfish about 1.1 m long: a blunt head with a small beak, big domed eyes, fluttering pectoral fins, a
+dorsal and an anal fin set far back, a rounded tail fan, and spines lying flat on its skin. Healthy ones are sand-olive
+with dark spots; corrupted ones are starfire red with lime spots and a price tag on the tail.
+- **Behaviour:** swims about its home spot from place to place, pausing to hover; healthy ones ignore Clementine.
+  A corrupted one that sees her within 10 m turns to face her and drifts closer (1.2 m/s).
+- **Attack — Needle ring:** within 8 m it **blows up** into a spiny ball (0.8 s), then fires **8 needles** evenly
+  round itself, the ring turned at random each time (big hot-pink spikes, 20 m/s, 14 m, 8 damage; a needle pops any bubble it meets and
+  flies on). It stays round for 0.5 s; blown up, its spines sting on touch (4).
+- **Cooldown:** for 3 s it backs away about 3 m, shrinks back and regrows its spines — the window to strike.
+- **Counterplay:** close in during the cooldown; stand where the next ring's gaps may fall, or dash through it.
 
 ### Barracuda — fast swimmer
 A silver barracuda with a long jaw and a dark stripe. Patrols open water in the deeper half of the reef, alone or in pairs.
@@ -110,7 +116,7 @@ Per reef (224 m, scaled by size); each group is a den:
 |---|---|---|
 | Ninja nests | 7 | Seabed, ≥ 50 m from the start |
 | Spanish Dancer | ~10 | Seabed and reef walls |
-| Pufferling | ~8 groups of 1–3 | Near formations, mid-depth |
+| Pufferling | every mob spot (top-down), plus 8–12 healthy | Healthy ones in groups of 1–3 by the plazas and dens |
 | Jelly swarm | ~5 | Open water, mid and upper |
 | Sea Urchin | ~25 + 10 beds | Reef walls, cave interiors, seabed |
 | Crabby | ~12 | Seabed |
@@ -164,7 +170,9 @@ A huge giant clam, 8 m wide, sitting on the Crack, with a crown of pearls, a rip
 
 - **Data.** `data/creatures.json` holds each creature's numbers (health, size, speed, senses, notice and give-up ranges, damage, attack range, telegraph, cooldown, recover, charge or lunge speed and length, shots); the F1 panel has a section per creature. A telegraph under 0.45 s is rejected when the file loads.
 - **Sim.** `World.Creatures.cs` holds the shared brain (notice, startle, hunt, leash, sneaking) and one small state machine per creature: Idle → Alert (0.6 s) → Hunt → Telegraph → Attack → Recover. Pairs and packs take turns, and the limit of 3 attackers outside the view applies.
-- **Pufferling.** Swells over the telegraph (1× to 2.4×), chases at 4 m/s for 1.6 s, then bursts into 12 spines; any hit while swollen bursts it at once.
+- **Pufferling** (top-down, `PlanePufferling.cs`, `PufferlingView`, `pufferling.gdshader`). Wander → face and drift
+  → blow up (the telegraph) → 8 needles → round → cooldown (back away, shrink, regrow); healthy and freed ones are
+  `PlaneFish`, never targets.
 - **Barracuda.** Circles at 12–20 m, then charges in a locked straight line (16 m/s, 25 m); the charge never steers.
 - **Jelly swarm.** 6–9 per den; each pulses and lunges 4 m about every 3 s; defeated jellies sometimes drop a glow jelly.
 - **Sea Urchin.** Beds are 3–5 small urchins (12 HP, 8 damage on touch, never shoot). The bloom is 12 spines on a cap around the surface normal.

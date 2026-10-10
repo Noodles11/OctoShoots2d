@@ -16,19 +16,25 @@ public class PlanePearlTests
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
         ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
 
-    static readonly Lazy<LevelMap> Room1 = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
-    static readonly Lazy<LevelMap> Room2 = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 2));
+    /// <summary>A level with exactly one treasure room, and the level below it.</summary>
+    static readonly Lazy<LevelMap> Room1 = new(TestLevels.OneTreasure);
+    static readonly Lazy<LevelMap> Room2 = new(() => TestLevels.After(Room1.Value));
 
     static PlaneRun NewRun() => new(Catalog.Value, new Tuning());
 
     [Fact]
-    public void EveryPortedPearlIsInTheCatalogAndShapesShots()
+    public void RemovingAPearlTakesItsStatsAwayAndKeepsHpWithinTheMax()
     {
-        foreach (string id in PlaneRun.ShotPearls)
-        {
-            Assert.True(Catalog.Value.Contains(id), id);
-            Assert.NotNull(Catalog.Value[id].Shot);
-        }
+        var run = NewRun();
+        float baseMax = run.MaxHp;
+        run.Add("moon_jelly_heart");
+        Assert.True(run.MaxHp > baseMax);
+        run.Hp = run.MaxHp;
+        Assert.True(run.Remove("moon_jelly_heart"));
+        Assert.DoesNotContain("moon_jelly_heart", run.Items);
+        Assert.Equal(baseMax, run.MaxHp);
+        Assert.Equal(baseMax, run.Hp);
+        Assert.False(run.Remove("moon_jelly_heart"));
     }
 
     [Fact]
@@ -36,7 +42,7 @@ public class PlanePearlTests
     {
         var w = new PlaneWorld(Room1.Value, new Tuning(), NewRun());
         var pearl = Assert.Single(w.Pearls);
-        Assert.Contains(pearl.ItemId, PlaneRun.ShotPearls);
+        Assert.Contains(pearl.ItemId, PlaneRun.PortedPearls);
         var treasure = w.Map.Pois.Single(p => p.Kind == PoiKind.TreasureCave);
         Assert.Equal(treasure.Position, pearl.Position);
 
@@ -76,7 +82,7 @@ public class PlanePearlTests
     }
 
     [Fact]
-    public void ThroughTheRiftSheKeepsHerPearlsAndHp()
+    public void DownTheHoleSheKeepsHerPearlsAndHp()
     {
         var run = NewRun();
         var w1 = new PlaneWorld(Room1.Value, new Tuning(), run);
@@ -97,7 +103,7 @@ public class PlanePearlTests
     public void LevelsHoldManyMobs()
     {
         var w = new PlaneWorld(Room1.Value, new Tuning(), NewRun());
-        Assert.True(w.Mobs.Count >= 15, $"{w.Mobs.Count} mobs");
+        Assert.True(w.Mobs.Count >= 10, $"{w.Mobs.Count} mobs");
         var reach = LevelValidator.Distances(w.Map, w.Map.Start.Position);
         Assert.All(w.Mobs, m => Assert.False(float.IsPositiveInfinity(LevelValidator.DistanceAt(reach, m.Position))));
     }

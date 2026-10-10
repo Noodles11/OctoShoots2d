@@ -8,9 +8,12 @@ namespace OctoShoots.Core.Gen.TopDown;
 
 // Map coordinates: X runs east, Y runs south (world X and world Z). North (−Y) is up on screen.
 
-/// <summary>A named place on the level (DESIGN-TOPDOWN §4.1 stage 1).</summary>
-/// <summary>Ambush: an open clearing where, the first time Clementine enters, mobs spawn around her and attack.</summary>
-public enum PoiKind { Start, ItemSpawn, Rift, Shop, Secret, CurseDen, TreasureCave, Ambush }
+/// <summary>
+/// A named place on the level (DESIGN-TOPDOWN §4.1 stage 1). Exit: the way down — a blue hole, or on a boss level the
+/// boss arena with the Crack across its floor. ShellCache: a guarded clearing of shells. Ambush: an open clearing where,
+/// the first time Clementine enters, mobs spawn around her and attack.
+/// </summary>
+public enum PoiKind { Start, ShellCache, Exit, Shop, Secret, CurseDen, TreasureCave, Ambush }
 
 public sealed class Poi
 {
@@ -66,18 +69,18 @@ public sealed class Corridor
 public readonly record struct Plaza(Vector2 Center, float Radius);
 
 
-/// <summary>A deep: a canyon cut 4–8 m below 0, 8–14 m wide.</summary>
-public sealed class Trench
+/// <summary>
+/// The shaft down to the next level (DESIGN-TOPDOWN §4.6): an ellipse in the exit's floor (a disc for a blue hole, the
+/// Crack's fissure in a boss arena) where the floor gives way and the level below shows through.
+/// </summary>
+public readonly record struct Shaft(Vector2 Center, Vector2 Axis, float HalfLength, float HalfWidth)
 {
-    public List<Vector2> Points = new();
-    public float Width;
-    public float Depth;
-
-    public float DistanceToCentre(Vector2 p)
+    /// <summary>True inside the ellipse grown by <paramref name="margin"/> metres.</summary>
+    public bool Contains(Vector2 p, float margin = 0f)
     {
-        float best = float.MaxValue;
-        for (int i = 1; i < Points.Count; i++) best = MathF.Min(best, Geo.SegmentDistance(p, Points[i - 1], Points[i]));
-        return best;
+        Vector2 d = p - Center;
+        float a = Vector2.Dot(d, Axis) / (HalfLength + margin), b = Vector2.Dot(d, Geo.Perp(Axis)) / (HalfWidth + margin);
+        return a * a + b * b <= 1f;
     }
 }
 
@@ -137,7 +140,7 @@ public enum DecorKind
     SandChannel, GrassMeadow, Boulder, Bommie,
     SeaRod, SeaFan, TubeSponge,
     CliffCoral, EncrustingCoral, CrownGarden,
-    TrenchSponge, BiolumAccent,
+    BiolumAccent,
 }
 
 /// <summary>Cosmetic reef dressing, chosen by height band (DESIGN-TOPDOWN §4.1 stage 5). Never affects play.</summary>
@@ -169,12 +172,12 @@ public sealed class SpawnEntry
 }
 
 /// <summary>
-/// One generated level (DESIGN-TOPDOWN §4): a 150×150 m heightfield on a 1 m grid plus everything the generator
+/// One generated level (DESIGN-TOPDOWN §4): a 125×125 m heightfield on a 1 m grid plus everything the generator
 /// decided. Produced only by <see cref="TopDownGenerator"/>; the game reads it and never generates or scatters.
 /// </summary>
 public sealed class LevelMap
 {
-    public const int Size = 150;
+    public const int Size = 125;
     public const int Samples = Size + 1;
 
     /// <summary>Where the bell is drawn: floating just above the swim level (0), which every height is measured from.</summary>
@@ -186,10 +189,24 @@ public sealed class LevelMap
     /// <summary>Width of the impassable reef rim around the square.</summary>
     public const float RimWidth = 8f;
 
+    /// <summary>How far below this level the next one lies (swim plane to swim plane, metres).</summary>
+    public const float LevelDrop = 8f;
+    /// <summary>The bottom of the shaft: the next level's seabed.</summary>
+    public const float ShaftBottom = -LevelDrop - 1f;
+
     public ulong Seed;
-    public int Depth;
-    public int Reef;
+    public LevelId Id;
+    public int Cycle => Id.Cycle;
+    public int Depth => Id.Depth;
+    public int Level => Id.Level;
     public int Attempt;
+    /// <summary>The boss stands in the exit's arena; the Crack opens when she is freed.</summary>
+    public bool HasBoss;
+    public float Menace;
+    public ulong EntryStampSeed, ExitStampSeed;
+    public bool EntryFromArena;
+    /// <summary>Where the floor gives way to the level below.</summary>
+    public Shaft Shaft;
 
     /// <summary>Heights in metres at the 151×151 grid points, row-major (index = y * Samples + x).</summary>
     public float[] Heights = new float[Samples * Samples];
@@ -213,7 +230,6 @@ public sealed class LevelMap
     public List<Poi> Pois = new();
     public List<Corridor> Corridors = new();
     public List<Plaza> Plazas = new();
-    public List<Trench> Trenches = new();
     public List<CaveSite> Caves = new();
     public List<Canopy> Canopies = new();
     public List<WeakRock> WeakRocks = new();
@@ -223,7 +239,7 @@ public sealed class LevelMap
     public List<SpawnEntry> Spawns = new();
 
     public Poi Start => Pois.Find(p => p.Kind == PoiKind.Start)!;
-    public Poi Rift => Pois.Find(p => p.Kind == PoiKind.Rift)!;
+    public Poi Exit => Pois.Find(p => p.Kind == PoiKind.Exit)!;
 
     public float this[int x, int y]
     {
@@ -283,11 +299,20 @@ public sealed class LevelMap
             w.Write(v.X);
             w.Write(v.Y);
         }
-        w.Write(1); // format version
+        w.Write(2); // format version
         w.Write(Seed);
+        w.Write(Cycle);
         w.Write(Depth);
-        w.Write(Reef);
+        w.Write(Level);
         w.Write(Attempt);
+        w.Write(HasBoss);
+        w.Write(Menace);
+        w.Write(EntryStampSeed);
+        w.Write(ExitStampSeed);
+        V(Shaft.Center);
+        V(Shaft.Axis);
+        w.Write(Shaft.HalfLength);
+        w.Write(Shaft.HalfWidth);
         foreach (float h in Heights) w.Write(h);
         foreach (float h in Lid) w.Write(h);
         w.Write(Pois.Count);
@@ -313,14 +338,6 @@ public sealed class LevelMap
         {
             V(p.Center);
             w.Write(p.Radius);
-        }
-        w.Write(Trenches.Count);
-        foreach (var t in Trenches)
-        {
-            w.Write(t.Width);
-            w.Write(t.Depth);
-            w.Write(t.Points.Count);
-            foreach (var p in t.Points) V(p);
         }
         w.Write(Caves.Count);
         foreach (var c in Caves)

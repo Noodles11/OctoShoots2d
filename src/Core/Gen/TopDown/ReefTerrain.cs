@@ -67,7 +67,8 @@ public static class ReefTerrain
 
     /// <summary>
     /// Fills a (Cells+1)² grid of heights for the seed text: the prototype's map on cells 0…149 (the extra row and column
-    /// continue the same noise). Level 0 sits at the quantile taken over the prototype's 150×150 cells.
+    /// continue the same noise). Level 0 sits at the quantile taken over the prototype's 150×150 cells (or the whole
+    /// grid, if smaller).
     /// </summary>
     public static void Generate(float[] heights, int samples, string seedText)
     {
@@ -77,10 +78,12 @@ public static class ReefTerrain
         for (int x = 0; x < samples; x++)
             raw[y * samples + x] = Fbm(x * Frequency, y * Frequency, seed);
 
-        var cells = new double[Cells * Cells];
-        for (int y = 0; y < Cells; y++)
-        for (int x = 0; x < Cells; x++)
-            cells[y * Cells + x] = raw[y * samples + x];
+        // The quantile over the prototype's cells, or over the whole square when it is smaller.
+        int n = Math.Min(Cells, samples - 1);
+        var cells = new double[n * n];
+        for (int y = 0; y < n; y++)
+        for (int x = 0; x < n; x++)
+            cells[y * n + x] = raw[y * samples + x];
         Array.Sort(cells);
         double level = cells[(int)Math.Floor((1 - MaxAbove) * (cells.Length - 1))];
 

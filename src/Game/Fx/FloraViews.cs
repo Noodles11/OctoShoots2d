@@ -32,6 +32,9 @@ public partial class FloraViews : Node3D
 
     readonly Dictionary<FloraKind, (Mesh Mesh, ShaderMaterial Material)> _species = new();
 
+    /// <summary>Each species' material (a level sets its frame and the dive's portal on them).</summary>
+    public IEnumerable<ShaderMaterial> Materials => _species.Values.Select(s => s.Material);
+
     /// <summary>Draw at any distance (the top-down camera sees the whole view at once), and cast shadows.</summary>
     public bool Unlimited { get; set; }
 

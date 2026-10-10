@@ -18,27 +18,25 @@ uniform float cracks = 0.0;
 varying vec3 world;
 varying vec3 world_normal;
 
-const float BAYER[16] = float[](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
-
 void vertex() {
-	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 wp = lf_pattern(lf_local((MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz));
 	if (lumps > 0.0) VERTEX += NORMAL * (rs_fbm(wp * 0.45) - 0.5) * 2.0 * lumps;
 	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
-	if (fade < 0.999) {
-		ivec2 p = ivec2(FRAGCOORD.xy) % 4;
-		if ((BAYER[p.y * 4 + p.x] + 0.5) / 16.0 >= fade) discard;
-	}
-	ReefSkin s = reef_surface(world, normalize(world_normal), TIME, length(fwidth(world.xz)));
+	if (fade < 0.999 && lf_dither(FRAGCOORD.xy) >= fade) discard;
+	if (lf_portal_cut(world, FRAGCOORD.xy)) discard;
+	vec3 local = lf_local(world);
+	ReefSkin s = reef_surface(local, normalize(world_normal), TIME, length(fwidth(world.xz)));
 	// The caustics ride to light() in BACKLIGHT (this shader does its own lighting, so nothing else reads it).
 	BACKLIGHT = vec3(s.caustic * 1.5);
 	vec3 c = s.albedo * tint;
 	if (cracks > 0.0) {
 		// Weak rock: a web of dark fractures (one ink bomb will open it).
-		vec3 cell = rs_cells(world.xz * 1.3 + world.y * 0.7);
+		vec3 at = lf_pattern(local);
+		vec3 cell = rs_cells(at.xz * 1.3 + at.y * 0.7);
 		c = mix(c, vec3(0.06, 0.05, 0.06), (1.0 - smoothstep(0.02, 0.07, cell.y)) * cracks);
 	}
 	ALBEDO = c;

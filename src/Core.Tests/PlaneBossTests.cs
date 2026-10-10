@@ -16,11 +16,16 @@ public class PlaneBossTests
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
         ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
 
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
+    /// <summary>The seed's first boss level (level 4 or 5 of the first depth).</summary>
+    static readonly Lazy<LevelMap> Shared = new(() =>
+    {
+        var seed = SeedCode.Parse("KELP7Q2Z");
+        return TopDownGenerator.Generate(new RunStreams(seed), new LevelId(1, 1, LevelPlan.BossLevel(seed, 1, 1)));
+    });
 
     static PlaneWorld World() => new(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
 
-    /// <summary>Puts her inside the arena, 7 m south of the rift.</summary>
+    /// <summary>Puts her inside the arena, 7 m south of the Crack's middle.</summary>
     static void Enter(PlaneWorld w)
     {
         var at = w.ArenaCenter + new Vector2(0f, 7f);
@@ -38,10 +43,10 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void TheGatewayIsShutUntilSheIsFreed()
+    public void TheCrackIsShutUntilSheIsFreed()
     {
         var w = World();
-        Assert.False(w.GatewayOpen);
+        Assert.False(w.ExitOpen);
         Assert.Equal(BossStage.Waiting, w.Boss!.Stage);
     }
 
@@ -177,10 +182,10 @@ public class PlaneBossTests
         Assert.DoesNotContain(w.Shots, s => s.BossPearl);
         Assert.True(StepUntil(w, PlaneEventType.BossFreed, 60) > 0);
         Assert.False(w.ArenaSealed);
-        Assert.True(w.GatewayOpen);
+        Assert.True(w.ExitOpen);
         Assert.Equal(pearlsBefore + 1, w.Pearls.Count);
-        Assert.Contains(w.Pearls[^1].ItemId, PlaneRun.ShotPearls);
-        Assert.True(Vector2.Distance(w.Pearls[^1].Position, w.GatewayPosition) > PlaneCombatTuning.GatewayRadius + 1f);
+        Assert.Contains(w.Pearls[^1].ItemId, PlaneRun.PortedPearls);
+        Assert.False(w.Map.Shaft.Contains(w.Pearls[^1].Position), "her pearl floats down beside the Crack, not into it");
         Assert.Equal(1, w.Stats.BossesFreed);
     }
 

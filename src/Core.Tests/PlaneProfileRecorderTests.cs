@@ -17,7 +17,7 @@ public class PlaneProfileRecorderTests
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
         ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
 
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
+    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), LevelId.First));
 
     static (PlaneWorld World, PlaneProfileRecorder Recorder) Start(params string[] pearls)
     {
@@ -26,7 +26,7 @@ public class PlaneProfileRecorderTests
         var world = new PlaneWorld(Shared.Value, new Tuning(), run);
         var recorder = new PlaneProfileRecorder(new Profile());
         recorder.StartRun("KELP 7Q2Z", customSeed: false, run.Items, continuing: false);
-        recorder.EnterRoom(world, 1, 1);
+        recorder.EnterLevel(world, LevelId.First);
         return (world, recorder);
     }
 
@@ -80,7 +80,7 @@ public class PlaneProfileRecorderTests
         Assert.True(w.Defeated);
         r.RunDied(w, 120);
         Assert.Equal(1, r.Profile.Stats.Deaths);
-        Assert.Equal(1, r.Profile.Stats.DeathsByCause["mob_shot"]);
+        Assert.Equal(1, r.Profile.Stats.DeathsByCause["puffer_needle"]);
         Assert.Equal(1, r.Profile.Creature(PlaneProfileRecorder.MobId).DefeatedYou);
         Assert.Equal(1, r.Profile.Pearl("hammerhead").RunsLost);
         Assert.Equal(1, r.Profile.Pearl("hammerhead").Runs);
@@ -92,10 +92,10 @@ public class PlaneProfileRecorderTests
     {
         var (w, r) = Start("mirror_scale");
         w.Stats.ShellsCollected = 40;
-        r.RoomCleared(w, 95);
+        r.LevelCleared(w, 95);
         w.Stats.ShellsCollected = 25;
         w.Stats.DamageTaken = 10f;
-        r.RoomCleared(w, 130);
+        r.LevelCleared(w, 130);
         var s = r.Profile.Stats;
         Assert.Equal(2, s.RoomsCleared);
         Assert.Equal(95, s.FastestRoomSeconds);

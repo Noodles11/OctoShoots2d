@@ -17,7 +17,8 @@ void vertex() {
 }
 
 void fragment() {
-	ReefSkin s = reef_surface(world, normalize(world_normal), TIME, length(fwidth(world.xz)));
+	if (lf_portal_cut(world, FRAGCOORD.xy)) discard;
+	ReefSkin s = reef_surface(lf_local(world), normalize(world_normal), TIME, length(fwidth(world.xz)));
 	// The caustics ride to light() in BACKLIGHT (this shader does its own lighting, so nothing else reads it).
 	BACKLIGHT = vec3(s.caustic * 1.5);
 	ALBEDO = s.albedo;

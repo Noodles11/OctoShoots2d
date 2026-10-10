@@ -9,14 +9,45 @@ using OctoShoots.Game.Util;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
+/// Everything about a level's look that takes time to work out — the ground's meshes, the cave roofs, the flora —
+/// prepared off the main thread (<see cref="Prepare"/>), so the level below can be readied while she plays.
+/// </summary>
+public sealed class LevelShape
+{
+    public sealed record Surface(Vector3[] Vertices, Vector3[] Normals, Color[] Colors, int[] Indices);
+
+    public LevelMap Map { get; private init; } = null!;
+    public List<Surface> Ground { get; } = new();
+    /// <summary>Per cave, its roof (null where the roof is flush with the ground).</summary>
+    public List<Surface?> Lids { get; } = new();
+    public List<FloraItem> Flora { get; } = new();
+    public List<Transform3D> Rocks { get; } = new();
+    public List<Transform3D> Glows { get; } = new();
+
+    /// <summary>Pure work on the map: safe to run on any thread.</summary>
+    public static LevelShape Prepare(LevelMap map)
+    {
+        var shape = new LevelShape { Map = map };
+        const int chunk = 32;
+        for (int cy = 0; cy < LevelMap.Size; cy += chunk)
+        for (int cx = 0; cx < LevelMap.Size; cx += chunk)
+            shape.Ground.Add(LevelView.ChunkSurface(map, cx, cy, Math.Min(cx + chunk, LevelMap.Size), Math.Min(cy + chunk, LevelMap.Size))!);
+        foreach (var cave in map.Caves) shape.Lids.Add(LevelView.LidSurface(map, cave));
+        if (!OS.GetCmdlineUserArgs().Contains("--dbg-nodecor")) LevelView.DecorItems(map, shape.Flora, shape.Rocks, shape.Glows);
+        return shape;
+    }
+}
+
+/// <summary>
 /// Shows a <see cref="LevelMap"/>: the heightfield as static 32 m chunks coloured by height band, the canopy layer
 /// (arches, cave roofs, overhangs) that fades while Clementine is underneath, the POIs in the landmark colour
 /// language, weak rock, and the decoration the generator chose. Purely presentation: nothing here generates,
 /// randomises or decides placement.
+/// The level below (DESIGN-TOPDOWN §4.6) is shown by a second LevelView placed under the hole (<see cref="Place"/>), drawn
+/// only through the shaft (<see cref="SetPortal"/>) until she dives; then it is promoted (<see cref="Promote"/>).
 /// </summary>
 public partial class LevelView : Node3D
 {
-    const int Chunk = 32;
 
     /// <summary>Landmark light language (DESIGN-TOPDOWN §4.2, THEME-BIBLE §6.3).</summary>
     public static Color PoiColor(PoiKind kind) => kind switch
@@ -25,15 +56,19 @@ public partial class LevelView : Node3D
         PoiKind.Shop => new Color(0.35f, 0.95f, 0.45f),        // green
         PoiKind.CurseDen => new Color(1f, 0.25f, 0.25f),       // red
         PoiKind.Secret => new Color(0.7f, 0.4f, 1f),           // violet (no beacon)
-        PoiKind.Rift => new Color(1f, 0.55f, 0.15f),           // orange (the Crack)
+        PoiKind.Exit => new Color(1f, 0.55f, 0.15f),           // orange (the Crack, the way down)
         PoiKind.Start => new Color(0.95f, 0.95f, 0.95f),       // white
-        PoiKind.ItemSpawn => new Color(0.3f, 0.9f, 0.85f),     // teal (the treasure pool's colour)
+        PoiKind.ShellCache => new Color(0.3f, 0.9f, 0.85f),    // teal (the treasure pool's colour)
         _ => new Color(1f, 0.45f, 0.3f),                       // ambushes: coral, warm but not gold
     };
 
 
     LevelMap _map = null!;
     ShaderMaterial _ground = null!;
+    /// <summary>Every material of the level's ground, rock and flora: they all take its frame and the dive's portal.</summary>
+    readonly List<ShaderMaterial> _materials = new();
+    /// <summary>Drawn below the current level: no Crack of its own yet.</summary>
+    bool _below;
     readonly List<(Canopy Canopy, ShaderMaterial Material, float Alpha)> _canopies = new();
     readonly List<ShaderMaterial> _lids = new();
     Shader _rock = null!;
@@ -42,6 +77,7 @@ public partial class LevelView : Node3D
     ShaderMaterial Rock(float lumps, Color? tint = null, float cracks = 0f)
     {
         var m = new ShaderMaterial { Shader = _rock };
+        Track(m);
         m.SetShaderParameter("lumps", lumps);
         m.SetShaderParameter("tint", tint ?? Colors.White);
         m.SetShaderParameter("cracks", cracks);
@@ -58,23 +94,26 @@ public partial class LevelView : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--dbg-normals")) _ground.SetShaderParameter("debug_normals", true);
     }
 
-    public void Show(LevelMap map)
+    /// <summary>Shows a level: the current one, or (<paramref name="below"/>) the one under the hole, without its Crack.</summary>
+    public void Show(LevelShape shape, bool below = false)
     {
         foreach (var child in GetChildren())
             if (child != _flora) child.QueueFree();
         _canopies.Clear();
-        _map = map;
+        _materials.Clear();
+        Track(_ground);
+        foreach (var m in _flora.Materials) Track(m);
+        var map = _map = shape.Map;
+        _below = below;
 
-        for (int cy = 0; cy < LevelMap.Size; cy += Chunk)
-        for (int cx = 0; cx < LevelMap.Size; cx += Chunk)
-            AddChild(new MeshInstance3D { Mesh = ChunkMesh(map, cx, cy, Math.Min(cx + Chunk, LevelMap.Size), Math.Min(cy + Chunk, LevelMap.Size)), MaterialOverride = _ground });
+        foreach (var surface in shape.Ground) AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = _ground });
 
         _lids.Clear();
-        foreach (var cave in map.Caves)
+        for (int i = 0; i < map.Caves.Count; i++)
         {
             var lid = Rock(0f);
             _lids.Add(lid);
-            if (LidMesh(map, cave) is { } mesh) AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = lid });
+            if (shape.Lids[i] is { } surface) AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = lid });
         }
         foreach (var canopy in map.Canopies) AddCanopy(canopy);
         // Weak rock plugging a secret: paler, fractured (an ink bomb will open it).
@@ -87,9 +126,68 @@ public partial class LevelView : Node3D
                 Position = new Vector3(rock.Center.X, map.HeightAt(rock.Center) + rock.Radius * 0.8f, rock.Center.Y),
             });
         }
-        if (!OS.GetCmdlineUserArgs().Contains("--dbg-nodecor")) ShowDecor(map);
-        ShowCrack(map);
+        ShowDecor(shape);
+        foreach (var m in _materials) m.SetShaderParameter("crack_mask", below ? 0f : 1f);
+        if (!below) ShowCrack(map);
         if (OS.GetCmdlineUserArgs().Contains("--dbg-nocanopy")) foreach (var c in _canopies) c.Material.SetShaderParameter("fade", 0f);
+    }
+
+    void Track(ShaderMaterial m)
+    {
+        if (!_materials.Contains(m)) _materials.Add(m);
+    }
+
+    /// <summary>
+    /// Where the level sits in the world (its offset) and its absolute origin, which its patterns are drawn from: a
+    /// level looks the same wherever it is placed, so moving it back to the origin after the dive changes nothing.
+    /// </summary>
+    public void Place(Vector3 offset, Vector2 origin)
+    {
+        Position = offset;
+        foreach (var m in _materials)
+        {
+            m.SetShaderParameter("level_offset", offset);
+            m.SetShaderParameter("level_origin", origin);
+        }
+    }
+
+    /// <summary>The level's corruption on its floor (docs/CORRUPTION.md): the field's texture, or null for none.</summary>
+    public void SetCorruption(Texture2D? texture)
+    {
+        foreach (var m in _materials)
+        {
+            m.SetShaderParameter("corruption_map", texture is null ? default(Variant) : texture);
+            m.SetShaderParameter("corruption_on", texture is null ? 0f : 1f);
+        }
+    }
+
+    /// <summary>The dive's portal: world xz centre, radius, and mode (0 off, 1 cut away inside, 2 only the inside).</summary>
+    public void SetPortal(Vector2 centre, float radius, int mode)
+    {
+        foreach (var m in _materials) m.SetShaderParameter("portal", new Vector4(centre.X, centre.Y, radius, mode));
+    }
+
+    /// <summary>The level below becomes the current one, back at the origin: its Crack, its lights.</summary>
+    public void Promote(Vector2 origin)
+    {
+        _below = false;
+        Place(Vector3.Zero, origin);
+        SetPortal(Vector2.Zero, 0f, 0);
+        foreach (var m in _materials) m.SetShaderParameter("crack_mask", 1f);
+        ShowCrack(_map);
+    }
+
+    static ArrayMesh ToMesh(LevelShape.Surface surface)
+    {
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = surface.Vertices;
+        arrays[(int)Mesh.ArrayType.Normal] = surface.Normals;
+        arrays[(int)Mesh.ArrayType.Color] = surface.Colors;
+        arrays[(int)Mesh.ArrayType.Index] = surface.Indices;
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
     }
 
     // ───────────────────────── ground ─────────────────────────
@@ -124,9 +222,11 @@ public partial class LevelView : Node3D
 
     /// <summary>
     /// The terrain as a smooth surface: bicubic (Catmull-Rom) through the height samples, so it still passes through
-    /// every grid point the simulation collides against, but without creases between them.
+    /// every grid point the simulation collides against, but without creases between them. Around the shaft it is
+    /// plain bilinear: its walls drop sheer, without the bicubic's ripples.
     /// </summary>
-    static float SmoothHeight(LevelMap map, float x, float y) => SmoothSample((i, j) => map[i, j], x, y);
+    static float SmoothHeight(LevelMap map, float x, float y) =>
+        map.Shaft.Contains(new System.Numerics.Vector2(x, y), 3f) ? map.HeightAt(new System.Numerics.Vector2(x, y)) : SmoothSample((i, j) => map[i, j], x, y);
 
     /// <summary>The cave roof where there is one, the terrain elsewhere (so a roof's edge meets the ground exactly).</summary>
     static float SmoothRoof(LevelMap map, float x, float y) => SmoothSample((i, j) => float.IsNaN(map.LidAt(i, j)) ? map[i, j] : map.LidAt(i, j), x, y);
@@ -149,21 +249,23 @@ public partial class LevelView : Node3D
     static float CatmullRom(float p0, float p1, float p2, float p3, float t) =>
         0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t * t + (3f * p1 - p0 - 3f * p2 + p3) * t * t * t);
 
-    static ArrayMesh ChunkMesh(LevelMap map, int x0, int y0, int x1, int y1) =>
-        SurfaceMesh((x, y) => SmoothHeight(map, x, y), x0, y0, x1, y1, null)!;
+    /// <summary>A chunk of the ground. The shaft has no floor: through it, the level below shows.</summary>
+    internal static LevelShape.Surface? ChunkSurface(LevelMap map, int x0, int y0, int x1, int y1) =>
+        SurfaceMesh((x, y) => SmoothHeight(map, x, y), x0, y0, x1, y1, (x, y) => SmoothHeight(map, x, y) > LevelMap.ShaftBottom + 0.3f);
 
     /// <summary>
     /// A cave's roof: the mountain as it stood before the cave was hollowed out, over the chambers and a little past them
     /// (where it meets the terrain again). It fades like any canopy while Clementine is inside.
     /// </summary>
-    static ArrayMesh? LidMesh(LevelMap map, CaveSite cave)
+    internal static LevelShape.Surface? LidSurface(LevelMap map, CaveSite cave)
     {
         int x0 = Math.Max(0, (int)cave.Chambers.Min(c => c.Center.X - c.Radius) - 4), x1 = Math.Min(LevelMap.Size, (int)cave.Chambers.Max(c => c.Center.X + c.Radius) + 5);
         int y0 = Math.Max(0, (int)cave.Chambers.Min(c => c.Center.Y - c.Radius) - 4), y1 = Math.Min(LevelMap.Size, (int)cave.Chambers.Max(c => c.Center.Y + c.Radius) + 5);
         return SurfaceMesh((x, y) => SmoothRoof(map, x, y) + 0.03f, x0, y0, x1, y1, (x, y) => SmoothRoof(map, x, y) > SmoothHeight(map, x, y) + 0.05f);
     }
 
-    static ArrayMesh? SurfaceMesh(Func<float, float, float> height, int x0, int y0, int x1, int y1, Func<float, float, bool>? keep)
+    /// <summary>A triangle is kept when any of its corners passes <paramref name="keep"/>.</summary>
+    static LevelShape.Surface? SurfaceMesh(Func<float, float, float> height, int x0, int y0, int x1, int y1, Func<float, float, bool>? keep)
     {
         int w = (x1 - x0) * Sub + 1, h = (y1 - y0) * Sub + 1;
         var verts = new Vector3[w * h];
@@ -191,15 +293,7 @@ public partial class LevelView : Node3D
             indices.AddRange(new[] { a, b, c, b, d, c });
         }
         if (indices.Count == 0) return null;
-        var arrays = new Godot.Collections.Array();
-        arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = verts;
-        arrays[(int)Mesh.ArrayType.Normal] = normals;
-        arrays[(int)Mesh.ArrayType.Color] = colors;
-        arrays[(int)Mesh.ArrayType.Index] = indices.ToArray();
-        var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        return mesh;
+        return new LevelShape.Surface(verts, normals, colors, indices.ToArray());
     }
 
     // ───────────────────────── canopy ─────────────────────────
@@ -326,10 +420,12 @@ public partial class LevelView : Node3D
     /// </summary>
     void ShowCrack(LevelMap map)
     {
-        var rift = map.Rift.Position;
-        RenderingServer.GlobalShaderParameterSet("reef_crack", new Vector4(rift.X, rift.Y, 10f, 1f));
+        // A blue hole is plain water; only a boss level's exit is the Crack.
+        RenderingServer.GlobalShaderParameterSet("reef_crack", map.HasBoss ? new Vector4(map.Exit.Position.X, map.Exit.Position.Y, 10f, 1f) : Vector4.Zero);
+        if (!map.HasBoss) return;
+        var rift = map.Exit.Position;
         var floor = new Vector3(rift.X, -6f, rift.Y);
-        AddChild(new OmniLight3D
+        AddChild(_crackLight = new OmniLight3D
         {
             Position = floor + Vector3.Up * 2.5f,
             LightColor = new Color(1f, 0.5f, 0.18f),
@@ -339,7 +435,7 @@ public partial class LevelView : Node3D
             ShadowEnabled = false,
         });
         var bubble = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/plane_bubble.gdshader") };
-        AddChild(new CpuParticles3D
+        AddChild(_crackBubbles = new CpuParticles3D
         {
             Position = floor,
             Amount = 36,
@@ -359,27 +455,52 @@ public partial class LevelView : Node3D
         });
     }
 
+    OmniLight3D? _crackLight;
+    CpuParticles3D? _crackBubbles;
+
+    /// <summary>
+    /// The dive through the Crack: its glow, its warm light and its rising bubbles fade together (1 full, 0 gone), so
+    /// nothing of it is switched off when this level is let go.
+    /// </summary>
+    public void FadeCrack(float k)
+    {
+        if (!_map.HasBoss) return;
+        RenderingServer.GlobalShaderParameterSet("reef_crack", new Vector4(_map.Exit.Position.X, _map.Exit.Position.Y, 10f, k));
+        if (_crackLight is not null) _crackLight.LightEnergy = 2.2f * k;
+        _crackBubbles?.SetInstanceShaderParameter("fade", k);
+    }
+
     // ───────────────────────── places ─────────────────────────
 
     /// <summary>The place's name, as the HUD shows it when Clementine enters.</summary>
     public static string PlaceName(PoiKind kind) => kind switch
     {
-        PoiKind.ItemSpawn => "Item cache",
+        PoiKind.ShellCache => "Shell cache",
         PoiKind.TreasureCave => "Treasure cave",
         PoiKind.CurseDen => "Curse den",
         PoiKind.Ambush => "Ambush",
-        PoiKind.Rift => "The Rift",
+        PoiKind.Exit => "Blue hole",
         _ => kind.ToString(),
     };
 
+    /// <summary>A place's name on this level: a boss level's exit is the Crack.</summary>
+    public static string PlaceName(LevelMap map, PoiKind kind) => kind == PoiKind.Exit && map.HasBoss ? "The Crack" : PlaceName(kind);
+
     // ───────────────────────── decoration ─────────────────────────
 
-    /// <summary>Maps the generator's decoration onto the existing flora art. Positions, yaw and scale all come from the map.</summary>
-    void ShowDecor(LevelMap map)
+    void ShowDecor(LevelShape shape)
     {
-        var items = new List<FloraItem>();
-        var rocks = new List<Transform3D>();
-        var glows = new List<Transform3D>();
+        PaintFlora(ReefLook.For(shape.Map.Depth));
+        _flora.Show(shape.Flora);
+        AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 18, Rings = 9 }, Rock(0.22f), shape.Rocks));
+        if (shape.Glows.Count > 0)
+            AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 8, Rings = 4 },
+                new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(0.4f, 1f, 0.9f), EmissionEnabled = true, Emission = new Color(0.4f, 1f, 0.9f), EmissionEnergyMultiplier = 2f }, shape.Glows));
+    }
+
+    /// <summary>Maps the generator's decoration onto the existing flora art. Positions, yaw and scale all come from the map.</summary>
+    internal static void DecorItems(LevelMap map, List<FloraItem> items, List<Transform3D> rocks, List<Transform3D> glows)
+    {
         foreach (var d in map.Decor)
         {
             var pos = new Vector3(d.Position.X, d.Height, d.Position.Y);
@@ -394,7 +515,6 @@ public partial class LevelView : Node3D
                 DecorKind.EncrustingCoral => FloraKind.BrainCoral,
                 DecorKind.Bommie => FloraKind.BrainCoral,
                 DecorKind.CrownGarden => FloraKind.SeaFan,
-                DecorKind.TrenchSponge => FloraKind.BarrelSponge,
                 _ => null,
             };
             if (d.Kind == DecorKind.Boulder) rocks.Add(new Transform3D(basis.Scaled(new Vector3(0.9f, 0.6f, 0.8f)), pos));
@@ -417,22 +537,17 @@ public partial class LevelView : Node3D
             }
         }
         Scatter(map, items, rocks);
-        PaintFlora(ReefLook.For(map.Depth));
-        _flora.Show(items);
-        AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 18, Rings = 9 }, Rock(0.22f), rocks));
-        AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 8, Rings = 4 },
-            new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(0.4f, 1f, 0.9f), EmissionEnabled = true, Emission = new Color(0.4f, 1f, 0.9f), EmissionEnergyMultiplier = 2f }, glows));
     }
 
     /// <summary>
     /// Ground cover, for the look only (nothing in play depends on it): a deterministic scatter from the level's seed so
     /// the seabed reads as a living reef rather than a beach (THEME-BIBLE §7, Depth 1: healthy neighbours everywhere).
     /// Seagrass meadows in drifting patches; small corals, sponges and sea rods crowding the feet of the walls; lone
-    /// coral heads and bits of rubble out on the open sand. The rift's arena is left clear around the Crack.
+    /// coral heads and bits of rubble out on the open sand. The exit is left clear around the shaft.
     /// </summary>
     static void Scatter(LevelMap map, List<FloraItem> items, List<Transform3D> rocks)
     {
-        uint seed = unchecked((uint)(map.Seed ^ (map.Seed >> 32)) ^ (uint)(map.Reef * 7919));
+        uint seed = unchecked((uint)(map.Seed ^ (map.Seed >> 32)) ^ (uint)(map.Level * 7919 + map.Depth * 104729 + map.Cycle * 15485863));
         float Hash(float x, float y, int k)
         {
             uint h = unchecked((uint)((int)(x * 10f) * 73856093) ^ (uint)((int)(y * 10f) * 19349663) ^ (uint)(k * 83492791) ^ seed);
@@ -441,7 +556,7 @@ public partial class LevelView : Node3D
             h ^= h >> 15;
             return (h & 0xFFFFFF) / 16777216f;
         }
-        var rift = map.Rift;
+        var rift = map.Exit;
         const float step = 1.1f;
         for (float y = LevelMap.RimWidth + 1f; y < LevelMap.Size - LevelMap.RimWidth - 1f; y += step)
         for (float x = LevelMap.RimWidth + 1f; x < LevelMap.Size - LevelMap.RimWidth - 1f; x += step)
@@ -452,8 +567,7 @@ public partial class LevelView : Node3D
             if (h > -0.6f || h < -6f) continue;
             float slope = map.Gradient(p).Length();
             if (slope > 0.9f) continue;
-            float toRift = System.Numerics.Vector2.Distance(p, rift.Position);
-            if (toRift < rift.Radius * 0.6f) continue;
+            if (map.HasBoss ? System.Numerics.Vector2.Distance(p, rift.Position) < rift.Radius * 0.6f : map.Shaft.Contains(p, 1.5f)) continue;
             bool nearWall = false;
             for (int i = 0; i < 6 && !nearWall; i++)
             {

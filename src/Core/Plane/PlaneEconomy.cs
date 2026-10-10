@@ -11,14 +11,25 @@ public static class PlaneEconomyTuning
 {
     /// <summary>Shells are picked up within this distance of her edge, and drift toward her from a little farther.</summary>
     public const float ShellReach = 0.6f, ShellMagnet = 2.5f, ShellMagnetSpeed = 9f;
-    /// <summary>Every mob drops this many shells (inclusive range).</summary>
-    public const int MobDropMin = 1, MobDropMax = 2;
+    /// <summary>Pirate's Doubloon: shell caches hold this many times as many shells.</summary>
+    public const float RichCaches = 1.5f;
+    /// <summary>Remora Sucker: shells drift to her from this far instead.</summary>
+    public const float RemoraMagnet = 7.5f;
+    /// <summary>
+    /// What a freed mob leaves, one roll each: a heart (HeartChance), else shells (ShellChance: one, or two at
+    /// TwoShells of those), else nothing. About one heart and six shells a level from mobs.
+    /// </summary>
+    public const float HeartChance = 0.06f, ShellChance = 0.3f, TwoShells = 0.25f;
+    /// <summary>A heart pickup heals one heart (20 HP, 2D §23). She takes it only when hurt; otherwise it waits.</summary>
+    public const float HeartHeal = 20f, HeartReach = 0.6f;
     /// <summary>Shell caches at places: the item cache and secret rooms (inclusive ranges).</summary>
     public const int CacheMin = 6, CacheMax = 9, SecretMin = 8, SecretMax = 12;
-    /// <summary>The shop: pearls, and a health top-up.</summary>
-    public const int PearlPrice = 15, HealthPrice = 5;
+    /// <summary>The shop: at most one pearl (offered this often), and always a heart (a health top-up).</summary>
+    public const int PearlPrice = 30, HealthPrice = 5;
     public const float HealthAmount = 25f;
-    public const int PearlsForSale = 2;
+    public const float PearlOffered = 0.5f;
+    /// <summary>The shop's stand slots, left to right: the pearl, the heart, and a third kept for wares to come.</summary>
+    public const int PearlSlot = 0, HeartSlot = 1, Slots = 3;
     /// <summary>A stand sells when she touches it.</summary>
     public const float StandReach = 0.7f;
 }
@@ -29,6 +40,14 @@ public sealed class PlaneShell
     public Vector2 Position;
     public Vector2 Velocity;
     public int Value = 1;
+    public bool Taken;
+}
+
+/// <summary>A heart dropped by a freed mob: it floats where it fell until she, hurt, swims over it.</summary>
+public sealed class PlaneHeart
+{
+    public Vector2 Position;
+    public Vector2 Velocity;
     public bool Taken;
 }
 
@@ -58,6 +77,7 @@ public sealed class PlaneStats
 public sealed partial class PlaneWorld
 {
     public List<PlaneShell> Shells { get; } = new();
+    public List<PlaneHeart> Hearts { get; } = new();
     public List<ShopStand> Stands { get; } = new();
     public PlaneStats Stats { get; } = new();
 
@@ -68,16 +88,18 @@ public sealed partial class PlaneWorld
     /// <summary>Shell caches at the item cache and secret rooms, scattered round each place's middle.</summary>
     void PlaceShells()
     {
-        _drops = new Rng(Map.Seed ^ 0x5E115UL ^ ((ulong)Map.Reef << 24) ^ ((ulong)Map.Attempt << 48));
+        _drops = new Rng(Map.Seed ^ 0x5E115UL ^ ((ulong)Map.Level << 24) ^ ((ulong)Map.Depth << 32) ^ ((ulong)Map.Attempt << 48));
         foreach (var poi in Map.Pois)
         {
             (int min, int max) = poi.Kind switch
             {
-                PoiKind.ItemSpawn => (PlaneEconomyTuning.CacheMin, PlaneEconomyTuning.CacheMax),
+                PoiKind.ShellCache => (PlaneEconomyTuning.CacheMin, PlaneEconomyTuning.CacheMax),
                 PoiKind.Secret => (PlaneEconomyTuning.SecretMin, PlaneEconomyTuning.SecretMax),
                 _ => (0, 0),
             };
             int count = min + (max > min ? _drops.Int(max - min + 1) : 0);
+            // Pirate's Doubloon: shell caches hold half as many again.
+            if (poi.Kind == PoiKind.ShellCache && Run.Loadout.Flags.Contains("richCaches")) count = (int)MathF.Round(count * PlaneEconomyTuning.RichCaches);
             for (int i = 0; i < count; i++)
             {
                 float a = _drops.Range(0f, MathF.Tau), r = _drops.Range(0.8f, MathF.Min(3f, poi.Radius - 1f));
@@ -87,51 +109,58 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>The shop's stands in a row across its chamber: pearls she does not have yet, and a health top-up.</summary>
+    /// <summary>
+    /// The shop's stands in fixed slots across its chamber: a pearl she does not have yet (some visits none), a heart,
+    /// and an empty third slot for wares to come.
+    /// </summary>
     void PlaceShop()
     {
         var shop = Map.Pois.FirstOrDefault(p => p.Kind == PoiKind.Shop);
         if (shop is null) return;
         Vector2 facing = shop.Cave >= 0 ? Map.Caves[shop.Cave].Facing : Vector2.UnitY;
         Vector2 side = new(-facing.Y, facing.X);
-        var rng = new Rng(Map.Seed ^ 0x5409UL ^ ((ulong)Map.Reef << 28) ^ ((ulong)Map.Attempt << 50));
-        var offer = PlaneRun.ShotPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id)).ToList();
-        var items = new List<ShopStand>();
-        for (int i = 0; i < PlaneEconomyTuning.PearlsForSale && offer.Count > 0; i++)
-        {
-            int k = rng.Int(offer.Count);
-            items.Add(new ShopStand { Kind = StandKind.Pearl, ItemId = offer[k], Price = PlaneEconomyTuning.PearlPrice });
-            offer.RemoveAt(k);
-        }
-        items.Add(new ShopStand { Kind = StandKind.Health, Price = PlaneEconomyTuning.HealthPrice });
-        for (int i = 0; i < items.Count; i++)
-        {
-            float along = (i - (items.Count - 1) * 0.5f) * 2.4f;
-            items[i].Position = shop.Position + side * along - facing * 0.8f;
-            Stands.Add(items[i]);
-        }
+        var rng = new Rng(Map.Seed ^ 0x5409UL ^ ((ulong)Map.Level << 28) ^ ((ulong)Map.Depth << 36) ^ ((ulong)Map.Attempt << 50));
+        var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id)).ToList();
+        Vector2 Slot(int i) => shop.Position + side * ((i - (PlaneEconomyTuning.Slots - 1) * 0.5f) * 2.4f) - facing * 0.8f;
+        if (offer.Count > 0 && rng.NextFloat() < PlaneEconomyTuning.PearlOffered)
+            Stands.Add(new ShopStand { Kind = StandKind.Pearl, ItemId = offer[rng.Int(offer.Count)], Price = PlaneEconomyTuning.PearlPrice, Position = Slot(PlaneEconomyTuning.PearlSlot) });
+        Stands.Add(new ShopStand { Kind = StandKind.Health, Price = PlaneEconomyTuning.HealthPrice, Position = Slot(PlaneEconomyTuning.HeartSlot) });
     }
 
     /// <summary>A defeated mob leaves shells, flung a little way.</summary>
-    void DropShells(Vector2 at)
+    void Drop(Vector2 at)
     {
-        int count = PlaneEconomyTuning.MobDropMin + _drops.Int(PlaneEconomyTuning.MobDropMax - PlaneEconomyTuning.MobDropMin + 1);
-        for (int i = 0; i < count; i++)
+        // Lucky Sea Glass: each point of luck is one more shell from every freed foe.
+        int lucky = (int)MathF.Round(Run.Loadout.Stats.Luck);
+        for (int i = 0; i < lucky; i++) Shells.Add(new PlaneShell { Position = at, Velocity = Fling(2f, 4f) });
+        float roll = _drops.NextFloat();
+        if (roll < PlaneEconomyTuning.HeartChance)
         {
-            float a = _drops.Range(0f, MathF.Tau);
-            Shells.Add(new PlaneShell { Position = at, Velocity = new Vector2(MathF.Cos(a), MathF.Sin(a)) * _drops.Range(2f, 4f) });
+            Hearts.Add(new PlaneHeart { Position = at, Velocity = Fling(1.5f, 2.5f) });
+            return;
         }
+        if (roll >= PlaneEconomyTuning.HeartChance + PlaneEconomyTuning.ShellChance) return;
+        int count = _drops.NextFloat() < PlaneEconomyTuning.TwoShells ? 2 : 1;
+        for (int i = 0; i < count; i++) Shells.Add(new PlaneShell { Position = at, Velocity = Fling(2f, 4f) });
+    }
+
+    /// <summary>A drop flung a little way in a random direction.</summary>
+    Vector2 Fling(float min, float max)
+    {
+        float a = _drops.Range(0f, MathF.Tau);
+        return new Vector2(MathF.Cos(a), MathF.Sin(a)) * _drops.Range(min, max);
     }
 
     void StepEconomy()
     {
         var p = Player;
+        float magnet = Run.Loadout.Flags.Contains("magnet") ? PlaneEconomyTuning.RemoraMagnet : PlaneEconomyTuning.ShellMagnet;
         foreach (var shell in Shells)
         {
             if (shell.Taken) continue;
             Vector2 to = p.Position - shell.Position;
             float d = to.Length();
-            if (d < Radius + PlaneEconomyTuning.ShellMagnet && d > 1e-4f) shell.Velocity = to / d * PlaneEconomyTuning.ShellMagnetSpeed;
+            if (d < Radius + magnet && d > 1e-4f) shell.Velocity = to / d * PlaneEconomyTuning.ShellMagnetSpeed;
             else shell.Velocity *= MathF.Exp(-4f * Dt);
             Vector2 next = shell.Position + shell.Velocity * Dt;
             if (Map.IsOpen(next)) shell.Position = next;
@@ -143,6 +172,25 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(PlaneEventType.ShellCollected, shell.Position, Vector2.Zero));
         }
         Shells.RemoveAll(s => s.Taken);
+
+        // Hearts: they drift to a stop; hurt, she takes one by swimming over it (Remora Sucker draws it to her).
+        bool hurt = p.Hp < Run.MaxHp;
+        foreach (var heart in Hearts)
+        {
+            Vector2 to = p.Position - heart.Position;
+            float d = to.Length();
+            if (hurt && d < Radius + magnet && d > 1e-4f) heart.Velocity = to / d * PlaneEconomyTuning.ShellMagnetSpeed;
+            else heart.Velocity *= MathF.Exp(-4f * Dt);
+            Vector2 next = heart.Position + heart.Velocity * Dt;
+            if (Map.IsOpen(next)) heart.Position = next;
+            else heart.Velocity = Vector2.Zero;
+            if (!hurt || d > Radius + PlaneEconomyTuning.HeartReach) continue;
+            heart.Taken = true;
+            p.Hp = MathF.Min(p.Hp + PlaneEconomyTuning.HeartHeal, Run.MaxHp);
+            hurt = p.Hp < Run.MaxHp;
+            Events.Add(new PlaneEvent(PlaneEventType.HeartCollected, heart.Position, Vector2.Zero));
+        }
+        Hearts.RemoveAll(h => h.Taken);
 
         int near = -1;
         for (int i = 0; i < Stands.Count; i++)
@@ -162,15 +210,7 @@ public sealed partial class PlaneWorld
             Stats.ShellsSpent += stand.Price;
             stand.Sold = true;
             if (stand.Kind == StandKind.Health) p.Hp = MathF.Min(p.Hp + PlaneEconomyTuning.HealthAmount, Run.MaxHp);
-            else
-            {
-                float before = Run.MaxHp;
-                Run.Add(stand.ItemId);
-                p.Hp = MathF.Min(p.Hp + MathF.Max(Run.MaxHp - before, 0f), Run.MaxHp);
-                LastPearl = stand.ItemId;
-                Stats.PearlsFound++;
-                Events.Add(new PlaneEvent(PlaneEventType.PearlCollected, stand.Position, Vector2.Zero));
-            }
+            else Absorb(stand.ItemId, stand.Position);
             Events.Add(new PlaneEvent(PlaneEventType.Purchased, stand.Position, Vector2.Zero));
         }
         if (near < 0) _denied = -1;
