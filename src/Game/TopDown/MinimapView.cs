@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using OctoShoots.Core.Gen.TopDown;
+using OctoShoots.Core.Plane;
 
 namespace OctoShoots.Game.TopDown;
 
@@ -89,6 +90,20 @@ public partial class MinimapView : Control
     }
 
     public void SetMap(LevelMap map) => _map.SetMap(map);
+
+    /// <summary>The corruption's texture and works on the minimap (docs/CORRUPTION.md).</summary>
+    public void SetCorruption(Texture2D? texture) => _map.Corruption = texture;
+
+    public void SetBlight(PlaneWorld world) => FillBlight(_map, world);
+
+    /// <summary>Copies the world's Blightroots and valves onto a map.</summary>
+    public static void FillBlight(TopoMap map, PlaneWorld world)
+    {
+        map.Blights.Clear();
+        foreach (var b in world.Blightroots) map.Blights.Add((b.Position, b.Alive));
+        map.Valves.Clear();
+        foreach (var v in world.Valves) map.Valves.Add((v.Center - v.Across * v.HalfWidth, v.Center + v.Across * v.HalfWidth, v.Seen, v.Cleared));
+    }
 
     public void SetVisited(IReadOnlySet<int> visited) => _map.Visited = visited;
 

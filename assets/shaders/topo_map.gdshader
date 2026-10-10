@@ -16,6 +16,11 @@ uniform bool use_fog = false;
 uniform sampler2D fog : filter_linear;
 // The mud cloud around a sealed boss arena, a ring about 15 m thick: centre (metres), rim, how risen (0–1).
 uniform vec4 mud = vec4(0.0, 0.0, 15.0, 0.0);
+// The corruption (docs/CORRUPTION.md): open water reads ink-violet where the floor is corrupted, its own colour where
+// cleansed, so the map literally regains colour as she plays.
+uniform sampler2D corruption_tex : filter_linear, repeat_disable;
+uniform bool use_corruption = false;
+const vec3 INK = vec3(0.16, 0.09, 0.22);
 const vec3 MUD = vec3(0.3, 0.25, 0.19);
 const vec3 PAPER = vec3(0.93, 0.93, 0.92);
 const vec3 WALL = vec3(0.56, 0.57, 0.57);
@@ -83,6 +88,11 @@ void fragment() {
 			col = mix(col, MINOR, minor * (h < shore ? 0.55 : 0.75));
 			col = mix(col, INDEX, index);
 			col = mix(col, SHORE, edge);
+		}
+		if (use_corruption) {
+			float cr = texture(corruption_tex, w / (samples - 1.0)).r;
+			float aa2 = max(fwidth(h), 1e-4);
+			col = mix(col, INK, smoothstep(0.03, 0.6, cr) * (1.0 - smoothstep(-aa2, aa2, h - shore)) * 0.85);
 		}
 		if (use_fog) col = mix(FOG, col, smoothstep(0.0, 1.0, texture(fog, (w + 0.5) / samples).r));
 		if (use_fog && mud.w > 0.0) {

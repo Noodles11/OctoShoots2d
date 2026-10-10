@@ -45,6 +45,8 @@ public sealed class PlaneBody
     public bool WasFiring;
     /// <summary>Bubble Shield: untouchable inside it while this counts down.</summary>
     public float ShieldTimer;
+    /// <summary>Held by a coiling gloomvine (no swimming; a dash frees her).</summary>
+    public float RootTimer;
 
     public bool IsDashing => DashTimer > 0f;
 }
@@ -61,10 +63,12 @@ public sealed class PlaneInk
 public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, MobNoticed, PlayerHit, PlayerDefeated, Dived, PufferSwells, NeedlesFired, PearlCollected, ShellCollected, HeartCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped, BubbleFull,
     ChargeFull, InkBlast, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
     SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
+    BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
+    MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
-public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact }
+public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Valve }
 
 /// <summary>
 /// Direction: for ShotPopped, the unit direction from the bubble's centre to where its film gave way. Size: a popped
@@ -87,9 +91,11 @@ public sealed partial class PlaneWorld
     public const float Dt = 1f / TickRate;
 
     /// <param name="run">What she carries in from the last room (HP, pearls); a fresh run when null.</param>
-    public PlaneWorld(LevelMap map, Tuning tuning, PlaneRun? run = null)
+    /// <param name="options">What the world runs with (the game's <see cref="PlaneOptions.Default"/> when null).</param>
+    public PlaneWorld(LevelMap map, Tuning tuning, PlaneRun? run = null, PlaneOptions? options = null)
     {
         Map = map;
+        Options = options ?? PlaneOptions.Default;
         Tuning = tuning;
         Run = run ?? new PlaneRun(null, tuning);
         Player.Position = Player.PrevPosition = map.Start.Position;
@@ -97,7 +103,7 @@ public sealed partial class PlaneWorld
         _rocks = new List<WeakRock>(map.WeakRocks);
         _bubbleRng = new Rng(map.Seed ^ 0xB0BB1EUL ^ ((ulong)map.Level << 24) ^ ((ulong)map.Depth << 32) ^ ((ulong)map.Attempt << 48));
         Director = new ReefDirector(map);
-        PlaceMobs();
+        if (Options.Pufferlings) PlaceMobs();
         PlaceFish();
         PlacePearls();
         PlaceShop();
@@ -105,6 +111,7 @@ public sealed partial class PlaneWorld
         PlaceAmbushes();
         PlaceBoss();
         PlaceVases();
+        if (Options.Corruption) PlaceCorruption();
     }
 
     public LevelMap Map { get; }
@@ -162,6 +169,7 @@ public sealed partial class PlaneWorld
             p.JetTimer = 0f;
             Clouds.Add(new PlaneInk { Position = p.Position, Radius = t.InkCloudRadius, Life = t.InkCloudLife, MaxLife = t.InkCloudLife });
             Events.Add(new PlaneEvent(PlaneEventType.DashStarted, p.Position, dir));
+            DashFreed();
         }
 
         if (p.DashTimer > 0f)
@@ -210,6 +218,8 @@ public sealed partial class PlaneWorld
         }
         p.JetTimer -= Dt;
 
+        // Coiled by a gloomvine: held in place (a dash frees her).
+        if (p.RootTimer > 0f && p.DashTimer <= 0f) p.Velocity = Vector2.Zero;
         Move(ref p.Position, ref p.Velocity, Radius, barrier: ArenaBarrier.Inside);
 
         StepReef();
@@ -220,6 +230,7 @@ public sealed partial class PlaneWorld
 
         StepBoss();
         StepCombat(input);
+        StepCorruption();
         StepFish();
         StepEconomy();
     }

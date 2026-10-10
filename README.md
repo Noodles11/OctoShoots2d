@@ -15,6 +15,10 @@ A top-down action roguelite in a darkening ocean.
   and pop. It also has the Pufferling (corrupted ones to free, healthy ones about the reef) and ambushes, pearls,
   shells and the shop, the dive down the shaft, Menace,
   and Queen Clam, the Depth 1 boss.
+- **The corruption war** ([`docs/CORRUPTION.md`](docs/CORRUPTION.md)): ink outgrowth over every level's floor that her
+  light cleanses; Blightroot pylons that regrow it and starve when ringed by clean ground; murklings budding from it;
+  gloomvines; valves of darkness; the boss arena as the condensation zone. The pufferling enemies are retracted for
+  now (`PlaneOptions`).
 - **Presentation.** The Godot layer: heightfield chunks, the tilted camera with depth focus, the level below drawn
   through the shaft and the dive into it, HUD and run clock, minimap with fog of war, pause menu, splashes, and the
   F3 debug map.
