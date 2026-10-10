@@ -73,6 +73,10 @@ public sealed class PlaneBoss
     public Vector2 RestAt;
     /// <summary>The mud cloud around the arena: 0 settled, 1 fully risen.</summary>
     public float Cloud;
+    /// <summary>Her health at the fight's start (eased by the level cleansed) and how dense her patterns are (1 full).</summary>
+    public float MaxHp = PlaneBossTuning.Hp, Pattern = 1f;
+    /// <summary>The corruption's crust on her (0..CrustLayers): armour, denser patterns, longer reach. Each fifth of the arena cleansed strips one.</summary>
+    public int Crust;
     public bool Freed => Stage == BossStage.Freed;
     /// <summary>Hurt only while the shell is open.</summary>
     public bool Open => Stage == BossStage.Fight && Act is ClamAct.Volleys or ClamAct.Helix;
@@ -221,6 +225,13 @@ public sealed partial class PlaneWorld
 
     void Land(PlaneBoss boss)
     {
+        if (Corruption is not null)
+        {
+            // An explorer who cleansed the level meets an easier boss (up to BossEase less health and pattern).
+            float ease = 1f - CorruptionTuning.BossEase * Cleansed;
+            boss.MaxHp = boss.Hp = boss.Hp * ease;
+            boss.Pattern = ease;
+        }
         boss.Stage = BossStage.Fight;
         boss.StageTime = 0f;
         boss.Act = ClamAct.Closed;
@@ -238,7 +249,9 @@ public sealed partial class PlaneWorld
     void Release(PlaneBoss boss)
     {
         ArenaSealed = false;
-        ExitOpen = true;
+        // The Crack opens once the arena is cleansed enough too (StepCondensation).
+        ExitOpen = Corruption is null || ArenaCleansed >= CorruptionTuning.ArenaToOpen;
+        if (ExitOpen && Corruption is not null) Events.Add(new PlaneEvent(PlaneEventType.CrackOpened, ArenaCenter, Vector2.Zero));
         var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id || q.Taken)).ToList();
         var boss_ = offer.Where(id => Run.Catalog!.TryGet(id, out var item) && item.Pools.Contains("boss")).ToList();
         var pick = boss_.Count > 0 ? boss_ : offer;
@@ -375,11 +388,17 @@ public sealed partial class PlaneWorld
         boss.ActTime = 0f;
     }
 
+    /// <summary>The crust's reach: her pearls fly this much of their full life (shorter as layers fall).</summary>
+    static float Reach(PlaneBoss boss) => 0.65f + 0.07f * boss.Crust;
+
+    /// <summary>How many of a pattern's pearls she sends: thinner as the crust falls and for an explorer.</summary>
+    static int Thinned(PlaneBoss boss, int count) => Math.Max(3, (int)MathF.Round(count * boss.Pattern * (0.6f + 0.08f * boss.Crust)));
+
     PlaneShot BossPearl(PlaneBoss boss, Vector2 dir, float speed, bool royal = false) => new()
     {
         Position = boss.Position + dir * (PlaneBossTuning.BodyRadius * 0.8f),
         Velocity = dir * speed,
-        Life = royal ? PlaneBossTuning.RoyalLife : PlaneBossTuning.PearlLife,
+        Life = (royal ? PlaneBossTuning.RoyalLife : PlaneBossTuning.PearlLife) * (Corruption is null ? 1f : Reach(boss)),
         Damage = royal ? PlaneBossTuning.RoyalDamage : PlaneBossTuning.PearlDamage,
         Radius = royal ? PlaneBossTuning.RoyalRadius : PlaneBossTuning.PearlRadius,
         BossPearl = true,
@@ -390,7 +409,7 @@ public sealed partial class PlaneWorld
     /// <summary>A full ring of pearls with a gap of a few at a random angle.</summary>
     void PearlRing(PlaneBoss boss)
     {
-        int n = PlaneBossTuning.RingCount, gap = _bossRng.Int(n);
+        int n = Corruption is null ? PlaneBossTuning.RingCount : Thinned(boss, PlaneBossTuning.RingCount), gap = _bossRng.Int(n);
         float turn = _bossRng.Range(0f, MathF.Tau);
         for (int i = 0; i < n; i++)
         {
@@ -405,7 +424,7 @@ public sealed partial class PlaneWorld
     {
         Vector2 aim = SafeNormalize(Player.Position - boss.Position);
         if (aim == Vector2.Zero) aim = boss.Facing;
-        int n = PlaneBossTuning.WallCount, hole = 1 + _bossRng.Int(n - PlaneBossTuning.WallHole - 1);
+        int n = Corruption is null ? PlaneBossTuning.WallCount : Math.Max(PlaneBossTuning.WallHole + 3, Thinned(boss, PlaneBossTuning.WallCount)), hole = 1 + _bossRng.Int(n - PlaneBossTuning.WallHole - 1);
         float arc = PlaneBossTuning.WallArcDeg * MathUtil.Deg2Rad;
         for (int i = 0; i < n; i++)
         {
@@ -420,7 +439,8 @@ public sealed partial class PlaneWorld
         var boss = Boss;
         if (boss is null || boss.Stage != BossStage.Fight) return false;
         if (Vector2.Distance(shot.Position, boss.Position) > PlaneBossTuning.BodyRadius + shot.Radius) return false;
-        if (boss.Open) DamageBoss(boss, HitDamage(shot), shot.Velocity);
+        // The crust absorbs most of a bubble's light while it holds (each layer a sixth).
+        if (boss.Open) DamageBoss(boss, HitDamage(shot) * (1f - 0.17f * boss.Crust), shot.Velocity);
         Pop(shot, boss.Position - shot.Position);
         return true;
     }
@@ -433,7 +453,7 @@ public sealed partial class PlaneWorld
         boss.HitFlash = PlaneCombatTuning.HitFlash;
         Events.Add(new PlaneEvent(PlaneEventType.BossHit, boss.Position, dir, damage));
         if (boss.Hp <= 0f) FreeBoss(boss);
-        else if (boss.Phase == 1 && boss.Hp <= PlaneBossTuning.Hp * 0.5f)
+        else if (boss.Phase == 1 && boss.Hp <= boss.MaxHp * 0.5f)
         {
             boss.Phase = 2;
             SetAct(boss, ClamAct.Stagger);

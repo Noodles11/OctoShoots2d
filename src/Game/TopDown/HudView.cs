@@ -49,7 +49,7 @@ public partial class HudView : Control
         _bossShown = Mathf.MoveToward(_bossShown, _bossFight ? 1f : 0f, dt * 2f);
         if (boss is not null)
         {
-            _bossHp = boss.Hp / PlaneBossTuning.Hp;
+            _bossHp = boss.Hp / Mathf.Max(boss.MaxHp, 1f);
             _bossTrail = _bossTrail < _bossHp ? _bossHp : Mathf.MoveToward(_bossTrail, _bossHp, dt * 0.4f);
         }
         _run = world.Run;

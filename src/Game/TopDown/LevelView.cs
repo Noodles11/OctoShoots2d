@@ -151,6 +151,16 @@ public partial class LevelView : Node3D
         }
     }
 
+    /// <summary>The level's corruption on its floor (docs/CORRUPTION.md): the field's texture, or null for none.</summary>
+    public void SetCorruption(Texture2D? texture)
+    {
+        foreach (var m in _materials)
+        {
+            m.SetShaderParameter("corruption_map", texture is null ? default(Variant) : texture);
+            m.SetShaderParameter("corruption_on", texture is null ? 0f : 1f);
+        }
+    }
+
     /// <summary>The dive's portal: world xz centre, radius, and mode (0 off, 1 cut away inside, 2 only the inside).</summary>
     public void SetPortal(Vector2 centre, float radius, int mode)
     {

@@ -284,7 +284,7 @@ public partial class TitleMain : Node3D
         AddItem("quit", "Quit", () => GetTree().Quit());
         Refresh();
 
-        var footer = TitleStyle.Text("Ink Deep · prototype · one profile", 14, new Color(0.78f, 0.88f, 0.88f, 0.7f), TitleStyle.Body, HorizontalAlignment.Right);
+        var footer = TitleStyle.Text($"Ink Deep {GameVersion.Label} · prototype · one profile", 14, new Color(0.78f, 0.88f, 0.88f, 0.7f), TitleStyle.Body, HorizontalAlignment.Right);
         footer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomRight);
         footer.Position -= new Vector2(24f, 30f);
         footer.GrowHorizontal = Control.GrowDirection.Begin;

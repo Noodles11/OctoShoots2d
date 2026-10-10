@@ -118,6 +118,16 @@ public partial class TopDownMain : Node3D
     Task<LevelShape>? _belowTask;
     LevelView? _below;
     LevelMap? _belowMap;
+    // The corruption (docs/CORRUPTION.md): its blades and creatures, the live texture, and the blades being laid out.
+    CorruptionView _corruption = null!;
+    BlightView _blight = null!;
+    CleanseMeter _cleanse = null!;
+    CorruptionTexture? _corruptTex;
+    Task<CorruptionView.Layout>? _bladeTask;
+    /// <summary>The level below's corruption, laid out off the main thread while she is still up here.</summary>
+    Task<(CorruptionField Field, CorruptionView.Layout Layout)>? _belowCorruption;
+    LevelMap? _belowCorruptionMap, _belowLayoutMap;
+    CorruptionView.Layout? _belowLayout;
     /// <summary>Where the level below sits under this one: its start right under the hole, a level's drop down.</summary>
     Vector3 _belowOffset;
     /// <summary>The absolute position (xz) of the world's origin: each dive moves the world back by the hole's offset.</summary>
@@ -166,6 +176,10 @@ public partial class TopDownMain : Node3D
         AddChild(_boss);
         _puffers = new PufferlingView();
         AddChild(_puffers);
+        _corruption = new CorruptionView();
+        AddChild(_corruption);
+        _blight = new BlightView();
+        AddChild(_blight);
         _camera = new CameraRig();
         AddChild(_camera);
         _snow = new MarineSnow(900, new Vector3(22f, 7f, 17f), 0.11f);
@@ -369,6 +383,8 @@ public partial class TopDownMain : Node3D
         layer.AddChild(_banner);
         _minimap = new MinimapView();
         layer.AddChild(_minimap);
+        _cleanse = new CleanseMeter();
+        layer.AddChild(_cleanse);
         // Tab: the whole level on one sheet, drawn by the minimap's rules (wall edges, fog, places only once spotted).
         _fullMap = new TopoMap
         {
@@ -598,6 +614,7 @@ public partial class TopDownMain : Node3D
         _combat.Visible = _boss.Visible = _puffers.Visible = true;
         _damage.Clear();
         _camera.SetBubbleLights(_combat.Lights, 0);
+        SetupCorruption(map);
         _boss.Show(_world);
         if (_bossHp is { } bossHp && _world.Boss is { } queen) queen.Hp = bossHp;
         _debugMap.SetMap(_map);
@@ -638,6 +655,9 @@ public partial class TopDownMain : Node3D
         _below?.QueueFree();
         _below = null;
         _belowMap = null;
+        _belowCorruption = null;
+        _belowCorruptionMap = _belowLayoutMap = null;
+        _belowLayout = null;
     }
 
     /// <summary>
@@ -655,6 +675,63 @@ public partial class TopDownMain : Node3D
         _belowOffset = new Vector3(hole.X - start.X, -LevelMap.LevelDrop, hole.Y - start.Y);
         _below.Place(_belowOffset, _origin + new Vector2(_belowOffset.X, _belowOffset.Z));
         _below.SetPortal(new Vector2(hole.X, hole.Y), Stamp.Pin, 2);
+        // Its corruption, laid out off the main thread: the floor's ink for the dive, the blades for when she lands.
+        if (PlaneOptions.Default.Corruption)
+        {
+            var map = _belowCorruptionMap = shape.Map;
+            _belowCorruption = Task.Run(() =>
+            {
+                var field = CorruptionField.ForMap(map);
+                return (field, CorruptionView.Build(map, field));
+            });
+        }
+    }
+
+    /// <summary>A level's corruption on screen: the live texture on its floor and maps, its creatures, and its blades.</summary>
+    void SetupCorruption(LevelMap map)
+    {
+        _bladeTask = null;
+        if (_world.Corruption is not { } field)
+        {
+            _corruptTex = null;
+            _level.SetCorruption(null);
+            _corruption.Show(null, null);
+            _minimap.SetCorruption(null);
+            _fullMap.Corruption = null;
+            _blight.Show(_world);
+            return;
+        }
+        _corruptTex = new CorruptionTexture(field);
+        _level.SetCorruption(_corruptTex.Texture);
+        _minimap.SetCorruption(_corruptTex.Texture);
+        _fullMap.Corruption = _corruptTex.Texture;
+        _blight.Show(_world);
+        // The blades were laid out already if she dived here; otherwise they are laid out now, off the main thread.
+        if (_belowLayout is { } ready && ReferenceEquals(_belowLayoutMap, map)) _corruption.Show(ready, _corruptTex.Texture);
+        else
+        {
+            _corruption.Show(null, null);
+            _bladeTask = CorruptionView.Plan(map, field);
+        }
+        _belowLayout = null;
+        _belowLayoutMap = null;
+    }
+
+    /// <summary>The corruption's per-frame work: its texture, blades arriving, her light pushing the blades, the creatures.</summary>
+    void SyncCorruption(float dt, float alpha)
+    {
+        if (_bladeTask is { IsCompleted: true } blades)
+        {
+            _bladeTask = null;
+            if (blades.IsFaulted) GD.PushError(blades.Exception?.ToString());
+            else if (_corruptTex is not null) _corruption.Show(blades.Result, _corruptTex.Texture);
+        }
+        if (_world.Corruption is { } field && _corruptTex is not null) _corruptTex.Update(field, dt);
+        _corruption.SetHer(Focus(alpha));
+        _blight.Sync(_world, dt, _camera.Camera);
+        _cleanse.Track(_world, dt);
+        MinimapView.FillBlight(_fullMap, _world);
+        _minimap.SetBlight(_world);
     }
 
     /// <summary>Verification: start somewhere interesting.</summary>
@@ -760,6 +837,17 @@ public partial class TopDownMain : Node3D
             _achievementBanner.Enqueue(shown, _catalog is not null && _catalog.TryGet(shown.Pearl, out var p0) ? p0 : null);
         }
         // The level below, once made, goes under the hole.
+        if (_belowCorruption is { IsCompleted: true } preview)
+        {
+            _belowCorruption = null;
+            if (preview.IsFaulted) GD.PushError(preview.Exception?.ToString());
+            else if (_below is not null && ReferenceEquals(_belowMap, _belowCorruptionMap))
+            {
+                _below.SetCorruption(new CorruptionTexture(preview.Result.Field).Texture);
+                _belowLayout = preview.Result.Layout;
+                _belowLayoutMap = _belowMap;
+            }
+        }
         if (_belowTask is { IsCompleted: true } below && _transition == Transition.None)
         {
             _belowTask = null;
@@ -812,6 +900,8 @@ public partial class TopDownMain : Node3D
             steps++;
             foreach (var e in _world.Events)
             {
+                _blight.OnEvent(e);
+                CorruptionEvent(e);
                 if (e.Type == PlaneEventType.Dived) dived = true;
                 else if (e.Type == PlaneEventType.PlayerDefeated) dived = false;
                 else if (e.Type == PlaneEventType.PearlCollected && _world.LastPearl is { } pearl) _hud.ShowPearl(pearl);
@@ -858,7 +948,8 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.BossFreed)
                 {
                     _camera.Shake(0.4f);
-                    Say($"{PlaneBossTuning.Name} is freed! The Crack is open");
+                    Say(_world.ExitOpen ? $"{PlaneBossTuning.Name} is freed! The Crack is open"
+                        : $"{PlaneBossTuning.Name} is freed! Cleanse the arena to open the Crack ({Mathf.RoundToInt(_world.ArenaCleansed * 100f)}% of {Mathf.RoundToInt(CorruptionTuning.ArenaToOpen * 100f)}%)");
                 }
             }
         }
@@ -884,6 +975,7 @@ public partial class TopDownMain : Node3D
         _currents.Sync(_world, dt);
         _vases.Sync(dt);
         _puffers.Sync(_world, dt);
+        SyncCorruption(dt, alpha);
         _damage.Tick(dt);
         _boss.Sync(_world, dt);
         if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) _banner.Sync(_world.Boss);
@@ -1249,6 +1341,50 @@ public partial class TopDownMain : Node3D
             if (_pad) _pause.FocusFirst();
         }
     }
+
+    /// <summary>The corruption war's moments: shakes, sounds and words (the sights are BlightView's).</summary>
+    void CorruptionEvent(in PlaneEvent e)
+    {
+        switch (e.Type)
+        {
+            case PlaneEventType.BlightrootBurst:
+                _camera.Shake(0.35f);
+                _sfx.PlayPitched("bell_ring", 0.75f, -8f);
+                Say("A Blightroot starves and bursts");
+                break;
+            case PlaneEventType.MurklingBurst:
+                _sfx.PlayPitched("pop", 0.6f, -6f);
+                break;
+            case PlaneEventType.VineCoiled:
+                _camera.Shake(0.22f);
+                if (!_saidCoil)
+                {
+                    _saidCoil = true;
+                    Say("A gloomvine has you: dash to break free");
+                }
+                break;
+            case PlaneEventType.ValveSeen:
+                if (!_saidValve)
+                {
+                    _saidValve = true;
+                    Say("A valve of darkness: dash through it free, or cleanse its edges");
+                }
+                break;
+            case PlaneEventType.ValveCleared:
+                _sfx.PlayPitched("merge", 0.8f, -6f);
+                break;
+            case PlaneEventType.CrustBroken:
+                _camera.Shake(0.3f);
+                _sfx.PlayPitched("bell_ring", 1.2f, -10f);
+                Say(e.Size > 0f ? $"Crust broken: {Mathf.RoundToInt(e.Size)} left" : "The last of her crust falls away");
+                break;
+            case PlaneEventType.CrackOpened:
+                Say("The arena is clean: the Crack opens");
+                break;
+        }
+    }
+
+    bool _saidCoil, _saidValve;
 
     void CloseDebug()
     {

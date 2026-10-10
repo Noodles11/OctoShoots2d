@@ -160,6 +160,10 @@ public sealed class PlaneShot
     public Vector2 Line;
     /// <summary>Queen Clam's pearls: any bubble pops one (the royal pearl takes PearlHp bubbles); the royal one homes.</summary>
     public bool BossPearl, Royal;
+    /// <summary>Her bubbles' light, 1 → dimmer (a murkling, its throw, a Blightroot's ring); damage dims with it.</summary>
+    public float Dim = 1f;
+    /// <summary>The last Blightroot ring that dimmed it (each ring dims a bubble once).</summary>
+    public int Pulse;
     /// <summary>A pufferling's needle: fast, and it pops any bubble it meets (flying on).</summary>
     public bool Needle;
     public int PearlHp;
@@ -211,6 +215,13 @@ public sealed partial class PlaneWorld
         {
             if (ambush.Sprung || Vector2.Distance(p.Position, ambush.Center) > ambush.Radius) continue;
             ambush.Sprung = true;
+            if (!Options.Pufferlings)
+            {
+                // The pufferlings are retracted: the clearing's corruption buds murklings round her instead.
+                if (Corruption is not null) AmbushBuds(ambush);
+                Events.Add(new PlaneEvent(PlaneEventType.AmbushSprung, ambush.Center, Vector2.Zero));
+                continue;
+            }
             var rng = new Rng(Map.Seed ^ 0xA3B05UL ^ ((ulong)ambush.Poi << 16) ^ ((ulong)Map.Level << 32) ^ ((ulong)Map.Depth << 40) ^ ((ulong)Map.Attempt << 48));
             int count = PlaneCombatTuning.AmbushMin + rng.Int(PlaneCombatTuning.AmbushMax - PlaneCombatTuning.AmbushMin + 1);
             float turn = rng.Range(0f, MathF.Tau);
@@ -274,7 +285,8 @@ public sealed partial class PlaneWorld
     public bool OverShaft => Map.Shaft.Contains(Player.Position);
 
     /// <summary>An active battle: the arena is sealed, or a creature that has noticed her is close.</summary>
-    public bool InBattle => ArenaSealed || Mobs.Any(m => m.Alive && m.Aggro && Vector2.Distance(m.Position, Player.Position) < PlaneCombatTuning.DiveSafeDistance);
+    public bool InBattle => ArenaSealed || Mobs.Any(m => m.Alive && m.Aggro && Vector2.Distance(m.Position, Player.Position) < PlaneCombatTuning.DiveSafeDistance)
+                            || Murklings.Any(m => m.Alive && !m.Budding && Vector2.Distance(m.Position, Player.Position) < PlaneCombatTuning.DiveSafeDistance);
 
     /// <summary>She may dive now (DESIGN-TOPDOWN §4.6): over the shaft, the way open, and no battle on.</summary>
     public bool CanDive => OverShaft && ExitOpen && !InBattle && !Defeated;
@@ -877,7 +889,19 @@ public sealed partial class PlaneWorld
                     target = mob;
                 }
             }
-            if (target is not null) dir = Turn(dir, Vector2.Normalize(target.Position - shot.Line), PlaneCombatTuning.HomingDegPerSec * MathUtil.Deg2Rad * Dt);
+            Vector2? aimAt = target?.Position;
+            // Murklings draw homing bubbles too.
+            foreach (var m in Murklings)
+            {
+                if (!m.Alive || m.Budding || m.Clinging) continue;
+                float d = Vector2.Distance(m.Position, shot.Line);
+                if (d < best && Vector2.Dot(m.Position - shot.Line, dir) > 0f)
+                {
+                    best = d;
+                    aimAt = m.Position;
+                }
+            }
+            if (aimAt is { } homeOn) dir = Turn(dir, Vector2.Normalize(homeOn - shot.Line), PlaneCombatTuning.HomingDegPerSec * MathUtil.Deg2Rad * Dt);
         }
         shot.Velocity = dir * speed;
 
@@ -945,6 +969,7 @@ public sealed partial class PlaneWorld
         }
         Events.Add(new PlaneEvent(PlaneEventType.ShotPopped, shot.Position, at, shot.Radius));
         if (shot.FromPlayer && shot.Explosive) InkBlast(shot);
+        LightReleased(shot);
     }
 
     /// <summary>Her bubbles' own rolls (hover times, pops on a bump, where a film gives way), from the level's seed.</summary>

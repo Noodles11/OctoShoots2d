@@ -637,7 +637,7 @@ void fragment() {
                 }
                 // Hanging at the end of its range: it breathes slowly like an ember, live for a merge or a dash.
                 float ember = shot.Rest > 0f ? 0.78f + 0.22f * Mathf.Sin(_time * 2.4f + seed * 9f) : 1f;
-                float light = (charged ? Mathf.Max(CoreLight(shot.Bubbles), 0.75f) : CoreLight(shot.Bubbles)) * ember * (1f + 0.5f * pulse);
+                float light = (charged ? Mathf.Max(CoreLight(shot.Bubbles), 0.75f) : CoreLight(shot.Bubbles)) * ember * (1f + 0.5f * pulse) * shot.Dim;
                 float warmth = charged ? Mathf.Max(Warmth(shot.Bubbles), 0.5f) : Warmth(shot.Bubbles);
                 bool full = shot.Bubbles >= PlaneCombatTuning.BubbleCap;
                 _shots[i].SetInstanceShaderParameter("seed", seed);

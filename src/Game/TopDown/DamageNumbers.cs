@@ -23,9 +23,9 @@ public partial class DamageNumbers : Node3D
     /// <summary>One number per damage event this step (PlayerHit, MobHit, MobDefeated, BossHit).</summary>
     public void Show(in PlaneEvent e)
     {
-        if (e.Type is not (PlaneEventType.PlayerHit or PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit)) return;
+        if (e.Type is not (PlaneEventType.PlayerHit or PlaneEventType.PlayerDrained or PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit)) return;
         float lift = e.Type == PlaneEventType.BossHit ? Height * 2f : Height;
-        Show(e.Position, -e.Size, hers: e.Type == PlaneEventType.PlayerHit, lift);
+        Show(e.Position, -e.Size, hers: e.Type is PlaneEventType.PlayerHit or PlaneEventType.PlayerDrained, lift);
     }
 
     /// <summary>HP healed (any source: Whale Song, a healing pearl, the shop): a green +number above Clementine.</summary>

@@ -27,6 +27,10 @@ global uniform float reef_menace;
 global uniform vec4 reef_crack;
 /// 0 on a level drawn below the current one: the Crack (a global) belongs to the current level.
 uniform float crack_mask = 1.0;
+// The corruption (docs/CORRUPTION.md): this level's field, R = ink density, G = the gold of corruption dying (set per
+// material by LevelView; off on any level that is not the one she is on or diving into).
+uniform sampler2D corruption_map : filter_linear, repeat_disable;
+uniform float corruption_on = 0.0;
 
 struct ReefSkin {
 	vec3 albedo;
@@ -220,6 +224,23 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 		vec3 ember = mix(vec3(1.0, 0.16, 0.02), vec3(1.0, 0.36, 0.06), smoothstep(-7.0, -3.0, h));
 		s.emission += ember * inside * breathe * flicker * reef_crack.w * crack_mask * 0.9;
 		s.albedo = mix(s.albedo, vec3(0.05, 0.03, 0.03), inside * 0.8);
+	}
+	// The corruption on the floor: ink-black, glossy, drinking the caustics, threaded with faint violet veins. Where it
+	// dies it burns gold (light spreading, never erasing); its retreating edge keeps a warm fringe. Walls above the
+	// floor stay clean, the ink only licking their feet.
+	if (corruption_on > 0.0) {
+		vec2 cr = texture(corruption_map, local.xz / reef_extent).rg;
+		float floor_k = 1.0 - smoothstep(-0.2, 0.9, h);
+		float ink = smoothstep(0.03, 0.7, cr.r) * floor_k * corruption_on;
+		float vein = 1.0 - smoothstep(0.0, 0.07, abs(rs_noise(vec3(w.xz * 0.55, time * 0.05)) - 0.5));
+		vein *= 0.55 + 0.45 * sin(time * 0.9 + w.x * 0.31 + w.z * 0.23);
+		vec3 ink_col = vec3(0.016, 0.011, 0.026) + vec3(0.06, 0.012, 0.11) * vein;
+		s.albedo = mix(s.albedo, ink_col, ink * 0.95);
+		s.rough = mix(s.rough, 0.2, ink);
+		s.caustic *= 1.0 - ink * 0.9;
+		s.emission += vec3(0.14, 0.03, 0.24) * vein * ink * 0.22;
+		float fringe = smoothstep(0.02, 0.16, cr.r) * (1.0 - smoothstep(0.16, 0.42, cr.r));
+		s.emission += (vec3(1.0, 0.7, 0.3) * cr.g * 1.5 + vec3(1.0, 0.62, 0.26) * fringe * 0.07) * floor_k * corruption_on;
 	}
 	return s;
 }
