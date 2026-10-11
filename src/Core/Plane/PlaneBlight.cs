@@ -14,9 +14,12 @@ public static class BlightTuning
     public const float Reach = 9f;
     /// <summary>It regrows its reach toward the field's starting density at this rate (density per second).</summary>
     public const float Regrow = 0.1f;
-    /// <summary>It starves when its ring (from RingInner of its reach out) is cleansed below this mean density.</summary>
-    public const float RingInner = 0.55f, StarveBelow = 0.12f;
-    /// <summary>The ink sac: bubbles that reach it are drunk (no damage).</summary>
+    /// <summary>
+    /// Its corruption meter (shot by her light): about ten default shots empty it; it re-corrupts quickly, RootRegen a
+    /// second (more with Menace) once RootDelay has passed without a hit. Empty, it bursts.
+    /// </summary>
+    public const float RootCorruption = 95f, RootRegen = 30f, RootDelay = 0.5f;
+    /// <summary>The ink sac: where her light strikes it.</summary>
     public const float SacRadius = 0.9f;
     /// <summary>Its burst sends a wave of cleansing through its whole reach in this long.</summary>
     public const float BurstSeconds = 0.7f;
@@ -46,6 +49,11 @@ public static class BlightTuning
 
     // Murklings: orbs of darkness budding from the corruption.
     public const float MurkRadius = 0.45f, MurkSpeed = 1.8f, Sense = 14f;
+    /// <summary>
+    /// Its corruption meter: three default shots in a row empty it (a pause lets it regrow, MurkRegen a second, more
+    /// with Menace, once MurkDelay has passed without a hit). One strong enough shot empties it at once.
+    /// </summary>
+    public const float MurkCorruption = 27f, MurkRegen = 14f, MurkDelay = 0.8f;
     public const float BudSeconds = 0.8f, BudInterval = 15f, BudDensity = 0.6f, BudClearance = 5f;
     /// <summary>An area stops budding for good once it is cleansed this far (below a fifth of its corruption left).</summary>
     public const float AreaSpent = 0.8f;
@@ -64,6 +72,46 @@ public static class BlightTuning
     public const int AmbushBuds = 3;
 }
 
+/// <summary>
+/// A corrupted creature's corruption meter (docs/CORRUPTION.md): full at first; each shot of her light takes its damage
+/// (illuminance) off; after Delay without a hit it regrows at Regen a second. Emptied, the creature is cleansed. It is
+/// shown (a ring round the creature) only while partly emptied: not when full, not once empty.
+/// </summary>
+public sealed class CorruptionMeter
+{
+    public float Max, Value, Regen, Delay, Since;
+    /// <summary>What the last hit took off (for the view's after-image of the chunk).</summary>
+    public float LastHit;
+
+    public CorruptionMeter(float max, float regen, float delay)
+    {
+        Max = Value = max;
+        Regen = regen;
+        Delay = delay;
+    }
+
+    public float Fraction => Max <= 0f ? 0f : Value / Max;
+    public bool Shown => Value > 0f && Value < Max;
+    public bool Empty => Value <= 0f;
+
+    /// <summary>A shot of her light: true when it empties the meter.</summary>
+    public bool Hit(float light)
+    {
+        if (Empty) return false;
+        LastHit = MathF.Min(light, Value);
+        Value = MathF.Max(0f, Value - light);
+        Since = 0f;
+        return Empty;
+    }
+
+    public void Step(float dt)
+    {
+        if (Empty) return;
+        Since += dt;
+        if (Since >= Delay) Value = MathF.Min(Max, Value + Regen * dt);
+    }
+}
+
 /// <summary>A Blightroot: a blackened stump crowned with a pulsing ink sac.</summary>
 public sealed class Blightroot
 {
@@ -71,7 +119,8 @@ public sealed class Blightroot
     public bool Alive = true;
     /// <summary>Its area (index into Areas): the cells of its reach.</summary>
     public int Area;
-    public List<int> Ring = new();
+    /// <summary>Its corruption meter: her shots empty it; empty, it bursts.</summary>
+    public CorruptionMeter Corruption = new(BlightTuning.RootCorruption, BlightTuning.RootRegen, BlightTuning.RootDelay);
     /// <summary>Distance of each of its area's cells from it (same order as the area's cells).</summary>
     public float[] CellDistance = Array.Empty<float>();
     public float PulseTimer;
@@ -80,8 +129,7 @@ public sealed class Blightroot
     public int PulseId;
     /// <summary>The sac's inflation for the telegraph, 0..1.</summary>
     public float Inflate;
-    /// <summary>Its ring's mean density (how close it is to starving), for the view.</summary>
-    public float RingDensity = 1f;
+
     /// <summary>The burst's cleansing wave radius (negative: not bursting).</summary>
     public float BurstRadius = -1f;
     public float Dead;
@@ -124,6 +172,8 @@ public sealed class Murkling
     public bool Alive = true, Clinging;
     public Vector2 ClingOffset;
     public float ThrowTimer, Seed;
+    /// <summary>Its corruption meter: her shots empty it; empty, it bursts.</summary>
+    public CorruptionMeter Corruption = new(BlightTuning.MurkCorruption, BlightTuning.MurkRegen, BlightTuning.MurkDelay);
     /// <summary>Drifting toward this light (her, or a hanging bubble of hers).</summary>
     public Vector2 Target;
     public bool Budding => Bud > 0f;
@@ -218,7 +268,7 @@ public sealed partial class PlaneWorld
             var area = new CorruptArea { Center = at, Radius = BlightTuning.Reach, Cells = field.CellsWithin(at, BlightTuning.Reach) };
             root.Area = Areas.Count;
             Areas.Add(area);
-            root.Ring = field.CellsWithin(at, BlightTuning.Reach, BlightTuning.Reach * BlightTuning.RingInner);
+            root.Corruption.Regen *= 1f + 0.5f * Menace;
             root.CellDistance = area.Cells.Select(i => Vector2.Distance(CorruptionField.CellCentre(i % CorruptionField.N, i / CorruptionField.N), at)).ToArray();
             Blightroots.Add(root);
             for (int v = 0; v < BlightTuning.VinesPer; v++)
@@ -389,23 +439,32 @@ public sealed partial class PlaneWorld
                     field.Raise(i, field.Initial[i], BlightTuning.Regrow * near * Dt * 4f);
                 }
 
-            if (Tick % 15 == 0)
+            // Her light on its sac: each shot takes its damage off the corruption; emptied, it bursts. It re-corrupts quickly.
+            root.Corruption.Step(Dt);
+            foreach (var shot in Shots)
             {
-                root.RingDensity = field.Mean(root.Ring);
-                if (root.RingDensity < BlightTuning.StarveBelow)
+                if (!shot.FromPlayer || shot.Life <= 0f) continue;
+                if (Vector2.Distance(shot.Position, root.Position) > BlightTuning.SacRadius + shot.Radius) continue;
+                float light = HitDamage(shot);
+                bool emptied = root.Corruption.Hit(light);
+                Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, SafeNormalize(shot.Velocity), light));
+                Pop(shot, root.Position - shot.Position);
+                if (emptied) break;
+            }
+            if (root.Corruption.Empty)
+            {
+                // Cleansed: it shrivels and bursts into motes, a wave of cleansing runs through its reach; its vines dissolve.
+                root.Alive = false;
+                root.BurstRadius = 0f;
+                root.PulseRadius = -1f;
+                Stats.MobsDefeated++;
+                foreach (var vine in Vines.Where(v => v.Root == root))
                 {
-                    // Starved: it shrivels and bursts into motes; its vines dissolve.
-                    root.Alive = false;
-                    root.BurstRadius = 0f;
-                    root.PulseRadius = -1f;
-                    foreach (var vine in Vines.Where(v => v.Root == root))
-                    {
-                        if (vine.Coiling) LetGo(vine);
-                        vine.Dissolving = 0f;
-                    }
-                    Events.Add(new PlaneEvent(PlaneEventType.BlightrootBurst, root.Position, Vector2.Zero, BlightTuning.Reach));
-                    continue;
+                    if (vine.Coiling) LetGo(vine);
+                    vine.Dissolving = 0f;
                 }
+                Events.Add(new PlaneEvent(PlaneEventType.BlightrootBurst, root.Position, Vector2.Zero, BlightTuning.Reach));
+                continue;
             }
 
             // The pulse: the sac inflates (the telegraph), then a ring of ink runs out over its reach.
@@ -442,14 +501,6 @@ public sealed partial class PlaneWorld
                 if (r1 >= BlightTuning.Reach) root.PulseRadius = -1f;
             }
 
-            // The sac drinks the light of bubbles that reach it: no damage, no pop.
-            foreach (var shot in Shots)
-            {
-                if (!shot.FromPlayer || shot.Life <= 0f) continue;
-                if (Vector2.Distance(shot.Position, root.Position) > BlightTuning.SacRadius + shot.Radius) continue;
-                shot.Life = -1000f;
-                Events.Add(new PlaneEvent(PlaneEventType.BlightrootDrank, root.Position, SafeNormalize(shot.Velocity), shot.Bubbles));
-            }
         }
     }
 
@@ -712,16 +763,26 @@ public sealed partial class PlaneWorld
             }
         }
 
-        // Her bubbles: one bubble's light bursts a murkling (or a bud), and a throw it meets; either way it loses half its light.
+        // Her shots of light: each takes its damage off a murkling's (or a bud's) corruption and bursts on it (a piercing
+        // one flies on); emptied, the murkling bursts. A throw it meets costs it half its light.
+        foreach (var m in Murklings)
+            if (m.Alive) m.Corruption.Step(Dt);
         foreach (var shot in Shots)
         {
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var m in Murklings)
             {
-                if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, shot.Position) > BlightTuning.MurkRadius + shot.Radius) continue;
-                BurstMurkling(m, ember: true, shot.Damage);
-                DimBubble(shot, BlightTuning.BubbleDim);
-                if (shot.Life <= 0f) break;
+                if (!m.Alive || m.Clinging || shot.Struck == m || Vector2.Distance(m.Position, shot.Position) > BlightTuning.MurkRadius + shot.Radius) continue;
+                float light = HitDamage(shot);
+                bool emptied = m.Corruption.Hit(light);
+                Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, SafeNormalize(shot.Velocity), light));
+                if (emptied) BurstMurkling(m, ember: true);
+                if (shot.Pierce) shot.Struck = m;
+                else
+                {
+                    Pop(shot, m.Position - shot.Position);
+                    break;
+                }
             }
             if (shot.Life <= 0f) continue;
             foreach (var s in MurkShots)
@@ -738,7 +799,9 @@ public sealed partial class PlaneWorld
 
     void Bud(Vector2 at, int area)
     {
-        Murklings.Add(new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) });
+        var m = new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) };
+        m.Corruption.Regen *= 1f + 0.5f * Menace;
+        Murklings.Add(m);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, Vector2.Zero, BlightTuning.BudSeconds));
     }
 

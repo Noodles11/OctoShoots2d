@@ -163,6 +163,8 @@ public sealed class PlaneShot
     public float Dim = 1f;
     /// <summary>The last Blightroot ring that dimmed it (each ring dims a bubble once).</summary>
     public int Pulse;
+    /// <summary>A piercing shot's last corrupted creature struck (it is struck once as the shot passes through).</summary>
+    public object? Struck;
     /// <summary>A pufferling's needle: fast, and it pops any bubble it meets (flying on).</summary>
     public bool Needle;
     public int PearlHp;

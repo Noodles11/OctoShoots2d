@@ -72,40 +72,69 @@ public class CorruptionTests
         Assert.True(w.Cleansed > 0f);
     }
 
+    /// <summary>A default shot of her light (damage 10) striking a point.</summary>
+    static PlaneShot Light(Vector2 at, float damage = 10f) =>
+        new() { Position = at, Line = at, Velocity = Vector2.UnitY * 0.01f, Life = 1f, FromPlayer = true, Damage = damage };
+
     [Fact]
-    public void ABlightrootDrinksBubblesAndStarvesWhenItsRingIsCleansed()
+    public void ABlightrootTakesAboutTenShotsAndReCorruptsQuickly()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var root = w.Blightroots[0];
-        // A bubble into the sac is drunk: no pop, no harm to it.
-        w.Shots.Add(new PlaneShot { Position = root.Position, Line = root.Position, Velocity = Vector2.UnitX, Life = 1f, FromPlayer = true, Damage = 999f });
-        w.Step(default);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.BlightrootDrank);
+        // A few shots: its meter drops by each one's light, shown as partly emptied.
+        for (int i = 0; i < 4; i++)
+        {
+            w.Shots.Add(Light(root.Position));
+            w.Step(default);
+        }
         Assert.True(root.Alive);
-        // Ring its reach with clean ground: it starves and bursts, cleansing its whole reach.
-        var field = w.Corruption!;
-        for (float a = 0f; a < MathF.Tau; a += 0.05f)
-            field.Cleanse(root.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * BlightTuning.Reach * 0.8f, 2.5f, 1f);
-        for (int i = 0; i < 20 && root.Alive; i++) w.Step(default);
+        Assert.True(root.Corruption.Shown);
+        Assert.Equal(BlightTuning.RootCorruption - 40f, root.Corruption.Value, 0);
+        // Left alone, it re-corrupts in a few seconds, and the meter hides again.
+        for (int i = 0; i < 4 * 60; i++) w.Step(default);
+        Assert.False(root.Corruption.Shown);
+        // Ten default shots in a row cleanse it: it bursts, cleansing its whole reach.
+        for (int i = 0; i < 10 && root.Alive; i++)
+        {
+            w.Shots.Add(Light(root.Position));
+            w.Step(default);
+        }
         Assert.False(root.Alive);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.BlightrootBurst);
         for (int i = 0; i < 60; i++) w.Step(default);
-        Assert.True(field.CleansedOf(w.Areas[root.Area].Cells) > 0.9f);
+        Assert.True(w.Corruption!.CleansedOf(w.Areas[root.Area].Cells) > 0.9f);
     }
 
     [Fact]
-    public void OneBubbleBurstsAMurklingAndLosesHalfItsLight()
+    public void AMurklingTakesThreeShotsInARowOrOneStrongOne()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var at = w.Player.Position + new Vector2(0f, -3f);
-        w.Murklings.Add(new Murkling { Position = at, Bud = 0f });
-        var shot = new PlaneShot { Position = at, Line = at, Velocity = Vector2.UnitY * 0.01f, Life = 1f, FromPlayer = true, Damage = 10f, Speed0 = 0f };
-        w.Shots.Add(shot);
-        w.Step(default);
-        Assert.Empty(w.Murklings);
+        var m = new Murkling { Position = at, Bud = 0f };
+        w.Murklings.Add(m);
+        // Shots at her firing rate: two leave it standing, the third bursts it.
+        for (int shot = 0; shot < 3; shot++)
+        {
+            m.Position = at;
+            w.Shots.Add(Light(m.Position));
+            w.Step(default);
+            if (shot < 2)
+            {
+                Assert.True(m.Alive);
+                for (int i = 0; i < (int)(PlaneCombatTuning.ShotInterval * 60f); i++) w.Step(default);
+            }
+        }
+        Assert.False(m.Alive);
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.MurklingBurst);
-        Assert.Equal(0.5f, shot.Dim, 3);
+
+        // One strong shot (a merged one) empties a full meter at once.
+        var big = new Murkling { Position = at, Bud = 0f };
+        w.Murklings.Add(big);
+        w.Shots.Add(Light(at, BlightTuning.MurkCorruption + 1f));
+        w.Step(default);
+        Assert.False(big.Alive);
     }
 
     [Fact]

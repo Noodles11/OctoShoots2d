@@ -26,10 +26,10 @@ clearings bud murklings instead. The healthy fish still swim the reef.
 - Placed on plazas and canyon points, reachable from the start, 22 m apart, never in the arena or the shaft. There
   are 3 + 1.5 × Menace of them, at most 6.
 - **Regrowth:** it restores its 9 m reach toward the starting density at 0.1/s, strongest at the stump.
-- **Immune to shots:** a bubble reaching the 0.9 m sac is drunk. It is absorbed with no pop, no damage and no
-  cleansing.
-- **Starving:** when the mean density of its outer ring (55–100% of its reach) falls below 0.12, it bursts. A wave of
-  cleansing runs through its whole reach in 0.7 s and its vines dissolve.
+- **Shot down:** its corruption meter (see "Corruption meters" below) is 95, so it takes about ten default shots on
+  its 0.9 m sac. It re-corrupts quickly: 30/s (more with Menace) once 0.5 s pass without a hit. Emptied, it bursts. A
+  wave of cleansing runs through its whole reach in 0.7 s and its vines dissolve. Cleansing the ground round it no
+  longer harms it.
 - **The pulse:** every 4 s the sac inflates for 0.8 s (the telegraph), then a ring of ink runs out at 10 m/s. The ring
   stains cleansed ground back to 0.35 and dims each of her bubbles it crosses to 70% (each ring once).
 
@@ -44,9 +44,21 @@ clearings bud murklings instead. The healthy fish still swim the reef.
 - **Attack:** a black orb thrown every ~2.4 s when she is within 9 m and in sight, for 7 damage.
 - **Contact:** 6 damage, then it clings (at most 3 at once), draining 2.5 HP/s each and dimming her bell. A dash
   shakes them off into the ink cloud.
-- **Killed by light:** one bubble bursts a murkling, and the bubble keeps flying at half its light (and damage).
-  Passing through a throw also halves its light. A murkling burst over cleansed ground drops its ember, which blooms a
-  2.6 m patch of colour.
+- **Killed by light:** its corruption meter is 27, so three default shots in a row burst it. It regrows at 14/s (more
+  with Menace) after 0.8 s without a hit, and one strong (merged) shot empties it at once. Each shot bursts on it, and
+  a piercing one flies on. Passing through a throw halves a shot's light. A murkling burst over cleansed ground drops
+  its ember, which blooms a 2.6 m patch of colour.
+
+## Corruption meters (`CorruptionMeter`)
+
+Fighting the corrupted is a matter of thresholds and illuminance. Every murkling and Blightroot has a corruption
+meter that starts full. Each shot of her light takes its damage (illuminance) off. After a pause without hits the
+meter regrows, at a rate set by the creature's kind and the Menace. Emptied, the creature is cleansed: one strong
+enough shot does it at once, or keep shooting until the meter runs out.
+
+The meter is drawn as a ring round the creature (`corruption_ring.gdshader`), always on top. It fills clockwise from
+the top with ink and a violet edge for what is left, and the chunk the last shots took off burns gold-white as it
+drains away. It is shown only while partly emptied: it fades out when full again, and it is gone once emptied.
 
 ## Gloomvines (`Gloomvine`)
 

@@ -83,6 +83,8 @@ public partial class BlightView : Node3D
         foreach (var r in _ripples) r.Mesh.QueueFree();
         _roots.Clear();
         _walls.Clear();
+        foreach (var meter in _meters.Values) meter.Ring.QueueFree();
+        _meters.Clear();
         _ripples.Clear();
         _motes.Clear();
         _droplets.Clear();
@@ -165,6 +167,7 @@ public partial class BlightView : Node3D
         SyncRoots(world, dt);
         SyncWalls(world, dt);
         SyncMurklings(world);
+        SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
         if (camera is not null)
@@ -199,7 +202,8 @@ public partial class BlightView : Node3D
                 continue;
             }
             // Breathing; inflating on the telegraph; shrinking as it starves (its ring cleansed).
-            float starve = Mathf.Clamp(root.RingDensity / 0.45f, 0f, 1f);
+            // Her light eats its corruption: the sac shrinks as its meter empties.
+            float starve = Mathf.Clamp(root.Corruption.Fraction / 0.45f, 0f, 1f);
             float breathe = 1f + 0.06f * Mathf.Sin(_time * 2.1f + i);
             float size = 0.75f * breathe * (0.6f + 0.4f * starve) * (1f + 0.45f * root.Inflate);
             view.Sac.Scale = Vector3.One * size;
@@ -416,6 +420,65 @@ public partial class BlightView : Node3D
         _vineMesh.SurfaceAddVertex(at);
     }
 
+    // ───────────────────────── corruption meters ─────────────────────────
+
+    /// <summary>A meter on screen: its ring, the gold after-image of what the last shots took off, and its fade.</summary>
+    sealed class Meter
+    {
+        public MeshInstance3D Ring = null!;
+        public float Ghost = 1f, Alpha;
+        public bool Seen;
+    }
+
+    readonly Dictionary<object, Meter> _meters = new();
+    ShaderMaterial? _meterMat;
+
+    /// <summary>
+    /// The corruption meters (docs/CORRUPTION.md): a ring round every murkling and Blightroot her light has partly
+    /// cleansed, hidden again when full or emptied. The chunk each shot takes off burns gold and drains away.
+    /// </summary>
+    void SyncMeters(PlaneWorld world, float dt)
+    {
+        foreach (var meter in _meters.Values) meter.Seen = false;
+        foreach (var m in world.Murklings)
+            if (m.Alive && !m.Budding)
+                ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), 1.7f, dt);
+        foreach (var root in world.Blightroots)
+            if (root.Alive) ShowMeter(root, root.Corruption, new Vector3(root.Position.X, SacHeight, root.Position.Y), 2.8f, dt);
+        var gone = new List<object>();
+        foreach (var (key, meter) in _meters)
+            if (!meter.Seen)
+            {
+                meter.Ring.QueueFree();
+                gone.Add(key);
+            }
+        foreach (var key in gone) _meters.Remove(key);
+    }
+
+    void ShowMeter(object owner, CorruptionMeter corruption, Vector3 at, float size, float dt)
+    {
+        if (!_meters.TryGetValue(owner, out var meter))
+        {
+            _meterMat ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_ring.gdshader"), RenderPriority = 5 };
+            meter = new Meter { Ring = new MeshInstance3D { Mesh = new QuadMesh { Size = Vector2.One }, MaterialOverride = _meterMat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off } };
+            AddChild(meter.Ring);
+            _meters[owner] = meter;
+        }
+        meter.Seen = true;
+        float fill = corruption.Fraction;
+        // The after-image drains down to the fill (and follows it straight back up as it re-corrupts).
+        meter.Ghost = fill > meter.Ghost ? fill : Mathf.MoveToward(meter.Ghost, fill, dt * 0.9f);
+        meter.Alpha = Mathf.MoveToward(meter.Alpha, corruption.Shown ? 1f : 0f, dt * 6f);
+        meter.Ring.Visible = meter.Alpha > 0.01f;
+        meter.Ring.Position = at;
+        // A small pop on each hit.
+        float pop = 1f + 0.12f * Mathf.Clamp((meter.Ghost - fill) * 4f, 0f, 1f);
+        meter.Ring.Scale = Vector3.One * size * pop;
+        meter.Ring.SetInstanceShaderParameter("fill", fill);
+        meter.Ring.SetInstanceShaderParameter("ghost", meter.Ghost);
+        meter.Ring.SetInstanceShaderParameter("alpha", meter.Alpha);
+    }
+
     // ───────────────────────── events ─────────────────────────
 
     /// <summary>The war's moments: a bud's ripple, a murkling bursting (and its ember blooming), a sac drinking a bubble.</summary>
@@ -435,14 +498,6 @@ public partial class BlightView : Node3D
                     AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.2f, e.Size, 0.9f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.85f));
                     for (int i = 0; i < 24; i++)
                         _motes.Emit(at, _motes.RandDir() * _motes.RandRange(0.6f, 2.4f) + Vector3.Down * 1.2f, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 2f, buoyancy: 0.4f);
-                }
-                break;
-            case PlaneEventType.BlightrootDrank:
-                // A bubble's light drawn into the sac: a brief inward spiral of motes.
-                for (int i = 0; i < 12; i++)
-                {
-                    var from = at + _motes.RandDir() * 1.2f;
-                    _motes.Emit(from, (at - from) * 2.4f, 0.4f, 0.12f, 0.02f, new Color(1f, 0.8f, 0.4f), new Color(0.6f, 0.2f, 0.8f, 0f), drag: 0.5f);
                 }
                 break;
         }
