@@ -97,7 +97,7 @@ public class PlaneCombatTests
         Assert.Equal(PufferlingTuning.Needles, needles.Count);
         var angles = needles.Select(n => MathF.Atan2(n.Velocity.Y, n.Velocity.X)).OrderBy(a => a).ToList();
         for (int k = 1; k < angles.Count; k++) Assert.Equal(MathF.Tau / 8f, angles[k] - angles[k - 1], 3);
-        Assert.All(needles, n => Assert.True(n.Velocity.Length() > PlaneCombatTuning.ShotSpeed));
+        Assert.All(needles, n => Assert.True(n.Velocity.Length() >= PufferlingTuning.NeedleSpeed));
     }
 
     [Fact]

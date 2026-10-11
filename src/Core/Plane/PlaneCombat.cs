@@ -18,14 +18,13 @@ public static class PlaneCombatTuning
     public const float PlayerHurtGrace = 0.6f;
 
     /// <summary>
-    /// Her shots are bubbles, and a bubble never stops dead: thrown at ShotSpeed, it first slows steadily (the
-    /// deceleration that would stop it BubbleRange away), then, once the water's drag (BubbleDrag × its speed, per
-    /// second) is the gentler of the two, it eases off exponentially — the two meet smoothly, at about 6.5 m/s. Below
-    /// BubbleStop it hovers (still drifting, still slowing) for its own hover time, then pops: in all about 11.5 m from
-    /// her. ShotLife is only a safety net.
+    /// Her shots are light (docs/LIGHT-BUBBLES.md; the rules still call them bubbles): thrown hard at ShotSpeed, light
+    /// has no friction, so it flies on undimmed at full speed; only toward the end of its BubbleRange does it settle,
+    /// braking at LightSettle per second (exponentially) so that it comes to rest about BubbleRange from her. Below
+    /// BubbleStop it hovers (still drifting) for its own hover time, then bursts. ShotLife is only a safety net.
     /// </summary>
-    public const float ShotSpeed = 17f;
-    public const float BubbleRange = 10f, BubbleDrag = 2.2f;
+    public const float ShotSpeed = 30f;
+    public const float BubbleRange = 11.5f, LightSettle = 8f;
     /// <summary>
     /// Below this speed a bubble hovers: still drifting and slowing, each bubble for its own time between BubbleHoverMin
     /// and BubbleHoverMax seconds (times her bubble hover stat), then it pops.
@@ -839,12 +838,14 @@ public sealed partial class PlaneWorld
         float speed = shot.Velocity.Length();
         Vector2 dir = speed > 1e-4f ? shot.Velocity / speed : p.Aim;
         float range = shot.Range > 0f ? shot.Range : PlaneCombatTuning.BubbleRange;
-        // A bubble eases out and never stops dead: steady deceleration while fast, the water's drag (proportional to its
-        // speed) once that is gentler; slow, it hovers — drifting on, still slowing — for its own time, then pops.
+        // Light has no friction: it flies at full speed until, near the end of its range, it settles (braking
+        // exponentially, so it comes to rest at its range without stopping dead); slow, it hovers for its own time, then
+        // bursts.
         if (shot.Range > 0f && !shot.Boomerang)
         {
-            float decel = shot.Speed0 * shot.Speed0 / (2f * shot.Range);
-            speed = MathF.Max(speed - MathF.Min(decel, PlaneCombatTuning.BubbleDrag * speed) * Dt, 0f);
+            float settleFrom = shot.Range - shot.Speed0 / PlaneCombatTuning.LightSettle;
+            if (shot.Traveled >= settleFrom || speed < shot.Speed0 * 0.98f)
+                speed *= MathF.Exp(-PlaneCombatTuning.LightSettle * Dt);
             if (speed < PlaneCombatTuning.BubbleStop)
             {
                 shot.Rest += Dt;

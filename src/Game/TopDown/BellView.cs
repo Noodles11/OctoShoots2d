@@ -125,8 +125,8 @@ public partial class BellView : Node3D
         _shield = new MeshInstance3D { Mesh = sphere, MaterialOverride = shieldMaterial, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(_shield);
         // Pearl Diver's charge: the light she gathers to throw, the same lantern as her bubbles (one substance).
-        _chargeMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/plane_bubble.gdshader"), RenderPriority = 3 };
-        _chargeOrb = new MeshInstance3D { Mesh = sphere, MaterialOverride = _chargeMaterial, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        _chargeMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_shot.gdshader"), RenderPriority = 3 };
+        _chargeOrb = new MeshInstance3D { Mesh = new QuadMesh { Size = Vector2.One }, MaterialOverride = _chargeMaterial, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(_chargeOrb);
         _inkMaterial = new StandardMaterial3D
         {
@@ -338,11 +338,11 @@ public partial class BellView : Node3D
         float size = PlaneCombatTuning.ShotRadius * (1f + (PlaneCombatTuning.ChargeSize - 1f) * k) * 1.3f * (full ? 1f + 0.07f * Mathf.Sin(_time * 14f) : 1f);
         var aim = new Vector3(p.Aim.X, 0f, p.Aim.Y);
         _chargeOrb.Position = aim * (BellRadius + 0.25f + size) + Vector3.Down * 0.1f;
-        _chargeOrb.Scale = Vector3.One * size;
+        // The mote's glow reaches well past its core: a quad several times the throw's size.
+        _chargeOrb.Scale = Vector3.One * size * 4f;
         _chargeOrb.SetInstanceShaderParameter("lantern", 0.3f + 0.6f * k * k + (full ? 0.15f * Mathf.Sin(_time * 14f) : 0f));
         _chargeOrb.SetInstanceShaderParameter("warmth", full ? 0.6f : 0.3f * k);
         _chargeOrb.SetInstanceShaderParameter("seed", 1.7f);
-        _chargeOrb.SetInstanceShaderParameter("wobble", 0.3f);
     }
 
     /// <summary>The contraction over one beat: a quick squeeze, then a slow relax that overshoots into a slight flare.</summary>

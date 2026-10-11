@@ -4,6 +4,7 @@ using Godot;
 using OctoShoots.Core.Gen.TopDown;
 using OctoShoots.Core.Items;
 using OctoShoots.Core.Plane;
+using OctoShoots.Game.Fx;
 
 namespace OctoShoots.Game.TopDown;
 
@@ -79,6 +80,11 @@ public partial class CombatView : Node3D
         _needle = PufferlingView.NeedleMaterial();
         _herShot = Glow(new Color(1f, 0.85f, 0.65f));
         _bubble = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/plane_bubble.gdshader") };
+        _sparkMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_shot.gdshader"), RenderPriority = 2 };
+        _trails = new LightTrails();
+        AddChild(_trails);
+        _fireworks = new FxParticles(1024, additive: true);
+        AddChild(_fireworks);
         _theirShot = Glow(new Color(1f, 0.25f, 0.3f));
         _clamPearl = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.96f, 0.9f), Roughness = 0.12f, Metallic = 0.3f, RimEnabled = true, Rim = 1f, EmissionEnabled = true, Emission = new Color(1f, 0.82f, 0.9f), EmissionEnergyMultiplier = 0.9f };
         _royalPearl = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.85f, 0.45f), Roughness = 0.1f, Metallic = 0.5f, RimEnabled = true, Rim = 1f, EmissionEnabled = true, Emission = new Color(1f, 0.6f, 0.95f), EmissionEnergyMultiplier = 1.6f };
@@ -283,6 +289,8 @@ public partial class CombatView : Node3D
         }
         foreach (var s in _shots) s.QueueFree();
         foreach (var h in _halos) h.QueueFree();
+        _trails.Clear();
+        _fireworks.Clear();
         foreach (var q in _pearls) q.QueueFree();
         _shots.Clear();
         _halos.Clear();
@@ -382,6 +390,11 @@ void fragment() {
     readonly List<PopFx> _pops = new();
     readonly SphereMesh _unitSphere = new() { Radius = 1f, Height = 2f, RadialSegments = 20, Rings = 10 };
     ShaderMaterial _bubble = null!;
+    /// <summary>Her shots of light: a camera-facing mote (light_shot.gdshader), their afterlight, and their fireworks.</summary>
+    readonly QuadMesh _spark = new() { Size = Vector2.One };
+    ShaderMaterial _sparkMat = null!;
+    LightTrails _trails = null!;
+    FxParticles _fireworks = null!;
 
     const float BlastSeconds = 0.65f;
 
@@ -492,7 +505,12 @@ void fragment() {
     {
         // Her light, spent: the lantern flares and goes out, and leaves a bloom of light on the water for a second.
         int bubbles = BubblesNear(at, radius + 1.5f);
-        if (bubbles > 0) AddBloom(at, CoreLight(bubbles), BloomSeconds, BloomRadius);
+        if (bubbles > 0)
+        {
+            AddBloom(at, CoreLight(bubbles), BloomSeconds, BloomRadius);
+            Firework(at, bubbles, toward);
+            return;
+        }
         var node = new Node3D { Position = new Vector3(at.X, LevelMap.SwimBand, at.Y) };
         AddChild(node);
         var impact = new Vector3(toward.X, 0.35f, toward.Y);
@@ -526,6 +544,35 @@ void fragment() {
             node.AddChild(drops[i]);
         }
         _pops.Add(new PopFx { Node = node, Shell = shell, Drops = drops, DropAt = place, DropVel = vel, DropBorn = born, Impact = impact, Radius = radius, Light = bubbles > 0 ? CoreLight(bubbles) : 0f });
+    }
+
+    /// <summary>
+    /// Her light bursts like a small firework: a white flash, sparks flung out (more and faster for a bigger, merged
+    /// shot) that drag to a stop and cool from white-gold to ember orange, a few slower ones drifting up, and a ring of
+    /// glints flung back the way it came.
+    /// </summary>
+    void Firework(System.Numerics.Vector2 at, int bubbles, System.Numerics.Vector2 toward)
+    {
+        var p = new Vector3(at.X, LevelMap.SwimBand, at.Y);
+        float k = Warmth(bubbles);
+        var hot = new Color(1.6f, 1.45f, 1.1f);
+        var gold = new Color(1.3f, 0.82f, 0.32f);
+        var ember = new Color(1f, 0.35f, 0.08f, 0f);
+        _fireworks.Emit(p, Vector3.Zero, 0.14f, 0.9f + 1.2f * k, 0.2f, hot, gold with { A = 0f }, drag: 0f);
+        int sparks = Mathf.Min(16 + 3 * bubbles, 60);
+        float speed = 4.5f + 4f * k;
+        var back = new Vector3(-toward.X, 0f, -toward.Y);
+        for (int i = 0; i < sparks; i++)
+        {
+            var dir = _fireworks.RandDir();
+            dir.Y = dir.Y * 0.45f + 0.15f;
+            // Thrown a little back from what it struck.
+            dir = (dir + back * 0.35f).Normalized();
+            float life = _fireworks.RandRange(0.35f, 0.7f) * (1f + 0.4f * k);
+            _fireworks.Emit(p, dir * speed * _fireworks.RandRange(0.6f, 1.15f), life, _fireworks.RandRange(0.08f, 0.15f) * (1f + 0.5f * k), 0.015f, i % 3 == 0 ? hot : gold, ember, drag: 3.2f);
+        }
+        for (int i = 0; i < 4 + bubbles / 2; i++)
+            _fireworks.Emit(p, new Vector3(_fireworks.RandRange(-0.6f, 0.6f), _fireworks.RandRange(0.8f, 1.8f), _fireworks.RandRange(-0.6f, 0.6f)), _fireworks.RandRange(0.8f, 1.3f), 0.07f, 0.01f, gold, ember, drag: 1.2f, buoyancy: 0.6f);
     }
 
     /// <summary>
@@ -603,18 +650,15 @@ void fragment() {
             _shots[i].Basis = Basis.Identity;
             if (shot.FromPlayer)
             {
-                // A light bubble: a film that wobbles, livelier as it moves, weaving a little off its line the way a
-                // real one does (drawn only; it hits where the sim says), with a lantern inside. An Ink Sac one is dark
-                // with ink, its lantern muffled; a Pearl Diver throw is the gathered light, a bright lantern.
+                // A shot of light: a small hot mote, no bubble (it hits where the sim says, with the sim's radius). It
+                // grows a little and brightens as it merges; an Ink Sac one has a violet heart; a Pearl Diver throw is
+                // the gathered light, bigger and brighter. Its lightning afterlight is drawn by the trails.
                 bool charged = shot.Charged > 0.25f;
-                float r = shot.Radius * (charged ? 1.3f : 1.7f);
                 float seed = (System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(shot) & 1023) * 0.0137f;
-                float speed = shot.Velocity.Length();
-                float lively = Mathf.Clamp(speed / 8f, 0f, 1f);
-                var side = speed > 1e-3f ? new Vector3(-shot.Velocity.Y, 0f, shot.Velocity.X) / speed : Vector3.Zero;
-                _shots[i].Position += side * Mathf.Sin(shot.Age * 11f + seed * 7f) * 0.05f * lively + Vector3.Up * 0.04f * Mathf.Sin(shot.Age * 3.1f + seed * 5f);
-                _shots[i].Scale = Vector3.One * r;
-                _shots[i].MaterialOverride = _bubble;
+                float mote = Mathf.Min(0.45f * (1f + 0.1f * (shot.Bubbles - 1)), 1.3f) * (charged ? 1.5f : 1f);
+                _shots[i].Mesh = _spark;
+                _shots[i].Scale = Vector3.One * mote;
+                _shots[i].MaterialOverride = _sparkMat;
 
                 // Merged since the last frame: a pulse of light and a chime.
                 if (_seen.TryGetValue(shot, out var was) && shot.Bubbles > was.Bubbles)
@@ -639,16 +683,12 @@ void fragment() {
                 float ember = shot.Rest > 0f ? 0.78f + 0.22f * Mathf.Sin(_time * 2.4f + seed * 9f) : 1f;
                 float light = (charged ? Mathf.Max(CoreLight(shot.Bubbles), 0.75f) : CoreLight(shot.Bubbles)) * ember * (1f + 0.5f * pulse) * shot.Dim;
                 float warmth = charged ? Mathf.Max(Warmth(shot.Bubbles), 0.5f) : Warmth(shot.Bubbles);
-                bool full = shot.Bubbles >= PlaneCombatTuning.BubbleCap;
                 _shots[i].SetInstanceShaderParameter("seed", seed);
-                _shots[i].SetInstanceShaderParameter("wobble", (0.45f + 0.55f * lively) * (charged ? 0.5f : 1f));
-                _shots[i].SetInstanceShaderParameter("hole", new Vector4(0f, 1f, 0f, 0f));
-                _shots[i].SetInstanceShaderParameter("fade", 1f);
                 _shots[i].SetInstanceShaderParameter("ink", shot.Explosive ? 1f : 0f);
-                // A full bubble is a small star: the rainbow sheen becomes its faint corona.
-                _shots[i].SetInstanceShaderParameter("rainbow", full ? 0.55f : 0f);
-                _shots[i].SetInstanceShaderParameter("lantern", light);
+                // A full one burns white: a small star.
+                _shots[i].SetInstanceShaderParameter("lantern", Mathf.Max(light, 0.35f * shot.Dim) * (shot.Bubbles >= PlaneCombatTuning.BubbleCap ? 1.25f : 1f));
                 _shots[i].SetInstanceShaderParameter("warmth", warmth);
+                _trails.Feed(shot, _shots[i].Position, warmth, Mathf.Clamp(light * 1.4f, 0.35f, 1.2f) * (shot.Explosive ? 0.5f : 1f));
 
                 // Its glow in the water: a fixed-size disc, stronger (never wider) as it merges.
                 float k = Mathf.Clamp(light / MaxLight, 0f, 1.5f);
@@ -674,6 +714,8 @@ void fragment() {
         (_seen, _seenNext) = (_seenNext, _seen);
         foreach (var gone in _merges.Keys.Where(key => !_seen.ContainsKey(key)).ToList()) _merges.Remove(gone);
         SyncLights(world, dt);
+        _trails.Step(dt, _time);
+        if (GetViewport().GetCamera3D() is { } camera) _fireworks.Tick(dt, camera.GlobalBasis);
 
         // Popping bubbles: the tear opens from the struck point and sweeps the film away; droplets break off the rim
         // as it passes and fly on, shrinking and fading.

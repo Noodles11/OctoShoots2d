@@ -39,3 +39,15 @@ reignites, kindled by hers. Corrupted creatures flinch from light.
 
 - The corruption tell (§7): corrupted creatures darkening away from nearby bubble light, and healthy ones warming in
   it.
+
+## Light shots: the bubble is gone
+
+Her shots are now light itself. The sim still calls them bubbles, and every rule still applies: merging, multishot
+and fans, bounces, boomerang, homing, splits, Ink Sac, Pearl Diver, hovering, bait and dimming.
+
+| Part | Where | What |
+|---|---|---|
+| Flight | `PlaneCombatTuning.ShotSpeed` 30 m/s, `BubbleRange` 11.5 m, `LightSettle` 8/s | Light has no friction. It flies at full speed and settles (exponential braking) only over its last few metres, coming to rest about 11.5 m out, where it hovers as before. |
+| The mote | `light_shot.gdshader` on a camera-facing quad | A white-hot core, her gold glow whitening as it merges, and a slowly turning four-point twinkle. It grows slightly with merges (0.45 m to at most 1.3 m across) while its hit radius stays the sim's. Ink Sac gives it a violet heart, and Pearl Diver's throw and charge orb are a bigger, brighter mote. The halo and the swim-layer light stay. |
+| Afterlight | `LightTrails`, `light_trail.gdshader` | A glowing thread with a soft glow either side, fading over 1.1 s and outliving the shot. It is jagged like lightning: every point is thrown aside and every segment kinked at its middle. The kinks re-strike 13 times a second and widen as the light ages. All trails are one mesh, uploaded once a frame. |
+| Impact | `CombatView.Firework` | A small firework: a white flash, then 16–60 sparks (more and faster for a merged shot). They are flung partly back from what was struck, drag to a stop and cool from white-gold to ember orange, while a few drift up. The pop's bloom of ground light stays. |
