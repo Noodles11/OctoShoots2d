@@ -147,12 +147,64 @@ public partial class MinimapView : Control
 
         public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
 
+        /// <summary>Ink evaporating off the meter as it drains: wisps that lift away from the ring, thin and turn gold.</summary>
+        struct Wisp
+        {
+            public Vector2 At, Velocity;
+            public float Age, Life, Size;
+        }
+
+        readonly System.Collections.Generic.List<Wisp> _wisps = new();
+        readonly System.Random _random = new(77);
+        float _owed;
+
+        float Rand(float a, float b) => a + (b - a) * (float)_random.NextDouble();
+
         public override void _Process(double delta)
         {
+            float dt = (float)delta;
             float target = 1f - Health;
             float before = _shown;
-            _shown = Mathf.MoveToward(_shown, target, (float)delta * (target > _shown ? 1.2f : 0.9f));
-            if (_shown != before || _shown > 0.75f) QueueRedraw();
+            _shown = Mathf.MoveToward(_shown, target, dt * (target > _shown ? 1.2f : 0.9f));
+            // Draining: the ink steams off the receding end of the arc, more the faster it goes.
+            float drained = before - _shown;
+            if (drained > 0f)
+            {
+                _owed += drained * 900f;
+                var c = Size * 0.5f;
+                float rr = Size.X * 0.5f - 7.5f;
+                while (_owed >= 1f)
+                {
+                    _owed -= 1f;
+                    // Mostly at the tip, some from the ink just behind it.
+                    float back = Mathf.Min(_shown, 0.08f) * Mathf.Pow(Rand(0f, 1f), 2f);
+                    float a = -Mathf.Pi * 0.5f + Mathf.Tau * (_shown - back);
+                    var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                    _wisps.Add(new Wisp
+                    {
+                        At = c + dir * (rr + Rand(-4f, 4f)),
+                        Velocity = dir * Rand(6f, 18f) + new Vector2(Rand(-6f, 6f), Rand(-26f, -12f)),
+                        Life = Rand(0.6f, 1.1f),
+                        Size = Rand(2.5f, 4.5f),
+                    });
+                }
+            }
+            else _owed = 0f;
+            for (int i = _wisps.Count - 1; i >= 0; i--)
+            {
+                var w = _wisps[i];
+                w.Age += dt;
+                if (w.Age >= w.Life)
+                {
+                    _wisps.RemoveAt(i);
+                    continue;
+                }
+                // Curling as it rises, slowing.
+                w.Velocity = w.Velocity * Mathf.Exp(-1.6f * dt) + new Vector2(Mathf.Sin(w.Age * 9f + w.Size * 3f) * 30f * dt, -10f * dt);
+                w.At += w.Velocity * dt;
+                _wisps[i] = w;
+            }
+            if (_shown != before || _shown > 0.75f || _wisps.Count > 0) QueueRedraw();
         }
 
         public override void _Draw()
@@ -166,6 +218,10 @@ public partial class MinimapView : Control
             // The track: her light, pale gold, all round.
             DrawArc(c, rr, 0f, Mathf.Tau, 96, new Color(0f, 0f, 0f, 0.6f), width + 3f, true);
             DrawArc(c, rr, 0f, Mathf.Tau, 96, new Color(1f, 0.86f, 0.6f, 0.35f), width, true);
+            var top = new Vector2(c.X, 3f);
+            DrawColoredPolygon(new[] { top + new Vector2(0f, -1f), top + new Vector2(5f, 8f), top + new Vector2(-5f, 8f) }, new Color(0.85f, 0.88f, 0.9f));
+            DrawString(ThemeDB.FallbackFont, top + new Vector2(-4.5f, 22f), "N", HorizontalAlignment.Left, -1, 12, new Color(0.85f, 0.88f, 0.9f));
+            DrawWisps();
             if (_shown <= 0.001f) return;
             // The ink, clockwise from 12 o'clock (Godot's angles run clockwise on screen from east).
             float from = -Mathf.Pi * 0.5f, to = from + Mathf.Tau * Mathf.Clamp(_shown, 0f, 1f);
@@ -178,9 +234,20 @@ public partial class MinimapView : Control
             var tip = c + new Vector2(Mathf.Cos(to), Mathf.Sin(to)) * rr;
             DrawCircle(tip, width * 0.62f, new Color(0.04f, 0.015f, 0.07f));
             DrawCircle(tip + new Vector2(-1.5f, -1.5f), width * 0.18f, new Color(0.75f, 0.55f, 1f, 0.8f));
-            var top = new Vector2(c.X, 3f);
-            DrawColoredPolygon(new[] { top + new Vector2(0f, -1f), top + new Vector2(5f, 8f), top + new Vector2(-5f, 8f) }, new Color(0.85f, 0.88f, 0.9f));
-            DrawString(ThemeDB.FallbackFont, top + new Vector2(-4.5f, 22f), "N", HorizontalAlignment.Left, -1, 12, new Color(0.85f, 0.88f, 0.9f));
+        }
+
+        /// <summary>The evaporating ink: dark puffs that swell, thin, and burn off into gold glints.</summary>
+        void DrawWisps()
+        {
+            foreach (var w in _wisps)
+            {
+                float k = w.Age / w.Life;
+                float size = w.Size * (1f + 1.6f * k);
+                var ink = new Color(0.08f, 0.03f, 0.13f).Lerp(new Color(0.55f, 0.3f, 0.85f), k);
+                DrawCircle(w.At, size, ink with { A = 0.7f * (1f - k) * (1f - k) });
+                // A spark of light where the ink lets go.
+                if (k > 0.3f) DrawCircle(w.At, 1.1f, new Color(1f, 0.86f, 0.5f, 0.9f * (1f - k)));
+            }
         }
     }
 }

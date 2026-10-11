@@ -121,6 +121,16 @@ field never seeds there.
   - While she bathes, everything brightens and warms, the emblem turns faster, and the sparkles stream.
 - On both maps, once seen: an aqua dot with a gold heart.
 
+## Evaporation: corruption clearing
+
+Cleared corruption never just vanishes. It evaporates.
+
+| Where | What |
+|---|---|
+| The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Ink lifts off them as dark curls that rise and swell, then thin to violet and fade. Gold glints rise with them. The chance of a curl grows with how much a cell lost. At most 48 curls a frame. |
+| Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same vapour steams off her body. It is thicker the faster she clears. |
+| Her meter (`MinimapView` frame) | Wisps of ink steam off the arc's receding tip. They drift outward and up, curling, and turn violet, then gold, as they fade. |
+
 ## Presentation
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked

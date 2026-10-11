@@ -27,6 +27,9 @@ public sealed class CorruptionTexture
 
     public ImageTexture Texture { get; }
 
+    /// <summary>The cells cleansed since the last upload, and by how much (InkVapour lifts ink off them).</summary>
+    public readonly System.Collections.Generic.List<(int Cell, float Drop)> Drops = new();
+
     public CorruptionTexture(CorruptionField field)
     {
         Array.Copy(field.Density, _prev, _prev.Length);
@@ -51,12 +54,14 @@ public sealed class CorruptionTexture
     {
         var d = field.Density;
         bool burning = false;
+        Drops.Clear();
         float fade = BurnFade * dt;
         for (int i = 0; i < d.Length; i++)
         {
             float v = d[i];
             float drop = _prev[i] - v;
             float b = _burn[i];
+            if (drop > 0.02f && dt > 0f) Drops.Add((i, drop));
             b = drop > 0f ? MathF.Min(1f, b + drop * BurnGain) : MathF.Max(0f, b - fade);
             _burn[i] = b;
             _prev[i] = v;

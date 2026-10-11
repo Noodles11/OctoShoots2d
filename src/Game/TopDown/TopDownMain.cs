@@ -122,6 +122,9 @@ public partial class TopDownMain : Node3D
     CorruptionView _corruption = null!;
     BlightView _blight = null!;
     SpringView _springs = null!;
+    InkVapour _vapour = null!;
+    /// <summary>Her health last frame: a rise is corruption cleared, which steams off her.</summary>
+    float _lastHp = -1f;
     CleanseMeter _cleanse = null!;
     CorruptionTexture? _corruptTex;
     Task<CorruptionView.Layout>? _bladeTask;
@@ -183,6 +186,8 @@ public partial class TopDownMain : Node3D
         AddChild(_blight);
         _springs = new SpringView();
         AddChild(_springs);
+        _vapour = new InkVapour();
+        AddChild(_vapour);
         _camera = new CameraRig();
         AddChild(_camera);
         _snow = new MarineSnow(900, new Vector3(22f, 7f, 17f), 0.11f);
@@ -694,6 +699,8 @@ public partial class TopDownMain : Node3D
     void SetupCorruption(LevelMap map)
     {
         _bladeTask = null;
+        _vapour.Clear();
+        _lastHp = -1f;
         if (_world.Corruption is not { } field)
         {
             _corruptTex = null;
@@ -731,7 +738,16 @@ public partial class TopDownMain : Node3D
             if (blades.IsFaulted) GD.PushError(blades.Exception?.ToString());
             else if (_corruptTex is not null) _corruption.Show(blades.Result, _corruptTex.Texture);
         }
-        if (_world.Corruption is { } field && _corruptTex is not null) _corruptTex.Update(field, dt);
+        if (_world.Corruption is { } field && _corruptTex is not null)
+        {
+            _corruptTex.Update(field, dt);
+            _vapour.FromField(_corruptTex, _world.Map);
+        }
+        // Her own corruption clearing (a spring, or any healing) steams off her.
+        float hp = _world.Player.Hp, max = _world.Run.MaxHp;
+        if (_lastHp >= 0f && hp > _lastHp && max > 0f) _vapour.FromHer(Focus(alpha), (hp - _lastHp) / max);
+        _lastHp = hp;
+        _vapour.Tick(dt, _camera.Camera);
         _corruption.SetHer(Focus(alpha));
         _blight.Sync(_world, dt, _camera.Camera);
         _springs.Sync(dt, _camera.Camera);
