@@ -121,6 +121,7 @@ public partial class TopDownMain : Node3D
     // The corruption (docs/CORRUPTION.md): its blades and creatures, the live texture, and the blades being laid out.
     CorruptionView _corruption = null!;
     BlightView _blight = null!;
+    SpringView _springs = null!;
     CleanseMeter _cleanse = null!;
     CorruptionTexture? _corruptTex;
     Task<CorruptionView.Layout>? _bladeTask;
@@ -180,6 +181,8 @@ public partial class TopDownMain : Node3D
         AddChild(_corruption);
         _blight = new BlightView();
         AddChild(_blight);
+        _springs = new SpringView();
+        AddChild(_springs);
         _camera = new CameraRig();
         AddChild(_camera);
         _snow = new MarineSnow(900, new Vector3(22f, 7f, 17f), 0.11f);
@@ -299,7 +302,7 @@ public partial class TopDownMain : Node3D
     void StartFirstLevel()
     {
         var stats = new List<(string, string)> { ("Seed", _seed.ToString() + (_customSeed ? "  (seeded)" : "")) };
-        if (_resume is { } saved) stats.Add(("Carrying", $"{saved.Items.Count} pearls · {saved.Shells} shells · {Mathf.CeilToInt(saved.Hp)} HP"));
+        if (_resume is { } saved) stats.Add(("Carrying", $"{saved.Items.Count} pearls · {saved.Shells} shells · {CorruptionText(saved.Hp, saved.Items)}"));
         _splash.Fill(_resume is not null ? "Back into the sea" : "A new dive", stats, _id.ToString());
         _splash.Modulate = Colors.White;
         _splash.Visible = true;
@@ -699,6 +702,7 @@ public partial class TopDownMain : Node3D
             _minimap.SetCorruption(null);
             _fullMap.Corruption = null;
             _blight.Show(_world);
+            _springs.Show(_world);
             return;
         }
         _corruptTex = new CorruptionTexture(field);
@@ -706,6 +710,7 @@ public partial class TopDownMain : Node3D
         _minimap.SetCorruption(_corruptTex.Texture);
         _fullMap.Corruption = _corruptTex.Texture;
         _blight.Show(_world);
+        _springs.Show(_world);
         // The blades were laid out already if she dived here; otherwise they are laid out now, off the main thread.
         if (_belowLayout is { } ready && ReferenceEquals(_belowLayoutMap, map)) _corruption.Show(ready, _corruptTex.Texture);
         else
@@ -729,6 +734,7 @@ public partial class TopDownMain : Node3D
         if (_world.Corruption is { } field && _corruptTex is not null) _corruptTex.Update(field, dt);
         _corruption.SetHer(Focus(alpha));
         _blight.Sync(_world, dt, _camera.Camera);
+        _springs.Sync(dt, _camera.Camera);
         _cleanse.Track(_world, dt);
         MinimapView.FillBlight(_fullMap, _world);
         _minimap.SetBlight(_world);
@@ -1219,7 +1225,7 @@ public partial class TopDownMain : Node3D
             ("Seed", _seed.ToString()),
         };
         _deathSplash = true;
-        _splash.Fill("Clementine's light went out", stats, "Everything she carried is lost.");
+        _splash.Fill("The corruption took Clementine", stats, "Her meter filled with ink. Everything she carried is lost.");
         OpenSplash();
     }
 
@@ -1342,6 +1348,13 @@ public partial class TopDownMain : Node3D
         }
     }
 
+    /// <summary>A saved run's corruption, from its health and the pearls it carries (they set her meter's size).</summary>
+    string CorruptionText(float hp, System.Collections.Generic.IEnumerable<string> items)
+    {
+        float max = Loadout.Build(_catalog, items.ToList(), _tuning).Stats.MaxHp;
+        return $"{Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(max, 1f), 0f, 1f) * 100f)}% corrupted";
+    }
+
     /// <summary>The corruption war's moments: shakes, sounds and words (the sights are BlightView's).</summary>
     void CorruptionEvent(in PlaneEvent e)
     {
@@ -1378,13 +1391,25 @@ public partial class TopDownMain : Node3D
                 _sfx.PlayPitched("bell_ring", 1.2f, -10f);
                 Say(e.Size > 0f ? $"Crust broken: {Mathf.RoundToInt(e.Size)} left" : "The last of her crust falls away");
                 break;
+            case PlaneEventType.SpringEntered:
+                _sfx.PlayPitched("merge", 1.2f, -8f);
+                if (!_saidSpring)
+                {
+                    _saidSpring = true;
+                    Say("A light spring: its clear water washes the corruption away");
+                }
+                break;
+            case PlaneEventType.SpringCleansed:
+                _sfx.PlayPitched("bell_ring", 1.4f, -10f);
+                Say("Wholly cleansed");
+                break;
             case PlaneEventType.CrackOpened:
                 Say("The arena is clean: the Crack opens");
                 break;
         }
     }
 
-    bool _saidCoil, _saidValve;
+    bool _saidCoil, _saidValve, _saidSpring;
 
     void CloseDebug()
     {

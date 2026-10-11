@@ -155,7 +155,7 @@ public partial class PauseMenu : Control
     public void Open(PlaneRun run, ItemCatalog? catalog, string seed, string where, float hp, AchievementCatalog? achievements = null)
     {
         FillAchievements(achievements, run.Unlocked, catalog);
-        _summary.Text = $"Seed {seed} · {where} · HP {Mathf.CeilToInt(hp)} / {Mathf.RoundToInt(run.MaxHp)} · {run.Items.Count} pearl{(run.Items.Count == 1 ? "" : "s")}";
+        _summary.Text = $"Seed {seed} · {where} · {Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(run.MaxHp, 1f), 0f, 1f) * 100f)}% corrupted · {run.Items.Count} pearl{(run.Items.Count == 1 ? "" : "s")}";
         foreach (var child in _pearls.GetChildren()) child.QueueFree();
         if (run.Items.Count == 0 || catalog is null)
         {

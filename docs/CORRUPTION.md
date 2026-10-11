@@ -91,6 +91,36 @@ drains away. It is shown only while partly emptied: it fades out when full again
   explorer meets an easier boss).
 - **The Crack** opens only when she is freed **and** the arena is ≥ 60% cleansed. The HUD tracks both.
 
+## Her corruption meter (replaces HP)
+
+Clementine has no health bar. Everything that hurts her corrupts her instead, and her meter fills. When it is full the
+corruption takes her and the run is lost. Inside, the sim still keeps `Hp`: corruption = 1 − Hp / MaxHp, and Hp 0
+means a full meter. All damage, healing and items work unchanged.
+
+| Part | Where | What |
+|---|---|---|
+| Meter | `MinimapView` frame | Replaces the red bezel round the minimap. Dark ink fills it clockwise from 12 o'clock over a pale gold track. A violet sheen sits on the ink's lip and pulses above 75 %. An ink bead with a glint marks the tip. |
+| Numbers | `DamageNumbers` | A hit on her shows `+N` in ink violet. Cleansing shows `−N` in gold. |
+| Words | pause menu, save card, resume stats, death splash | "X% corrupted". The death splash reads "The corruption took Clementine". |
+
+## Light springs (`LightSpring`)
+
+A pool of clear, luminous water where her corruption washes away. Each level has a 50 % chance of one
+(`SpringTuning.Chance`). The level seed places it on open floor in a plaza or corridor, at least 22 m from the start,
+14 m from the exit, and clear of the shaft and other POIs (`LightSprings.Of`). Its 3 m radius is a safe place: the
+field never seeds there.
+
+- While she is inside, her meter drains by 30 % of the whole each second until it is empty (`StepSprings`).
+- Entering it while corrupted raises `SpringEntered`: a chime, plus a hint the first time. Reaching clean raises
+  `SpringCleansed`: a bell and "Wholly cleansed".
+- Visuals (`SpringView`):
+  - `light_spring.gdshader`: drifting caustics, a bright rim, and under the water her emblem, the four gold gonad
+    horseshoes in a ring round a gold heart. The emblem turns slowly and wavers with the ripples.
+  - `light_column.gdshader`: a soft column of light rising to her plane.
+  - Rising aqua and gold sparkles, and an aqua OmniLight.
+  - While she bathes, everything brightens and warms, the emblem turns faster, and the sparkles stream.
+- On both maps, once seen: an aqua dot with a gold heart.
+
 ## Presentation
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked

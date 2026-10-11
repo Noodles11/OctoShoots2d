@@ -16,6 +16,9 @@ public partial class DamageNumbers : Node3D
 
     static readonly Color Damage = new(1f, 0.3f, 0.28f);
     static readonly Color Heal = new(0.4f, 1f, 0.5f);
+    /// <summary>Clementine has no health, only corruption (docs/CORRUPTION.md): ink gained, light regained.</summary>
+    static readonly Color Ink = new(0.72f, 0.45f, 1f);
+    static readonly Color Cleansed = new(1f, 0.85f, 0.45f);
 
     readonly List<(Label3D Label, float Age, float Drift)> _live = new();
     readonly RandomNumberGenerator _rng = new();
@@ -39,13 +42,14 @@ public partial class DamageNumbers : Node3D
         string number = size >= 1f ? Mathf.RoundToInt(size).ToString() : size.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
         var label = new Label3D
         {
-            Text = (amount < 0f ? "-" : "+") + number,
+            // Hers read as corruption: a hit adds ink (+), cleansing takes it away (−).
+            Text = (hers ? (amount < 0f ? "+" : "-") : (amount < 0f ? "-" : "+")) + number,
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.022f,
             FontSize = hers ? 56 : 46,
             OutlineSize = 16,
             OutlineModulate = new Color(0.08f, 0.04f, 0.05f, 0.95f),
-            Modulate = amount < 0f ? Damage : Heal,
+            Modulate = hers ? (amount < 0f ? Ink : Cleansed) : (amount < 0f ? Damage : Heal),
             NoDepthTest = true,
             RenderPriority = 4,
             OutlineRenderPriority = 3,

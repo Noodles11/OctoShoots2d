@@ -65,9 +65,10 @@ public sealed class CorruptionField
     /// <summary>Bumped on every change, so a view knows when to upload.</summary>
     public int Version { get; private set; }
 
-    /// <summary>The safe places of a level: the start, shops and treasure caves.</summary>
+    /// <summary>The safe places of a level: the start, shops, treasure caves and light springs.</summary>
     public static IEnumerable<(Vector2 Centre, float Radius)> SafeOf(LevelMap map) =>
-        map.Pois.Where(p => p.Kind is PoiKind.Start or PoiKind.Shop or PoiKind.TreasureCave).Select(p => (p.Position, p.Radius));
+        map.Pois.Where(p => p.Kind is PoiKind.Start or PoiKind.Shop or PoiKind.TreasureCave).Select(p => (p.Position, p.Radius))
+            .Concat(LightSprings.Of(map).Select(at => (at, SpringTuning.Radius)));
 
     /// <summary>A level's field as it starts, from its map alone (the world lays the same; a view previews the level below).</summary>
     public static CorruptionField ForMap(LevelMap map)

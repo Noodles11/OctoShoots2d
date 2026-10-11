@@ -95,7 +95,7 @@ public partial class DebugMenu : Control
         var first = new Button { Text = "First level", CustomMinimumSize = new Vector2(120f, 34f) };
         first.Pressed += () => GoTo?.Invoke(LevelId.First, _fullHp.ButtonPressed);
         go.AddChild(first);
-        _fullHp = new CheckBox { Text = "Arrive at full HP", ButtonPressed = true };
+        _fullHp = new CheckBox { Text = "Arrive cleansed", ButtonPressed = true };
         _fullHp.AddThemeColorOverride("font_color", Ink);
         go.AddChild(_fullHp);
 

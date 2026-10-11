@@ -48,6 +48,8 @@ public partial class TopoMap : Control
     public Texture2D? Corruption;
     public readonly List<(System.Numerics.Vector2 At, bool Alive)> Blights = new();
     public readonly List<(System.Numerics.Vector2 A, System.Numerics.Vector2 B, bool Seen, bool Cleared)> Valves = new();
+    /// <summary>Light springs (docs/CORRUPTION.md), and whether she is bathing in one.</summary>
+    public readonly List<(System.Numerics.Vector2 At, bool Bathing)> Springs = new();
     /// <summary>Clementine's arrow: size and fill.</summary>
     public float ArrowScale = 1f;
     public Color ArrowColor = Colors.White;
@@ -246,6 +248,17 @@ public partial class TopoMap : Control
                 DrawLine(q - new Vector2(4f, 0f), q + new Vector2(4f, 0f), gold, 1.5f, true);
                 DrawLine(q - new Vector2(0f, 4f), q + new Vector2(0f, 4f), gold, 1.5f, true);
             }
+        }
+
+        // A light spring, once seen: a pool of clear aqua with a gold heart (brighter while she bathes).
+        foreach (var (at, bathing) in Springs)
+        {
+            if (Fog is not null && Fog.At(at) < 0.5f) continue;
+            Vector2 q = P(at);
+            DrawCircle(q, 8f, new Color(0f, 0f, 0f, 0.55f));
+            DrawCircle(q, 6.5f, new Color(0.3f, 0.85f, 0.95f, bathing ? 1f : 0.85f));
+            DrawArc(q, 6.5f, 0f, Mathf.Tau, 24, new Color(0.85f, 1f, 1f), 1.4f, true);
+            DrawCircle(q, bathing ? 3f : 2.2f, new Color(1f, 0.85f, 0.45f));
         }
 
         // Clementine: an arrow along her heading.

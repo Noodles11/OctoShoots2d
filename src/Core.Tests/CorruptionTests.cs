@@ -169,6 +169,36 @@ public class CorruptionTests
         Assert.InRange(boss.Crust, 2, 3);
     }
 
+    [Fact]
+    public void AboutHalfTheLevelsHaveALightSpringThatWashesHerCorruptionAway()
+    {
+        var ids = TestLevels.All(_ => true).Take(16).ToList();
+        int with = ids.Count(id => LightSprings.Of(TestLevels.Get(id)).Count > 0);
+        Assert.InRange(with, 3, 13);
+        var map = TestLevels.Get(ids.First(id => LightSprings.Of(TestLevels.Get(id)).Count > 0));
+        var w = World(map);
+        Quiet(w);
+        var spring = Assert.Single(w.Springs);
+        // Kept clean of the field, and far from the start.
+        Assert.Equal(0f, w.Corruption!.At(spring.Position));
+        Assert.True(System.Numerics.Vector2.Distance(spring.Position, map.Start.Position) >= SpringTuning.FromStart);
+        // Corrupted to three quarters, she bathes: it drains steadily until she is wholly clean.
+        w.Player.Hp = w.Run.MaxHp * 0.25f;
+        w.Player.Position = w.Player.PrevPosition = spring.Position;
+        w.Step(default);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.SpringEntered);
+        float after1 = w.Player.Hp;
+        Assert.True(after1 > w.Run.MaxHp * 0.25f && after1 < w.Run.MaxHp);
+        bool cleansed = false;
+        for (int i = 0; i < 4 * 60 && !cleansed; i++)
+        {
+            w.Step(default);
+            cleansed = w.Events.Any(e => e.Type == PlaneEventType.SpringCleansed);
+        }
+        Assert.True(cleansed);
+        Assert.Equal(w.Run.MaxHp, w.Player.Hp);
+    }
+
     /// <summary>No budding or murklings, so a test sees only what it sets up.</summary>
     static void Quiet(PlaneWorld w)
     {

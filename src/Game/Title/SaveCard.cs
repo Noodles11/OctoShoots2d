@@ -137,7 +137,7 @@ public partial class SaveCard : PanelContainer
         row.AddChild(info);
         info.AddChild(TitleStyle.Text(run.Where, 30, TitleStyle.Ink, TitleStyle.Display));
         info.AddChild(TitleStyle.Text($"{run.Seed}{(run.CustomSeed ? "  (seeded)" : "")}", 18, TitleStyle.Ink, TitleStyle.Mono));
-        info.AddChild(TitleStyle.Text($"{Mathf.CeilToInt(run.Hp)} HP  ·  {run.Shells} shells  ·  {TitleStyle.Clock(run.Elapsed)} played  ·  saved {When(run.SavedAt)}", 15, TitleStyle.InkSoft));
+        info.AddChild(TitleStyle.Text($"{Mathf.RoundToInt(Mathf.Clamp(1f - run.Hp / Mathf.Max(OctoShoots.Core.Items.Loadout.Build(_catalog, run.Items, SettingsStore.LoadTuning()).Stats.MaxHp, 1f), 0f, 1f) * 100f)}% corrupted  ·  {run.Shells} shells  ·  {TitleStyle.Clock(run.Elapsed)} played  ·  saved {When(run.SavedAt)}", 15, TitleStyle.InkSoft));
         var pearls = new HBoxContainer();
         pearls.AddThemeConstantOverride("separation", 6);
         foreach (string id in run.Items)
