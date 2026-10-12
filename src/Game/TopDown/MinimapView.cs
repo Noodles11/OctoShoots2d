@@ -101,6 +101,8 @@ public partial class MinimapView : Control
     {
         map.Blights.Clear();
         foreach (var b in world.Blightroots) map.Blights.Add((b.Position, b.Alive));
+        map.Blotters.Clear();
+        foreach (var b in world.Blotters) map.Blotters.Add((b.Position, b.Heading));
         map.Springs.Clear();
         foreach (var sp in world.Springs) map.Springs.Add((sp.Position, sp.Bathing));
         map.Valves.Clear();

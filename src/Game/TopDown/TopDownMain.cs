@@ -1451,10 +1451,25 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.CrackOpened:
                 Say("The arena is clean: the Crack opens");
                 break;
+            case PlaneEventType.BlotterBorn:
+                _sfx.PlayPitched("merge", 0.5f, -6f);
+                Say("A Blotter rises from the ink");
+                break;
+            case PlaneEventType.BlotterBurst:
+                _camera.Shake(0.3f);
+                _sfx.PlayPitched("bell_ring", 0.9f, -8f);
+                _haptics.Pulse(0.5f, 0.5f, 0.3f);
+                break;
+        }
+        // The first time she nears a Blotter: what it is.
+        if (!_saidBlotter && _world.Blotters.Exists(b => System.Numerics.Vector2.Distance(b.Position, _world.Player.Position) < 14f))
+        {
+            _saidBlotter = true;
+            Say("A Blotter: it spreads the ink wherever it crawls. Cleanse it");
         }
     }
 
-    bool _saidCoil, _saidValve, _saidSpring;
+    bool _saidCoil, _saidValve, _saidSpring, _saidBlotter;
 
     void CloseDebug()
     {

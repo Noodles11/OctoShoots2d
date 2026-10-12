@@ -183,6 +183,8 @@ public sealed class Murkling
     public bool Alive = true, Clinging;
     public Vector2 ClingOffset;
     public float ThrowTimer, Seed;
+    /// <summary>The Blotter it guards (it budded round one), if any.</summary>
+    public Blotter? Guarding;
     /// <summary>Thrown off her by a dash (counting down): it tumbles away and cannot cling or chase until it recovers.</summary>
     public float Shaken;
     /// <summary>Its corruption meter: her shots empty it; empty, it bursts.</summary>
@@ -246,6 +248,7 @@ public sealed partial class PlaneWorld
             Areas.Add(ArenaArea);
         }
         PlaceBlightroots();
+        PlaceBlotters(field);
         PlaceValves();
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
@@ -273,6 +276,8 @@ public sealed partial class PlaneWorld
         {
             if (Blightroots.Count >= want) break;
             if (float.IsPositiveInfinity(LevelValidator.DistanceAt(reach, at)) || !Clear(at, 1.2f)) continue;
+            // It stands in the corruption, never on clean floor.
+            if (field.At(at) < 0.5f) continue;
             if (safes.Any(s => Vector2.Distance(at, s.Centre) < s.Radius + BlightTuning.SafeDistance)) continue;
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + BlightTuning.Reach + 2f) continue;
             if (Map.Shaft.Contains(at, BlightTuning.Reach)) continue;
@@ -367,6 +372,7 @@ public sealed partial class PlaneWorld
         StepBlightroots(field);
         StepVines(field);
         StepValves();
+        StepBlotters(field);
         StepMurklings(field);
         _pops.Clear();
 
@@ -845,13 +851,14 @@ public sealed partial class PlaneWorld
         Murklings.RemoveAll(m => !m.Alive);
     }
 
-    void Bud(Vector2 at, int area)
+    Murkling Bud(Vector2 at, int area)
     {
         var m = new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) };
         m.Corruption.Regen *= 1f + 0.5f * Menace;
         m.Corruption.Max = m.Corruption.Value = BlightTuning.MurkCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
         Murklings.Add(m);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, Vector2.Zero, BlightTuning.BudSeconds));
+        return m;
     }
 
     /// <summary>

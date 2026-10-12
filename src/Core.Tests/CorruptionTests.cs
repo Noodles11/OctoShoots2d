@@ -205,6 +205,69 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void HalfTheFloorStartsCorruptedGatheredTowardTheDeepEnd()
+    {
+        var map = TestLevels.Get(TestLevels.Find(p => !p.HasBoss && p.Menace == 0f));
+        var field = CorruptionField.ForMap(map);
+        int open = 0, corrupt = 0, nearC = 0, nearN = 0, farC = 0, farN = 0;
+        var focus = CorruptionField.Focus(map);
+        for (int i = 0; i < field.Density.Length; i++)
+        {
+            if (field.Guard[i] < 1f) continue;
+            open++;
+            bool c = field.Density[i] > 0f;
+            if (c) corrupt++;
+            float d = Vector2.Distance(CellAt(i), focus);
+            if (d < 40f) { nearN++; if (c) nearC++; }
+            else if (d > 90f) { farN++; if (c) farC++; }
+        }
+        Assert.InRange(corrupt / (float)open, 0.42f, 0.6f);
+        // Thicker toward the deep end, but scattered everywhere.
+        Assert.True(nearC / (float)nearN > farC / (float)farN);
+        Assert.True(farC > farN * 0.1f, $"far {farC}/{farN} near {nearC}/{nearN}");
+    }
+
+    [Fact]
+    public void BlottersCreepTowardCleanFloorAndCorruptIt()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        Assert.Equal(2, w.Blotters.Count);
+        var b = w.Blotters[0];
+        Assert.Equal(BlotterTuning.Meter, b.Corruption.Max);
+        float before = w.Corruption!.InitialTotal;
+        var start = b.Position;
+        // Her far away: it creeps on and smears ink as it goes.
+        for (int i = 0; i < 20 * 60; i++) w.Step(default);
+        Assert.True(Vector2.Distance(b.Position, start) > 3f);
+        // Clean floor it crossed is corruption now (the level's total to cleanse grew).
+        Assert.True(w.Corruption.InitialTotal > before + 5f);
+        Assert.True(w.Corruption.At(b.Position) > 0.5f);
+        // Its guards bud round it.
+        Assert.Contains(w.Murklings, m => m.Guarding == b);
+    }
+
+    [Fact]
+    public void ABlotterTakesTenShotsAndBurstsCleansingAround()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var b = w.Blotters[0];
+        w.Blotters.RemoveAt(1);
+        Quiet(w);
+        w.Blotters.Add(b);
+        int shots = 0;
+        while (b.Alive && shots < 40)
+        {
+            w.Shots.Add(Light(b.Position));
+            w.Step(default);
+            shots++;
+        }
+        Assert.False(b.Alive);
+        Assert.InRange(shots, 10, 11);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.BlotterBurst);
+        Assert.True(w.Corruption!.At(b.Position) < CorruptionTuning.Clean);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));
@@ -271,6 +334,7 @@ public class CorruptionTests
     {
         foreach (var area in w.Areas) area.Spent = true;
         w.Murklings.Clear();
+        w.Blotters.Clear();
         foreach (var vine in w.Vines) vine.Points.RemoveRange(1, vine.Points.Count - 1);
     }
 }

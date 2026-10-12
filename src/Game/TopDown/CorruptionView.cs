@@ -147,8 +147,12 @@ public partial class CorruptionView : Node3D
         for (int y = 0; y < n; y++)
         for (int x = 0; x < n; x++)
         {
+            // Blades stand wherever corruption is or may spread (a Blotter's trail grows them where there were none);
+            // the shader hides them while their ground is clean.
             float start = field.Initial[CorruptionField.Index(x, y)];
-            if (start <= 0.05f) continue;
+            float guard = field.Guard[CorruptionField.Index(x, y)];
+            if (start <= 0.05f && guard <= 0.05f) continue;
+            if (start <= 0.05f) start = 0.6f * guard;
             // Thicker ground, more blades (one or two a cell: a dense sward at half-metre spacing).
             int blades = 1 + (Rand() < start * 0.75f ? 1 : 0);
             for (int b = 0; b < blades; b++)

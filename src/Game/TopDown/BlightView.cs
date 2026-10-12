@@ -86,6 +86,7 @@ public partial class BlightView : Node3D
         foreach (var meter in _meters.Values) meter.Ring.QueueFree();
         _meters.Clear();
         _ripples.Clear();
+        ClearSlugs();
         _motes.Clear();
         _droplets.Clear();
         foreach (var root in world.Blightroots) _roots.Add(MakeRoot(root));
@@ -167,6 +168,7 @@ public partial class BlightView : Node3D
         SyncRoots(world, dt);
         SyncWalls(world, dt);
         SyncMurklings(world);
+        SyncSlugs(world, dt);
         SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
@@ -443,6 +445,8 @@ public partial class BlightView : Node3D
         foreach (var m in world.Murklings)
             if (m.Alive && !m.Budding)
                 ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), 1.7f, dt);
+        foreach (var b in world.Blotters)
+            if (b.Alive && b.Rise <= 0f) ShowMeter(b, b.Corruption, new Vector3(b.Position.X, LevelMap.SwimBand + 1.6f, b.Position.Y), 3.4f, dt);
         foreach (var root in world.Blightroots)
             if (root.Alive) ShowMeter(root, root.Corruption, new Vector3(root.Position.X, SacHeight, root.Position.Y), 2.8f, dt);
         var gone = new List<object>();
@@ -487,6 +491,17 @@ public partial class BlightView : Node3D
         var at = new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y);
         switch (e.Type)
         {
+            case PlaneEventType.BlotterBorn:
+                AddRipple(e.Position, Floor(e.Position) + 0.06f, 0.4f, 4f, e.Size, new Color(Ink.R, Ink.G, Ink.B, 0.95f));
+                _droplets.Burst(new Vector3(e.Position.X, Floor(e.Position) + 0.2f, e.Position.Y), Vector3.Up, 30, 3.5f, 0.6f, 0.8f, 0.2f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2f);
+                break;
+            case PlaneEventType.BlotterBurst:
+                // Cleansed: it bursts into gold, and its light washes the floor round it.
+                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.5f, e.Size, 1.1f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
+                _droplets.Burst(at, Vector3.Up, 40, 4f, 1f, 0.7f, 0.22f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
+                for (int i = 0; i < 70; i++)
+                    _motes.Emit(at + _motes.RandDir() * 0.8f, _motes.RandDir() * _motes.RandRange(1f, 4f) + Vector3.Up * 1.5f, _motes.RandRange(0.8f, 1.6f), _motes.RandRange(0.1f, 0.24f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                break;
             case PlaneEventType.MurklingBud:
                 AddRipple(e.Position, Floor(e.Position) + 0.06f, 0.2f, 1.6f, BlightTuning.BudSeconds, new Color(Ink.R, Ink.G, Ink.B, 0.9f));
                 break;

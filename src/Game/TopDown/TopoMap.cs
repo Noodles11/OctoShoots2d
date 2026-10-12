@@ -50,6 +50,8 @@ public partial class TopoMap : Control
     public readonly List<(System.Numerics.Vector2 A, System.Numerics.Vector2 B, bool Seen, bool Cleared)> Valves = new();
     /// <summary>Light springs (docs/CORRUPTION.md), and whether she is bathing in one.</summary>
     public readonly List<(System.Numerics.Vector2 At, bool Bathing)> Springs = new();
+    /// <summary>Blotters (docs/CORRUPTION.md): where each is and which way it creeps.</summary>
+    public readonly List<(System.Numerics.Vector2 At, System.Numerics.Vector2 Heading)> Blotters = new();
     /// <summary>Clementine's arrow: size and fill.</summary>
     public float ArrowScale = 1f;
     public Color ArrowColor = Colors.White;
@@ -248,6 +250,20 @@ public partial class TopoMap : Control
                 DrawLine(q - new Vector2(4f, 0f), q + new Vector2(4f, 0f), gold, 1.5f, true);
                 DrawLine(q - new Vector2(0f, 4f), q + new Vector2(0f, 4f), gold, 1.5f, true);
             }
+        }
+
+        // A Blotter, once seen: a fat ink slug shape pointing the way it creeps, rimmed violet.
+        foreach (var (at, heading) in Blotters)
+        {
+            if (Fog is not null && Fog.At(at) < 0.5f) continue;
+            Vector2 q = P(at), f = new Vector2(heading.X, heading.Y).Normalized() * 5f, s = new Vector2(-f.Y, f.X);
+            DrawCircle(q - f * 0.6f, 6.5f, new Color(0f, 0f, 0f, 0.6f));
+            DrawCircle(q + f * 0.4f, 6.5f, new Color(0f, 0f, 0f, 0.6f));
+            DrawCircle(q - f * 0.6f, 5f, new Color(0.08f, 0.03f, 0.12f));
+            DrawCircle(q + f * 0.4f, 5f, new Color(0.08f, 0.03f, 0.12f));
+            DrawArc(q + f * 0.4f, 5f, 0f, Mathf.Tau, 20, new Color(0.7f, 0.35f, 1f), 1.4f, true);
+            DrawLine(q + f * 0.9f + s * 0.4f, q + f * 1.5f + s * 0.7f, new Color(0.7f, 0.35f, 1f), 1.2f, true);
+            DrawLine(q + f * 0.9f - s * 0.4f, q + f * 1.5f - s * 0.7f, new Color(0.7f, 0.35f, 1f), 1.2f, true);
         }
 
         // A light spring, once seen: a pool of clear aqua with a gold heart (brighter while she bathes).

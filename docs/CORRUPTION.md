@@ -10,7 +10,12 @@ clearings bud murklings instead. The healthy fish still swim the reef.
 ## The field
 
 - A density grid of 0..1 for every half-metre cell (250 × 250), laid at level start from the map alone
-  (`CorruptionField.ForMap`). Open floor is corrupted in patches (0.45–1 from two octaves of noise).
+  (`CorruptionField.ForMap`). **Half the open floor** starts corrupted (`Cover` 50% + 10% per Menace, at most 85%).
+  Each cell's score is patchy noise lifted toward the level's deep end (its boss arena, else its exit;
+  `Condense` 0.18). The top share is corrupted, thin (0.5) at its edges and thick (1) well inside. In practice about
+  60% of the floor near the deep end is corrupt against about 12% at the far side.
+- **Spreading:** Blotters smear corruption over clean floor (`CorruptionField.Spread`). Spread ink counts toward the
+  level's total to cleanse, and Blightroots regrow it. It never reaches safe places (`Guard`).
 - **Safe places** (the start, shops and treasure caves) are clean out to their radius + 3 m, feathered over 4 m.
   Blightroots never stand within 18 m of their edge.
 - The **boss arena** is the condensation zone: density 1 everywhere inside.
@@ -33,6 +38,28 @@ clearings bud murklings instead. The healthy fish still swim the reef.
 - **The pulse:** every 4 s the sac inflates for 0.8 s (the telegraph), then a ring of ink runs out at 10 m/s. The ring
   stains cleansed ground back to 0.35 and snuffs out each of her shots it crosses. Passing over her, it corrupts her
   for 6 + 2 × Menace (once per ring). Dashing through it takes nothing.
+
+## Blotters (`Blotter`)
+
+Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
+
+- **Waking:** 2 + 1 per Menace (at most 6 alive) wake with the level. They start on thick ground (≥ 0.6), at least
+  25 m from her start and 15 m apart, out of the arena and the shaft.
+- **Born from corruption:** every 20 s there is a 5% chance (+3% per Menace) that one rises out of thick ground at
+  least 18 m from her. It takes 1.5 s, with a dark ripple and a hint.
+- **Creeping:** 1.2 m/s (+0.2 per Menace), with a surging slug gait. It turns slowly (1.6 rad/s) toward clean floor
+  in sight 4–20 m off, the nearer the better, avoiding safe places and the arena. It re-picks a target on arrival,
+  after 10 s, when stuck for 2.5 s, or once its target has been corrupted.
+- **Spreading:** it smears ink over a 2.6 m disc beneath it, toward density 0.9.
+- **Tough:** its corruption meter is 100 (+25% per Menace), about ten default shots in the Shallows. It regrows
+  slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, it bursts into gold and cleanses a 5 m disc.
+- **Contact:** 8 corruption, with the usual hit grace.
+- **Guards:** every ~6 s (less with Menace) there is a 70% chance a murkling buds 2.5–4.5 m from it, up to 2 + Menace
+  guards alive (`Murkling.Guarding`).
+- **Looks** (`BlightView.Blotters.cs`): a chain of six glossy ink mounds from the floor up past her plane, following
+  the head along its trail with a wave down its back. Two eye stalks are tipped with violet, and ink beads off it. On
+  both maps it is a fat ink slug shape pointing the way it creeps. The corruption blades now stand on all open floor,
+  so a Blotter's trail grows them.
 
 ## Murklings (`Murkling`)
 

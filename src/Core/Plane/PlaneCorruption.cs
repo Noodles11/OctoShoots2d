@@ -32,6 +32,13 @@ public static class CorruptionTuning
     public const float EmberRadius = 2.6f;
     /// <summary>Start, shops and treasure caves are clean this far past their own radius (soft edge beyond).</summary>
     public const float SafeMargin = 3f, SafeFeather = 4f;
+    /// <summary>
+    /// At the start, this share of the open floor is corrupted (more with Menace, up to CoverMax): condensed toward the
+    /// level's deep end (its boss arena, else its exit) and scattered in patches everywhere else.
+    /// </summary>
+    public const float Cover = 0.5f, CoverPerMenace = 0.1f, CoverMax = 0.85f;
+    /// <summary>How strongly the corruption gathers toward the deep end (0: evenly patchy).</summary>
+    public const float Condense = 0.18f;
     /// <summary>A cell counts as cleansed below this density.</summary>
     public const float Clean = 0.15f;
 
@@ -59,6 +66,8 @@ public sealed class CorruptionField
     /// <summary>The density each cell started with (what a regrowing Blightroot restores).</summary>
     public readonly float[] Initial = new float[N * N];
     public float InitialTotal { get; private set; }
+    /// <summary>Per cell: 1 where corruption may spread (open floor), easing to 0 at safe places, which it never reaches.</summary>
+    public readonly float[] Guard = new float[N * N];
     public float Total { get; private set; }
     /// <summary>How much of the level's corruption is cleansed, 0..1.</summary>
     public float Cleansed => InitialTotal <= 0f ? 1f : Math.Clamp(1f - Total / InitialTotal, 0f, 1f);
@@ -74,9 +83,12 @@ public sealed class CorruptionField
     public static CorruptionField ForMap(LevelMap map)
     {
         var field = new CorruptionField();
-        field.Lay(map, SafeOf(map), map.HasBoss ? (map.Exit.Position, map.Exit.Radius) : null);
+        field.Lay(map, SafeOf(map), map.HasBoss ? (map.Exit.Position, map.Exit.Radius) : null, Focus(map));
         return field;
     }
+
+    /// <summary>Where a level's corruption gathers: its boss arena, or else its exit (the way deeper).</summary>
+    public static Vector2 Focus(LevelMap map) => map.Exit.Position;
 
     public static int Index(int x, int y) => y * N + x;
     public static Vector2 CellCentre(int x, int y) => new((x + 0.5f) * CorruptionTuning.Cell, (y + 0.5f) * CorruptionTuning.Cell);
@@ -87,29 +99,52 @@ public sealed class CorruptionField
         return x < 0 || y < 0 || x >= N || y >= N ? 0f : Density[Index(x, y)];
     }
 
-    /// <summary>Lays the field: open floor corrupted in patches (thicker toward the deeps), safe places clean, the arena full.</summary>
-    public void Lay(LevelMap map, IEnumerable<(Vector2 Centre, float Radius)> safe, (Vector2 Centre, float Radius)? arena)
+    /// <summary>
+    /// Lays the field: a share of the open floor (Cover, more with Menace) corrupted, gathered toward the focus (the
+    /// deep end) and scattered in patches elsewhere; safe places clean; the arena full.
+    /// </summary>
+    public void Lay(LevelMap map, IEnumerable<(Vector2 Centre, float Radius)> safe, (Vector2 Centre, float Radius)? arena, Vector2? focus = null)
     {
         var safes = safe.ToList();
         float seed = (map.Seed % 997) * 0.37f;
+        float cover = MathF.Min(CorruptionTuning.Cover + CorruptionTuning.CoverPerMenace * MathF.Max(map.Menace, 0f), CorruptionTuning.CoverMax);
+        var score = new float[N * N];
+        var open = new List<float>(N * N / 2);
         for (int y = 0; y < N; y++)
         for (int x = 0; x < N; x++)
         {
             var c = CellCentre(x, y);
-            float d = 0f;
-            if (map.IsOpen(c))
+            int i = Index(x, y);
+            score[i] = float.NegativeInfinity;
+            if (!map.IsOpen(c)) continue;
+            float guard = 1f;
+            foreach (var (centre, radius) in safes)
             {
-                // Patchy: a slow noise lifts most of the floor to thick outgrowth, with thinner glades between.
-                float n = Noise(c.X * 0.09f + seed, c.Y * 0.09f - seed) * 0.65f + Noise(c.X * 0.23f - seed, c.Y * 0.23f + seed * 0.5f) * 0.35f;
-                d = Math.Clamp(0.45f + 0.75f * n, 0f, 1f);
-                foreach (var (centre, radius) in safes)
-                {
-                    float r = Vector2.Distance(c, centre) - (radius + CorruptionTuning.SafeMargin);
-                    if (r < CorruptionTuning.SafeFeather) d *= Math.Clamp(r / CorruptionTuning.SafeFeather, 0f, 1f);
-                }
-                if (arena is { } a && Vector2.Distance(c, a.Centre) <= a.Radius) d = 1f;
+                float r = Vector2.Distance(c, centre) - (radius + CorruptionTuning.SafeMargin);
+                if (r < CorruptionTuning.SafeFeather) guard *= Math.Clamp(r / CorruptionTuning.SafeFeather, 0f, 1f);
             }
-            Density[Index(x, y)] = Initial[Index(x, y)] = d;
+            Guard[i] = guard;
+            // Patchy noise, lifted toward the focus: thick there, scattered patches and glades elsewhere.
+            float n = Noise(c.X * 0.09f + seed, c.Y * 0.09f - seed) * 0.65f + Noise(c.X * 0.23f - seed, c.Y * 0.23f + seed * 0.5f) * 0.35f;
+            float near = focus is { } f ? 1f - Math.Clamp(Vector2.Distance(c, f) / (LevelMap.Size * 0.75f), 0f, 1f) : 0.5f;
+            score[i] = n * (1f - CorruptionTuning.Condense) + near * CorruptionTuning.Condense;
+            if (guard > 0f) open.Add(score[i]);
+        }
+        // The threshold that corrupts the wanted share of the open floor.
+        open.Sort();
+        float cut = open.Count == 0 ? 1f : open[Math.Clamp((int)((1f - cover) * open.Count), 0, open.Count - 1)];
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            int i = Index(x, y);
+            float d = 0f;
+            if (!float.IsNegativeInfinity(score[i]))
+            {
+                // Just past the edge it is thin; well inside, thick.
+                if (score[i] >= cut) d = Math.Clamp(0.5f + (score[i] - cut) * 5f, 0.5f, 1f) * Guard[i];
+                if (arena is { } a && Vector2.Distance(CellCentre(x, y), a.Centre) <= a.Radius) d = 1f;
+            }
+            Density[i] = Initial[i] = d;
             InitialTotal += d;
         }
         Total = InitialTotal;
@@ -152,6 +187,42 @@ public sealed class CorruptionField
         Density[i] = nv;
         Total += nv - v;
         Version++;
+    }
+
+    /// <summary>
+    /// Corruption spreading (a Blotter's trail): raises the open floor round a point toward target by step a call at its
+    /// centre, never into safe places. What it spreads counts as corruption to cleanse (the level's total grows) and is
+    /// what a Blightroot regrows. Returns how much it spread.
+    /// </summary>
+    public float Spread(Vector2 at, float radius, float target, float step)
+    {
+        float added = 0f;
+        Span(at, radius, out int x0, out int y0, out int x1, out int y1);
+        float r2 = radius * radius;
+        for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+        {
+            float d2 = Vector2.DistanceSquared(CellCentre(x, y), at);
+            if (d2 > r2) continue;
+            int i = Index(x, y);
+            float cap = target * Guard[i];
+            float v = Density[i];
+            if (v >= cap) continue;
+            float nv = MathF.Min(cap, v + step * (0.4f + 0.6f * (1f - d2 / r2)));
+            Density[i] = nv;
+            added += nv - v;
+            if (nv > Initial[i])
+            {
+                InitialTotal += nv - Initial[i];
+                Initial[i] = nv;
+            }
+        }
+        if (added > 0f)
+        {
+            Total += added;
+            Version++;
+        }
+        return added;
     }
 
     /// <summary>The cells inside a circle (for an area: a Blightroot's reach, the arena).</summary>
