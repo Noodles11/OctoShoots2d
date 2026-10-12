@@ -76,6 +76,7 @@ src/Game/Title/    title screen (the main scene): live-sea backdrop, menu, seed 
 src/Game/TopDown/ the game scene: level, combat and boss views, camera rig, HUD, minimap, menus, splashes
 src/Game/Fx/      reusable art: flora, creature, clam and reef meshes, pearl materials, particles, sounds, sun light
 src/Game/         controls (InputSetup), settings and save store, conversions
+assets/fonts/     Baloo 2, Nunito and IBM Plex Mono (SIL Open Font License, licences beside them; see TitleStyle)
 assets/shaders/   the reef's skin (reef_surface), each level's frame and the dive's portal (level_frame), the water pass (topdown_post), Clementine's bell and tentacles, bubble, pearl, boss, map and art shaders
 docs/             design documents, the Depth 1 bestiary and milestone checklists
 ```

@@ -154,6 +154,8 @@ public partial class TopDownMain : Node3D
 
     public override void _Ready()
     {
+        // The bundled fonts: Nunito is every screen's default (THEME-BIBLE §6.8).
+        TitleStyle.InstallDefaultFont();
         ParseArgs();
         TakeLaunch();
         InputSetup.Register();
@@ -1027,6 +1029,13 @@ public partial class TopDownMain : Node3D
                         : $"{PlaneBossTuning.Name} is freed! Cleanse the arena to open the Crack ({Mathf.RoundToInt(_world.ArenaCleansed * 100f)}% of {Mathf.RoundToInt(CorruptionTuning.ArenaToOpen * 100f)}%)");
                 }
             }
+        }
+        // The soundtrack follows the reef: darker the more of it the corruption holds, the combat layer while a fight is on.
+        if (OctoShoots.Game.Audio.MusicManager.Instance is { } music)
+        {
+            music.SetCorruption(-(1f - _world.Cleansed));
+            if (_world.InBattle && !_world.Defeated) music.EnterCombat();
+            else music.ExitCombat();
         }
         // Down the shaft: the dive takes over until she is on the level below.
         if (dived)

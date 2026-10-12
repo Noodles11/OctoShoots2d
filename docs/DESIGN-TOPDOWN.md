@@ -913,8 +913,10 @@ at mist distance (inherited fade rule).
   - **Captain's Hook:** every hit shoves a mob along the shot (1.5 m/s, easing off at 6/s, so about 0.25 m); the hook
     makes it ×2.5. Queen Clam is never shoved.
   - **Remora Sucker:** shells drift to her from 7.5 m instead of 2.5 m.
-  - **Bubble Coral:** her bubbles that touch merge into one, bigger and stronger, instead of bouncing apart, and they
-    hover ×1.5 as long (see Combat above).
+  - **Bubble Coral:** her light lingers. Instead of going out at full speed at the end of its range, it slows (steady
+    slowing while fast, the water's drag below about 6.5 m/s) to a hover about 12 m out and hangs there for its own
+    hover time (0.8–1.2 s, ×1.5 with the pearl) before going out — so the shots that follow catch up with it, and
+    shots that touch merge into one, bigger and stronger, instead of bouncing apart (see Combat above).
   - **Lantern Pearl:** her glow (its light) reaches ×1.8 as far and shines brighter, and she reveals the minimap's fog
     ×1.4 as far around her.
   - **Active pearls (F):** she holds one at a time (the last taken; a new one comes charged). Used, it empties and

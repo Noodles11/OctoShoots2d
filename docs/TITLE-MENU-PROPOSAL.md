@@ -63,7 +63,9 @@ The title renders the real game behind the menu.
 - **Display:** Baloo 2 ExtraBold, for the logo, screen titles and big numbers.
 - **UI:** Nunito, for menu items, labels and body text.
 - **Seeds and codes:** IBM Plex Mono.
-- All three are open-licensed, so they can ship with the game as TTFs.
+- All three are open-licensed (SIL OFL) and ship with the game in `assets/fonts` (Baloo 2 and Nunito as variable
+  fonts, set to their weights in `TitleStyle`; the licences beside them). Nunito is also the game's default font, so
+  the HUD, the pause menu and the maps use it too.
 
 **Colours**
 
@@ -107,8 +109,7 @@ The title renders the real game behind the menu.
   - **Continue:** where the save is.
   - **Sea-pedia:** how much you have found.
   - **Statistics:** your best room.
-- **The focused item** turns coral and moves 12 px right. A coral pip appears in front of it: a tiny bubble that
-  pulses.
+- **The focused item** turns coral and moves 12 px right.
 - **Continue** appears only when there is a suspended run. When it is there, it is first and focused by default;
   otherwise **New run** is.
 
@@ -283,7 +284,6 @@ The title uses the **surface & dive** language of the banner prototype, so every
 
 **Focus**
 - The focused item glides 12 px right with a quick ease-out (120 ms).
-- Its coral pip pops in with a tiny bubble-pop ring.
 - Moving the focus leaves a short trail of 2–3 bubbles rising from the item it left.
 
 **Opening a sub-screen**
@@ -409,8 +409,6 @@ deterministically from the sim's events by a new `ProfileRecorder` in Core, so i
 
 ## 11. Not in this first pass
 
-- **Fonts.** Baloo 2, Nunito and IBM Plex Mono are not bundled yet. The screen asks the system for them, then falls
-  back to Arial Rounded / Segoe UI / Consolas.
 - **Trophies.** Freed bosses do not yet appear in the backdrop.
 - **Small motion.** The bubble trail when the focus moves, the logo's splash, and Clementine's jet before a run are
   not built. The menu blooms in (fade and grow) rather than rising, because the rows sit in a layout container.

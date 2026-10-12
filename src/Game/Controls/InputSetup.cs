@@ -20,7 +20,7 @@ public static class InputSetup
 	public const string Left = "move_left";
 	public const string Right = "move_right";
 	public const string AimUp = "aim_up";
-	public const string AimDown = "aim_down";
+	public const string AimDown = "im_down";
 	public const string AimLeft = "aim_left";
 	public const string AimRight = "aim_right";
 	public const string Fire = "fire";

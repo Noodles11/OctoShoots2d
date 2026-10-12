@@ -89,7 +89,7 @@
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
 | No |  | **Twin Siphon** | *Two at a time* | +1 bubbles per throw; ×0.85 shot damage | ★★★ | treasure, boss |  |
-| Yes | ✅ | **Bubble Coral** | *Little ones grow up* | ×1.5 bubble hover time; Bubbles that touch merge into one, bigger and stronger | ★★ | treasure, shop |  |
+| Yes | ✅ | **Bubble Coral** | *Little ones grow up* | ×1.5 bubble hover time; Her light lingers at the end of its range; shots that touch merge into one, bigger and stronger | ★★ | treasure, shop |  |
 
 ## Active pearls (Right mouse click/RB, recharge over time)
 

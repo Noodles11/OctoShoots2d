@@ -5,8 +5,10 @@ namespace OctoShoots.Game.Title;
 
 /// <summary>
 /// The title screen's look (docs/TITLE-MENU-PROPOSAL.md §3): pearl-white cards with a coral rim over the live sea, mint
-/// for good things, butter for records; Baloo 2 for display, Nunito for the UI, IBM Plex Mono for seeds and codes
-/// (system fallbacks until the fonts ship with the game). Plus the surface and dive motions shared by its cards.
+/// for good things, butter for records; Baloo 2 ExtraBold for display, Nunito for the UI (THEME-BIBLE §6.8), IBM Plex
+/// Mono for seeds and codes — bundled in assets/fonts (SIL Open Font License), with system fonts behind them for any
+/// glyph they lack. Nunito is also the game's default font (InstallDefaultFont), so every screen speaks it. Plus the
+/// surface and dive motions shared by its cards.
 /// </summary>
 public static class TitleStyle
 {
@@ -21,12 +23,38 @@ public static class TitleStyle
     public static readonly Color WaterSoft = new(0.78f, 0.88f, 0.88f);
     public static readonly Color Rule = new(1f, 0.85f, 0.82f);
 
-    static Font? _display, _body, _mono;
+    const string Fonts = "res://assets/fonts/";
+    static Font? _display, _body, _bold, _italic, _mono, _symbols;
 
-    public static Font Display => _display ??= new SystemFont { FontNames = new[] { "Baloo 2", "Arial Rounded MT Bold", "Segoe UI Black", "Arial Black" }, FontWeight = 800 };
-    public static Font Body => _body ??= new SystemFont { FontNames = new[] { "Nunito", "Segoe UI", "Arial" }, FontWeight = 600 };
-    public static Font BodyBold => new SystemFont { FontNames = new[] { "Nunito", "Segoe UI", "Arial" }, FontWeight = 800 };
-    public static Font Mono => _mono ??= new SystemFont { FontNames = new[] { "IBM Plex Mono", "Cascadia Mono", "Consolas", "Courier New" }, FontWeight = 500 };
+    /// <summary>Baloo 2 ExtraBold: the logo, screen titles, big numbers, banners.</summary>
+    public static Font Display => _display ??= Weighted("Baloo2-Variable.ttf", 800, "Arial Rounded MT Bold", "Segoe UI Black");
+    /// <summary>Nunito SemiBold: menu items' details, labels, body text, captions.</summary>
+    public static Font Body => _body ??= Weighted("Nunito-Variable.ttf", 600, "Segoe UI", "Arial");
+    /// <summary>Nunito ExtraBold: menu items, names, emphasis.</summary>
+    public static Font BodyBold => _bold ??= Weighted("Nunito-Variable.ttf", 800, "Segoe UI", "Arial");
+    /// <summary>Nunito Italic: the logo's line, taglines.</summary>
+    public static Font Italic => _italic ??= Weighted("Nunito-Italic-Variable.ttf", 600, "Segoe UI", "Arial");
+    /// <summary>IBM Plex Mono Medium: seeds and save codes.</summary>
+    public static Font Mono => _mono ??= Weighted("IBMPlexMono-Medium.ttf", 0, "Cascadia Mono", "Consolas");
+
+    /// <summary>Makes Nunito the default font of every control and every drawn string that names none.</summary>
+    public static void InstallDefaultFont() => ThemeDB.FallbackFont = Body;
+
+    /// <summary>
+    /// A bundled font at a weight (variable fonts; 0 leaves a static font as it is), backed by the named system fonts and
+    /// a symbol font for any glyph it lacks. If the file is missing, the system fonts alone.
+    /// </summary>
+    static Font Weighted(string file, int weight, params string[] system)
+    {
+        var fallback = new SystemFont { FontNames = system, FontWeight = weight > 0 ? weight : 500 };
+        var symbols = _symbols ??= new SystemFont { FontNames = new[] { "Segoe UI Symbol", "Segoe UI Emoji", "Arial Unicode MS" } };
+        fallback.Fallbacks = new Godot.Collections.Array<Font> { symbols };
+        var data = ResourceLoader.Exists(Fonts + file) ? GD.Load<FontFile>(Fonts + file) : null;
+        if (data is null) return fallback;
+        var font = new FontVariation { BaseFont = data, Fallbacks = new Godot.Collections.Array<Font> { fallback } };
+        if (weight > 0) font.VariationOpentype = new Godot.Collections.Dictionary { { TextServerManager.GetPrimaryInterface().NameToTag("wght"), weight } };
+        return font;
+    }
 
     public static Label Text(string text, int size, Color color, Font? font = null, HorizontalAlignment align = HorizontalAlignment.Left)
     {
