@@ -546,6 +546,13 @@ void fragment() {
         _pops.Add(new PopFx { Node = node, Shell = shell, Drops = drops, DropAt = place, DropVel = vel, DropBorn = born, Impact = impact, Radius = radius, Light = bubbles > 0 ? CoreLight(bubbles) : 0f });
     }
 
+    /// <summary>A dash: a small burst of her light where she pushed off (a small firework and a bloom on the water).</summary>
+    public void DashBurst(System.Numerics.Vector2 at)
+    {
+        AddBloom(at, CoreLight(2), BloomSeconds * 0.6f, BloomRadius);
+        Firework(at, 2, System.Numerics.Vector2.Zero);
+    }
+
     /// <summary>Her light struck something (a creature, a vase, a vine...): a power surge arcs back to her for half a second.</summary>
     public void Surge(System.Numerics.Vector2 at) => _trails.Strike(new Vector3(at.X, LevelMap.SwimBand, at.Y));
 

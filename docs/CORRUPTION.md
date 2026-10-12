@@ -42,8 +42,10 @@ clearings bud murklings instead. The healthy fish still swim the reef.
 - **Movement:** they drift toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
   shines brighter than her). This makes bait and herding possible.
 - **Attack:** a black orb thrown every ~2.4 s when she is within 9 m and in sight, for 7 damage.
-- **Contact:** 6 damage, then it clings (at most 3 at once), draining 2.5 HP/s each and dimming her bell. A dash
-  shakes them off into the ink cloud.
+- **Contact:** 6 damage, then it clings (at most 3 at once), draining 2.5 HP/s each and dimming her bell. Feeding shows
+  as one corruption number a second, summed over it. A dash bursts her light: each clinging murkling is thrown off
+  (9 m/s), losing one default shot's worth (10) of its meter, and is dazed for 0.7 s. Then it chases her again. One
+  already worn down bursts. The dash shows as a small light burst, not an ink cloud.
 - **Killed by light:** its corruption meter is 27, so three default shots in a row burst it. It regrows at 14/s (more
   with Menace) after 0.8 s without a hit, and one strong (merged) shot empties it at once. Each shot bursts on it, and
   a piercing one flies on. Passing through a throw halves a shot's light. A murkling burst over cleansed ground drops

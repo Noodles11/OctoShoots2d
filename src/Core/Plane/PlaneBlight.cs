@@ -64,6 +64,8 @@ public static class BlightTuning
     public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 6f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 2.5f;
     /// <summary>A bubble that bursts a murkling or meets its throw keeps this much of its light.</summary>
     public const float BubbleDim = 0.5f;
+    /// <summary>A dash throws a clinging murkling off: one default shot's worth of light, flung this fast, dazed this long.</summary>
+    public const float ShakeLight = 10f, ShakeSpeed = 9f, ShakeSeconds = 0.7f;
     /// <summary>A steady drain (a creature feeding on her) shows as one number: all it took over each second.</summary>
     public const float DrainReport = 1f;
     /// <summary>The arena buds faster while the boss fights.</summary>
@@ -172,6 +174,8 @@ public sealed class Murkling
     public bool Alive = true, Clinging;
     public Vector2 ClingOffset;
     public float ThrowTimer, Seed;
+    /// <summary>Thrown off her by a dash (counting down): it tumbles away and cannot cling or chase until it recovers.</summary>
+    public float Shaken;
     /// <summary>Its corruption meter: her shots empty it; empty, it bursts.</summary>
     public CorruptionMeter Corruption = new(BlightTuning.MurkCorruption, BlightTuning.MurkRegen, BlightTuning.MurkDelay);
     /// <summary>Drifting toward this light (her, or a hanging bubble of hers).</summary>
@@ -369,7 +373,7 @@ public sealed partial class PlaneWorld
         if (_drained > 0f) _drainClock += Dt;
         _drainIdle = _drained != _drainedBefore ? 0f : _drainIdle + Dt;
         _drainedBefore = _drained;
-        if (_drained > 0f && (_drainClock >= BlightTuning.DrainReport || _drainIdle >= 0.25f || Defeated))
+        if (_drained > 0f && (_drainClock >= BlightTuning.DrainReport - 1e-4f || _drainIdle >= 0.25f || Defeated))
         {
             Events.Add(new PlaneEvent(PlaneEventType.PlayerDrained, p.Position, Vector2.Zero, _drained, _drainSource));
             _drained = _drainedBefore = 0f;
@@ -403,12 +407,26 @@ public sealed partial class PlaneWorld
         _pops.Add((shot.Position, shot.Bubbles, shot.Dim));
     }
 
-    /// <summary>A dash: clinging murklings are shaken off into the ink cloud, and a coiling vine lets go.</summary>
+    /// <summary>
+    /// A dash: her light bursts out. Clinging murklings are thrown off, each losing one shot's worth of corruption (one
+    /// already worn down bursts), and come back for her once they recover; a coiling vine lets go.
+    /// </summary>
     void DashFreed()
     {
         if (Corruption is null) return;
+        var p = Player;
         foreach (var m in Murklings)
-            if (m.Alive && m.Clinging) BurstMurkling(m, ember: false);
+        {
+            if (!m.Alive || !m.Clinging) continue;
+            m.Clinging = false;
+            var away = SafeNormalize(m.ClingOffset);
+            if (away == Vector2.Zero) away = -SafeNormalize(p.Velocity);
+            m.Velocity = away * BlightTuning.ShakeSpeed;
+            m.Shaken = BlightTuning.ShakeSeconds;
+            bool emptied = m.Corruption.Hit(BlightTuning.ShakeLight);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, BlightTuning.ShakeLight));
+            if (emptied) BurstMurkling(m, ember: true);
+        }
         foreach (var vine in Vines)
             if (vine.Coiling) LetGo(vine);
         Player.RootTimer = 0f;
@@ -703,6 +721,13 @@ public sealed partial class PlaneWorld
             {
                 m.Position = p.Position + m.ClingOffset;
                 Drain(BlightTuning.ClingDrain * Dt, DamageSource.Murkling);
+                continue;
+            }
+            if (m.Shaken > 0f)
+            {
+                m.Shaken -= Dt;
+                m.Velocity = MoveToward(m.Velocity, Vector2.Zero, BlightTuning.ShakeSpeed * 1.2f * Dt);
+                Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false);
                 continue;
             }
             // Toward the brightest light: her, or a bubble of hers hanging at the end of its range (bait).

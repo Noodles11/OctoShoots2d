@@ -556,7 +556,8 @@ public partial class BellView : Node3D
         }
         for (int i = 0; i < _ink.Count; i++)
         {
-            bool used = i < world.Clouds.Count;
+            // The dash leaves no ink now: her light bursts instead (CombatView.DashBurst). The cloud stays in the sim.
+            bool used = false;
             _ink[i].Visible = used;
             if (!used) continue;
             var c = world.Clouds[i];

@@ -940,6 +940,8 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.ShellCollected) _hud.PulseShells();
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
                 else if (e.Type == PlaneEventType.AmbushSprung) Say("Ambush!");
+                else if (e.Type == PlaneEventType.PlayerDrained) _damage.Show(e);
+                else if (e.Type == PlaneEventType.DashStarted) _combat.DashBurst(e.Position);
                 else if (e.Type == PlaneEventType.PlayerHit)
                 {
                     _damage.Show(e);

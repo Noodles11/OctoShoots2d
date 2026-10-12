@@ -138,6 +138,38 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void ADashThrowsAClingingMurklingOffAndItComesBack()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var m = new Murkling { Position = w.Player.Position + new Vector2(0.5f, 0f), Bud = 0f, Clinging = true, ClingOffset = new Vector2(0.5f, 0f) };
+        w.Murklings.Add(m);
+        // While it clings, it drinks: one number a second, the whole second's worth.
+        float hp = w.Player.Hp;
+        int reports = 0;
+        for (int i = 0; i < 60; i++)
+        {
+            w.Step(default);
+            reports += w.Events.Count(e => e.Type == PlaneEventType.PlayerDrained);
+        }
+        Assert.Equal(1, reports);
+        Assert.True(w.Player.Hp < hp);
+        // A dash throws it off with one shot's worth of light; it lives on.
+        w.Step(new PlaneInput { Dash = true, Move = Vector2.UnitY });
+        Assert.True(m.Alive);
+        Assert.False(m.Clinging);
+        Assert.Equal(BlightTuning.MurkCorruption - BlightTuning.ShakeLight, m.Corruption.Value, 0);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.MobHit);
+        // Once it recovers, it chases her again.
+        for (int i = 0; i < (int)(BlightTuning.ShakeSeconds * 60f) + 2; i++) w.Step(default);
+        Assert.True(m.Alive);
+        Assert.True(m.Shaken <= 0f);
+        float apart = Vector2.Distance(m.Position, w.Player.Position);
+        for (int i = 0; i < 90 && !m.Clinging; i++) w.Step(default);
+        Assert.True(m.Clinging || Vector2.Distance(m.Position, w.Player.Position) < apart);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));
