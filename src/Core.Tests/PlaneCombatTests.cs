@@ -548,4 +548,76 @@ public class PlaneCombatTests
         }
         return from + Vector2.UnitX * 2f;
     }
+
+    /// <summary>The longest open line from her start (so shots fly free).</summary>
+    static Vector2 OpenAim(PlaneWorld w)
+    {
+        var from = w.Player.Position;
+        Vector2 best = Vector2.UnitX;
+        float bestRun = 0f;
+        for (int i = 0; i < 32; i++)
+        {
+            var d = new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f));
+            float run = 0f;
+            while (run < 20f && w.Map.IsOpen(from + d * run)) run += 0.5f;
+            if (run > bestRun) { bestRun = run; best = d; }
+        }
+        return best;
+    }
+
+    [Fact]
+    public void WithBubbleCoralHerLightSlowsHoversAndThenGoesOut()
+    {
+        var w = MergingWorld();
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        var aim = OpenAim(w);
+        w.Step(new PlaneInput { Aim = aim, Fire = true });
+        var shot = w.Shots.Single(s => s.FromPlayer);
+        Assert.True(shot.Lingers);
+        float last = shot.Velocity.Length(), slowest = last, hovered = 0f;
+        bool gone = false;
+        for (int i = 0; i < 400 && !gone; i++)
+        {
+            w.Step(new PlaneInput { Aim = aim });
+            gone = !w.Shots.Contains(shot);
+            if (gone) break;
+            float v = shot.Velocity.Length();
+            Assert.True(v <= last + 1e-3f, "it only slows");
+            last = v;
+            slowest = MathF.Min(slowest, v);
+            if (v < PlaneCombatTuning.BubbleStop) hovered += PlaneWorld.Dt;
+        }
+        Assert.True(gone, "it goes out in the end");
+        Assert.True(slowest < PlaneCombatTuning.BubbleStop, $"it slowed to {slowest}");
+        Assert.True(hovered >= PlaneCombatTuning.BubbleHoverMin * 1.5f - 0.05f, $"it hovered {hovered:0.00} s");
+    }
+
+    [Fact]
+    public void WithBubbleCoralVolleysCatchUpAndMergeAndWithoutItTheyDoNot()
+    {
+        foreach (bool coral in new[] { true, false })
+        {
+            var w = coral ? MergingWorld() : World();
+            foreach (var m in w.Mobs) m.Hp = 0f;
+            var aim = OpenAim(w);
+            int most = 0;
+            float slowest = float.MaxValue;
+            for (int i = 0; i < 180; i++)
+            {
+                w.Player.Hp = 100f;
+                w.Step(new PlaneInput { Aim = aim, Fire = true });
+                foreach (var s in w.Shots.Where(s => s.FromPlayer))
+                {
+                    most = Math.Max(most, s.Bubbles);
+                    slowest = MathF.Min(slowest, s.Velocity.Length());
+                }
+            }
+            if (coral) Assert.True(most >= 3, $"merged up to {most}");
+            else
+            {
+                Assert.Equal(1, most);
+                Assert.True(slowest >= PlaneCombatTuning.ShotSpeed - 0.01f, "plain light never slows");
+            }
+        }
+    }
 }

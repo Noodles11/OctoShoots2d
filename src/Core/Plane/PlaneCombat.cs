@@ -20,7 +20,8 @@ public static class PlaneCombatTuning
     /// <summary>
     /// Her shots are light (docs/LIGHT-BUBBLES.md; the rules still call them bubbles): thrown hard at ShotSpeed, light
     /// has no friction, so it flies on undimmed at full speed to the end of its BubbleRange and goes out there like a
-    /// match (no hovering, no burst). ShotLife is only a safety net. LightSettle and the hover times are no longer used.
+    /// match (no hovering, no burst). ShotLife is only a safety net. With Bubble Coral her light lingers instead (see
+    /// LingerDrag): it slows to a hover near the end of its range, so later shots catch up and merge with it.
     /// </summary>
     public const float ShotSpeed = 30f;
     /// <summary>The surge back to her after a hit cleanses a line of ground this wide, by this much density.</summary>
@@ -32,6 +33,13 @@ public static class PlaneCombatTuning
     /// </summary>
     public const float BubbleStop = 0.9f;
     public const float BubbleHoverMin = 0.8f, BubbleHoverMax = 1.2f;
+    /// <summary>
+    /// Bubble Coral: lingering light. Thrown at ShotSpeed, it slows steadily (the deceleration that would stop it at its
+    /// range), then — once the water's drag (LingerDrag × its speed, per second) is the gentler — eases off, the two
+    /// meeting smoothly at about 6.5 m/s. Slower than BubbleStop it hovers (still drifting, still slowing) for its own
+    /// hover time (BubbleHoverMin–Max × her bubble hover stat: Bubble Coral ×1.5), then goes out — about 12 m from her.
+    /// </summary>
+    public const float LingerDrag = 6f;
     /// <summary>
     /// A bubble that bumps into rock or another bubble pops this often; otherwise it bounces off (Mirror Scale's bounces
     /// are sure; with Bubble Coral, bubbles that meet merge instead). A bubble that hits a mob always pops.
@@ -144,6 +152,8 @@ public sealed class PlaneShot
     public bool Homing, Pierce, Boomerang, Returning, Wave;
     /// <summary>Starfish Arm: it grows as it flies. Starburst Gland: it bursts into light where it pops. Mitosis: it splits on a pop.</summary>
     public bool Grow, Explosive, Split;
+    /// <summary>Bubble Coral: the light slows to a hover near the end of its range instead of going out there at speed.</summary>
+    public bool Lingers;
     /// <summary>Pearl Diver: how charged it was when thrown, 0–1 (the view draws a charged one as a pearl).</summary>
     public float Charged;
     /// <summary>Bubbles: thrown at Speed0, slowing as if to stop at Range, then easing off with drag (0: a plain shot at constant speed).</summary>
@@ -656,6 +666,7 @@ public sealed partial class PlaneWorld
                 Grow = spec.Grow,
                 Explosive = spec.Explosive,
                 Split = spec.Split,
+                Lingers = Run.Loadout.Flags.Contains("mergeBubbles"),
                 Charged = charge,
                 Hover = hover,
                 Volley = _volleys,
@@ -810,6 +821,7 @@ public sealed partial class PlaneWorld
                 BaseRadius = radius,
                 Volley = volley,
                 Explosive = shot.Explosive,
+                Lingers = shot.Lingers,
                 Hover = _bubbleRng.Range(PlaneCombatTuning.BubbleHoverMin, PlaneCombatTuning.BubbleHoverMax) * Run.Loadout.Stats[Stat.BubbleHover],
             };
             if (spare is not null) half.Hit = new HashSet<PlaneMob> { spare };
@@ -838,14 +850,30 @@ public sealed partial class PlaneWorld
         shot.Age += Dt;
         shot.Life -= Dt;
         float speed = shot.Velocity.Length();
-        // Light has no friction: it flies at full speed to the end of its range and goes out there, like a match. It
-        // never lingers, and it does not burst (unless a pearl makes it: the Starburst Gland's burst).
-        if (shot.Life <= 0f || shot.Range > 0f && !shot.Boomerang && shot.Traveled >= shot.Range)
+        // Light has no friction: it flies at full speed to the end of its range and goes out there, like a match, and
+        // it does not burst (unless a pearl makes it: the Starburst Gland's burst). With Bubble Coral it lingers instead.
+        bool lingers = shot.Lingers && shot.Range > 0f && !shot.Boomerang;
+        if (shot.Life <= 0f || !lingers && shot.Range > 0f && !shot.Boomerang && shot.Traveled >= shot.Range)
         {
             Extinguish(shot);
             return;
         }
-        Vector2 dir = speed > 1e-4f ? shot.Velocity / speed : p.Aim;
+        if (lingers)
+        {
+            // Steady slowing while fast, the water's drag once that is gentler; slow, it hovers its own time, then goes out.
+            float decel = shot.Speed0 * shot.Speed0 / (2f * shot.Range);
+            speed = MathF.Max(speed - MathF.Min(decel, PlaneCombatTuning.LingerDrag * speed) * Dt, 0f);
+            if (speed < PlaneCombatTuning.BubbleStop)
+            {
+                shot.Rest += Dt;
+                if (shot.Rest >= shot.Hover)
+                {
+                    Extinguish(shot);
+                    return;
+                }
+            }
+        }
+        Vector2 dir = shot.Velocity.LengthSquared() > 1e-8f ? Vector2.Normalize(shot.Velocity) : p.Aim;
         float range = shot.Range > 0f ? shot.Range : PlaneCombatTuning.BubbleRange;
 
         if (shot.Boomerang)

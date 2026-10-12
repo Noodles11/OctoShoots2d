@@ -130,7 +130,7 @@ public static class ItemCaption
     static string FlagLine(string flag) => flag switch
     {
         "magnet" => "Pulls pickups toward you",
-        "mergeBubbles" => "Bubbles that touch merge into one, bigger and stronger",
+        "mergeBubbles" => "Her light lingers at the end of its range; shots that touch merge into one, bigger and stronger",
         "landmarks" => "Shows landmarks on the map",
         "inkTrail" => "Leaves an ink trail",
         "colorCycle" => "Shots cycle through neon colours",
