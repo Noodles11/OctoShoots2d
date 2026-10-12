@@ -89,10 +89,10 @@ public static class PlaneCombatTuning
     /// <summary>Starfish Arm: a bubble grows as it flies, reaching GrowMax× its size and damage at the end of its range.</summary>
     public const float GrowMax = 2f;
     /// <summary>
-    /// Ink Sac: wherever a bubble pops it bursts into ink, hurting everything within InkBlastRadius of its edge for
-    /// InkBlastDamage of its own damage (on top of the hit itself).
+    /// Starburst Gland (item id ink_sac): wherever a shot pops it bursts into light, cleansing everything within
+    /// BurstRadius of its edge for BurstDamage of its own damage (on top of the hit itself), and the ground under it.
     /// </summary>
-    public const float InkBlastRadius = 1.8f, InkBlastDamage = 0.6f;
+    public const float BurstRadius = 1.8f, BurstDamage = 0.6f;
     /// <summary>A hit shoves a mob along the shot at Tuning.ShotKnockback × her knockback stat (m/s), easing off at this rate.</summary>
     public const float KnockDecay = 6f;
     /// <summary>
@@ -142,7 +142,7 @@ public sealed class PlaneShot
     public float Age;
     public float Traveled;
     public bool Homing, Pierce, Boomerang, Returning, Wave;
-    /// <summary>Starfish Arm: it grows as it flies. Ink Sac: it bursts into ink where it pops. Mitosis: it splits on a pop.</summary>
+    /// <summary>Starfish Arm: it grows as it flies. Starburst Gland: it bursts into light where it pops. Mitosis: it splits on a pop.</summary>
     public bool Grow, Explosive, Split;
     /// <summary>Pearl Diver: how charged it was when thrown, 0–1 (the view draws a charged one as a pearl).</summary>
     public float Charged;
@@ -519,12 +519,16 @@ public sealed partial class PlaneWorld
         Free(mob);
     }
 
-    /// <summary>Ink Sac: a popped bubble bursts into ink, hurting every mob (and Queen Clam, while open) within reach.</summary>
-    void InkBlast(PlaneShot shot)
+    /// <summary>
+    /// Starburst Gland: a popped shot bursts into light, striking every creature within reach (pufferlings, murklings,
+    /// Blotters, a Blightroot's sac, Queen Clam while open), breaking pots, and cleansing the ground it floods.
+    /// </summary>
+    void LightBurst(PlaneShot shot)
     {
-        float reach = PlaneCombatTuning.InkBlastRadius + shot.Radius;
-        float damage = shot.Damage * GrowFactor(shot) * PlaneCombatTuning.InkBlastDamage;
-        Events.Add(new PlaneEvent(PlaneEventType.InkBlast, shot.Position, Vector2.Zero, reach));
+        float reach = PlaneCombatTuning.BurstRadius + shot.Radius;
+        float damage = shot.Damage * GrowFactor(shot) * PlaneCombatTuning.BurstDamage;
+        Events.Add(new PlaneEvent(PlaneEventType.LightBurst, shot.Position, Vector2.Zero, reach));
+        BurstOnCorruption(shot.Position, reach, damage);
         foreach (var mob in Mobs)
             if (mob.Alive && Vector2.Distance(mob.Position, shot.Position) < reach + mob.Radius)
                 DamageMob(mob, damage, mob.Position - shot.Position);
@@ -835,7 +839,7 @@ public sealed partial class PlaneWorld
         shot.Life -= Dt;
         float speed = shot.Velocity.Length();
         // Light has no friction: it flies at full speed to the end of its range and goes out there, like a match. It
-        // never lingers, and it does not burst (unless a pearl makes it: Ink Sac's blast).
+        // never lingers, and it does not burst (unless a pearl makes it: the Starburst Gland's burst).
         if (shot.Life <= 0f || shot.Range > 0f && !shot.Boomerang && shot.Traveled >= shot.Range)
         {
             Extinguish(shot);
@@ -942,12 +946,12 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>
-    /// A bubble bursts where it is (on a mob, on rock, or where it hovered); an Ink Sac one bursts into ink. toward: from
+    /// A bubble bursts where it is (on a mob, on rock, or where it hovered); a Starburst Gland one bursts into light. toward: from
     /// its centre to where it was struck (the film tears open there first); none, it gives way at a random spot.
     /// </summary>
     /// <summary>
     /// A shot of her light at the end of its range goes out like a match: no burst and no cleansing burst, only a wisp
-    /// (the view). With Ink Sac it still bursts into ink.
+    /// (the view). With the Starburst Gland it still bursts into light.
     /// </summary>
     void Extinguish(PlaneShot shot)
     {
@@ -991,7 +995,7 @@ public sealed partial class PlaneWorld
             at = new Vector2(MathF.Cos(a), MathF.Sin(a));
         }
         Events.Add(new PlaneEvent(PlaneEventType.ShotPopped, shot.Position, at, shot.Radius));
-        if (shot.FromPlayer && shot.Explosive) InkBlast(shot);
+        if (shot.FromPlayer && shot.Explosive) LightBurst(shot);
         LightReleased(shot);
     }
 

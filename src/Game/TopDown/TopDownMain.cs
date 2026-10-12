@@ -992,9 +992,9 @@ public partial class TopDownMain : Node3D
                 else if (e.Type is PlaneEventType.MobHit or PlaneEventType.BossHit) _damage.Show(e);
                 else if (e.Type == PlaneEventType.ShotPopped) _combat.Pop(e.Position, e.Size * 1.7f, e.Direction);
                 else if (e.Type == PlaneEventType.ShotOut) _combat.Extinguish(e.Position, e.Direction);
-                else if (e.Type == PlaneEventType.InkBlast)
+                else if (e.Type == PlaneEventType.LightBurst)
                 {
-                    _combat.InkBlast(e.Position, e.Size);
+                    _combat.LightBurst(e.Position, e.Size);
                     _camera.Shake(0.12f);
                 }
                 else if (e.Type == PlaneEventType.ActiveUsed) _combat.ActiveUsed(_world);

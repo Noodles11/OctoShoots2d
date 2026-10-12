@@ -122,7 +122,7 @@ public class PlanePearlEffectTests
     }
 
     [Fact]
-    public void InkSacBubblesBurstIntoInkThatHurtsEveryoneNear()
+    public void StarburstGlandShotsBurstIntoLightThatStrikesEveryoneNear()
     {
         var w = World("ink_sac");
         var at = w.Player.Position + new Vector2(4f, 0f);
@@ -132,7 +132,7 @@ public class PlanePearlEffectTests
         w.Mobs.Add(b);
         w.Shots.Add(new PlaneShot { Position = at, Line = at, Velocity = Vector2.UnitX, Life = 1f, FromPlayer = true, Damage = 10f, Explosive = true });
         w.Step(default);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.InkBlast);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.LightBurst);
         Assert.True(a.Hp <= PlaneCombatTuning.MobHp - 10f - 6f + 0.01f, $"hit and blast: {a.Hp}");
         Assert.True(b.Hp < PlaneCombatTuning.MobHp, "the blast reaches the one beside it");
     }

@@ -418,6 +418,38 @@ public sealed partial class PlaneWorld
         Run.Hp = p.Hp;
     }
 
+    /// <summary>
+    /// A burst of her light (the Starburst Gland): it cleanses the ground it floods and strikes every corrupted
+    /// creature in reach, each taking the burst's light off its meter.
+    /// </summary>
+    void BurstOnCorruption(Vector2 at, float reach, float light)
+    {
+        if (Corruption is not { } field) return;
+        field.Cleanse(at, reach, 0.9f);
+        foreach (var m in Murklings)
+        {
+            if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, at) > reach + BlightTuning.MurkRadius) continue;
+            bool emptied = m.Corruption.Hit(light);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, light));
+            if (emptied) BurstMurkling(m, ember: true);
+        }
+        foreach (var b in Blotters)
+        {
+            if (!b.Alive || b.Rise > 0f || !b.Touches(at, reach)) continue;
+            b.SinceStruck = 0f;
+            bool emptied = b.Corruption.Hit(light);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, Vector2.Zero, light));
+            if (emptied) BurstBlotter(b, field);
+        }
+        foreach (var root in Blightroots)
+        {
+            if (!root.Alive || Vector2.Distance(root.Position, at) > reach + BlightTuning.SacRadius) continue;
+            // Emptied, it bursts on its own next step.
+            root.Corruption.Hit(light);
+            Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, Vector2.Zero, light));
+        }
+    }
+
     /// <summary>One of her bubbles popped: its light cleanses (and cuts vines, wears valves) after combat.</summary>
     void LightReleased(PlaneShot shot)
     {

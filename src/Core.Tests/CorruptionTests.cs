@@ -362,6 +362,25 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void AStarburstShotBurstsIntoLightThatCleansesAndStrikesTheCorrupted()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var field = w.Corruption!;
+        int cell = Enumerable.Range(0, field.Density.Length).First(i => field.Density[i] > 0.8f && w.Clear(CellAt(i), 1.5f)
+            && Vector2.Distance(CellAt(i), w.Player.Position) > 6f);
+        var at = CellAt(cell);
+        var near = new Murkling { Position = at + new Vector2(1.2f, 0f), Bud = 0f };
+        w.Murklings.Add(near);
+        // A burst where the shot goes out: no direct hit, but its light floods round it.
+        w.Shots.Add(new PlaneShot { Position = at, Line = at, Velocity = Vector2.UnitX * 0.01f, Life = 1f, FromPlayer = true, Damage = 10f, Explosive = true, Range = 1f, Traveled = 2f });
+        w.Step(default);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.LightBurst);
+        Assert.True(near.Corruption.Value < near.Corruption.Max);
+        Assert.True(field.At(at) < 0.3f);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));

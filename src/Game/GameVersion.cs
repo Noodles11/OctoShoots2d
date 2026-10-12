@@ -5,7 +5,7 @@ namespace OctoShoots.Game;
 /// <summary>Which build this is, shown on the title screen (bump with each notable change).</summary>
 public static class GameVersion
 {
-    public const string Number = "0.6.6";
+    public const string Number = "0.6.7";
     /// <summary>The line of work this build comes from.</summary>
     public const string Line = "m1-corruption";
 

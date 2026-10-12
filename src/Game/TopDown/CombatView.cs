@@ -433,33 +433,30 @@ void fragment() {
 
     readonly List<BlastFx> _blasts = new();
 
-    /// <summary>Ink Sac: a bubble burst into ink here — a dark violet cloud billows out to the blast's reach and thins away.</summary>
-    public void InkBlast(System.Numerics.Vector2 at, float radius)
+    /// <summary>
+    /// Starburst Gland: a shot bursts into light here. A white-gold flash swells to the burst's reach and fades, sparks
+    /// fly out like a big firework, and a bloom of light lies on the water a moment.
+    /// </summary>
+    public void LightBurst(System.Numerics.Vector2 at, float radius)
     {
+        AddBloom(at, 1.8f, 0.9f, Mathf.Min(radius * 1.2f, 3f));
+        Firework(at, 10, System.Numerics.Vector2.Zero);
         var node = new Node3D { Position = new Vector3(at.X, LevelMap.SwimBand, at.Y) };
         AddChild(node);
         var material = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.16f, 0.06f, 0.26f, 0.7f),
+            AlbedoColor = new Color(1f, 0.85f, 0.55f, 0.55f),
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            BlendMode = BaseMaterial3D.BlendModeEnum.Add,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             EmissionEnabled = true,
-            Emission = new Color(0.45f, 0.15f, 0.75f),
-            EmissionEnergyMultiplier = 0.6f,
+            Emission = new Color(1f, 0.78f, 0.4f),
+            EmissionEnergyMultiplier = 1.6f,
             RimEnabled = true,
         };
         var cloud = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         node.AddChild(cloud);
-        var puffs = new MeshInstance3D[8];
-        var dirs = new Vector3[8];
-        for (int i = 0; i < puffs.Length; i++)
-        {
-            float a = i * Mathf.Tau / puffs.Length + 0.3f * Mathf.Sin(i * 2.7f);
-            dirs[i] = new Vector3(Mathf.Cos(a), 0.25f + 0.2f * Mathf.Sin(i * 1.9f), Mathf.Sin(a));
-            puffs[i] = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            node.AddChild(puffs[i]);
-        }
-        _blasts.Add(new BlastFx { Node = node, Cloud = cloud, Puffs = puffs, PuffDirs = dirs, Material = material, Radius = radius });
+        _blasts.Add(new BlastFx { Node = node, Cloud = cloud, Puffs = System.Array.Empty<MeshInstance3D>(), PuffDirs = System.Array.Empty<Vector3>(), Material = material, Radius = radius });
     }
 
     const float SongSeconds = 1.6f;
@@ -734,20 +731,20 @@ void fragment() {
                 float light = (charged ? Mathf.Max(CoreLight(shot.Bubbles), 0.75f) : CoreLight(shot.Bubbles)) * ember * (1f + 0.5f * pulse) * shot.Dim;
                 float warmth = charged ? Mathf.Max(Warmth(shot.Bubbles), 0.5f) : Warmth(shot.Bubbles);
                 _shots[i].SetInstanceShaderParameter("seed", seed);
-                _shots[i].SetInstanceShaderParameter("ink", shot.Explosive ? 1f : 0f);
+                _shots[i].SetInstanceShaderParameter("ink", 0f);
                 // A full one burns white: a small star.
                 _shots[i].SetInstanceShaderParameter("lantern", Mathf.Max(light, 0.35f * shot.Dim) * (shot.Bubbles >= PlaneCombatTuning.BubbleCap ? 1.25f : 1f));
                 _shots[i].SetInstanceShaderParameter("warmth", warmth);
-                _trails.Feed(shot, _shots[i].Position, warmth, Mathf.Clamp(light * 1.4f, 0.35f, 1.2f) * (shot.Explosive ? 0.5f : 1f));
+                _trails.Feed(shot, _shots[i].Position, warmth, Mathf.Clamp(light * 1.4f, 0.35f, 1.2f) * (shot.Explosive ? 1.25f : 1f));
 
                 // Its glow in the water: a fixed-size disc, stronger (never wider) as it merges.
                 float k = Mathf.Clamp(light / MaxLight, 0f, 1.5f);
                 var halo = _halos[i];
                 halo.Visible = true;
                 halo.Position = _shots[i].Position;
-                halo.SetInstanceShaderParameter("strength", Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 0.4f : 1f));
+                halo.SetInstanceShaderParameter("strength", Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 1.3f : 1f));
                 halo.SetInstanceShaderParameter("color", new Color(1f, 0.769f, 0.42f).Lerp(new Color(1f, 0.95f, 0.84f), warmth));
-                _candidates.Add((shot.Position, GroundStrength * Mathf.Min(k, 1f) * (shot.Explosive ? 0.4f : 1f), GroundRadius));
+                _candidates.Add((shot.Position, GroundStrength * Mathf.Min(k, 1f) * (shot.Explosive ? 1.3f : 1f), GroundRadius));
             }
             else if (shot.BossPearl)
             {
@@ -800,7 +797,7 @@ void fragment() {
             }
         }
 
-        // Ink blasts: the cloud billows out to its reach and thins; puffs roll outward and up.
+        // Light bursts: the flash swells out to its reach and fades.
         for (int i = _blasts.Count - 1; i >= 0; i--)
         {
             var blast = _blasts[i];
@@ -813,14 +810,11 @@ void fragment() {
                 continue;
             }
             float grow = 1f - (1f - k) * (1f - k) * (1f - k);
-            blast.Cloud.Scale = new Vector3(1f, 0.55f, 1f) * blast.Radius * (0.35f + 0.65f * grow);
-            blast.Material.AlbedoColor = new Color(0.16f, 0.06f, 0.26f, 0.7f * (1f - k) * (1f - k));
-            blast.Material.EmissionEnergyMultiplier = 0.9f * (1f - k);
-            for (int d = 0; d < blast.Puffs.Length; d++)
-            {
-                blast.Puffs[d].Position = blast.PuffDirs[d] * blast.Radius * (0.4f + 0.75f * grow);
-                blast.Puffs[d].Scale = Vector3.One * blast.Radius * 0.32f * (1f - 0.5f * k);
-            }
+            // A flash: quick to swell, white-gold at first and warming as it fades.
+            blast.Cloud.Scale = new Vector3(1f, 0.6f, 1f) * blast.Radius * (0.3f + 0.7f * grow);
+            float fade = (1f - k) * (1f - k);
+            blast.Material.AlbedoColor = new Color(1f, 0.92f - 0.15f * k, 0.7f - 0.3f * k, 0.55f * fade);
+            blast.Material.EmissionEnergyMultiplier = 1.6f * fade;
         }
 
         // Whale Song: rings of sound swell out and fade.
