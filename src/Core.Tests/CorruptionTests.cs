@@ -292,6 +292,26 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void TheSurgeBackFromAHitCleansesAThinLineOfGround()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var field = w.Corruption!;
+        // A murkling 6 m off over thick ink; she stands on clean ground.
+        int cell = Enumerable.Range(0, field.Density.Length).First(i => field.Density[i] > 0.8f && w.Clear(CellAt(i), 1f)
+            && w.Clear(CellAt(i) + new Vector2(6f, 0f), 0.6f) && w.LineOfSight(CellAt(i), CellAt(i) + new Vector2(6f, 0f)));
+        var at = CellAt(cell);
+        w.Player.Position = w.Player.PrevPosition = at + new Vector2(6f, 0f);
+        var mid = at + new Vector2(3f, 0f);
+        float before = field.At(mid);
+        var m = new Murkling { Position = at, Bud = 0f };
+        w.Murklings.Add(m);
+        w.Shots.Add(Light(at));
+        w.Step(default);
+        Assert.True(field.At(mid) < before || before <= 0f);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));

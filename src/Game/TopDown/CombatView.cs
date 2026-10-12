@@ -569,6 +569,23 @@ void fragment() {
         _pops.Add(new PopFx { Node = node, Shell = shell, Drops = drops, DropAt = place, DropVel = vel, DropBorn = born, Impact = impact, Radius = radius, Light = bubbles > 0 ? CoreLight(bubbles) : 0f });
     }
 
+    /// <summary>
+    /// A shot of her light going out at the end of its range, like a match: a last flicker, a few embers drifting up
+    /// and cooling, and a curl of smoke. No flash and no bloom on the water.
+    /// </summary>
+    public void Extinguish(System.Numerics.Vector2 at, System.Numerics.Vector2 dir)
+    {
+        var p = new Vector3(at.X, LevelMap.SwimBand, at.Y);
+        var on = new Vector3(dir.X, 0f, dir.Y) * 0.6f;
+        var gold = new Color(1.2f, 0.75f, 0.3f);
+        var ember = new Color(0.9f, 0.3f, 0.06f, 0f);
+        for (int i = 0; i < 5; i++)
+            _fireworks.Emit(p, on + new Vector3(_fireworks.RandRange(-0.3f, 0.3f), _fireworks.RandRange(0.5f, 1.2f), _fireworks.RandRange(-0.3f, 0.3f)),
+                _fireworks.RandRange(0.35f, 0.7f), _fireworks.RandRange(0.05f, 0.09f), 0.01f, gold, ember, drag: 2f, buoyancy: 0.4f);
+        // The smoke: a pale curl that rises and spreads as it fades.
+        _fireworks.Emit(p, on * 0.5f + Vector3.Up * 0.6f, 0.9f, 0.1f, 0.35f, new Color(0.5f, 0.45f, 0.4f, 0.25f), new Color(0.3f, 0.3f, 0.32f, 0f), drag: 1.5f, buoyancy: 0.3f);
+    }
+
     /// <summary>A dash: a small burst of her light where she pushed off (a small firework and a bloom on the water).</summary>
     public void DashBurst(System.Numerics.Vector2 at)
     {

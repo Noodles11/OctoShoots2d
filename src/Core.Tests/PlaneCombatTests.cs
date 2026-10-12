@@ -304,7 +304,7 @@ public class PlaneCombatTests
     }
 
     [Fact]
-    public void BubblesSlowToAStopAndPop()
+    public void HerLightFliesAtFullSpeedAndGoesOutAtTheEndOfItsRange()
     {
         var w = World();
         foreach (var m in w.Mobs) m.Hp = 0f;
@@ -322,24 +322,21 @@ public class PlaneCombatTests
         w.Step(new PlaneInput { Aim = best, Fire = true });
         var bubble = w.Shots.Single(s => s.FromPlayer);
         float first = bubble.Velocity.Length();
-        float lastSpeed = first;
-        bool popped = false;
-        for (int i = 0; i < 400 && !popped; i++)
+        bool gone = false, popped = false;
+        for (int i = 0; i < 400 && !gone; i++)
         {
             w.Step(new PlaneInput { Aim = best });
-            popped = w.Events.Any(e => e.Type == PlaneEventType.ShotPopped);
-            if (!popped)
-            {
-                float v = bubble.Velocity.Length();
-                Assert.True(v <= lastSpeed + 1e-3f, "it only ever slows down");
-                lastSpeed = v;
-            }
+            popped |= w.Events.Any(e => e.Type == PlaneEventType.ShotPopped);
+            gone = !w.Shots.Contains(bubble);
+            if (!gone) Assert.Equal(first, bubble.Velocity.Length(), 2);
         }
-        Assert.True(popped, "it pops");
-        Assert.True(lastSpeed > 0f, "it was still moving when it popped");
-        Assert.DoesNotContain(w.Shots, s => s == bubble);
+        Assert.True(gone);
         if (bestRun >= 14f)
-            Assert.InRange(bubble.Traveled, 10.5f, 12.5f);
+        {
+            // Out like a match at its range: no burst.
+            Assert.False(popped);
+            Assert.InRange(bubble.Traveled, PlaneCombatTuning.BubbleRange - 0.1f, PlaneCombatTuning.BubbleRange + 0.6f);
+        }
     }
 
     static PlaneShot Bubble(Vector2 at, int volley, float life = 3f) => new()
@@ -446,30 +443,17 @@ public class PlaneCombatTests
     }
 
     [Fact]
-    public void ASlowBubbleHoversItsOwnTimeDriftingThenPops()
+    public void ASpentShotGoesOutWithoutBurstingOrCleansing()
     {
         var w = World();
         foreach (var m in w.Mobs) m.Hp = 0f;
         var bubble = Bubble(w.Player.Position, 1);
-        bubble.Velocity = Vector2.UnitX * 0.5f;
-        bubble.Hover = 0.95f;
+        bubble.Traveled = bubble.Range;
         w.Shots.Add(bubble);
-        int frames = 0;
-        float lastSpeed = bubble.Velocity.Length();
-        while (w.Shots.Contains(bubble) && frames < 120)
-        {
-            var was = bubble.Position;
-            w.Step(default);
-            frames++;
-            if (!w.Shots.Contains(bubble)) break;
-            // Never a dead stop: it drifts on, slower each step.
-            float v = bubble.Velocity.Length();
-            Assert.True(v > 0f && v < lastSpeed, $"{v} after {lastSpeed}");
-            Assert.NotEqual(was, bubble.Position);
-            lastSpeed = v;
-        }
-        Assert.InRange(frames * PlaneWorld.Dt, 0.95f - 0.02f, 0.95f + 0.05f);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.ShotPopped);
+        w.Step(default);
+        Assert.DoesNotContain(bubble, w.Shots);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.ShotOut);
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.ShotPopped);
     }
 
     [Fact]

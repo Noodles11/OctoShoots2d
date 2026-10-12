@@ -19,11 +19,12 @@ public static class PlaneCombatTuning
 
     /// <summary>
     /// Her shots are light (docs/LIGHT-BUBBLES.md; the rules still call them bubbles): thrown hard at ShotSpeed, light
-    /// has no friction, so it flies on undimmed at full speed; only toward the end of its BubbleRange does it settle,
-    /// braking at LightSettle per second (exponentially) so that it comes to rest about BubbleRange from her. Below
-    /// BubbleStop it hovers (still drifting) for its own hover time, then bursts. ShotLife is only a safety net.
+    /// has no friction, so it flies on undimmed at full speed to the end of its BubbleRange and goes out there like a
+    /// match (no hovering, no burst). ShotLife is only a safety net. LightSettle and the hover times are no longer used.
     /// </summary>
     public const float ShotSpeed = 30f;
+    /// <summary>The surge back to her after a hit cleanses a line of ground this wide, by this much density.</summary>
+    public const float StrikeWidth = 0.6f, StrikeCleanse = 0.25f;
     public const float BubbleRange = 11.5f, LightSettle = 8f;
     /// <summary>
     /// Below this speed a bubble hovers: still drifting and slowing, each bubble for its own time between BubbleHoverMin
@@ -832,32 +833,16 @@ public sealed partial class PlaneWorld
         var p = Player;
         shot.Age += Dt;
         shot.Life -= Dt;
-        if (shot.Life <= 0f)
+        float speed = shot.Velocity.Length();
+        // Light has no friction: it flies at full speed to the end of its range and goes out there, like a match. It
+        // never lingers, and it does not burst (unless a pearl makes it: Ink Sac's blast).
+        if (shot.Life <= 0f || shot.Range > 0f && !shot.Boomerang && shot.Traveled >= shot.Range)
         {
-            Pop(shot);
+            Extinguish(shot);
             return;
         }
-        float speed = shot.Velocity.Length();
         Vector2 dir = speed > 1e-4f ? shot.Velocity / speed : p.Aim;
         float range = shot.Range > 0f ? shot.Range : PlaneCombatTuning.BubbleRange;
-        // Light has no friction: it flies at full speed until, near the end of its range, it settles (braking
-        // exponentially, so it comes to rest at its range without stopping dead); slow, it hovers for its own time, then
-        // bursts.
-        if (shot.Range > 0f && !shot.Boomerang)
-        {
-            float settleFrom = shot.Range - shot.Speed0 / PlaneCombatTuning.LightSettle;
-            if (shot.Traveled >= settleFrom || speed < shot.Speed0 * 0.98f)
-                speed *= MathF.Exp(-PlaneCombatTuning.LightSettle * Dt);
-            if (speed < PlaneCombatTuning.BubbleStop)
-            {
-                shot.Rest += Dt;
-                if (shot.Rest >= shot.Hover)
-                {
-                    Pop(shot);
-                    return;
-                }
-            }
-        }
 
         if (shot.Boomerang)
         {
@@ -960,6 +945,41 @@ public sealed partial class PlaneWorld
     /// A bubble bursts where it is (on a mob, on rock, or where it hovered); an Ink Sac one bursts into ink. toward: from
     /// its centre to where it was struck (the film tears open there first); none, it gives way at a random spot.
     /// </summary>
+    /// <summary>
+    /// A shot of her light at the end of its range goes out like a match: no burst and no cleansing burst, only a wisp
+    /// (the view). With Ink Sac it still bursts into ink.
+    /// </summary>
+    void Extinguish(PlaneShot shot)
+    {
+        if (shot.Life < -100f) return;
+        if (shot.Explosive)
+        {
+            Pop(shot);
+            return;
+        }
+        shot.Life = -1000f;
+        Events.Add(new PlaneEvent(PlaneEventType.ShotOut, shot.Position, SafeNormalize(shot.Velocity), shot.Radius));
+    }
+
+    /// <summary>
+    /// Her light struck something: the surge that arcs back to her (the view's lightning) is bright enough to cleanse a
+    /// thin line of ground on its way.
+    /// </summary>
+    void StrikeBack()
+    {
+        if (Corruption is not { } field) return;
+        var her = Player.Position;
+        foreach (var e in Events)
+        {
+            if (e.Type is not (PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit) || e.Direction == Vector2.Zero) continue;
+            var from = e.Position;
+            float length = Vector2.Distance(from, her);
+            int steps = Math.Max(1, (int)(length / 0.5f));
+            for (int i = 0; i <= steps; i++)
+                field.Cleanse(Vector2.Lerp(from, her, i / (float)steps), PlaneCombatTuning.StrikeWidth, PlaneCombatTuning.StrikeCleanse);
+        }
+    }
+
     void Pop(PlaneShot shot, Vector2? toward = null)
     {
         if (shot.Life < -100f) return;
