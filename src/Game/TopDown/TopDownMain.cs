@@ -627,6 +627,7 @@ public partial class TopDownMain : Node3D
         _puffers.Show(_world);
         _combat.Visible = _boss.Visible = _puffers.Visible = true;
         _damage.Clear();
+        _springHealed = 0f;
         _camera.SetBubbleLights(_combat.Lights, 0);
         SetupCorruption(map);
         _boss.Show(_world);
@@ -923,7 +924,18 @@ public partial class TopDownMain : Node3D
             foreach (var e in _world.Events)
                 if (e.Type == PlaneEventType.PlayerHit) taken += e.Size;
             float healed = _world.Player.Hp - hpBefore + taken;
-            if (healed > 0.05f) _damage.ShowHeal(_world.Player.Position, healed);
+            // A light spring's washing shows as one number: the whole of it, once she is clean or has left the water.
+            bool bathing = _world.Player.Hp < _world.Run.MaxHp && _world.Springs.Exists(sp => sp.Bathing);
+            if (bathing || _springHealed > 0f)
+            {
+                if (healed > 0f) _springHealed += healed;
+                if (!bathing && _springHealed > 0.05f)
+                {
+                    _damage.ShowHeal(_world.Player.Position, _springHealed);
+                    _springHealed = 0f;
+                }
+            }
+            else if (healed > 0.05f) _damage.ShowHeal(_world.Player.Position, healed);
             _levelTime += PlaneWorld.Dt;
             _elapsed += PlaneWorld.Dt;
             _accumulator -= PlaneWorld.Dt;
@@ -1477,6 +1489,9 @@ public partial class TopDownMain : Node3D
             Say("A Blotter: it spreads the ink wherever it crawls. Cleanse it");
         }
     }
+
+    /// <summary>Corruption a light spring has washed off her since she entered it (shown as one number when she is done).</summary>
+    float _springHealed;
 
     bool _saidCoil, _saidValve, _saidSpring, _saidBlotter, _saidCache;
 
