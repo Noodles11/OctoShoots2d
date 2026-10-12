@@ -923,6 +923,10 @@ public partial class TopDownMain : Node3D
             foreach (var e in _world.Events)
             {
                 _blight.OnEvent(e);
+                // Her light struck something: a power surge arcs back to her (hits by a shot carry its direction).
+                if ((e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
+                    || e.Type == PlaneEventType.VineCut)
+                    _combat.Surge(e.Position - e.Direction * 0.4f);
                 CorruptionEvent(e);
                 if (e.Type == PlaneEventType.Dived) dived = true;
                 else if (e.Type == PlaneEventType.PlayerDefeated) dived = false;

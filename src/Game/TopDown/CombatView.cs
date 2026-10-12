@@ -546,6 +546,9 @@ void fragment() {
         _pops.Add(new PopFx { Node = node, Shell = shell, Drops = drops, DropAt = place, DropVel = vel, DropBorn = born, Impact = impact, Radius = radius, Light = bubbles > 0 ? CoreLight(bubbles) : 0f });
     }
 
+    /// <summary>Her light struck something (a creature, a vase, a vine...): a power surge arcs back to her for half a second.</summary>
+    public void Surge(System.Numerics.Vector2 at) => _trails.Strike(new Vector3(at.X, LevelMap.SwimBand, at.Y));
+
     /// <summary>
     /// Her light bursts like a small firework: a white flash, sparks flung out (more and faster for a bigger, merged
     /// shot) that drag to a stop and cool from white-gold to ember orange, a few slower ones drifting up, and a ring of
@@ -714,6 +717,7 @@ void fragment() {
         (_seen, _seenNext) = (_seenNext, _seen);
         foreach (var gone in _merges.Keys.Where(key => !_seen.ContainsKey(key)).ToList()) _merges.Remove(gone);
         SyncLights(world, dt);
+        _trails.Her = new Vector3(world.Player.Position.X, LevelMap.SwimBand, world.Player.Position.Y);
         _trails.Step(dt, _time);
         if (GetViewport().GetCamera3D() is { } camera) _fireworks.Tick(dt, camera.GlobalBasis);
 

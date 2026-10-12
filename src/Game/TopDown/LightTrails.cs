@@ -8,12 +8,16 @@ namespace OctoShoots.Game.TopDown;
 /// The afterlight her shots of light leave (docs/LIGHT-BUBBLES.md): a glowing thread along each one's path that fades
 /// over about a second. It is never a straight line: every segment is kinked at its middle and every point is thrown
 /// aside, and the kinks re-strike a dozen times a second and grow as the light ages, so it crackles like lightning.
-/// A trail outlives its shot (it fades where the shot burst). All trails are one mesh, built in a single upload a frame.
+/// A trail outlives its shot only briefly, like an afterimage. When her light strikes something, a power surge arcs
+/// between the impact and her for half a second. All trails and surges are one mesh, built in a single upload a frame.
 /// </summary>
 public partial class LightTrails : Node3D
 {
     /// <summary>How long a point of afterlight lasts, how far apart points are laid, and how wide the ribbon is.</summary>
-    const float Life = 1.1f, Spacing = 0.32f, Width = 0.34f;
+    const float Life = 0.3f, Spacing = 0.32f, Width = 0.34f;
+    /// <summary>A surge: how long it lasts, its width, how far it is thrown aside, how often it re-strikes, how many at once.</summary>
+    const float SurgeLife = 0.5f, SurgeWidth = 0.5f, SurgeJag = 0.55f, SurgeStrikes = 22f;
+    const int MaxSurges = 8;
     /// <summary>Jitter: aside at the head, aside when old, and how often it re-strikes.</summary>
     const float JitterNew = 0.03f, JitterOld = 0.2f, Strikes = 13f;
 
@@ -24,6 +28,18 @@ public partial class LightTrails : Node3D
         public float Strength;
         public bool Fed;
     }
+
+    sealed class Surge
+    {
+        public Vector3 From;
+        public float Age;
+        public int Seed;
+    }
+
+    readonly List<Surge> _surges = new();
+
+    /// <summary>Where Clementine is (the far end of every surge), set each frame.</summary>
+    public Vector3 Her;
 
     readonly Dictionary<PlaneShot, Trail> _live = new();
     readonly List<Trail> _fading = new();
@@ -62,9 +78,24 @@ public partial class LightTrails : Node3D
         else pts[^1] = (at, pts[^1].Born, pts[^1].Id);
     }
 
+    /// <summary>Her light struck something at this point: a surge arcs between it and her.</summary>
+    public void Strike(Vector3 at)
+    {
+        // Several hits in one place at once are one surge, renewed.
+        foreach (var s in _surges)
+            if (s.Age < 0.1f && s.From.DistanceSquaredTo(at) < 0.5f)
+            {
+                s.Age = 0f;
+                return;
+            }
+        if (_surges.Count >= MaxSurges) _surges.RemoveAt(0);
+        _surges.Add(new Surge { From = at, Seed = _ids++ * 31 });
+    }
+
     /// <summary>A new level: no afterlight carries over.</summary>
     public void Clear()
     {
+        _surges.Clear();
         _live.Clear();
         _fading.Clear();
         _mesh.ClearSurfaces();
@@ -93,6 +124,13 @@ public partial class LightTrails : Node3D
         for (int i = _fading.Count - 1; i >= 0; i--)
         {
             if (!Build(_fading[i])) _fading.RemoveAt(i);
+        }
+        for (int i = _surges.Count - 1; i >= 0; i--)
+        {
+            var surge = _surges[i];
+            surge.Age += dt;
+            if (surge.Age >= SurgeLife) _surges.RemoveAt(i);
+            else BuildSurge(surge);
         }
         _mesh.ClearSurfaces();
         if (_verts.Count == 0) return;
@@ -147,6 +185,69 @@ public partial class LightTrails : Node3D
             Quad(a0, a1, b0, b1, ca, cb);
         }
         return true;
+    }
+
+    static readonly Color SurgeCore = new(1f, 0.93f, 0.75f), SurgeFork = new(0.85f, 0.8f, 1f);
+
+    /// <summary>
+    /// A surge: a jagged bolt from the impact to her, re-struck many times a second (each strike a new path, flickering
+    /// in strength), with a fork or two splitting off it, fading out over its half second.
+    /// </summary>
+    void BuildSurge(Surge surge)
+    {
+        float k = surge.Age / SurgeLife;
+        int strike = (int)(_time * SurgeStrikes);
+        // A hard flash at first, then flickering down.
+        float flicker = 0.65f + 0.35f * Signed(surge.Seed + 5, strike);
+        float strength = (1f - k) * (1f - k * 0.5f) * flicker * 1.4f;
+        var from = surge.From;
+        var to = Her;
+        var path = Bolt(from, to, surge.Seed, strike, SurgeJag);
+        Ribbon(path, SurgeCore, strength, SurgeWidth * (1f - 0.4f * k));
+        // Forks: from a point along the bolt, a short jagged branch off to one side.
+        for (int f = 0; f < 2; f++)
+        {
+            int at = (int)((0.25f + 0.5f * (Signed(surge.Seed + 11 + f, strike) * 0.5f + 0.5f)) * (path.Count - 1));
+            var start = path[at];
+            var along = (to - from) with { Y = 0f };
+            if (along.LengthSquared() < 1e-6f) return;
+            var side = new Vector3(-along.Z, 0f, along.X).Normalized() * (f == 0 ? 1f : -1f);
+            float len = Mathf.Min(along.Length() * 0.25f, 2.5f);
+            var end = start + (along.Normalized() * 0.6f + side).Normalized() * len * (0.6f + 0.4f * Signed(surge.Seed + 17 + f, strike));
+            Ribbon(Bolt(start, end, surge.Seed + 101 * (f + 1), strike, SurgeJag * 0.6f), SurgeFork, strength * 0.6f, SurgeWidth * 0.55f);
+        }
+    }
+
+    /// <summary>A jagged path from a to b: a point every half metre, thrown aside most in the middle, never at the ends.</summary>
+    static List<Vector3> Bolt(Vector3 a, Vector3 b, int seed, int strike, float jag)
+    {
+        var d = (b - a) with { Y = 0f };
+        float len = d.Length();
+        int n = Mathf.Clamp((int)(len / 0.5f), 2, 64);
+        var side = len > 1e-4f ? new Vector3(-d.Z, 0f, d.X) / len : Vector3.Right;
+        var pts = new List<Vector3>(n + 1);
+        for (int i = 0; i <= n; i++)
+        {
+            float t = i / (float)n;
+            float pin = Mathf.Sin(t * Mathf.Pi);
+            pts.Add(a.Lerp(b, t) + side * Signed(seed + i * 13, strike) * jag * pin);
+        }
+        return pts;
+    }
+
+    /// <summary>A flat ribbon along a path, of one colour and strength.</summary>
+    void Ribbon(List<Vector3> path, Color color, float strength, float width)
+    {
+        var c = color with { A = strength };
+        for (int k = 1; k < path.Count; k++)
+        {
+            var a = path[k - 1];
+            var b = path[k];
+            var dir = (b - a) with { Y = 0f };
+            if (dir.LengthSquared() < 1e-8f) continue;
+            var side = new Vector3(-dir.Z, 0f, dir.X).Normalized() * width * 0.5f;
+            Quad(a - side, a + side, b - side, b + side, c, c);
+        }
     }
 
     /// <summary>Eases out: bright, then a long tail.</summary>
