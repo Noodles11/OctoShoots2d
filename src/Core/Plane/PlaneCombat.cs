@@ -676,6 +676,7 @@ public sealed partial class PlaneWorld
     /// </summary>
     int Volley(Vector2 aim, float charge = 0f)
     {
+        LastVolleyDamage = 0f;
         var p = Player;
         var spec = Run.Loadout.Shot;
         int count = Math.Max(1, spec.Multishot);
@@ -718,9 +719,13 @@ public sealed partial class PlaneWorld
             };
             if (shot.Pierce || shot.Boomerang) shot.Hit = new HashSet<PlaneMob>();
             Shots.Add(shot);
+            LastVolleyDamage += shot.Damage;
         }
         return count;
     }
+
+    /// <summary>The damage of every shot in her last volley, added up (the controller's kick on firing scales with it).</summary>
+    public float LastVolleyDamage { get; private set; }
 
     int _volleys;
 

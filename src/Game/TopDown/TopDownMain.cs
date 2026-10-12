@@ -1010,7 +1010,14 @@ public partial class TopDownMain : Node3D
                         _sfx.PlayPitched("bell_ring", 1f, -10f);
                     }
                 }
-                else if (e.Type == PlaneEventType.Shot) _bell.Spend(e.Size);
+                else if (e.Type == PlaneEventType.Shot)
+                {
+                    _bell.Spend(e.Size);
+                    // A kick with every volley, stronger the harder it hits: a default shot is a light tap, and more
+                    // shots at once (or a merged, charged or empowered one) add up.
+                    float power = _world.LastVolleyDamage / PlaneCombatTuning.ShotDamage;
+                    _haptics.Pulse(Mathf.Clamp(0.1f * Mathf.Pow(power, 0.8f), 0.06f, 0.85f), Mathf.Clamp(0.04f * power, 0f, 0.7f), 0.05f + 0.015f * Mathf.Min(power, 6f));
+                }
                 else if (e.Type is PlaneEventType.MobHit or PlaneEventType.BossHit) _damage.Show(e);
                 else if (e.Type == PlaneEventType.ShotPopped) _combat.Pop(e.Position, e.Size * 1.7f, e.Direction);
                 else if (e.Type == PlaneEventType.ShotOut) _combat.Extinguish(e.Position, e.Direction);
