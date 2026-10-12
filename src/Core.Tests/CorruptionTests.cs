@@ -77,7 +77,7 @@ public class CorruptionTests
         new() { Position = at, Line = at, Velocity = Vector2.UnitY * 0.01f, Life = 1f, FromPlayer = true, Damage = damage };
 
     [Fact]
-    public void ABlightrootTakesAboutTenShotsAndReCorruptsQuickly()
+    public void ABlightrootTakesAboutThirteenShotsAndReCorruptsQuickly()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
@@ -90,12 +90,13 @@ public class CorruptionTests
         }
         Assert.True(root.Alive);
         Assert.True(root.Corruption.Shown);
-        Assert.Equal(BlightTuning.RootCorruption - 40f, root.Corruption.Value, 0);
+        Assert.Equal(root.Corruption.Max - 40f, root.Corruption.Value, 0);
         // Left alone, it re-corrupts in a few seconds, and the meter hides again.
         for (int i = 0; i < 4 * 60; i++) w.Step(default);
         Assert.False(root.Corruption.Shown);
-        // Ten default shots in a row cleanse it: it bursts, cleansing its whole reach.
-        for (int i = 0; i < 10 && root.Alive; i++)
+        // Its meter's worth of default shots in a row (13 in the Shallows) cleanse it: it bursts, cleansing its reach.
+        int shots = (int)MathF.Ceiling(root.Corruption.Max / 10f);
+        for (int i = 0; i < shots && root.Alive; i++)
         {
             w.Shots.Add(Light(root.Position));
             w.Step(default);
@@ -107,20 +108,22 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void AMurklingTakesThreeShotsInARowOrOneStrongOne()
+    public void AMurklingTakesFourShotsInARowOrOneStrongOne()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var at = w.Player.Position + new Vector2(0f, -3f);
         var m = new Murkling { Position = at, Bud = 0f };
         w.Murklings.Add(m);
-        // Shots at her firing rate: two leave it standing, the third bursts it.
-        for (int shot = 0; shot < 3; shot++)
+        // Shots at her firing rate: three leave it standing, the fourth bursts it.
+        int shots = (int)MathF.Ceiling(m.Corruption.Max / 10f);
+        Assert.Equal(4, shots);
+        for (int shot = 0; shot < shots; shot++)
         {
             m.Position = at;
             w.Shots.Add(Light(m.Position));
             w.Step(default);
-            if (shot < 2)
+            if (shot < shots - 1)
             {
                 Assert.True(m.Alive);
                 for (int i = 0; i < (int)(PlaneCombatTuning.ShotInterval * 60f); i++) w.Step(default);
@@ -158,7 +161,7 @@ public class CorruptionTests
         w.Step(new PlaneInput { Dash = true, Move = Vector2.UnitY });
         Assert.True(m.Alive);
         Assert.False(m.Clinging);
-        Assert.Equal(BlightTuning.MurkCorruption - BlightTuning.ShakeLight, m.Corruption.Value, 0);
+        Assert.Equal(m.Corruption.Max - BlightTuning.ShakeLight, m.Corruption.Value, 0);
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.MobHit);
         // Once it recovers, it chases her again.
         for (int i = 0; i < (int)(BlightTuning.ShakeSeconds * 60f) + 2; i++) w.Step(default);
@@ -167,6 +170,38 @@ public class CorruptionTests
         float apart = Vector2.Distance(m.Position, w.Player.Position);
         for (int i = 0; i < 90 && !m.Clinging; i++) w.Step(default);
         Assert.True(m.Clinging || Vector2.Distance(m.Position, w.Player.Position) < apart);
+    }
+
+    [Fact]
+    public void ABlightrootPulseCorruptsHerUnlessSheDashesThroughIt()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var root = w.Blightroots[0];
+        // She waits in its reach, where the ring will pass.
+        var spot = Enumerable.Range(0, 64).Select(i => root.Position + new Vector2(MathF.Cos(i * 0.4f), MathF.Sin(i * 0.4f)) * 4f).First(q => w.Clear(q, 0.6f));
+        w.Player.Position = w.Player.PrevPosition = spot;
+        root.PulseTimer = 0.05f;
+        float hp = w.Player.Hp;
+        for (int i = 0; i < 90; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = spot;
+            w.Step(default);
+        }
+        Assert.True(w.Player.Hp < hp);
+
+        // Next ring: dashing as it arrives, she slips through untouched.
+        hp = w.Player.Hp = w.Run.MaxHp;
+        w.Player.HurtTimer = 0f;
+        root.PulseTimer = 0.05f;
+        for (int i = 0; i < 90; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = spot;
+            if (root.PulseRadius >= 0f && root.PulseRadius > 4f - 2.5f && w.Player.DashInvulnerableTimer <= 0f && w.Player.DashCooldownTimer <= 0f)
+                w.Step(new PlaneInput { Dash = true, Move = Vector2.Zero });
+            else w.Step(default);
+        }
+        Assert.Equal(hp, w.Player.Hp);
     }
 
     [Fact]

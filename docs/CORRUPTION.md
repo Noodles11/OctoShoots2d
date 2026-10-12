@@ -26,12 +26,13 @@ clearings bud murklings instead. The healthy fish still swim the reef.
 - Placed on plazas and canyon points, reachable from the start, 22 m apart, never in the arena or the shaft. There
   are 3 + 1.5 × Menace of them, at most 6.
 - **Regrowth:** it restores its 9 m reach toward the starting density at 0.1/s, strongest at the stump.
-- **Shot down:** its corruption meter (see "Corruption meters" below) is 95, so it takes about ten default shots on
-  its 0.9 m sac. It re-corrupts quickly: 30/s (more with Menace) once 0.5 s pass without a hit. Emptied, it bursts. A
+- **Shot down:** its corruption meter (see "Corruption meters" below) is 125 × (1 + 0.2 × Menace), so it takes 13
+  default shots on its 0.9 m sac in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with Menace) once 0.5 s pass without a hit. Emptied, it bursts. A
   wave of cleansing runs through its whole reach in 0.7 s and its vines dissolve. Cleansing the ground round it no
   longer harms it.
 - **The pulse:** every 4 s the sac inflates for 0.8 s (the telegraph), then a ring of ink runs out at 10 m/s. The ring
-  stains cleansed ground back to 0.35 and dims each of her bubbles it crosses to 70% (each ring once).
+  stains cleansed ground back to 0.35 and snuffs out each of her shots it crosses. Passing over her, it corrupts her
+  for 6 + 2 × Menace (once per ring). Dashing through it takes nothing.
 
 ## Murklings (`Murkling`)
 
@@ -39,14 +40,16 @@ clearings bud murklings instead. The healthy fish still swim the reef.
   15 s / (1 + 0.6 × Menace). The bud takes 0.8 s and is shown as a dark bead swelling out of the floor with a ripple.
 - **Cap:** 2 + 1.5 × Menace per area. An area cleansed past 80% stops budding for good.
 - **The arena** buds every 6 s, but only while its boss fights.
-- **Movement:** they drift toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
+- **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
   shines brighter than her). This makes bait and herding possible.
-- **Attack:** a black orb thrown every ~2.4 s when she is within 9 m and in sight, for 7 damage.
+- **Attack:** a black orb thrown when she is within 9 m and in sight, for 7 damage. It flies at 10 + 1.5 × Menace m/s
+  and is thrown every ~2.4 s / (1 + 0.25 × Menace).
 - **Contact:** 6 damage, then it clings (at most 3 at once), draining 2.5 HP/s each and dimming her bell. Feeding shows
   as one corruption number a second, summed over it. A dash bursts her light: each clinging murkling is thrown off
   (9 m/s), losing one default shot's worth (10) of its meter, and is dazed for 0.7 s. Then it chases her again. One
   already worn down bursts. The dash shows as a small light burst, not an ink cloud.
-- **Killed by light:** its corruption meter is 27, so three default shots in a row burst it. It regrows at 14/s (more
+- **Killed by light:** its corruption meter is 36 × (1 + 0.2 × Menace), so four default shots in a row burst it in
+  the Shallows. It regrows at 14/s (more
   with Menace) after 0.8 s without a hit, and one strong (merged) shot empties it at once. Each shot bursts on it, and
   a piercing one flies on. Passing through a throw halves a shot's light. A murkling burst over cleansed ground drops
   its ember, which blooms a 2.6 m patch of colour.

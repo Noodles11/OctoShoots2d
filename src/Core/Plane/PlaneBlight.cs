@@ -18,7 +18,7 @@ public static class BlightTuning
     /// Its corruption meter (shot by her light): about ten default shots empty it; it re-corrupts quickly, RootRegen a
     /// second (more with Menace) once RootDelay has passed without a hit. Empty, it bursts.
     /// </summary>
-    public const float RootCorruption = 95f, RootRegen = 30f, RootDelay = 0.5f;
+    public const float RootCorruption = 125f, RootRegen = 30f, RootDelay = 0.5f;
     /// <summary>The ink sac: where her light strikes it.</summary>
     public const float SacRadius = 0.9f;
     /// <summary>Its burst sends a wave of cleansing through its whole reach in this long.</summary>
@@ -27,6 +27,13 @@ public static class BlightTuning
     public const float PulseEvery = 4f, Telegraph = 0.8f, PulseSpeed = 10f, PulseBand = 0.9f;
     /// <summary>The ring stains cleansed ground back to this density and dims the bubbles it crosses to this much.</summary>
     public const float PulseStain = 0.35f, PulseDim = 0.7f;
+    /// <summary>
+    /// The ring corrupts her as it passes over her (once per ring, more with Menace). A dash through it (she is
+    /// untouchable while dashing) takes nothing. Her shots it crosses are snuffed out.
+    /// </summary>
+    public const float PulseDamage = 6f, PulseDamagePerMenace = 2f;
+    /// <summary>Every creature's corruption meter grows this much per point of Menace (deeper, tougher).</summary>
+    public const float MeterPerMenace = 0.2f;
     /// <summary>Where they stand: never near safe places (beyond their radius), apart, more with Menace.</summary>
     public const float SafeDistance = 18f, Spacing = 22f;
     public const int Base = 3, Max = 6;
@@ -48,12 +55,12 @@ public static class BlightTuning
     public const float SeenRange = 14f;
 
     // Murklings: orbs of darkness budding from the corruption.
-    public const float MurkRadius = 0.45f, MurkSpeed = 1.8f, Sense = 14f;
+    public const float MurkRadius = 0.45f, MurkSpeed = 2.6f, MurkSpeedPerMenace = 0.4f, Sense = 14f;
     /// <summary>
-    /// Its corruption meter: three default shots in a row empty it (a pause lets it regrow, MurkRegen a second, more
+    /// Its corruption meter: four default shots in a row empty it (a pause lets it regrow, MurkRegen a second, more
     /// with Menace, once MurkDelay has passed without a hit). One strong enough shot empties it at once.
     /// </summary>
-    public const float MurkCorruption = 27f, MurkRegen = 14f, MurkDelay = 0.8f;
+    public const float MurkCorruption = 36f, MurkRegen = 14f, MurkDelay = 0.8f;
     public const float BudSeconds = 0.8f, BudInterval = 15f, BudDensity = 0.6f, BudClearance = 5f;
     /// <summary>An area stops budding for good once it is cleansed this far (below a fifth of its corruption left).</summary>
     public const float AreaSpent = 0.8f;
@@ -61,7 +68,9 @@ public static class BlightTuning
     public const float CapPerMenace = 1.5f;
     public const float ContactDamage = 6f, ClingDrain = 2.5f;
     public const int MaxClingers = 3;
-    public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 6f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 2.5f;
+    public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 10f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 1.5f;
+    /// <summary>Deeper, its throws come faster and more often (per point of Menace).</summary>
+    public const float ThrowSpeedPerMenace = 1.5f, ThrowRatePerMenace = 0.25f;
     /// <summary>A bubble that bursts a murkling or meets its throw keeps this much of its light.</summary>
     public const float BubbleDim = 0.5f;
     /// <summary>A dash throws a clinging murkling off: one default shot's worth of light, flung this fast, dazed this long.</summary>
@@ -273,6 +282,7 @@ public sealed partial class PlaneWorld
             root.Area = Areas.Count;
             Areas.Add(area);
             root.Corruption.Regen *= 1f + 0.5f * Menace;
+            root.Corruption.Max = root.Corruption.Value = BlightTuning.RootCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
             root.CellDistance = area.Cells.Select(i => Vector2.Distance(CorruptionField.CellCentre(i % CorruptionField.N, i / CorruptionField.N), at)).ToArray();
             Blightroots.Add(root);
             for (int v = 0; v < BlightTuning.VinesPer; v++)
@@ -510,14 +520,24 @@ public sealed partial class PlaneWorld
                     float d = root.CellDistance[k];
                     if (d >= r0 && d < r1) field.Raise(area.Cells[k], MathF.Min(BlightTuning.PulseStain, field.Initial[area.Cells[k]]), 1f);
                 }
-                // ...and dims her bubbles it crosses (once per ring).
+                // ...snuffs out her shots it crosses...
                 foreach (var shot in Shots)
                 {
                     if (!shot.FromPlayer || shot.Life <= 0f || shot.Pulse == root.PulseId) continue;
                     float d = Vector2.Distance(shot.Position, root.Position);
                     if (MathF.Abs(d - r1) > BlightTuning.PulseBand * 0.5f + shot.Radius) continue;
                     shot.Pulse = root.PulseId;
-                    DimBubble(shot, BlightTuning.PulseDim);
+                    Pop(shot, shot.Position - root.Position);
+                }
+                // ...and corrupts her as it passes over her (once per ring; a dash slips through it).
+                if (_pulseHit != root.PulseId)
+                {
+                    float her = Vector2.Distance(Player.Position, root.Position);
+                    if (MathF.Abs(her - (r0 + r1) * 0.5f) <= BlightTuning.PulseBand * 0.5f + Radius + (r1 - r0) * 0.5f)
+                    {
+                        _pulseHit = root.PulseId;
+                        HurtPlayer(BlightTuning.PulseDamage + BlightTuning.PulseDamagePerMenace * Menace, SafeNormalize(Player.Position - root.Position), DamageSource.Blightroot);
+                    }
                 }
                 if (r1 >= BlightTuning.Reach) root.PulseRadius = -1f;
             }
@@ -525,7 +545,7 @@ public sealed partial class PlaneWorld
         }
     }
 
-    int _pulses;
+    int _pulses, _pulseHit;
 
     /// <summary>A bubble loses some of its light (and with it, damage); one too dim pops.</summary>
     void DimBubble(PlaneShot shot, float keep)
@@ -753,7 +773,7 @@ public sealed partial class PlaneWorld
             Vector2 wish = dist < BlightTuning.Sense ? SafeNormalize(to) : Vector2.Zero;
             // A wobble off the line, as if the dark were reluctant.
             wish += new Vector2(MathF.Sin(Time * 1.7f + m.Seed), MathF.Cos(Time * 1.3f + m.Seed * 2f)) * 0.35f;
-            m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * BlightTuning.MurkSpeed, 4f * Dt);
+            m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace), 4f * Dt);
             Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false);
 
             // It clings on touch.
@@ -771,9 +791,9 @@ public sealed partial class PlaneWorld
             m.ThrowTimer -= Dt;
             if (her && dist < BlightTuning.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, p.Position))
             {
-                m.ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.8f, 1.2f);
+                m.ThrowTimer = BlightTuning.ThrowEvery / (1f + BlightTuning.ThrowRatePerMenace * Menace) * _blightRng.Range(0.8f, 1.2f);
                 var dir = SafeNormalize(p.Position - m.Position);
-                MurkShots.Add(new MurkShot { Position = m.Position + dir * BlightTuning.MurkRadius, Velocity = dir * BlightTuning.ThrowSpeed });
+                MurkShots.Add(new MurkShot { Position = m.Position + dir * BlightTuning.MurkRadius, Velocity = dir * (BlightTuning.ThrowSpeed + BlightTuning.ThrowSpeedPerMenace * Menace) });
                 Events.Add(new PlaneEvent(PlaneEventType.MurklingThrow, m.Position, dir));
             }
         }
@@ -829,6 +849,7 @@ public sealed partial class PlaneWorld
     {
         var m = new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) };
         m.Corruption.Regen *= 1f + 0.5f * Menace;
+        m.Corruption.Max = m.Corruption.Value = BlightTuning.MurkCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
         Murklings.Add(m);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, Vector2.Zero, BlightTuning.BudSeconds));
     }
