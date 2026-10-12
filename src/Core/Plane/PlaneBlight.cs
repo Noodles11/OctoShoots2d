@@ -64,8 +64,8 @@ public static class BlightTuning
     public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 6f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 2.5f;
     /// <summary>A bubble that bursts a murkling or meets its throw keeps this much of its light.</summary>
     public const float BubbleDim = 0.5f;
-    /// <summary>A drain shows as one hit this often.</summary>
-    public const float DrainReport = 0.4f;
+    /// <summary>A steady drain (a creature feeding on her) shows as one number: all it took over each second.</summary>
+    public const float DrainReport = 1f;
     /// <summary>The arena buds faster while the boss fights.</summary>
     public const float ArenaInterval = 6f;
     /// <summary>An ambush buds this many murklings round her.</summary>
@@ -218,7 +218,7 @@ public sealed partial class PlaneWorld
 
     Rng _blightRng = null!;
     readonly List<(Vector2 At, int Bubbles, float Dim)> _pops = new();
-    float _linger, _drained, _drainClock;
+    float _linger, _drained, _drainedBefore, _drainClock, _drainIdle;
     DamageSource _drainSource;
 
     IEnumerable<(Vector2 Centre, float Radius)> SafePlaces() => CorruptionField.SafeOf(Map);
@@ -364,12 +364,15 @@ public sealed partial class PlaneWorld
             }
         StepCondensation();
 
-        // Drains (clinging, coiling, a valve) show as one hit every so often.
-        _drainClock += Dt;
-        if (_drained > 0f && _drainClock >= BlightTuning.DrainReport)
+        // Drains (clinging, coiling, a valve) show as one hit a second, summed over it. The second starts with the
+        // first drop drunk; whatever is left shows once the feeding has stopped a moment, or she is lost.
+        if (_drained > 0f) _drainClock += Dt;
+        _drainIdle = _drained != _drainedBefore ? 0f : _drainIdle + Dt;
+        _drainedBefore = _drained;
+        if (_drained > 0f && (_drainClock >= BlightTuning.DrainReport || _drainIdle >= 0.25f || Defeated))
         {
             Events.Add(new PlaneEvent(PlaneEventType.PlayerDrained, p.Position, Vector2.Zero, _drained, _drainSource));
-            _drained = 0f;
+            _drained = _drainedBefore = 0f;
             _drainClock = 0f;
         }
     }
