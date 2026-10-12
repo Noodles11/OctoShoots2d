@@ -52,7 +52,7 @@ public partial class TitleMain : Node3D
     Control _ui = null!;
     VBoxContainer _column = null!;
     Control _logo = null!;
-    readonly List<(Button Button, Label Detail, Control Pip, string Id)> _items = new();
+    readonly List<(Button Button, Label Detail, string Id)> _items = new();
     readonly Dictionary<Button, Control> _glide = new();
     Control? _inline;
     Control? _card;
@@ -70,6 +70,8 @@ public partial class TitleMain : Node3D
 
     public override void _Ready()
     {
+        // The bundled fonts: Nunito is every screen's default (THEME-BIBLE §6.8).
+        TitleStyle.InstallDefaultFont();
         // Game flags mean a verification run: straight in, as before the title existed.
         var args = OS.GetCmdlineUserArgs();
         if (args.Any(a => !TitleOnlyFlags.Any(a.StartsWith)))
@@ -268,7 +270,7 @@ public partial class TitleMain : Node3D
         name.AddThemeConstantOverride("shadow_offset_x", 0);
         name.AddThemeConstantOverride("shadow_offset_y", 6);
         logo.AddChild(name);
-        var sub = TitleStyle.Text("the absorbent jellyfish", 24, TitleStyle.WaterSoft, TitleStyle.Body);
+        var sub = TitleStyle.Text("the absorbent jellyfish", 24, TitleStyle.WaterSoft, TitleStyle.Italic);
         logo.AddChild(sub);
         _logo = logo;
         _column.AddChild(logo);
@@ -303,7 +305,7 @@ public partial class TitleMain : Node3D
     {
         TitleStyle.Bloom(_logo, 0.35f, Reduced);
         int i = 0;
-        foreach (var (button, detail, _, _) in _items)
+        foreach (var (button, detail, _) in _items)
         {
             if (!button.GetParent<Control>().Visible) continue;
             TitleStyle.Bloom(button.GetParent<Control>(), 0.55f + 0.06f * i++, Reduced);
@@ -322,9 +324,6 @@ public partial class TitleMain : Node3D
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 0);
-        var pip = new Pip { CustomMinimumSize = new Vector2(26f, 44f), Visible = true };
-        pip.Modulate = new Color(1f, 1f, 1f, 0f);
-        row.AddChild(pip);
         // The focus glide: this spacer widens, pushing the item right.
         var glide = new Control { CustomMinimumSize = Vector2.Zero, MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddChild(glide);
@@ -350,35 +349,27 @@ public partial class TitleMain : Node3D
             pressed();
         };
         button.MouseEntered += () => button.GrabFocus();
-        button.FocusEntered += () => Focused(glide, pip, true);
-        button.FocusExited += () => Focused(glide, pip, false);
+        button.FocusEntered += () => Focused(glide, true);
+        button.FocusExited += () => Focused(glide, false);
         _glide[button] = glide;
-        _items.Add((button, detail, pip, id));
+        _items.Add((button, detail, id));
     }
 
-    /// <summary>The focused item glides right and its coral pip pops in.</summary>
-    void Focused(Control glide, Control pip, bool on)
+    /// <summary>The focused item glides right (it is coral too: the button's focus colour).</summary>
+    void Focused(Control glide, bool on)
     {
         float seconds = Reduced ? 0.01f : 0.12f;
-        var t = glide.CreateTween().SetParallel();
-        t.TweenProperty(glide, "custom_minimum_size:x", on ? 12f : 0f, seconds).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
-        t.TweenProperty(pip, "modulate:a", on ? 1f : 0f, seconds);
-        if (on && !Reduced)
-        {
-            pip.PivotOffset = pip.Size * 0.5f;
-            pip.Scale = new Vector2(0.4f, 0.4f);
-            t.TweenProperty(pip, "scale", Vector2.One, 0.25f).SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
-        }
+        glide.CreateTween().TweenProperty(glide, "custom_minimum_size:x", on ? 12f : 0f, seconds).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
     }
 
-    (Button Button, Label Detail, Control Pip, string Id) Item(string id) => _items.First(it => it.Id == id);
+    (Button Button, Label Detail, string Id) Item(string id) => _items.First(it => it.Id == id);
 
     /// <summary>Fills in the detail lines from the save.</summary>
     void Refresh()
     {
         var save = GameSave.Current;
         var p = save.Profile;
-        var (cont, contDetail, _, _) = Item("continue");
+        var (cont, contDetail, _) = Item("continue");
         cont.GetParent<Control>().Visible = save.Run is not null;
         if (save.Run is { } run) contDetail.Text = $"{run.Where} · {run.Seed} · {TitleStyle.Clock(run.Elapsed)}";
         Item("seeded").Detail.Text = p.RecentSeeds.Count > 0 ? $"last: {p.RecentSeeds[0]}" : "type a seed to share a reef";
@@ -656,28 +647,5 @@ public partial class TitleMain : Node3D
                 SavedAt = DateTime.Now.AddMinutes(-42).ToString("s", CultureInfo.InvariantCulture),
             },
         };
-    }
-
-    /// <summary>The focused item's coral pip: a small pulsing bubble.</summary>
-    partial class Pip : Control
-    {
-        float _t;
-
-        public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
-
-        public override void _Process(double delta)
-        {
-            _t += (float)delta;
-            QueueRedraw();
-        }
-
-        public override void _Draw()
-        {
-            var c = new Vector2(Size.X * 0.5f, Size.Y * 0.5f);
-            float r = 6.5f + 1f * Mathf.Sin(_t * 4f);
-            DrawCircle(c, r, TitleStyle.Coral);
-            DrawCircle(c + new Vector2(-2f, -2.2f), r * 0.32f, new Color(1f, 1f, 1f, 0.85f));
-            DrawArc(c, r + 3.5f, 0f, Mathf.Tau, 32, new Color(1f, 0.478f, 0.42f, 0.35f), 1.5f, true);
-        }
     }
 }

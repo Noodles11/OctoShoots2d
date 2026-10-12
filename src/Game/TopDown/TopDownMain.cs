@@ -154,6 +154,8 @@ public partial class TopDownMain : Node3D
 
     public override void _Ready()
     {
+        // The bundled fonts: Nunito is every screen's default (THEME-BIBLE §6.8).
+        TitleStyle.InstallDefaultFont();
         ParseArgs();
         TakeLaunch();
         InputSetup.Register();
