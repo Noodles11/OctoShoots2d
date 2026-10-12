@@ -401,6 +401,11 @@ public partial class TopDownMain : Node3D
         };
         layer.AddChild(_fullMap);
         // Achievement banners: above the HUD, below the pause menu.
+        // The aim pointer: above the HUD, below the banners and the pause menu.
+        var cursorLayer = new CanvasLayer { Layer = 4 };
+        AddChild(cursorLayer);
+        _cursor = new AimCursor { Visible = false };
+        cursorLayer.AddChild(_cursor);
         var bannerLayer = new CanvasLayer { Layer = 3 };
         AddChild(bannerLayer);
         _achievementBanner = new AchievementBanner { ReducedMotion = _view.ReducedMotion };
@@ -850,6 +855,7 @@ public partial class TopDownMain : Node3D
             return;
         }
         float dt = (float)delta;
+        SyncCursor(dt);
         // Banners run on game time: they wait while paused and under a splash.
         if (!Paused && _transition == Transition.None && !_deathSplash) _achievementBanner.Step(dt);
         if (_debugAward is { } award && _achievementData is not null && _achievementData.TryGet(award, out var shown))
@@ -1603,12 +1609,47 @@ public partial class TopDownMain : Node3D
         };
         if (pad == _pad) return;
         _pad = pad;
-        Input.MouseMode = pad ? Input.MouseModeEnum.Hidden : Input.MouseModeEnum.Visible;
+        SyncCursor();
         if (pad && _pause.Visible) _pause.FocusFirst();
     }
 
     bool _pad;
     System.Numerics.Vector2 _padAim;
+    AimCursor _cursor = null!;
+    /// <summary>The controller pointer's screen direction from her (eased so it glides round her).</summary>
+    Vector2 _cursorDir = Vector2.Up;
+
+    /// <summary>
+    /// The in-game pointer, while she plays (not under a menu, splash, dive or level change): under the mouse, or with a
+    /// controller half the screen's shorter side from her along her aim. The system cursor hides while it shows, and
+    /// whenever the controller plays.
+    /// </summary>
+    void SyncCursor(float dt = 0f)
+    {
+        bool show = _world is not null && !Paused && !_deathSplash && !_diving && _transition == Transition.None && !_autopilot;
+        _cursor.Visible = show;
+        var mode = show || _pad ? Input.MouseModeEnum.Hidden : Input.MouseModeEnum.Visible;
+        if (Input.MouseMode != mode) Input.MouseMode = mode;
+        if (!show) return;
+        if (!_pad)
+        {
+            _cursor.Place(GetViewport().GetMousePosition());
+            return;
+        }
+        var cam = _camera.Camera;
+        var her = _world!.Player.Position;
+        var aim = _padAim.LengthSquared() > 1e-6f ? System.Numerics.Vector2.Normalize(_padAim) : _world.Player.Aim;
+        if (aim.LengthSquared() < 1e-6f) aim = -System.Numerics.Vector2.UnitY;
+        var at = new Vector3(her.X, LevelMap.SwimBand, her.Y);
+        Vector2 from = cam.UnprojectPosition(at), toward = cam.UnprojectPosition(at + new Vector3(aim.X, 0f, aim.Y)) - from;
+        if (toward.LengthSquared() > 1e-6f)
+        {
+            float k = dt > 0f ? 1f - Mathf.Exp(-20f * dt) : 1f;
+            _cursorDir = _cursorDir.Slerp(toward.Normalized(), k).Normalized();
+        }
+        var size = GetViewport().GetVisibleRect().Size;
+        _cursor.Place(from + _cursorDir * Mathf.Min(size.X, size.Y) * 0.5f);
+    }
 
     /// <summary>Verification: fire at the boss in her fight, else at the nearest mob.</summary>
     bool AutoFire(ref PlaneInput input)
