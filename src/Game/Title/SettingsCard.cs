@@ -80,6 +80,13 @@ public partial class SettingsCard : PanelContainer
         });
         box.AddChild(Row("Reduced motion", "Menus and banners cross-fade instead of rising, diving and splashing.", reduced));
 
+        var vibration = Toggle(_view.Vibration, on =>
+        {
+            _view.Vibration = on;
+            Save();
+        });
+        box.AddChild(Row("Controller vibration", "A buzz when her light strikes, when she is hurt, when she dashes and in a current.", vibration));
+
         // Controls: every binding, keyboard and mouse or controller, rebindable (saved at once).
         box.AddChild(Heading("Controls"));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0f, 220f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };

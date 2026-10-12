@@ -16,7 +16,7 @@ public partial class LightTrails : Node3D
     /// <summary>How long a point of afterlight lasts, how far apart points are laid, and how wide the ribbon is.</summary>
     const float Life = 0.3f, Spacing = 0.32f, Width = 0.34f;
     /// <summary>A surge: how long it lasts, its width, how far it is thrown aside, how often it re-strikes, how many at once.</summary>
-    const float SurgeLife = 0.5f, SurgeWidth = 0.5f, SurgeJag = 0.55f, SurgeStrikes = 22f;
+    const float SurgeLife = 0.5f, SurgeWidth = 0.26f, SurgeJag = 0.32f, SurgeStrikes = 16f;
     const int MaxSurges = 8;
     /// <summary>Jitter: aside at the head, aside when old, and how often it re-strikes.</summary>
     const float JitterNew = 0.03f, JitterOld = 0.2f, Strikes = 13f;
@@ -187,7 +187,7 @@ public partial class LightTrails : Node3D
         return true;
     }
 
-    static readonly Color SurgeCore = new(1f, 0.93f, 0.75f), SurgeFork = new(0.85f, 0.8f, 1f);
+    static readonly Color SurgeCore = new(1f, 0.74f, 0.32f), SurgeFork = new(1f, 0.62f, 0.22f);
 
     /// <summary>
     /// A surge: a jagged bolt from the impact to her, re-struck many times a second (each strike a new path, flickering
@@ -199,13 +199,13 @@ public partial class LightTrails : Node3D
         int strike = (int)(_time * SurgeStrikes);
         // A hard flash at first, then flickering down.
         float flicker = 0.65f + 0.35f * Signed(surge.Seed + 5, strike);
-        float strength = (1f - k) * (1f - k * 0.5f) * flicker * 1.4f;
+        float strength = (1f - k) * (1f - k * 0.5f) * flicker * 0.55f;
         var from = surge.From;
         var to = Her;
         var path = Bolt(from, to, surge.Seed, strike, SurgeJag);
         Ribbon(path, SurgeCore, strength, SurgeWidth * (1f - 0.4f * k));
         // Forks: from a point along the bolt, a short jagged branch off to one side.
-        for (int f = 0; f < 2; f++)
+        for (int f = 0; f < 1; f++)
         {
             int at = (int)((0.25f + 0.5f * (Signed(surge.Seed + 11 + f, strike) * 0.5f + 0.5f)) * (path.Count - 1));
             var start = path[at];
@@ -214,7 +214,7 @@ public partial class LightTrails : Node3D
             var side = new Vector3(-along.Z, 0f, along.X).Normalized() * (f == 0 ? 1f : -1f);
             float len = Mathf.Min(along.Length() * 0.25f, 2.5f);
             var end = start + (along.Normalized() * 0.6f + side).Normalized() * len * (0.6f + 0.4f * Signed(surge.Seed + 17 + f, strike));
-            Ribbon(Bolt(start, end, surge.Seed + 101 * (f + 1), strike, SurgeJag * 0.6f), SurgeFork, strength * 0.6f, SurgeWidth * 0.55f);
+            Ribbon(Bolt(start, end, surge.Seed + 101 * (f + 1), strike, SurgeJag * 0.6f), SurgeFork, strength * 0.5f, SurgeWidth * 0.6f);
         }
     }
 

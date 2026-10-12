@@ -11,6 +11,8 @@ public sealed class ViewOptions
     /// <summary>Menus and banners cross-fade instead of moving, popping and splashing.</summary>
     [Tune("View")] public bool ReducedMotion = false;
     [Tune("View", 0f, 1f)] public float ShakeAmount = 0.5f;
+    /// <summary>Controller vibration: hits she lands, hits she takes, dashes and water currents.</summary>
+    [Tune("View")] public bool Vibration = true;
     /// <summary>Camera zoom: 1.5 by default; above it closer, below it farther (CameraRig.MinZoom..MaxZoom, 1–2).</summary>
     [Tune("View", 1f, 2f)] public float CameraZoom = 1.5f;
     [Tune("View", 10f, 80f)] public float MinimapRange = 32f;

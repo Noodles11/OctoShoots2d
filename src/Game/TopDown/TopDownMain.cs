@@ -326,6 +326,7 @@ public partial class TopDownMain : Node3D
 
     void GoToTitle()
     {
+        _haptics.Stop();
         Input.MouseMode = Input.MouseModeEnum.Visible;
         if (_persist) GameSave.Write();
         GetTree().ChangeSceneToFile(RunLaunch.TitleScene);
@@ -856,6 +857,7 @@ public partial class TopDownMain : Node3D
         }
         float dt = (float)delta;
         SyncCursor(dt);
+        SyncHaptics(dt);
         // Banners run on game time: they wait while paused and under a splash.
         if (!Paused && _transition == Transition.None && !_deathSplash) _achievementBanner.Step(dt);
         if (_debugAward is { } award && _achievementData is not null && _achievementData.TryGet(award, out var shown))
@@ -932,7 +934,12 @@ public partial class TopDownMain : Node3D
                 // Her light struck something: a power surge arcs back to her (hits by a shot carry its direction).
                 if ((e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
                     || e.Type == PlaneEventType.VineCut)
+                {
                     _combat.Surge(e.Position - e.Direction * 0.4f);
+                    // A tap for a hit landed, a firmer one for a creature freed.
+                    if (e.Type == PlaneEventType.MobDefeated) _haptics.Pulse(0.4f, 0.25f, 0.16f);
+                    else _haptics.Pulse(0.25f, 0.05f, 0.08f);
+                }
                 CorruptionEvent(e);
                 if (e.Type == PlaneEventType.Dived) dived = true;
                 else if (e.Type == PlaneEventType.PlayerDefeated) dived = false;
@@ -940,11 +947,21 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.ShellCollected) _hud.PulseShells();
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
                 else if (e.Type == PlaneEventType.AmbushSprung) Say("Ambush!");
-                else if (e.Type == PlaneEventType.PlayerDrained) _damage.Show(e);
-                else if (e.Type == PlaneEventType.DashStarted) _combat.DashBurst(e.Position);
+                else if (e.Type == PlaneEventType.PlayerDrained)
+                {
+                    _damage.Show(e);
+                    _haptics.Pulse(0.25f, 0.2f, 0.25f);
+                }
+                else if (e.Type == PlaneEventType.DashStarted)
+                {
+                    _combat.DashBurst(e.Position);
+                    _haptics.Pulse(0.35f, 0.3f, 0.14f);
+                }
                 else if (e.Type == PlaneEventType.PlayerHit)
                 {
                     _damage.Show(e);
+                    // Being hurt thuds: harder hits, harder thuds.
+                    _haptics.Pulse(0.5f, Mathf.Clamp(0.45f + e.Size * 0.02f, 0.45f, 0.9f), 0.28f);
                     // Harder hits jolt more: a mob shot (10) ~0.42, the boss's snap (18) ~0.5.
                     _camera.Shake(Mathf.Clamp(0.3f + e.Size * 0.011f, 0.3f, 0.55f));
                 }
@@ -1601,6 +1618,7 @@ public partial class TopDownMain : Node3D
     /// </summary>
     public override void _Input(InputEvent e)
     {
+        if (e is InputEventJoypadButton or InputEventJoypadMotion) _haptics.Device = e.Device;
         bool pad = e switch
         {
             InputEventJoypadButton => true,
@@ -1618,6 +1636,25 @@ public partial class TopDownMain : Node3D
     bool _pad;
     System.Numerics.Vector2 _padAim;
     AimCursor _cursor = null!;
+    readonly Haptics _haptics = new();
+
+    /// <summary>
+    /// The controller's buzz this frame: the pulses the sim's moments asked for, and a hum while a current carries her
+    /// (stronger the faster it runs). Only while she plays with a controller and vibration is on.
+    /// </summary>
+    void SyncHaptics(float dt)
+    {
+        bool playing = _world is not null && !Paused && !_deathSplash && !_diving && _transition == Transition.None;
+        if (playing)
+        {
+            var flow = _world!.Director.FlowAt(_world.Player.Position, _world.Time);
+            float k = Mathf.Clamp(flow.Length() / ReefDirectorTuning.SurgeSpeedMax, 0f, 1f);
+            if (k > 0.05f) _haptics.Hold(0.1f + 0.12f * k, 0.18f * k);
+        }
+        _haptics.Tick(dt, playing && _pad && _view.Vibration);
+    }
+
+    public override void _ExitTree() => _haptics.Stop();
     /// <summary>The controller pointer's screen direction from her (eased so it glides round her).</summary>
     Vector2 _cursorDir = Vector2.Up;
     float _cursorReach;
