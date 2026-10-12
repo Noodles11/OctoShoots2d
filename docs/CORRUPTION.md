@@ -53,7 +53,13 @@ Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
 - **Spreading:** it smears ink over a 2.6 m disc beneath it, toward density 0.9.
 - **Tough:** its corruption meter is 100 (+25% per Menace), about ten default shots in the Shallows. It regrows
   slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, it bursts into gold and cleanses a 5 m disc.
-- **Contact:** 8 corruption, with the usual hit grace.
+- **Body:** six segments along its trail, tapering from 1.1 m (`Blotter.Segment`). Every segment takes hits and hurts
+  on contact; the view draws the same segments.
+- **Contact:** 8 corruption, with the usual hit grace, and a 7 m/s shove away.
+- **Corruption bombs:** every 3.5 s it spits an ink ball up from its mouth. The ball arcs for 1.1 s and lands 3–7 m
+  away at random. If her light struck it in the last 3 s, it lands where she stood when it was thrown, if she is
+  within 13 m. A dark ring on the ground marks the landing spot and tightens as the ball falls. The splash spreads
+  corruption over 2.2 m. If she is in it, she takes 10 corruption and is thrown back at 9 m/s. A dash slips it.
 - **Guards:** every ~6 s (less with Menace) there is a 70% chance a murkling buds 2.5–4.5 m from it, up to 2 + Menace
   guards alive (`Murkling.Guarding`).
 - **Looks** (`BlightView.Blotters.cs`): a chain of six glossy ink mounds from the floor up past her plane, following

@@ -34,6 +34,30 @@ public static class BlotterTuning
     public const float FromStart = 25f, Spacing = 15f;
     /// <summary>Cleansed, it bursts: its light washes this wide.</summary>
     public const float BurstRadius = 5f;
+    /// <summary>Its body: Segments mounds, Spacing metres apart along its trail, tapering from SegmentRadius; any of them takes hits.</summary>
+    public const int Segments = 6;
+    public const float SegmentSpacing = 0.75f, SegmentRadius = 1.1f, Taper = 0.12f;
+    /// <summary>Touching her shoves her off this hard (m/s).</summary>
+    public const float ContactKnockback = 7f;
+    /// <summary>
+    /// Corruption bombs: every BombEvery seconds it spits one up from its mouth. It flies BombSeconds in an arc and lands
+    /// BombNear–BombFar metres off (at a random spot, or, while it is under attack, where she is), splashing corruption
+    /// over SplashRadius and, if she is within it, corrupting her for BombDamage and throwing her back.
+    /// </summary>
+    public const float BombEvery = 3.5f, BombSeconds = 1.1f, BombNear = 3f, BombFar = 7f, BombReach = 13f;
+    public const float SplashRadius = 2.2f, BombDamage = 10f, BombKnockback = 9f, BombInk = 0.9f;
+    /// <summary>It counts as under attack for this long after her light last struck it.</summary>
+    public const float Provoked = 3f;
+}
+
+/// <summary>A Blotter's corruption bomb: arcing from its mouth to where it will land.</summary>
+public sealed class CorruptionBomb
+{
+    public Vector2 From, To;
+    public float Age;
+    /// <summary>How far along its flight it is, 0..1.</summary>
+    public float T => MathF.Min(Age / BlotterTuning.BombSeconds, 1f);
+    public Vector2 Position => Vector2.Lerp(From, To, T);
 }
 
 /// <summary>A Blotter: a giant ink slug creeping toward clean floor and corrupting it.</summary>
@@ -44,7 +68,42 @@ public sealed class Blotter
     public Vector2 Heading = new(1f, 0f);
     public bool Alive = true;
     public CorruptionMeter Corruption = new(BlotterTuning.Meter, BlotterTuning.Regen, BlotterTuning.Delay);
-    public float Seeking, StuckFor, GuardTimer, Seed;
+    public float Seeking, StuckFor, GuardTimer, Seed, BombTimer, SinceStruck = 99f;
+    /// <summary>Where its head has been, newest first (a point every 0.25 m): its body follows it.</summary>
+    public readonly List<Vector2> Trail = new();
+
+    /// <summary>The middle of body segment i (0 the head) and its radius.</summary>
+    public (Vector2 At, float Radius) Segment(int i)
+    {
+        float r = BlotterTuning.SegmentRadius * (i == 0 ? 0.85f : 1f - BlotterTuning.Taper * (i - 1));
+        float distance = i * BlotterTuning.SegmentSpacing;
+        for (int k = 1; k < Trail.Count; k++)
+        {
+            float seg = Vector2.Distance(Trail[k - 1], Trail[k]);
+            if (distance <= seg) return (Trail[k - 1] + (Trail[k] - Trail[k - 1]) * (seg > 1e-5f ? distance / seg : 0f), r);
+            distance -= seg;
+        }
+        return (Trail.Count > 0 ? Trail[^1] : Position, r);
+    }
+
+    /// <summary>Whether a circle touches any part of its body.</summary>
+    public bool Touches(Vector2 at, float radius)
+    {
+        for (int i = 0; i < BlotterTuning.Segments; i++)
+        {
+            var (c, r) = Segment(i);
+            if (Vector2.DistanceSquared(c, at) < (r + radius) * (r + radius)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Records where its head is now.</summary>
+    public void Track()
+    {
+        if (Trail.Count == 0 || Vector2.Distance(Trail[0], Position) >= 0.25f) Trail.Insert(0, Position);
+        else Trail[0] = Position;
+        while (Trail.Count > BlotterTuning.Segments * 4 + 2) Trail.RemoveAt(Trail.Count - 1);
+    }
     /// <summary>Rising out of the ground (counting down; above zero it is not yet out).</summary>
     public float Rise;
 }
@@ -52,6 +111,7 @@ public sealed class Blotter
 public sealed partial class PlaneWorld
 {
     public List<Blotter> Blotters { get; } = new();
+    public List<CorruptionBomb> Bombs { get; } = new();
     float _birthTimer;
 
     float BlotterMeter => BlotterTuning.Meter * (1f + BlotterTuning.MeterPerMenace * Menace);
@@ -95,6 +155,9 @@ public sealed partial class PlaneWorld
         b.Corruption.Max = b.Corruption.Value = BlotterMeter;
         float a = _blightRng.Range(0f, MathF.Tau);
         b.Heading = new Vector2(MathF.Cos(a), MathF.Sin(a));
+        b.BombTimer = _blightRng.Range(1.5f, BlotterTuning.BombEvery);
+        // Laid out behind its head, so it has a whole body from the start.
+        for (int i = 0; i < BlotterTuning.Segments * 4; i++) b.Trail.Add(at - b.Heading * (i * 0.25f));
         return b;
     }
 
@@ -147,14 +210,39 @@ public sealed partial class PlaneWorld
             b.Velocity = b.Heading * speed * gait * (0.25f + 0.75f * facing);
             var before = b.Position;
             Move(ref b.Position, ref b.Velocity, BlotterTuning.Radius, report: false, barrier: ArenaBarrier.Outside);
+            b.Track();
             float moved = Vector2.Distance(before, b.Position);
             b.StuckFor = moved < speed * Dt * 0.2f ? b.StuckFor + Dt : 0f;
             // Its trail: ink smeared over the ground beneath it.
             field.Spread(b.Position, BlotterTuning.SmearRadius, BlotterTuning.Ink, BlotterTuning.Smear * Dt);
 
-            // Touching her corrupts her and shoves her off.
-            if (Vector2.Distance(b.Position, p.Position) < BlotterTuning.Radius + Radius)
-                HurtPlayer(BlotterTuning.ContactDamage, SafeNormalize(p.Position - b.Position), DamageSource.Blotter);
+            // Touching any of it corrupts her and shoves her off.
+            for (int i = 0; i < BlotterTuning.Segments; i++)
+            {
+                var (c, r) = b.Segment(i);
+                if (Vector2.Distance(c, p.Position) >= r + Radius) continue;
+                var away = SafeNormalize(p.Position - c);
+                if (HurtPlayer(BlotterTuning.ContactDamage, away, DamageSource.Blotter)) p.Velocity += away * BlotterTuning.ContactKnockback;
+                break;
+            }
+
+            // Its bombs: up from its mouth, at her while she is attacking it, else anywhere near.
+            b.SinceStruck += Dt;
+            b.BombTimer -= Dt;
+            if (b.BombTimer <= 0f)
+            {
+                b.BombTimer = BlotterTuning.BombEvery;
+                var mouth = b.Position + b.Heading * BlotterTuning.SegmentRadius * 0.8f;
+                Vector2 to;
+                if (b.SinceStruck < BlotterTuning.Provoked && Vector2.Distance(p.Position, mouth) < BlotterTuning.BombReach) to = p.Position;
+                else
+                {
+                    float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(BlotterTuning.BombNear, BlotterTuning.BombFar);
+                    to = b.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+                }
+                Bombs.Add(new CorruptionBomb { From = mouth, To = to });
+                Events.Add(new PlaneEvent(PlaneEventType.BombThrown, mouth, to - mouth, BlotterTuning.BombSeconds));
+            }
 
             // Its guards: murklings bud round it.
             b.GuardTimer -= Dt;
@@ -177,8 +265,9 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var b in Blotters)
             {
-                if (!b.Alive || b.Rise > 0f || shot.Struck == b || Vector2.Distance(b.Position, shot.Position) > BlotterTuning.Radius + shot.Radius) continue;
+                if (!b.Alive || b.Rise > 0f || shot.Struck == b || !b.Touches(shot.Position, shot.Radius)) continue;
                 float light = HitDamage(shot);
+                b.SinceStruck = 0f;
                 bool emptied = b.Corruption.Hit(light);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, SafeNormalize(shot.Velocity), light));
                 if (emptied) BurstBlotter(b, field);
@@ -191,6 +280,29 @@ public sealed partial class PlaneWorld
             }
         }
         Blotters.RemoveAll(b => !b.Alive);
+        StepBombs(field);
+    }
+
+    /// <summary>Bombs in flight land with a splash of corruption, corrupting her and throwing her back if she is in it.</summary>
+    void StepBombs(CorruptionField field)
+    {
+        var p = Player;
+        foreach (var bomb in Bombs)
+        {
+            bomb.Age += Dt;
+            if (bomb.Age < BlotterTuning.BombSeconds) continue;
+            var at = bomb.To;
+            field.Spread(at, BlotterTuning.SplashRadius, BlotterTuning.BombInk, 1f);
+            Events.Add(new PlaneEvent(PlaneEventType.BombSplash, at, Vector2.Zero, BlotterTuning.SplashRadius));
+            float d = Vector2.Distance(p.Position, at);
+            if (d < BlotterTuning.SplashRadius + Radius)
+            {
+                var away = SafeNormalize(p.Position - at);
+                if (away == Vector2.Zero) away = SafeNormalize(bomb.To - bomb.From);
+                if (HurtPlayer(BlotterTuning.BombDamage, away, DamageSource.Blotter)) p.Velocity += away * BlotterTuning.BombKnockback;
+            }
+        }
+        Bombs.RemoveAll(b => b.Age >= BlotterTuning.BombSeconds);
     }
 
     void PickBlotterTarget(Blotter b, CorruptionField field)

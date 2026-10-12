@@ -12,20 +12,72 @@ namespace OctoShoots.Game.TopDown;
 /// </summary>
 public partial class BlightView
 {
-    const int SlugSegments = 6;
-    const float SlugSpacing = 0.75f;
+    const int SlugSegments = BlotterTuning.Segments;
 
     sealed class Slug
     {
         public Node3D Node = null!;
         public MeshInstance3D[] Body = null!;
         public MeshInstance3D[] Stalks = null!, Eyes = null!;
-        /// <summary>Where its head has been (newest first), a point every 0.25 m.</summary>
-        public readonly List<System.Numerics.Vector2> Trail = new();
         public float Drip;
     }
 
     readonly Dictionary<Blotter, Slug> _slugs = new();
+    readonly Dictionary<CorruptionBomb, (MeshInstance3D Ball, MeshInstance3D Mark)> _bombs = new();
+
+    /// <summary>
+    /// Corruption bombs: a wobbling ink ball arcing from a Blotter's mouth, and on the ground where it will land a dark
+    /// ring that tightens and darkens as it falls (the warning to get out).
+    /// </summary>
+    void SyncBombs(PlaneWorld world)
+    {
+        var live = new HashSet<CorruptionBomb>(world.Bombs);
+        var gone = new List<CorruptionBomb>();
+        foreach (var (bomb, view) in _bombs)
+            if (!live.Contains(bomb))
+            {
+                view.Ball.QueueFree();
+                view.Mark.QueueFree();
+                gone.Add(bomb);
+            }
+        foreach (var bomb in gone) _bombs.Remove(bomb);
+        foreach (var bomb in world.Bombs)
+        {
+            if (!_bombs.TryGetValue(bomb, out var view))
+            {
+                var ball = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.32f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+                ball.SetInstanceShaderParameter("ember", 0.08f);
+                ball.SetInstanceShaderParameter("wobble", 1.4f);
+                ball.SetInstanceShaderParameter("seed", bomb.From.X * 0.3f);
+                var mark = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+                mark.SetInstanceShaderParameter("seed", bomb.To.Y * 0.2f);
+                AddChild(ball);
+                AddChild(mark);
+                _bombs[bomb] = view = (ball, mark);
+            }
+            float t = bomb.T;
+            var at = bomb.Position;
+            float from = LevelMap.SwimBand + 1.2f, to = Floor(bomb.To) + 0.2f;
+            // A lob: up from the mouth and down onto the ground.
+            float y = Mathf.Lerp(from, to, t) + 3.2f * 4f * t * (1f - t);
+            view.Ball.Position = new Vector3(at.X, y, at.Y);
+            float r = BlotterTuning.SplashRadius * (1.25f - 0.25f * t);
+            view.Mark.Position = new Vector3(bomb.To.X, Floor(bomb.To) + 0.07f, bomb.To.Y);
+            view.Mark.Scale = new Vector3(r, 1f, r);
+            view.Mark.SetInstanceShaderParameter("tint", new Color(0.05f, 0.02f, 0.08f, 0.35f + 0.5f * t));
+            view.Mark.SetInstanceShaderParameter("width", 0.12f + 0.1f * t);
+        }
+    }
+
+    void ClearBombs()
+    {
+        foreach (var (ball, mark) in _bombs.Values)
+        {
+            ball.QueueFree();
+            mark.QueueFree();
+        }
+        _bombs.Clear();
+    }
 
     void ClearSlugs()
     {
@@ -64,9 +116,7 @@ public partial class BlightView
             node.AddChild(stalks[i]);
             node.AddChild(eyes[i]);
         }
-        var slug = new Slug { Node = node, Body = body, Stalks = stalks, Eyes = eyes };
-        for (int i = 0; i < SlugSegments * 4; i++) slug.Trail.Add(b.Position - b.Heading * (i * 0.25f));
-        return slug;
+        return new Slug { Node = node, Body = body, Stalks = stalks, Eyes = eyes };
     }
 
     void SyncSlugs(PlaneWorld world, float dt)
@@ -84,15 +134,12 @@ public partial class BlightView
         foreach (var b in world.Blotters)
         {
             if (!_slugs.TryGetValue(b, out var slug)) _slugs[b] = slug = MakeSlug(b);
-            // Its trail: the body follows where the head has been.
-            if (System.Numerics.Vector2.Distance(b.Position, slug.Trail[0]) >= 0.25f) slug.Trail.Insert(0, b.Position);
-            else slug.Trail[0] = b.Position;
-            while (slug.Trail.Count > SlugSegments * 4 + 2) slug.Trail.RemoveAt(slug.Trail.Count - 1);
             // Rising out of the floor when born.
             float rise = b.Rise > 0f ? 1f - Mathf.Clamp(b.Rise / 1.5f, 0f, 1f) : 1f;
             for (int i = 0; i < SlugSegments; i++)
             {
-                var at = Along(slug.Trail, i * SlugSpacing);
+                // The sim's own body segments (its hitboxes), so what is drawn is what takes hits.
+                var (at, _) = b.Segment(i);
                 float floor = Floor(at);
                 float taper = i == 0 ? 0.85f : 1f - 0.12f * (i - 1);
                 // A slow wave runs down its back as it creeps.
@@ -129,17 +176,5 @@ public partial class BlightView
                     new Color(0.03f, 0.01f, 0.05f, 0.9f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 1.5f);
             }
         }
-    }
-
-    /// <summary>The point this far back along a trail (newest first).</summary>
-    static System.Numerics.Vector2 Along(List<System.Numerics.Vector2> trail, float distance)
-    {
-        for (int i = 1; i < trail.Count; i++)
-        {
-            float seg = System.Numerics.Vector2.Distance(trail[i - 1], trail[i]);
-            if (distance <= seg) return trail[i - 1] + (trail[i] - trail[i - 1]) * (seg > 1e-5f ? distance / seg : 0f);
-            distance -= seg;
-        }
-        return trail[^1];
     }
 }

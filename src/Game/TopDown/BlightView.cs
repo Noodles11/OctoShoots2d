@@ -88,6 +88,7 @@ public partial class BlightView : Node3D
         _ripples.Clear();
         ClearSlugs();
         ClearBumps();
+        ClearBombs();
         _motes.Clear();
         _droplets.Clear();
         foreach (var root in world.Blightroots) _roots.Add(MakeRoot(root));
@@ -171,6 +172,7 @@ public partial class BlightView : Node3D
         SyncMurklings(world);
         SyncSlugs(world, dt);
         SyncBumps(world);
+        SyncBombs(world);
         SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
@@ -493,6 +495,19 @@ public partial class BlightView : Node3D
         var at = new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y);
         switch (e.Type)
         {
+            case PlaneEventType.BombThrown:
+                // A gob of ink spat up from its mouth.
+                _droplets.Burst(at + Vector3.Up * 1.2f, (Vector3.Up + new Vector3(e.Direction.X, 0f, e.Direction.Y).Normalized() * 0.4f).Normalized(), 10, 3f, 0.5f, 0.5f, 0.12f, 0.03f, new Color(0.03f, 0.01f, 0.05f, 0.9f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2f);
+                break;
+            case PlaneEventType.BombSplash:
+            {
+                // It lands with a splash: ink flung up and out, and a dark ring spreading over the ground.
+                float floor = Floor(e.Position);
+                var from = new Vector3(e.Position.X, floor + 0.15f, e.Position.Y);
+                AddRipple(e.Position, floor + 0.07f, 0.3f, e.Size * 1.2f, 0.6f, new Color(Ink.R, Ink.G, Ink.B, 0.9f));
+                _droplets.Burst(from, Vector3.Up, 34, 5f, 0.85f, 0.7f, 0.2f, 0.04f, new Color(0.03f, 0.01f, 0.05f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2.5f);
+                break;
+            }
             case PlaneEventType.CacheRevealed:
             {
                 // The ground breaks open over it in a puff of gold, and the loot floats up.

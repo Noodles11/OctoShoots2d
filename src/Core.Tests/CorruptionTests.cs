@@ -312,6 +312,56 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void ABlotterTakesHitsAlongItsWholeBody()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var b = w.Blotters[0];
+        w.Blotters.RemoveAt(1);
+        Quiet(w);
+        w.Blotters.Add(b);
+        // A shot at its tail (the last segment), well behind its head.
+        var (tail, _) = b.Segment(BlotterTuning.Segments - 1);
+        Assert.True(Vector2.Distance(tail, b.Position) > 3f);
+        w.Shots.Add(Light(tail));
+        w.Step(default);
+        Assert.True(b.Corruption.Value < b.Corruption.Max);
+    }
+
+    [Fact]
+    public void AnAttackedBlotterBombsHerAndTheSplashCorruptsAndThrowsHer()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var b = w.Blotters[0];
+        w.Blotters.RemoveAt(1);
+        Quiet(w);
+        w.Blotters.Add(b);
+        // She stands 6 m off on clean ground and has just struck it; it spits a bomb at her.
+        var spot = Enumerable.Range(0, 32).Select(i => b.Position + new Vector2(MathF.Cos(i * 0.2f), MathF.Sin(i * 0.2f)) * 6f).First(q => w.Clear(q, 0.6f));
+        w.Player.Position = w.Player.PrevPosition = spot;
+        w.Corruption!.Cleanse(spot, 3f, 1f);
+        b.SinceStruck = 0f;
+        b.BombTimer = 0.01f;
+        b.Seeking = 99f;
+        b.Target = b.Position;
+        float hp = w.Player.Hp;
+        w.Step(default);
+        var bomb = Assert.Single(w.Bombs);
+        Assert.Equal(spot, bomb.To);
+        bool splashed = false;
+        for (int i = 0; i < 90 && !splashed; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = spot;
+            w.Player.Velocity = Vector2.Zero;
+            w.Step(default);
+            splashed = w.Events.Any(e => e.Type == PlaneEventType.BombSplash);
+        }
+        Assert.True(splashed);
+        Assert.True(w.Player.Hp < hp);
+        Assert.True(w.Player.Velocity.Length() > 1f);
+        Assert.True(w.Corruption.At(spot + new Vector2(1.5f, 0f)) > 0.3f || w.Corruption.At(spot - new Vector2(1.5f, 0f)) > 0.3f);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));
@@ -379,6 +429,7 @@ public class CorruptionTests
         foreach (var area in w.Areas) area.Spent = true;
         w.Murklings.Clear();
         w.Blotters.Clear();
+        w.Bombs.Clear();
         foreach (var vine in w.Vines) vine.Points.RemoveRange(1, vine.Points.Count - 1);
     }
 }

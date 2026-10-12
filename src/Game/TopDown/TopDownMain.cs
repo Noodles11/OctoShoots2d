@@ -1464,6 +1464,10 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.CrackOpened:
                 Say("The arena is clean: the Crack opens");
                 break;
+            case PlaneEventType.BombSplash:
+                _sfx.PlayPitched("merge", 0.45f, -8f);
+                if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 8f) _camera.Shake(0.15f);
+                break;
             case PlaneEventType.CacheRevealed:
                 _sfx.PlayPitched("merge", e.Size > 0f ? 1.5f : 1.2f, -6f);
                 _haptics.Pulse(0.2f, 0.1f, 0.12f);
