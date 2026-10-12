@@ -667,7 +667,8 @@ public sealed partial class PlaneWorld
                 if (to.Length() > 0.05f)
                 {
                     var moved = tip + SafeNormalize(to) * step;
-                    if (Map.IsOpen(moved))
+                    // A sealed arena keeps vines out.
+                    if (Map.IsOpen(moved) && !CrossesRim(tip, moved))
                     {
                         if (vine.Points.Count >= 2 && Vector2.Distance(vine.Points[^2], moved) >= BlightTuning.Segment)
                         {
@@ -748,11 +749,11 @@ public sealed partial class PlaneWorld
     void StepMurklings(CorruptionField field)
     {
         var p = Player;
-        // Budding: from the dense ground of each living area (the arena only while its boss fights).
+        // Budding: from the dense ground of each living area. Never in the arena: during the fight only she is in it.
         foreach (var area in Areas)
         {
-            if (area.Spent) continue;
-            if (area.Arena ? Boss is not { Stage: BossStage.Fight } : !Blightroots.Any(b => b.Alive && Areas[b.Area] == area)) continue;
+            if (area.Spent || area.Arena) continue;
+            if (!Blightroots.Any(b => b.Alive && Areas[b.Area] == area)) continue;
             area.BudTimer -= Dt;
             if (area.BudTimer > 0f) continue;
             area.BudTimer = area.Arena ? BlightTuning.ArenaInterval : BudInterval();
@@ -787,7 +788,7 @@ public sealed partial class PlaneWorld
             {
                 m.Shaken -= Dt;
                 m.Velocity = MoveToward(m.Velocity, Vector2.Zero, BlightTuning.ShakeSpeed * 1.2f * Dt);
-                Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false);
+                Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false, barrier: ArenaBarrier.Outside);
                 continue;
             }
             // Toward the brightest light: her, or a bubble of hers hanging at the end of its range (bait).
@@ -814,7 +815,7 @@ public sealed partial class PlaneWorld
             // A wobble off the line, as if the dark were reluctant.
             wish += new Vector2(MathF.Sin(Time * 1.7f + m.Seed), MathF.Cos(Time * 1.3f + m.Seed * 2f)) * 0.35f;
             m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace), 4f * Dt);
-            Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false);
+            Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false, barrier: ArenaBarrier.Outside);
 
             // It clings on touch.
             if (Vector2.Distance(m.Position, p.Position) < BlightTuning.MurkRadius + Radius)
@@ -841,9 +842,10 @@ public sealed partial class PlaneWorld
         // Its throws: they drain light on hit; rock stops them.
         foreach (var s in MurkShots)
         {
+            var was = s.Position;
             s.Position += s.Velocity * Dt;
             s.Life -= Dt;
-            if (!Map.IsOpen(s.Position)) s.Life = 0f;
+            if (!Map.IsOpen(s.Position) || CrossesRim(was, s.Position)) s.Life = 0f;
             else if (Vector2.Distance(s.Position, p.Position) < Radius + BlightTuning.ThrowRadius)
             {
                 s.Life = 0f;

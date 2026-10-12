@@ -7,9 +7,12 @@ using OctoShoots.Core.Plane;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// Queen Clam and her arena, drawn from the sim: her valves (opening on the telegraph, rattling in the stagger, snapping),
-/// the glowing heart-pearl, her pearl crown and grumpy eyes; the shadow before she drops, the landing wave and sand puff,
-/// the snap's warning rim, and the mud cloud standing around the sealed arena.
+/// Queen Clam and her arena, drawn from the sim. She is a real giant clam (art rules in CLAUDE.md: no face, nothing
+/// cartoonish): two heavy ribbed valves, ash-drained with ink in their grooves, the lid opening and closing on its hinge
+/// (creaking on the telegraph, rattling in the stagger, slamming on the snap), a dark corrupted mantle, and in her
+/// middle the black pearl her light must strike. She never turns. Freed, the pearl bursts into white light and stays
+/// white, her colour floods back, and she leaps aside and lies open. Also the shadow before she drops, the landing wave
+/// and sand puff, the snap's warning rim, and the mud cloud standing around the sealed arena.
 /// </summary>
 public partial class BossView : Node3D
 {
@@ -19,10 +22,13 @@ public partial class BossView : Node3D
     const float OpenDeg = 52f;
 
     Node3D _clam = null!, _hinge = null!;
-    MeshInstance3D _bottom = null!, _top = null!, _shadow = null!, _wave = null!, _snapRim = null!, _heart = null!;
-    readonly MeshInstance3D[] _crown = new MeshInstance3D[5];
+    MeshInstance3D _bottom = null!, _top = null!, _shadow = null!, _wave = null!, _snapRim = null!, _pearl = null!;
     readonly MeshInstance3D[] _puffs = new MeshInstance3D[10];
-    StandardMaterial3D _heartMat = null!, _waveMat = null!, _snapMat = null!, _puffMat = null!, _shadowMat = null!;
+    StandardMaterial3D _waveMat = null!, _snapMat = null!, _puffMat = null!, _shadowMat = null!, _mantleMat = null!, _whitePearl = null!;
+    ShaderMaterial _blackPearl = null!;
+    OmniLight3D _burstLight = null!;
+    OctoShoots.Game.Fx.FxParticles _motes = null!;
+    bool _burst;
     ShaderMaterial _shell = null!;
     readonly ShaderMaterial[] _mud = new ShaderMaterial[4];
     Node3D _mudRoot = null!;
@@ -40,47 +46,46 @@ public partial class BossView : Node3D
         _bottom = new MeshInstance3D { Mesh = dome, MaterialOverride = _shell, Scale = new Vector3(R, 0.75f, R * 0.88f), RotationDegrees = new Vector3(180f, 0f, 0f) };
         _clam.AddChild(_bottom);
 
-        // The mantle and heart-pearl inside, seen when she opens.
+        // The mantle inside, seen when she opens: dark, corrupted flesh (warm again once she is freed).
+        _mantleMat = new StandardMaterial3D { AlbedoColor = new Color(0.1f, 0.07f, 0.09f), Roughness = 0.35f, Metallic = 0f };
         var mantle = new MeshInstance3D
         {
             Mesh = new CylinderMesh { TopRadius = 1f, BottomRadius = 1f, Height = 0.04f, RadialSegments = 40 },
             Scale = new Vector3(R * 0.94f, 1f, R * 0.82f),
             Position = new Vector3(0f, 0.02f, 0f),
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.3f, 0.45f, 0.75f), EmissionEnabled = true, Emission = new Color(0.25f, 0.55f, 0.75f), EmissionEnergyMultiplier = 0.35f, Roughness = 0.3f },
+            MaterialOverride = _mantleMat,
         };
         _clam.AddChild(mantle);
-        _heartMat = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.9f, 0.95f), EmissionEnabled = true, Emission = new Color(1f, 0.6f, 0.8f), EmissionEnergyMultiplier = 0.5f, Roughness = 0.1f, Metallic = 0.3f, RimEnabled = true };
-        _heart = new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.5f, Height = 1f }, MaterialOverride = _heartMat, Position = new Vector3(R * 0.15f, 0.3f, 0f) };
-        _clam.AddChild(_heart);
+        // The black pearl in her middle: corruption, glossy and drinking the light, a cold glint deep in it when she
+        // opens. Her light must strike it. Freed, it is white.
+        _blackPearl = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader") };
+        _blackPearl.SetShaderParameter("ember_color", new Color(0.55f, 0.3f, 0.85f));
+        _whitePearl = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.97f, 0.96f, 0.93f), Roughness = 0.08f, Metallic = 0.25f, RimEnabled = true, Rim = 1f,
+            EmissionEnabled = true, Emission = new Color(1f, 0.95f, 0.85f), EmissionEnergyMultiplier = 0.6f,
+        };
+        _pearl = new MeshInstance3D
+        {
+            Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 32, Rings = 16 },
+            MaterialOverride = _blackPearl,
+            // Sits on the mantle, just under the shut lid.
+            Scale = Vector3.One * PlaneBossTuning.CoreRadius * 0.55f,
+            Position = new Vector3(0f, 0.36f, 0f),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        _pearl.SetInstanceShaderParameter("wobble", 0.05f);
+        _pearl.SetInstanceShaderParameter("ember", 0.1f);
+        _clam.AddChild(_pearl);
+        _burstLight = new OmniLight3D { LightColor = new Color(1f, 0.93f, 0.78f), LightEnergy = 0f, OmniRange = 30f, ShadowEnabled = false, Position = new Vector3(0f, 1.5f, 0f) };
+        _clam.AddChild(_burstLight);
+        _motes = new OctoShoots.Game.Fx.FxParticles(600, additive: true);
+        AddChild(_motes);
 
         _hinge = new Node3D { Position = new Vector3(-R, 0f, 0f) };
         _clam.AddChild(_hinge);
         _top = new MeshInstance3D { Mesh = dome, MaterialOverride = _shell, Scale = new Vector3(R, 0.95f, R * 0.88f), Position = new Vector3(R, 0f, 0f) };
         _hinge.AddChild(_top);
-        // Grumpy eyes on the top valve, near the lip, with heavy brows.
-        var white = new StandardMaterial3D { AlbedoColor = new Color(0.97f, 0.97f, 0.94f), Roughness = 0.3f };
-        var black = new StandardMaterial3D { AlbedoColor = new Color(0.05f, 0.05f, 0.08f) };
-        foreach (float side in new[] { -1f, 1f })
-        {
-            var eye = new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.42f, Height = 0.84f }, MaterialOverride = white, Position = new Vector3(R * 1.55f, 0.62f, side * 0.62f) };
-            _hinge.AddChild(eye);
-            eye.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.2f, Height = 0.4f }, MaterialOverride = black, Position = new Vector3(0.24f, 0.18f, -side * 0.05f) });
-            _hinge.AddChild(new MeshInstance3D
-            {
-                Mesh = new BoxMesh { Size = new Vector3(0.18f, 0.12f, 0.7f) },
-                MaterialOverride = black,
-                Position = new Vector3(R * 1.62f, 1.08f, side * 0.62f),
-                RotationDegrees = new Vector3(side * 22f, 0f, 0f),
-            });
-        }
-        // The pearl crown along the hinge.
-        var pearl = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.97f, 0.92f), Roughness = 0.12f, Metallic = 0.35f, RimEnabled = true, EmissionEnabled = true, Emission = new Color(0.9f, 0.85f, 1f), EmissionEnergyMultiplier = 0.25f };
-        for (int i = 0; i < _crown.Length; i++)
-        {
-            float z = (i - 2) * 0.55f;
-            _crown[i] = new MeshInstance3D { Mesh = new SphereMesh { Radius = i == 2 ? 0.34f : 0.25f, Height = i == 2 ? 0.68f : 0.5f }, MaterialOverride = pearl, Position = new Vector3(0.35f, 0.75f + (i == 2 ? 0.15f : 0f), z) };
-            _hinge.AddChild(_crown[i]);
-        }
 
         // Her shadow as she falls.
         _shadowMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(0f, 0f, 0f, 0.5f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha };
@@ -214,6 +219,10 @@ public partial class BossView : Node3D
         }
         _drained = 1f;
         _landedAt = _freedAt = -10f;
+        _burst = false;
+        _pearl.MaterialOverride = _blackPearl;
+        _burstLight.LightEnergy = 0f;
+        _motes.Clear();
         _lastStage = BossStage.Waiting;
         Visible = world.Boss is not null;
     }
@@ -253,6 +262,8 @@ public partial class BossView : Node3D
         // A squash on landing.
         float sinceLand = _time - _landedAt;
         float squash = sinceLand < 0.35f ? 1f - 0.25f * Mathf.Sin(sinceLand / 0.35f * Mathf.Pi) : 1f;
+        // Freed, she leaps aside in one arc.
+        if (boss.Stage == BossStage.Freed && boss.Leap is > 0f and < 1f) y += 3.5f * Mathf.Sin(boss.Leap * Mathf.Pi);
         _clam.Position = new Vector3(boss.Position.X, y, boss.Position.Y) + jitter;
         _clam.Scale = new Vector3(1f / Mathf.Sqrt(squash), squash, 1f / Mathf.Sqrt(squash));
         _clam.Rotation = new Vector3(0f, -Mathf.Atan2(boss.Facing.Y, boss.Facing.X), 0f);
@@ -272,12 +283,35 @@ public partial class BossView : Node3D
         if (world.Events.Exists(e => e.Type == PlaneEventType.BossSnap)) _snapSlam = 0f;
         _snapSlam = Mathf.MoveToward(_snapSlam, 1f, dt / 0.35f);
         open *= _snapSlam;
-        if (boss.Stage == BossStage.Freed) open = 0.45f + 0.05f * Mathf.Sin(_time * 2f);
+        // Freed, she lies wide open (shut only for the shudder and the leap).
+        if (boss.Stage == BossStage.Freed) open = boss.Leap >= 1f ? Mathf.MoveToward(_hinge.Rotation.Z / Mathf.DegToRad(OpenDeg), 1f, dt * 1.5f) : 0.2f;
         _hinge.Rotation = new Vector3(0f, 0f, Mathf.DegToRad(OpenDeg) * open);
 
-        // The heart-pearl glows up on the telegraph and while open.
-        float glow = boss.Stage == BossStage.Fight && boss.Act is ClamAct.Opening or ClamAct.Volleys or ClamAct.Helix ? 1.5f + 0.8f * Mathf.Sin(_time * 8f) : 0.4f;
-        _heartMat.EmissionEnergyMultiplier = Mathf.MoveToward(_heartMat.EmissionEnergyMultiplier, glow, dt * 6f);
+        // The black pearl: a cold glint stirs deep in it while she is open.
+        if (!_burst)
+        {
+            float glint = boss.Stage == BossStage.Fight && boss.Act is ClamAct.Opening or ClamAct.Volleys or ClamAct.Helix ? 0.35f + 0.15f * Mathf.Sin(_time * 5f) : 0.08f;
+            _pearl.SetInstanceShaderParameter("ember", glint);
+            _pearl.SetInstanceShaderParameter("fade", 1f);
+        }
+        // Freed: the pearl bursts into white light, washing the arena, and stays white.
+        if (boss.Stage == BossStage.Freed && !_burst)
+        {
+            _burst = true;
+            _pearl.MaterialOverride = _whitePearl;
+            _burstLight.LightEnergy = 16f;
+            var at = _pearl.GlobalPosition;
+            for (int i = 0; i < 160; i++)
+                _motes.Emit(at, _motes.RandDir() * _motes.RandRange(3f, 14f) + Vector3.Up * 1.5f, _motes.RandRange(0.8f, 1.8f), _motes.RandRange(0.12f, 0.3f), 0.02f,
+                    new Color(1.6f, 1.5f, 1.3f), new Color(1f, 0.7f, 0.3f, 0f), drag: 1.4f, buoyancy: 0.3f);
+        }
+        if (_burst)
+        {
+            _burstLight.LightEnergy = Mathf.MoveToward(_burstLight.LightEnergy, 1.2f, dt * 10f);
+            _whitePearl.EmissionEnergyMultiplier = 0.6f + 0.15f * Mathf.Sin(_time * 1.6f);
+        }
+        if (GetViewport()?.GetCamera3D() is { } cam) _motes.Tick(dt, cam.GlobalBasis);
+        _mantleMat.AlbedoColor = new Color(0.1f, 0.07f, 0.09f).Lerp(new Color(0.78f, 0.55f, 0.48f), 1f - _drained);
 
         // Corrupted colours wash back in once she is freed; hits flash her white.
         if (boss.Stage == BossStage.Freed) _drained = Mathf.MoveToward(_drained, 0f, dt / 1.2f);
@@ -287,10 +321,6 @@ public partial class BossView : Node3D
             valve.SetInstanceShaderParameter("flash", boss.HitFlash > 0f ? 0.7f : 0f);
         }
         SyncCrust(world, boss, dt);
-        // Her crown jiggles after a thump.
-        float jig = Mathf.Exp(-sinceLand * 3f) * Mathf.Sin(sinceLand * 30f) * 0.12f;
-        for (int i = 0; i < _crown.Length; i++)
-            _crown[i].Scale = Vector3.One * (1f + jig * (i % 2 == 0 ? 1f : -1f));
 
         // The landing wave and the sand puff.
         _wave.Visible = boss.Wave >= 0f;

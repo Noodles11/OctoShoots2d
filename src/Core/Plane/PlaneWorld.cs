@@ -64,7 +64,7 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     ChargeFull, LightBurst, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
     SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
-    MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash,
+    MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, BossLeap,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>

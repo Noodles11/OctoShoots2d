@@ -14,7 +14,13 @@ public static class PlaneBossTuning
     /// <summary>Her shell, as a solid disc on the plane (5 m across).</summary>
     public const float BodyRadius = 2.5f;
     public const float ContactDamage = 18f, ContactKnockback = 9f;
-    public const float TurnDegPerSec = 30f;
+    /// <summary>
+    /// Her weak spot: the black pearl in her middle, this wide. Only while her shell is open can her light reach it
+    /// (over the raised lid); everything else on her is shell, and shots break harmlessly on it.
+    /// </summary>
+    public const float CoreRadius = 0.9f;
+    /// <summary>Freed, her pearl bursts into light and she leaps off the gateway in this long, landing this far aside.</summary>
+    public const float LeapSeconds = 0.7f;
 
     /// <summary>The arena intro: the banner stands, dissolves, a beat, then her shadow grows and she lands.</summary>
     public const float BannerSeconds = 2.5f, DissolveSeconds = 0.6f, DropDelay = 0.5f, ShadowSeconds = 0.8f;
@@ -36,8 +42,8 @@ public static class PlaneBossTuning
     public const int RoyalHp = 2;
     public const float SlowSeconds = 2f, SlowFactor = 0.6f;
     public const float SnapRange = 7f, SnapWarn = 0.7f, SnapDamage = 18f;
-    /// <summary>Freed: she shudders this long before the poof, then shuffles off the gateway.</summary>
-    public const float FreedShudder = 0.3f, ShuffleSpeed = 2f, ShuffleAside = 6.5f;
+    /// <summary>Freed: she shudders this long as her pearl bursts, then leaps aside off the gateway and stays open.</summary>
+    public const float FreedShudder = 0.3f, ShuffleAside = 6.5f;
 }
 
 public enum BossStage { Waiting, Banner, Drop, Fight, Freed }
@@ -69,8 +75,10 @@ public sealed class PlaneBoss
     public float HitFlash;
     /// <summary>The landing wave's radius (negative when there is none).</summary>
     public float Wave = -1f;
-    /// <summary>Freed, she shuffles off the gateway to here.</summary>
-    public Vector2 RestAt;
+    /// <summary>Freed, she leaps off the gateway from here to there.</summary>
+    public Vector2 LeapFrom, RestAt;
+    /// <summary>How far through her leap she is (0..1; 1 once she has landed aside).</summary>
+    public float Leap;
     /// <summary>The mud cloud around the arena: 0 settled, 1 fully risen.</summary>
     public float Cloud;
     /// <summary>Her health at the fight's start (eased by the level cleansed) and how dense her patterns are (1 full).</summary>
@@ -100,8 +108,11 @@ public sealed partial class PlaneWorld
     {
         if (!Map.HasBoss) return;
         Boss = new PlaneBoss { Position = ArenaCenter };
+        // She does not see Clementine: she lies as she settled, facing wherever she happens to face, and never turns.
         ExitOpen = false;
         _bossRng = new Rng(Map.Seed ^ 0xB055C1A3UL ^ ((ulong)Map.Level << 24) ^ ((ulong)Map.Depth << 32) ^ ((ulong)Map.Attempt << 50));
+        float a = _bossRng.Range(0f, MathF.Tau);
+        Boss.Facing = new Vector2(MathF.Cos(a), MathF.Sin(a));
     }
 
     /// <summary>True when the barrier lets a circle stand here.</summary>
@@ -146,6 +157,7 @@ public sealed partial class PlaneWorld
                     boss.Stage = BossStage.Banner;
                     boss.StageTime = 0f;
                     ArenaSealed = true;
+                    ClearArenaOfCreatures();
                     Events.Add(new PlaneEvent(PlaneEventType.ArenaSealed, ArenaCenter, Vector2.Zero));
                 }
                 break;
@@ -157,23 +169,19 @@ public sealed partial class PlaneWorld
                 }
                 break;
             case BossStage.Drop:
-            {
-                // She falls already facing Clementine.
-                Vector2 look = SafeNormalize(p.Position - boss.Position);
-                boss.Facing = look == Vector2.Zero ? -Vector2.UnitY : look;
                 if (boss.StageTime >= PlaneBossTuning.ShadowSeconds) Land(boss);
-            }
                 break;
             case BossStage.Fight:
                 StepClam(boss);
                 break;
             case BossStage.Freed:
                 if (boss.StageTime >= PlaneBossTuning.FreedShudder && ArenaSealed) Release(boss);
-                else if (!ArenaSealed)
+                else if (!ArenaSealed && boss.Leap < 1f)
                 {
-                    Vector2 to = boss.RestAt - boss.Position;
-                    float step = PlaneBossTuning.ShuffleSpeed * Dt;
-                    boss.Position = to.Length() <= step ? boss.RestAt : boss.Position + Vector2.Normalize(to) * step;
+                    // One leap aside (the view lifts her in an arc), then she rests there, open.
+                    boss.Leap = MathF.Min(1f, boss.Leap + Dt / PlaneBossTuning.LeapSeconds);
+                    float k = boss.Leap * boss.Leap * (3f - 2f * boss.Leap);
+                    boss.Position = Vector2.Lerp(boss.LeapFrom, boss.RestAt, k);
                 }
                 break;
         }
@@ -240,7 +248,6 @@ public sealed partial class PlaneWorld
         var p = Player;
         Vector2 off = p.Position - boss.Position;
         Vector2 dir = off.LengthSquared() > 1e-6f ? Vector2.Normalize(off) : -Vector2.UnitY;
-        boss.Facing = dir;
         p.Velocity += dir * PlaneBossTuning.WaveNudge;
         Events.Add(new PlaneEvent(PlaneEventType.BossLanded, boss.Position, dir));
     }
@@ -255,17 +262,57 @@ public sealed partial class PlaneWorld
         var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id || q.Taken)).ToList();
         var boss_ = offer.Where(id => Run.Catalog!.TryGet(id, out var item) && item.Pools.Contains("boss")).ToList();
         var pick = boss_.Count > 0 ? boss_ : offer;
-        // She shuffles back off the gateway, away from Clementine; the pearl floats down off to one side of it.
-        boss.RestAt = boss.Position - boss.Facing * PlaneBossTuning.ShuffleAside;
-        if (!Clear(boss.RestAt, PlaneBossTuning.BodyRadius)) boss.RestAt = boss.Position + new Vector2(boss.Facing.Y, -boss.Facing.X) * PlaneBossTuning.ShuffleAside;
+        // She leaps aside off the gateway (to her side, or the other if there is no room); the reward floats down on
+        // the gateway's far side.
+        var side = new Vector2(boss.Facing.Y, -boss.Facing.X);
+        boss.LeapFrom = boss.Position;
+        boss.RestAt = boss.Position + side * PlaneBossTuning.ShuffleAside;
+        if (!Clear(boss.RestAt, PlaneBossTuning.BodyRadius)) boss.RestAt = boss.Position - side * PlaneBossTuning.ShuffleAside;
+        if (!Clear(boss.RestAt, PlaneBossTuning.BodyRadius)) boss.RestAt = boss.Position - boss.Facing * PlaneBossTuning.ShuffleAside;
+        boss.Leap = 0f;
+        Events.Add(new PlaneEvent(PlaneEventType.BossLeap, boss.Position, boss.RestAt - boss.Position));
         if (pick.Count > 0)
         {
-            Vector2 at = boss.Position + new Vector2(-boss.Facing.Y, boss.Facing.X) * (PlaneBossTuning.BodyRadius + 2.5f);
-            if (!Clear(at, 0.5f)) at = boss.Position + boss.Facing * (PlaneBossTuning.BodyRadius + 2.5f);
+            // On the gateway's far side from her leap, or round from there: in open water, never into the Crack.
+            var away = (boss.Position - boss.RestAt) / PlaneBossTuning.ShuffleAside;
+            Vector2 at = boss.Position + away * (PlaneBossTuning.BodyRadius + 2.5f);
+            for (int turn = 0; turn < 12; turn++)
+            {
+                var q = boss.Position + Rotate(away, turn * MathF.Tau / 12f) * (PlaneBossTuning.BodyRadius + 2.5f);
+                if (!Clear(q, 0.5f) || Map.Shaft.Contains(q)) continue;
+                at = q;
+                break;
+            }
             Pearls.Add(new PlanePearl { ItemId = Run.Pick(pick, _bossRng), Position = at });
         }
         Stats.BossesFreed++;
         Events.Add(new PlaneEvent(PlaneEventType.BossFreed, boss.Position, Vector2.Zero));
+    }
+
+    /// <summary>
+    /// The arena seals: no creature but her may be inside during the fight. Murklings (clinging ones too) and Blotters
+    /// in it are set down just outside; bombs bound for it are spent.
+    /// </summary>
+    void ClearArenaOfCreatures()
+    {
+        float Inside(Vector2 at, float radius) => Vector2.Distance(at, ArenaCenter) - (ArenaRadius + radius);
+        foreach (var m in Murklings)
+            if (m.Alive && Inside(m.Position, BlightTuning.MurkRadius) < 0f)
+            {
+                m.Clinging = false;
+                m.Position = OutsideArena(m.Position);
+                m.Velocity = Vector2.Zero;
+            }
+        foreach (var b in Blotters)
+            if (b.Alive && Inside(b.Position, BlotterTuning.Radius) < 0f)
+            {
+                b.Position = OutsideArena(b.Position);
+                b.Trail.Clear();
+                b.Track();
+                b.Target = b.Position;
+            }
+        Bombs.RemoveAll(bomb => Inside(bomb.To, 0f) < 0f);
+        MurkShots.Clear();
     }
 
     /// <summary>The nearest open water just outside the arena's rim, along the way out from p (then turning a little).</summary>
@@ -291,9 +338,7 @@ public sealed partial class PlaneWorld
     {
         var p = Player;
         boss.ActTime += Dt;
-        Vector2 toHer = SafeNormalize(p.Position - boss.Position);
-        if (toHer != Vector2.Zero)
-            boss.Facing = Turn(boss.Facing, toHer, PlaneBossTuning.TurnDegPerSec * MathUtil.Deg2Rad * Dt);
+        // She never turns: she does not see Clementine, only throws out what the corruption makes in her.
 
         switch (boss.Act)
         {
@@ -419,11 +464,10 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>An arc of pearls aimed at her, with one small hole somewhere along it.</summary>
+    /// <summary>An arc of pearls thrown out of her opening (she cannot see where Clementine is), with one small hole along it.</summary>
     void PearlWall(PlaneBoss boss)
     {
-        Vector2 aim = SafeNormalize(Player.Position - boss.Position);
-        if (aim == Vector2.Zero) aim = boss.Facing;
+        var aim = Rotate(boss.Facing, _bossRng.Range(-1.2f, 1.2f));
         int n = Corruption is null ? PlaneBossTuning.WallCount : Math.Max(PlaneBossTuning.WallHole + 3, Thinned(boss, PlaneBossTuning.WallCount)), hole = 1 + _bossRng.Int(n - PlaneBossTuning.WallHole - 1);
         float arc = PlaneBossTuning.WallArcDeg * MathUtil.Deg2Rad;
         for (int i = 0; i < n; i++)
@@ -433,14 +477,22 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>One of her bubbles reached Queen Clam: it pops; it hurts her only while she is open.</summary>
+    /// <summary>
+    /// One of her shots reached Queen Clam. Shut, she is all shell: it breaks on her harmlessly. Open, her lid is
+    /// raised and the light flies over her shell to the black pearl in her middle, the only thing that hurts her.
+    /// </summary>
     bool BubbleHitsBoss(PlaneShot shot)
     {
         var boss = Boss;
         if (boss is null || boss.Stage != BossStage.Fight) return false;
-        if (Vector2.Distance(shot.Position, boss.Position) > PlaneBossTuning.BodyRadius + shot.Radius) return false;
-        // The crust absorbs most of a bubble's light while it holds (each layer a sixth).
-        if (boss.Open) DamageBoss(boss, HitDamage(shot) * (1f - 0.17f * boss.Crust), shot.Velocity);
+        float d = Vector2.Distance(shot.Position, boss.Position);
+        if (boss.Open)
+        {
+            if (d > PlaneBossTuning.CoreRadius + shot.Radius) return false;
+            // The crust absorbs most of a shot's light while it holds (each layer a sixth).
+            DamageBoss(boss, HitDamage(shot) * (1f - 0.17f * boss.Crust), shot.Velocity);
+        }
+        else if (d > PlaneBossTuning.BodyRadius + shot.Radius) return false;
         Pop(shot, boss.Position - shot.Position);
         return true;
     }
@@ -468,9 +520,11 @@ public sealed partial class PlaneWorld
         boss.Stage = BossStage.Freed;
         boss.StageTime = 0f;
         boss.SnapTimer = -1f;
-        // Her pearls still in the water burst harmlessly.
+        // Her black pearl bursts into light: it washes the whole arena clean of corruption and turns white. Her pearls
+        // still in the water burst with it.
         foreach (var s in Shots)
             if (s.BossPearl) s.Life = 0f;
-        Events.Add(new PlaneEvent(PlaneEventType.BossDefeated, boss.Position, boss.Facing));
+        if (Corruption is { } field && ArenaArea is { } arena) field.Clear(arena.Cells);
+        Events.Add(new PlaneEvent(PlaneEventType.BossDefeated, boss.Position, boss.Facing, ArenaRadius));
     }
 }

@@ -1009,6 +1009,17 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.BossLanded) _camera.Shake(0.9f);
                 else if (e.Type == PlaneEventType.BossStagger) _camera.Shake(0.45f);
                 else if (e.Type == PlaneEventType.BossSnap) _camera.Shake(0.35f);
+                else if (e.Type == PlaneEventType.BossDefeated)
+                {
+                    // Her black pearl bursts into light: a white flash to the screen's edges (not with reduced motion),
+                    // a bell, a long rumble; the arena's corruption burns gold as it goes.
+                    _camera.Shake(0.6f);
+                    if (!_view.ReducedMotion) _camera.EdgeFlash();
+                    _sfx.PlayPitched("bell_ring", 0.8f, -4f);
+                    _haptics.Pulse(0.8f, 0.9f, 0.6f);
+                    _combat.LightBurst(e.Position, Mathf.Min(e.Size, 8f));
+                }
+                else if (e.Type == PlaneEventType.BossLeap) _sfx.PlayPitched("merge", 0.4f, -6f);
                 else if (e.Type == PlaneEventType.BossFreed)
                 {
                     _camera.Shake(0.4f);

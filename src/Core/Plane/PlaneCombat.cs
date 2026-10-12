@@ -158,7 +158,7 @@ public sealed class PlaneShot
     public float WavePhase;
     /// <summary>Wave shots: the point on their line (Position weaves around it).</summary>
     public Vector2 Line;
-    /// <summary>Queen Clam's pearls: any bubble pops one (the royal pearl takes PearlHp bubbles); the royal one homes.</summary>
+    /// <summary>Queen Clam's pearls: corruption, which her light cannot clear; the royal one homes. (PearlHp is no longer used.)</summary>
     public bool BossPearl, Royal;
     /// <summary>Her bubbles' light, 1 → dimmer (a murkling, its throw, a Blightroot's ring); damage dims with it.</summary>
     public float Dim = 1f;
@@ -432,25 +432,7 @@ public sealed partial class PlaneWorld
             if (shot.FromPlayer)
             {
                 if (BubbleHitsBoss(shot)) continue;
-                // A bubble pops on one of Queen Clam's pearls, like on a mob, and pops it (the royal one takes two).
-                PlaneShot? pearlHit = null;
-                foreach (var other in Shots)
-                    if (other.BossPearl && other.Life > 0f && Vector2.Distance(other.Position, shot.Position) < other.Radius + shot.Radius)
-                    {
-                        pearlHit = other;
-                        break;
-                    }
-                if (pearlHit is not null)
-                {
-                    pearlHit.PearlHp -= shot.Bubbles;
-                    if (pearlHit.PearlHp <= 0)
-                    {
-                        pearlHit.Life = 0f;
-                        Events.Add(new PlaneEvent(PlaneEventType.ShotPopped, pearlHit.Position, pearlHit.Velocity, pearlHit.Radius));
-                    }
-                    Pop(shot, pearlHit.Position - shot.Position);
-                    continue;
-                }
+                // Queen Clam's pearls are corruption: her light cannot clear them, and passes through.
                 foreach (var mob in Mobs)
                 {
                     if (!mob.Alive || Vector2.Distance(mob.Position, shot.Position) > mob.Radius + shot.Radius) continue;

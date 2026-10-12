@@ -132,7 +132,7 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void HerPearlsFlyInARingWithAGapAndABubblePopsOne()
+    public void HerPearlsFlyInARingWithAGapAndHerLightCannotClearThem()
     {
         var w = Landed();
         Assert.True(StepUntil(w, PlaneEventType.BossVolley) > 0);
@@ -144,8 +144,9 @@ public class PlaneBossTests
         var bubble = BubbleAt(pearl.Position + pearl.Velocity * PlaneWorld.Dt);
         w.Shots.Add(bubble);
         w.Step(default);
-        Assert.DoesNotContain(pearl, w.Shots);
-        Assert.DoesNotContain(bubble, w.Shots);
+        // Corruption: her light passes through it, and it flies on.
+        Assert.Contains(pearl, w.Shots);
+        Assert.Contains(bubble, w.Shots);
     }
 
     [Fact]

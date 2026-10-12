@@ -227,6 +227,20 @@ public sealed class CorruptionField
         return added;
     }
 
+    /// <summary>Wipes some cells wholly clean (the boss's pearl bursting over her arena); it stays clean (nothing to regrow).</summary>
+    public void Clear(List<int> cells)
+    {
+        float removed = 0f;
+        foreach (int i in cells)
+        {
+            removed += Density[i];
+            Density[i] = 0f;
+        }
+        if (removed <= 0f) return;
+        Total -= removed;
+        Version++;
+    }
+
     /// <summary>The cells inside a circle (for an area: a Blightroot's reach, the arena).</summary>
     public List<int> CellsWithin(Vector2 centre, float radius, float inner = 0f)
     {

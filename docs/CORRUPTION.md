@@ -135,6 +135,27 @@ drains away. It is shown only while partly emptied: it fades out when full again
 - **Cleared for good** once she has passed through, or once it is worn away. Each valve marks itself on both maps
   once seen.
 
+## Queen Clam (the Depth 1 boss)
+
+Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no face.
+
+- **Look** (`BossView`, `clam_shell.gdshader`): two heavy valves with radial ribs, growth lines and a scalloped lip.
+  The corruption drains their colour to ash and settles ink into every groove. The mantle inside is dark. In her
+  middle lies a **black pearl** (`corruption_orb`) with a cold glint that stirs while she is open.
+- **She does not see Clementine.** She lies facing wherever she settled (seeded) and never turns. She opens and
+  closes her lid and throws pearls from her opening: rings, walls thrown in a random spread around her facing, the
+  helix, and in phase 2 the homing royal pearl. The snap still comes if Clementine is close while she is open.
+- **Her pearls are corruption:** glossy ink orbs. Clementine's light passes through them and cannot clear them.
+- **Weak spot:** only the black pearl (0.9 m, `CoreRadius`) can be hurt, and only while she is open (the light flies
+  over the raised lid). Shut, or on the shell, shots break harmlessly.
+- **Defeat:** the pearl bursts into bright light and stays white. The whole arena is wiped clean of corruption
+  (`CorruptionField.Clear`), so the Crack opens as soon as the arena unseals. Her colour floods back. After a short
+  shudder she leaps 6.5 m aside in one arc (0.7 s) and lies there wide open. The reward pearl floats down on the
+  gateway's far side.
+- **The arena is hers alone during the fight:** sealing it sets every murkling (clinging ones too) and Blotter inside
+  down just outside. Murklings never bud in it. Murklings, Blotters and vines cannot cross the sealed rim, murkling
+  throws stop at it, and a Blotter's bomb bound inside lands just outside.
+
 ## The arena: condensation
 
 - **Crust:** the boss carries 5 crust layers, one stripped per 20% of the arena cleansed. Each layer absorbs 17% of a

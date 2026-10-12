@@ -29,7 +29,8 @@ public partial class CombatView : Node3D
     StandardMaterial3D _herShot = null!, _theirShot = null!;
     Mesh _needleMesh = null!;
     ShaderMaterial _needle = null!;
-    StandardMaterial3D _clamPearl = null!, _royalPearl = null!;
+    /// <summary>Queen Clam's pearls are corruption (art rules in CLAUDE.md): glossy ink orbs, the royal one bigger with a violet ember.</summary>
+    ShaderMaterial _clamPearl = null!, _royalPearl = null!;
     float _time;
 
     // Light bubbles (docs/LIGHT-BUBBLES.md): every bubble of hers carries a lantern, glows in the water and lights the
@@ -86,8 +87,11 @@ public partial class CombatView : Node3D
         _fireworks = new FxParticles(1024, additive: true);
         AddChild(_fireworks);
         _theirShot = Glow(new Color(1f, 0.25f, 0.3f));
-        _clamPearl = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.96f, 0.9f), Roughness = 0.12f, Metallic = 0.3f, RimEnabled = true, Rim = 1f, EmissionEnabled = true, Emission = new Color(1f, 0.82f, 0.9f), EmissionEnergyMultiplier = 0.9f };
-        _royalPearl = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.85f, 0.45f), Roughness = 0.1f, Metallic = 0.5f, RimEnabled = true, Rim = 1f, EmissionEnabled = true, Emission = new Color(1f, 0.6f, 0.95f), EmissionEnergyMultiplier = 1.6f };
+        var orb = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader");
+        _clamPearl = new ShaderMaterial { Shader = orb };
+        _clamPearl.SetShaderParameter("ember_color", new Color(0.4f, 0.2f, 0.6f));
+        _royalPearl = new ShaderMaterial { Shader = orb };
+        _royalPearl.SetShaderParameter("ember_color", new Color(0.7f, 0.35f, 1f));
 
     }
 

@@ -401,6 +401,46 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void TheClamIsHurtOnlyThroughHerOpenPearlAndItsBurstWashesTheArenaClean()
+    {
+        var w = World(TestLevels.Get(new LevelId(1, 1, LevelPlan.BossLevel(TestLevels.Seed, 1, 1))));
+        var boss = w.Boss!;
+        var facing = boss.Facing;
+        // In she goes: the arena seals, and no creature but the clam is inside it from then on.
+        w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + new Vector2(0f, 7f);
+        if (!w.Clear(w.Player.Position, 0.6f)) w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + new Vector2(7f, 0f);
+        bool open = false;
+        for (int i = 0; i < 60 * 14 && !open; i++)
+        {
+            w.Step(default);
+            Assert.DoesNotContain(w.Murklings, m => m.Alive && Vector2.Distance(m.Position, w.ArenaCenter) < w.ArenaRadius);
+            Assert.DoesNotContain(w.Blotters, b => Vector2.Distance(b.Position, w.ArenaCenter) < w.ArenaRadius);
+            open = boss.Open;
+        }
+        Assert.True(open);
+        // She never turned toward her.
+        Assert.Equal(facing, boss.Facing);
+        // Open, a shot on her shell's rim does nothing; one on her black pearl hurts her.
+        float hp = boss.Hp;
+        var rim = boss.Position + facing * (PlaneBossTuning.BodyRadius - 0.3f);
+        w.Shots.Add(new PlaneShot { Position = rim, Line = rim, Velocity = -facing * 0.01f, Life = 1f, FromPlayer = true, Damage = 10f });
+        w.Step(default);
+        Assert.Equal(hp, boss.Hp);
+        boss.Hp = 1f;
+        boss.Crust = 0;
+        w.Shots.Add(new PlaneShot { Position = boss.Position, Line = boss.Position, Velocity = Vector2.UnitX * 0.01f, Life = 1f, FromPlayer = true, Damage = 10f });
+        w.Step(default);
+        Assert.True(boss.Freed);
+        // The pearl's burst: the whole arena is clean.
+        Assert.True(w.Corruption!.CleansedOf(w.ArenaArea!.Cells) > 0.99f);
+        // She leaps aside and stays there.
+        for (int i = 0; i < 90; i++) w.Step(default);
+        Assert.Equal(1f, boss.Leap);
+        Assert.Equal(boss.RestAt, boss.Position);
+        Assert.True(Vector2.Distance(boss.Position, w.ArenaCenter) > PlaneBossTuning.ShuffleAside - 0.1f);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));

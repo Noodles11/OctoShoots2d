@@ -240,6 +240,8 @@ public sealed partial class PlaneWorld
                     float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(BlotterTuning.BombNear, BlotterTuning.BombFar);
                     to = b.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
                 }
+                // A sealed arena is closed to it: a bomb bound inside lands just outside instead.
+                if (ArenaSealed && Vector2.Distance(to, ArenaCenter) < ArenaRadius + BlotterTuning.SplashRadius) to = OutsideArena(to);
                 Bombs.Add(new CorruptionBomb { From = mouth, To = to });
                 Events.Add(new PlaneEvent(PlaneEventType.BombThrown, mouth, to - mouth, BlotterTuning.BombSeconds));
             }
