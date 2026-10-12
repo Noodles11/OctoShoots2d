@@ -1618,10 +1618,11 @@ public partial class TopDownMain : Node3D
     AimCursor _cursor = null!;
     /// <summary>The controller pointer's screen direction from her (eased so it glides round her).</summary>
     Vector2 _cursorDir = Vector2.Up;
+    float _cursorReach;
 
     /// <summary>
     /// The in-game pointer, while she plays (not under a menu, splash, dive or level change): under the mouse, or with a
-    /// controller half the screen's shorter side from her along her aim. The system cursor hides while it shows, and
+    /// controller along her aim, from a small ring round her to a quarter of the screen's shorter side as the stick tilts. The system cursor hides while it shows, and
     /// whenever the controller plays.
     /// </summary>
     void SyncCursor(float dt = 0f)
@@ -1647,8 +1648,14 @@ public partial class TopDownMain : Node3D
             float k = dt > 0f ? 1f - Mathf.Exp(-20f * dt) : 1f;
             _cursorDir = _cursorDir.Slerp(toward.Normalized(), k).Normalized();
         }
+        // Its distance follows how far the stick is pushed: a small ring round her at the lightest tilt, a quarter of
+        // the screen's shorter side at full tilt.
         var size = GetViewport().GetVisibleRect().Size;
-        _cursor.Place(from + _cursorDir * Mathf.Min(size.X, size.Y) * 0.5f);
+        float shorter = Mathf.Min(size.X, size.Y);
+        float tilt = Mathf.Clamp((_padAim.Length() - 0.2f) / 0.75f, 0f, 1f);
+        float reach = Mathf.Lerp(shorter * 0.06f, shorter * 0.25f, tilt);
+        _cursorReach = dt > 0f ? Mathf.Lerp(_cursorReach, reach, 1f - Mathf.Exp(-18f * dt)) : reach;
+        _cursor.Place(from + _cursorDir * _cursorReach);
     }
 
     /// <summary>Verification: fire at the boss in her fight, else at the nearest mob.</summary>
