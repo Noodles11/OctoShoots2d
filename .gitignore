@@ -15,3 +15,7 @@ TestResults/
 # OS
 Thumbs.db
 .DS_Store
+
+# A local placeholder theme (copyrighted: "LBA's Theme", Philippe Vachey); never committed.
+audio/theme.mp3
+audio/theme.mp3.import

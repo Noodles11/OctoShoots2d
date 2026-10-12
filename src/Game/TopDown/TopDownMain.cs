@@ -1019,6 +1019,13 @@ public partial class TopDownMain : Node3D
                 }
             }
         }
+        // The soundtrack follows the reef: darker the more of it the corruption holds, the combat layer while a fight is on.
+        if (OctoShoots.Game.Audio.MusicManager.Instance is { } music)
+        {
+            music.SetCorruption(-(1f - _world.Cleansed));
+            if (_world.InBattle && !_world.Defeated) music.EnterCombat();
+            else music.ExitCombat();
+        }
         // Down the shaft: the dive takes over until she is on the level below.
         if (dived)
         {

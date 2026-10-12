@@ -72,6 +72,12 @@ public partial class TitleMain : Node3D
     {
         // The bundled fonts: Nunito is every screen's default (THEME-BIBLE §6.8).
         TitleStyle.InstallDefaultFont();
+        // The title's music is the clean theme.
+        if (OctoShoots.Game.Audio.MusicManager.Instance is { } music)
+        {
+            music.SetCorruption(0f);
+            music.ExitCombat();
+        }
         // Game flags mean a verification run: straight in, as before the title existed.
         var args = OS.GetCmdlineUserArgs();
         if (args.Any(a => !TitleOnlyFlags.Any(a.StartsWith)))

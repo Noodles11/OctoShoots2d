@@ -32,6 +32,10 @@ rendering_device/vsync/frame_queue_size=1
 environment/defaults/default_clear_color=Color(0.02, 0.06, 0.1, 1)
 anti_aliasing/quality/screen_space_aa=1
 
+[autoload]
+
+MusicManager="*res://src/Game/Audio/MusicManager.cs"
+
 [shader_globals]
 
 sun_dir={
