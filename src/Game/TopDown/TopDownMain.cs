@@ -1451,6 +1451,15 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.CrackOpened:
                 Say("The arena is clean: the Crack opens");
                 break;
+            case PlaneEventType.CacheRevealed:
+                _sfx.PlayPitched("merge", e.Size > 0f ? 1.5f : 1.2f, -6f);
+                _haptics.Pulse(0.2f, 0.1f, 0.12f);
+                if (!_saidCache)
+                {
+                    _saidCache = true;
+                    Say("Something was buried under the ink");
+                }
+                break;
             case PlaneEventType.BlotterBorn:
                 _sfx.PlayPitched("merge", 0.5f, -6f);
                 Say("A Blotter rises from the ink");
@@ -1469,7 +1478,7 @@ public partial class TopDownMain : Node3D
         }
     }
 
-    bool _saidCoil, _saidValve, _saidSpring, _saidBlotter;
+    bool _saidCoil, _saidValve, _saidSpring, _saidBlotter, _saidCache;
 
     void CloseDebug()
     {

@@ -100,6 +100,30 @@ public partial class CombatView : Node3D
         EmissionEnergyMultiplier = 3f,
     };
 
+    /// <summary>
+    /// A light orb (a pickup that washes some of her corruption away): a bubble with a lantern of her light inside, like
+    /// her old bubble shots, a soft halo round it and a little warm light on the world. size scales it (1 on the floor,
+    /// larger on a shop stand).
+    /// </summary>
+    Node3D LightOrb(float size)
+    {
+        var node = new Node3D();
+        var shell = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = _bubble, Scale = Vector3.One * 0.34f * size, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        shell.SetInstanceShaderParameter("lantern", 0.85f);
+        shell.SetInstanceShaderParameter("warmth", 0.35f);
+        shell.SetInstanceShaderParameter("rainbow", 0.4f);
+        shell.SetInstanceShaderParameter("wobble", 0.35f);
+        shell.SetInstanceShaderParameter("seed", (float)GD.RandRange(0.0, 10.0));
+        shell.SetInstanceShaderParameter("hole", new Vector4(0f, 1f, 0f, 0f));
+        node.AddChild(shell);
+        var halo = new MeshInstance3D { Mesh = _haloQuad, MaterialOverride = _halo, Scale = Vector3.One * 0.8f * size, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        halo.SetInstanceShaderParameter("strength", 0.35f);
+        halo.SetInstanceShaderParameter("color", new Vector3(1f, 0.8f, 0.48f));
+        node.AddChild(halo);
+        node.AddChild(new OmniLight3D { LightColor = new Color(1f, 0.8f, 0.5f), LightEnergy = 0.9f * size, OmniRange = 2.8f * size, ShadowEnabled = false });
+        return node;
+    }
+
     /// <summary>A heart, flat, always facing the camera (billboard material).</summary>
     static ArrayMesh HeartMesh()
     {
@@ -277,8 +301,7 @@ public partial class CombatView : Node3D
             }
             else
             {
-                node.AddChild(new MeshInstance3D { Mesh = HeartMesh(), MaterialOverride = _heart ??= HeartMaterial() });
-                node.AddChild(new OmniLight3D { LightColor = new Color(1f, 0.4f, 0.45f), LightEnergy = 1.2f, OmniRange = 4f, ShadowEnabled = false });
+                node.AddChild(LightOrb(1.25f));
             }
             if (stand.Kind == StandKind.Pearl && fresh?.Contains(stand.ItemId) == true) node.AddChild(NewChip());
             var tag = PriceTag(stand.Price);
@@ -832,12 +855,10 @@ void fragment() {
             _shells[i].Rotation = new Vector3(0.35f, _time * 0.8f + i, 0f);
             _shells[i].Scale = Vector3.One * 1.7f;
         }
-        // Hearts: like the shop's heart but smaller, beating gently where they fell.
+        // Light orbs (the sim's hearts): a bubble with her light inside, breathing gently where they fell.
         while (_hearts.Count < world.Hearts.Count)
         {
-            var node = new Node3D();
-            node.AddChild(new MeshInstance3D { Mesh = HeartMesh(), MaterialOverride = _heart ??= HeartMaterial(), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
-            node.AddChild(new OmniLight3D { LightColor = new Color(1f, 0.4f, 0.45f), LightEnergy = 0.8f, OmniRange = 2.5f, ShadowEnabled = false });
+            var node = LightOrb(1f);
             AddChild(node);
             _hearts.Add(node);
         }
@@ -847,9 +868,9 @@ void fragment() {
             _hearts[i].Visible = used;
             if (!used) continue;
             var heart = world.Hearts[i];
-            float beat = Mathf.Pow(Mathf.Max(Mathf.Sin(_time * 5f + i), 0f), 6f);
+            float breathe = 0.5f + 0.5f * Mathf.Sin(_time * 2.6f + i);
             _hearts[i].Position = new Vector3(heart.Position.X, LevelMap.SwimBand + 0.12f * Mathf.Sin(_time * 1.8f + i), heart.Position.Y);
-            _hearts[i].Scale = Vector3.One * 0.7f * (1f + 0.12f * beat);
+            _hearts[i].Scale = Vector3.One * (1f + 0.06f * breathe);
         }
         for (int i = 0; i < _stands.Count && i < world.Stands.Count; i++)
         {

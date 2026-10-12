@@ -268,6 +268,30 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void LootLiesBuriedUnderTheInkUntilItsGroundIsCleansed()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        Assert.Empty(w.Vases);
+        Assert.InRange(w.Caches.Count, 4, CacheTuning.Max);
+        var cache = w.Caches[0];
+        Assert.True(w.Corruption!.At(cache.Position) >= CacheTuning.Buried);
+        int shells = w.Shells.Count + w.Run.Shells, orbs = w.Hearts.Count;
+        for (int i = 0; i < 30; i++) w.Step(default);
+        Assert.False(cache.Revealed);
+        // She swims over it: her light cleanses the ground, and the loot floats up.
+        for (int i = 0; i < 4 * 60 && !cache.Revealed; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = cache.Position;
+            w.Step(default);
+        }
+        Assert.True(cache.Revealed);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.CacheRevealed);
+        // Shells (some already gathered as she sits on them) or a light orb (she is not corrupted, so it waits).
+        Assert.True(w.Shells.Count + w.Run.Shells > shells || w.Hearts.Count > orbs);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));

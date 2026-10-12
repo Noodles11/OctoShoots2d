@@ -13,6 +13,8 @@ public sealed class PlaneOptions
     public bool Corruption = true;
     /// <summary>The pufferling enemies (retracted for now: none are placed and ambushes bud murklings instead).</summary>
     public bool Pufferlings = false;
+    /// <summary>Sunken pots with loot (retracted with the corruption on: loot lies buried under the ink instead).</summary>
+    public bool Vases = false;
 
     public static PlaneOptions Default { get; set; } = new();
 }

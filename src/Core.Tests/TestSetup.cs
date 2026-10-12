@@ -7,5 +7,5 @@ namespace OctoShoots.Core.Tests;
 static class TestSetup
 {
     [ModuleInitializer]
-    internal static void Init() => PlaneOptions.Default = new PlaneOptions { Corruption = false, Pufferlings = true };
+    internal static void Init() => PlaneOptions.Default = new PlaneOptions { Corruption = false, Pufferlings = true, Vases = true };
 }

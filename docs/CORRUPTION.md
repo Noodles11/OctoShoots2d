@@ -61,6 +61,22 @@ Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
   both maps it is a fat ink slug shape pointing the way it creeps. The corruption blades now stand on all open floor,
   so a Blotter's trail grows them.
 
+## Buried caches (`BuriedCache`) and light orbs
+
+With the corruption on there are no pots (`PlaneOptions.Vases` is off). Loot lies **buried under the ink** instead
+(`PlaneCaches.cs`):
+
+- **Placement:** 8–12 a level, under ink at least 0.55 thick, 9 m apart. They sit at least 14 m from her start and
+  stay clear of places, the arena and the shaft.
+- **Look:** a glossy bump in the ink (`BlightView.Caches.cs`). A faint warm glint shows through now and then. The bump
+  sinks as the ink over it thins.
+- **Uncovering:** once the ground over it is cleansed (her light, a pop), it breaks open in a puff of gold with a chime
+  (and a hint the first time). Its loot floats up: a light orb (45%) or 2–4 shells.
+
+**Light orbs** replace hearts everywhere: drops, the shop's top-up stand and caches. Each is a bubble with her light
+inside, like her old bubble shots, with a soft halo and a warm light. It washes 12 corruption away. The sim still calls
+it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
+
 ## Murklings (`Murkling`)
 
 - **Budding:** each living Blightroot's area buds one from dense ground (≥ 0.6), at least 5 m from her, every

@@ -249,6 +249,7 @@ public sealed partial class PlaneWorld
         }
         PlaceBlightroots();
         PlaceBlotters(field);
+        PlaceCaches(field);
         PlaceValves();
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
@@ -373,6 +374,7 @@ public sealed partial class PlaneWorld
         StepVines(field);
         StepValves();
         StepBlotters(field);
+        StepCaches(field);
         StepMurklings(field);
         _pops.Clear();
 

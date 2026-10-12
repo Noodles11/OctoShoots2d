@@ -20,8 +20,11 @@ public static class PlaneEconomyTuning
     /// TwoShells of those), else nothing. About one heart and six shells a level from mobs.
     /// </summary>
     public const float HeartChance = 0.06f, ShellChance = 0.3f, TwoShells = 0.25f;
-    /// <summary>A heart pickup heals one heart (20 HP, 2D §23). She takes it only when hurt; otherwise it waits.</summary>
-    public const float HeartHeal = 20f, HeartReach = 0.6f;
+    /// <summary>
+    /// A light orb (the sim still calls it a heart): a bubble of her light that washes some of her corruption away
+    /// (12, of 100 at the start). She takes it only when corrupted at all; otherwise it waits.
+    /// </summary>
+    public const float HeartHeal = 12f, HeartReach = 0.6f;
     /// <summary>Shell caches at places: the item cache and secret rooms (inclusive ranges).</summary>
     public const int CacheMin = 6, CacheMax = 9, SecretMin = 8, SecretMax = 12;
     /// <summary>The shop: at most one pearl (offered this often), and always a heart (a health top-up).</summary>
