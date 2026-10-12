@@ -46,8 +46,8 @@ public partial class DamageNumbers : Node3D
         string number = size >= 1f ? Mathf.RoundToInt(size).ToString() : size.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
         var label = new Label3D
         {
-            // Hers read as corruption: a hit adds ink (+), cleansing takes it away (−).
-            Text = (hers ? (amount < 0f ? "+" : "-") : (amount < 0f ? "-" : "+")) + number,
+                        // No sign: the colour says what it is, light (gold) or corruption (violet ink).
+            Text = number,
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.022f,
             FontSize = hers ? 37 : 31,

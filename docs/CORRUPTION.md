@@ -148,7 +148,7 @@ means a full meter. All damage, healing and items work unchanged.
 | Part | Where | What |
 |---|---|---|
 | Meter | `MinimapView` frame | Replaces the red bezel round the minimap. Dark ink fills it clockwise from 12 o'clock over a pale gold track. A violet sheen sits on the ink's lip and pulses above 75 %. An ink bead with a glint marks the tip. |
-| Numbers | `DamageNumbers` | Two colours only, light and corruption. A hit on her shows `+N` in dark violet ink with a pale violet edge. Her hits on anything (`−N`) and her cleansing or healing (`−N`) are bright gold light. |
+| Numbers | `DamageNumbers` | No signs, two colours only: light and corruption. A hit on her shows its amount in dark violet ink with a pale violet edge. Her hits on anything and her cleansing or healing show in bright gold light. |
 | Words | pause menu, save card, resume stats, death splash | "X% corrupted". The death splash reads "The corruption took Clementine". |
 
 ## Light springs (`LightSpring`)
