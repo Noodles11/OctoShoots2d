@@ -11,6 +11,11 @@ uniform float glow = 1.0;
 uniform vec3 body : source_color = vec3(1.0, 0.549, 0.259);
 uniform vec3 gold : source_color = vec3(1.0, 0.769, 0.420);
 uniform vec3 flash : source_color = vec3(1.0, 0.239, 0.498);
+// The absorbing ritual: her strands take on the pearl's colour with her bell (mimic), and flash with the burst.
+uniform float mimic = 0.0;
+uniform vec3 mimic_c0 : source_color = vec3(1.0);
+uniform vec3 mimic_c1 : source_color = vec3(1.0);
+uniform float burst = 0.0;
 
 void fragment() {
 	float t = UV.x;
@@ -34,6 +39,8 @@ void fragment() {
 		col = mix(col, gold * 1.25, bead * (1.0 - 0.6 * t));
 		a *= 1.0 - 0.6 * t * t;
 	}
+	col = mix(col, mix(mimic_c1, mimic_c0, t) * 1.15, clamp(mimic, 0.0, 1.0) * 0.8);
+	col = mix(col, vec3(1.0, 0.95, 0.85) * 1.5, clamp(burst, 0.0, 1.0) * 0.6);
 	col = mix(col, flash * 1.3, hurt * 0.6);
 	col = mix(col, vec3(0.2, 0.1, 0.3), ink * 0.5);
 	ALBEDO = col * glow;

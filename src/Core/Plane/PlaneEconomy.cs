@@ -215,7 +215,13 @@ public sealed partial class PlaneWorld
             Stats.ShellsSpent += stand.Price;
             stand.Sold = true;
             if (stand.Kind == StandKind.Health) p.Hp = MathF.Min(p.Hp + PlaneEconomyTuning.HealthAmount, Run.MaxHp);
-            else Absorb(stand.ItemId, stand.Position);
+            // A bought pearl begins its ritual by her, like a found one.
+            else
+            {
+                var bought = new PlanePearl { ItemId = stand.ItemId, Position = p.Position };
+                Pearls.Add(bought);
+                BeginRitual(bought);
+            }
             Events.Add(new PlaneEvent(PlaneEventType.Purchased, stand.Position, Vector2.Zero));
         }
         if (near < 0) _denied = -1;

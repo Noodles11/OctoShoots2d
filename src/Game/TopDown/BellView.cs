@@ -62,6 +62,29 @@ public partial class BellView : Node3D
     float _health = 1f, _snuff, _lastCharge = 1f;
     const float SnuffSeconds = 0.35f;
 
+    /// <summary>
+    /// The absorbing ritual (docs/PEARLS.md): how far she wears the pearl's look (0..1), the burst of light as she
+    /// returns to her own (1 → 0), and where her strands are drawn (toward a pearl, the nearer the stronger).
+    /// </summary>
+    float _mimic, _burst, _pull;
+    Vector3 _pullAt;
+    string? _wearing;
+
+    /// <summary>Where a pearl being absorbed hovers: circling her slowly, a little above her bell.</summary>
+    public static Vector3 RitualAt(Vector3 her, float ritual)
+    {
+        float a = ritual * 2.2f + 0.6f;
+        float reach = 1.05f - 0.25f * Mathf.Clamp(ritual / PearlRitual.ShatterAt, 0f, 1f);
+        return her + new Vector3(Mathf.Cos(a) * reach, 0.45f + 0.1f * Mathf.Sin(ritual * 5f), Mathf.Sin(a) * reach);
+    }
+
+    /// <summary>The ritual's climax: the pearl is hers. A strong pulse of light, and her own colours flood back.</summary>
+    public void Burst()
+    {
+        _burst = 1f;
+        _wearing = null;
+    }
+
     /// <summary>Pearl Diver: the pearl swelling in front of her while she charges it.</summary>
     MeshInstance3D _chargeOrb = null!;
     ShaderMaterial _chargeMaterial = null!;
@@ -268,6 +291,7 @@ public partial class BellView : Node3D
 
         if (speed > 0.3f) _across = new Vector3(-vel.Y, 0f, vel.X) / speed;
         _calm = Mathf.Lerp(_calm, 1f - 0.85f * Mathf.Min(pace, 1f), 1f - Mathf.Exp(-3f * h));
+        SyncRitual(world, h);
         StepStrands(h, pulseRate, hit);
         var camera = GetViewport().GetCamera3D();
         if (camera != null) DrawStrands(camera.GlobalPosition);
@@ -291,6 +315,74 @@ public partial class BellView : Node3D
     }
 
     float _glowRadius = 3f;
+
+    /// <summary>
+    /// The ritual on her: she takes on the touched pearl's colours, pattern and glow like a chameleon, holds them, and
+    /// lets them go in the burst. Her strands reach for any pearl near her (the nearer the harder) and, through the
+    /// ritual, for the pearl circling her, until it shatters.
+    /// </summary>
+    void SyncRitual(PlaneWorld world, float h)
+    {
+        PlanePearl? ritual = null;
+        PlanePearl? nearest = null;
+        float best = 6f;
+        var her = new System.Numerics.Vector2(GlobalPosition.X, GlobalPosition.Z);
+        foreach (var q in world.Pearls)
+        {
+            if (q.Taken) continue;
+            if (q.Absorbing) ritual = q;
+            else
+            {
+                float d = System.Numerics.Vector2.Distance(q.Position, her);
+                if (d < best)
+                {
+                    best = d;
+                    nearest = q;
+                }
+            }
+        }
+        float pull = 0f;
+        if (ritual is not null)
+        {
+            if (_wearing != ritual.ItemId && world.Run.Catalog is { } catalog && catalog.TryGet(ritual.ItemId, out var item) && item.Pearl is { } look)
+            {
+                _wearing = ritual.ItemId;
+                foreach (var (name, i) in new[] { ("mimic_c0", 0), ("mimic_c1", 1), ("mimic_c2", 2) })
+                {
+                    var c = Color.FromHtml(look.Colors[Mathf.Min(i, look.Colors.Count - 1)]);
+                    _bellMaterial.SetShaderParameter(name, c);
+                    if (i < 2) _strandMaterial.SetShaderParameter(name, c);
+                }
+                _bellMaterial.SetShaderParameter("mimic_pattern", (int)look.Pattern);
+            }
+            float k = Mathf.Clamp(ritual.Ritual / PearlRitual.Mimic, 0f, 1f);
+            _mimic = k * k * (3f - 2f * k);
+            if (ritual.Ritual < PearlRitual.ShatterAt)
+            {
+                pull = 1f;
+                _pullAt = RitualAt(GlobalPosition, ritual.Ritual);
+            }
+        }
+        else
+        {
+            if (_wearing is null) _mimic = Mathf.MoveToward(_mimic, 0f, h / 0.35f);
+            if (nearest is not null)
+            {
+                float k = 1f - best / 6f;
+                pull = 0.7f * k * k;
+                _pullAt = new Vector3(nearest.Position.X, LevelMap.SwimBand + 0.25f, nearest.Position.Y);
+            }
+        }
+        _pull = Mathf.MoveToward(_pull, pull, h * (pull > _pull ? 3f : 6f));
+        _burst = Mathf.MoveToward(_burst, 0f, h / 0.45f);
+        _bellMaterial.SetShaderParameter("mimic", _mimic);
+        _bellMaterial.SetShaderParameter("burst", _burst);
+        _strandMaterial.SetShaderParameter("mimic", _mimic);
+        _strandMaterial.SetShaderParameter("burst", _burst);
+        // The pulse of light: her glow flares far out and falls back.
+        _light.LightEnergy *= 1f + 4f * _burst + 0.4f * _mimic;
+        _light.OmniRange *= 1f + 0.8f * _burst;
+    }
 
     public override void _ExitTree() => RenderingServer.GlobalShaderParameterSet("her_glow_strength", 0f);
 
@@ -480,6 +572,13 @@ public partial class BellView : Node3D
                     if (i >= 2) acc += (s.Pos[i - 1] * 2f - s.Pos[i - 2] - s.Pos[i]) * 20f;
                     // ...and each stroke pushes water out behind the bell, carrying the strands with it.
                     acc -= axis * pulseRate * 0.6f * f;
+                    // A pearl near her draws her strands toward it, like a magnet, the nearer the harder.
+                    if (_pull > 0.001f)
+                    {
+                        Vector3 to = _pullAt - s.Pos[i];
+                        float d = to.Length();
+                        if (d > 0.05f) acc += to / d * _pull * 16f * f * Mathf.Min(d, 1.5f);
+                    }
                     // Streaming behind her, each strand ripples in a travelling S-wave of its own.
                     acc += _across * Mathf.Sin(t * 3.2f - i * 0.55f + si * 0.8f) * 2.4f * f * (1f - _calm);
                     Vector3 v = (s.Pos[i] - s.Prev[i]) * drag;

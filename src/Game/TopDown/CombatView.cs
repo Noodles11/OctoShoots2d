@@ -326,6 +326,9 @@ public partial class CombatView : Node3D
         _pearls.Clear();
         _catalog = catalog;
         _pearlBorn.Clear();
+        _pearlLooks.Clear();
+        foreach (var sh in _shards) sh.Mesh.QueueFree();
+        _shards.Clear();
         foreach (var pearl in world.Pearls)
         {
             AddPearl(pearl, -10f);
@@ -350,6 +353,61 @@ public partial class CombatView : Node3D
     ItemCatalog? _catalog;
     /// <summary>When each pearl appeared (a boss's reward floats down from above).</summary>
     readonly List<float> _pearlBorn = new();
+    /// <summary>Each world pearl's own material (its look, and how pale its ritual has left it) and its light.</summary>
+    readonly List<(ShaderMaterial? Look, OmniLight3D Light)> _pearlLooks = new();
+
+    /// <summary>Where her bell is now (the absorbing ritual circles it).</summary>
+    public Vector3 HerAt;
+
+    sealed class Shard
+    {
+        public MeshInstance3D Mesh = null!;
+        public StandardMaterial3D Material = null!;
+        public Vector3 Velocity, Spin;
+        public float Age;
+    }
+
+    readonly List<Shard> _shards = new();
+    const float ShardSeconds = 0.4f;
+
+    /// <summary>
+    /// The ritual's end: the pale, emptied pearl shatters into pieces that tumble outward and dissolve, with a few
+    /// glints of what light was left in it.
+    /// </summary>
+    public void ShatterPearl(Vector3 at)
+    {
+        var prism = new PrismMesh { Size = new Vector3(0.16f, 0.2f, 0.1f) };
+        for (int i = 0; i < 11; i++)
+        {
+            var dir = _fireworks.RandDir();
+            var material = new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.9f, 0.9f, 0.92f, 0.95f),
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                EmissionEnabled = true,
+                Emission = new Color(1f, 0.95f, 0.88f),
+                EmissionEnergyMultiplier = 0.5f,
+                Roughness = 0.15f,
+                Metallic = 0.3f,
+                RimEnabled = true,
+            };
+            var mesh = new MeshInstance3D { Mesh = prism, MaterialOverride = material, Position = at + dir * 0.15f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            mesh.Scale = Vector3.One * _fireworks.RandRange(0.6f, 1.3f);
+            AddChild(mesh);
+            _shards.Add(new Shard { Mesh = mesh, Material = material, Velocity = dir * _fireworks.RandRange(1.8f, 3.6f), Spin = _fireworks.RandDir() * 12f });
+        }
+        var glint = new Color(1.3f, 1.25f, 1.15f);
+        for (int i = 0; i < 18; i++)
+            _fireworks.Emit(at, _fireworks.RandDir() * _fireworks.RandRange(1f, 3f), _fireworks.RandRange(0.25f, 0.5f), 0.06f, 0.01f, glint, glint with { A = 0f }, drag: 3f);
+    }
+
+    /// <summary>The ritual's climax round her: a strong pulse of light, like an explosion, and a bloom on the water.</summary>
+    public void RitualBurst(Vector3 at)
+    {
+        var flat = new System.Numerics.Vector2(at.X, at.Z);
+        AddBloom(flat, 2.2f, 1.1f, 3f);
+        LightBurst(flat, 3.2f);
+    }
     const float PearlFall = 1.4f, PearlFallHeight = 7f;
 
     /// <summary>A pearl: glowing in its own colours, turning slowly.</summary>
@@ -364,15 +422,20 @@ public partial class CombatView : Node3D
                 b = new Color(look.Colors[^1]);
             }
             var node = new Node3D { Position = new Vector3(pearl.Position.X, LevelMap.SwimBand, pearl.Position.Y) };
+            // Its own copy of the pearl's look (colours in its pattern), so its ritual can pale it alone.
+            ShaderMaterial? look_ = catalog is not null && catalog.TryGet(pearl.ItemId, out var def) ? (ShaderMaterial)OctoShoots.Game.Fx.PearlMaterials.Get(def).Duplicate() : null;
             node.AddChild(new MeshInstance3D
             {
                 Mesh = new SphereMesh { Radius = 0.42f, Height = 0.84f, RadialSegments = 24, Rings = 12 },
-                MaterialOverride = new StandardMaterial3D { AlbedoColor = a, EmissionEnabled = true, Emission = b, EmissionEnergyMultiplier = 1.4f, Roughness = 0.15f, Metallic = 0.3f, RimEnabled = true, Rim = 1f },
+                MaterialOverride = look_ is not null ? look_ : new StandardMaterial3D { AlbedoColor = a, EmissionEnabled = true, Emission = b, EmissionEnergyMultiplier = 1.4f, Roughness = 0.15f, Metallic = 0.3f, RimEnabled = true, Rim = 1f },
             });
-            node.AddChild(new OmniLight3D { LightColor = b.Lerp(Colors.White, 0.3f), LightEnergy = 1.8f, OmniRange = 5f, ShadowEnabled = false });
+            var light = new OmniLight3D { LightColor = b.Lerp(Colors.White, 0.3f), LightEnergy = 1.8f, OmniRange = 5f, ShadowEnabled = false };
+            node.AddChild(light);
             AddChild(node);
             _pearls.Add(node);
-            _pearlBorn.Add(born);
+            // A bought pearl begins its ritual at once: no fall.
+            _pearlBorn.Add(pearl.Absorbing ? -10f : born);
+            _pearlLooks.Add((look_, light));
         }
     }
 
@@ -846,11 +909,46 @@ void fragment() {
         for (int i = 0; i < _pearls.Count && i < world.Pearls.Count; i++)
         {
             var pearl = world.Pearls[i];
+            var (look, light) = _pearlLooks[i];
+            if (pearl.Absorbing)
+            {
+                // The ritual: it circles her, paling as she takes its look, and is gone when it shatters.
+                _pearls[i].Visible = pearl.Ritual < PearlRitual.ShatterAt;
+                float pale = Mathf.Clamp(pearl.Ritual / PearlRitual.Mimic, 0f, 1f);
+                _pearls[i].Position = BellView.RitualAt(HerAt, pearl.Ritual);
+                _pearls[i].Rotation = new Vector3(0f, _time * 2.5f, 0f);
+                // Held, the empty vessel trembles before it breaks.
+                float tremble = pearl.Ritual > PearlRitual.Mimic ? 0.04f * Mathf.Sin(_time * 70f) : 0f;
+                _pearls[i].Scale = Vector3.One * (0.85f + tremble);
+                look?.SetShaderParameter("pale", pale);
+                light.LightEnergy = 1.8f * (1f - 0.85f * pale);
+                continue;
+            }
             _pearls[i].Visible = !pearl.Taken;
+            _pearls[i].Scale = Vector3.One;
             float fall = Mathf.Clamp((_time - _pearlBorn[i]) / PearlFall, 0f, 1f);
             float drop = PearlFallHeight * (1f - fall) * (1f - fall);
             _pearls[i].Position = new Vector3(pearl.Position.X, LevelMap.SwimBand + drop + 0.25f * Mathf.Sin(_time * 1.6f + i), pearl.Position.Y);
             _pearls[i].Rotation = new Vector3(0f, _time * 0.7f, 0f);
+        }
+        // The shattered pearl's pieces tumble out and dissolve.
+        for (int i = _shards.Count - 1; i >= 0; i--)
+        {
+            var sh = _shards[i];
+            sh.Age += dt;
+            if (sh.Age >= ShardSeconds)
+            {
+                sh.Mesh.QueueFree();
+                _shards.RemoveAt(i);
+                continue;
+            }
+            float k = sh.Age / ShardSeconds;
+            sh.Velocity *= Mathf.Exp(-3f * dt);
+            sh.Mesh.Position += sh.Velocity * dt;
+            sh.Mesh.Rotation += sh.Spin * dt;
+            sh.Material.AlbedoColor = sh.Material.AlbedoColor with { A = 0.95f * (1f - k) };
+            sh.Material.EmissionEnergyMultiplier = 0.5f * (1f - k);
+            sh.Mesh.Scale *= 1f - 1.5f * dt;
         }
 
         // Shells: a pooled mesh each, turning slowly and bobbing a little on the swim band.

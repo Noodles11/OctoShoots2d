@@ -8,6 +8,8 @@ uniform int pattern = 0;
 uniform float glow = 1.0;
 uniform float seed = 0.0;
 uniform float highlight = 0.0;
+// The absorbing ritual: as she takes its look, the pearl pales to an empty, milky vessel (1).
+uniform float pale = 0.0;
 
 varying vec3 local_n;
 
@@ -57,9 +59,10 @@ void fragment() {
 		t = fres;
 	}
 	vec3 col = ramp(t);
+	col = mix(col, vec3(0.88, 0.89, 0.9), pale * 0.85);
 	ALBEDO = col;
 	ROUGHNESS = 0.18;
 	METALLIC = 0.15;
 	SPECULAR = 0.8;
-	EMISSION = col * glow * (0.35 + 0.65 * fres) + vec3(fres * 0.4) + vec3(highlight * 0.6);
+	EMISSION = (col * glow * (0.35 + 0.65 * fres) + vec3(fres * 0.4)) * (1.0 - 0.8 * pale) + vec3(highlight * 0.6);
 }

@@ -134,6 +134,9 @@ public class PlaneEconomyTests
         w.Step(default);
         Assert.True(pearl.Sold);
         Assert.Equal(3, w.Run.Shells);
+        // Bought: its ritual plays by her, and then it is hers.
+        Assert.DoesNotContain(pearl.ItemId, w.Run.Items);
+        w.StepRitual();
         Assert.Contains(pearl.ItemId, w.Run.Items);
     }
 

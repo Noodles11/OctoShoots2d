@@ -199,6 +199,23 @@ public sealed class PlanePearl
     public string ItemId = "";
     public Vector2 Position;
     public bool Taken;
+    /// <summary>
+    /// The absorbing ritual (docs/PEARLS.md): seconds since she touched it, or below zero while it waits. It is hers
+    /// only once the ritual completes (Taken).
+    /// </summary>
+    public float Ritual = -1f;
+    public bool Absorbing => Ritual >= 0f && !Taken;
+}
+
+/// <summary>
+/// The absorbing ritual's beats (all while she swims on): she takes on the pearl's colours, glow and pattern as it
+/// pales (Mimic), holds the new look (Hold), the pearl shatters and dissolves (Shatter), and her light bursts out as
+/// she returns to her own colours: that burst is the moment it is absorbed.
+/// </summary>
+public static class PearlRitual
+{
+    public const float Mimic = 1.2f, Hold = 0.45f, Shatter = 0.3f;
+    public const float ShatterAt = Mimic + Hold, Total = Mimic + Hold + Shatter;
 }
 
 public sealed partial class PlaneWorld
@@ -394,13 +411,16 @@ public sealed partial class PlaneWorld
         }
         p.WasFiring = input.Fire;
 
-        // Pearls: swim over one to take it.
-        foreach (var pearl in Pearls)
-        {
-            if (pearl.Taken || Vector2.Distance(pearl.Position, p.Position) > Radius + PlaneCombatTuning.PearlReach) continue;
-            pearl.Taken = true;
-            Absorb(pearl.ItemId, pearl.Position);
-        }
+        // Pearls: touching one begins the absorbing ritual (one at a time); it plays round her as she swims on, and
+        // the pearl is hers when its light bursts.
+        StepRituals();
+        if (!Pearls.Exists(q => q.Absorbing))
+            foreach (var pearl in Pearls)
+            {
+                if (pearl.Taken || pearl.Absorbing || Vector2.Distance(pearl.Position, p.Position) > Radius + PlaneCombatTuning.PearlReach) continue;
+                BeginRitual(pearl);
+                break;
+            }
 
         foreach (var mob in Mobs)
         {
@@ -484,7 +504,13 @@ public sealed partial class PlaneWorld
 
         Run.Hp = p.Hp;
 
-        if (input.Dive && CanDive) Events.Add(new PlaneEvent(PlaneEventType.Dived, p.Position, Vector2.Zero));
+        if (input.Dive && CanDive)
+        {
+            // A ritual still playing completes as she dives: the pearl is never lost to the dive.
+            foreach (var pearl in Pearls)
+                if (pearl.Absorbing) FinishRitual(pearl);
+            Events.Add(new PlaneEvent(PlaneEventType.Dived, p.Position, Vector2.Zero));
+        }
     }
 
     /// <summary>What hurt her last (on her defeat: what ended the run).</summary>
@@ -527,6 +553,35 @@ public sealed partial class PlaneWorld
         if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.Position, shot.Position) < reach + PlaneBossTuning.BodyRadius)
             DamageBoss(boss, damage, boss.Position - shot.Position);
         BlastVases(shot.Position, reach);
+    }
+
+    void BeginRitual(PlanePearl pearl)
+    {
+        pearl.Ritual = 0f;
+        Events.Add(new PlaneEvent(PlaneEventType.PearlTouched, pearl.Position, Vector2.Zero));
+    }
+
+    void StepRituals()
+    {
+        foreach (var pearl in Pearls)
+        {
+            if (!pearl.Absorbing) continue;
+            float was = pearl.Ritual;
+            pearl.Ritual += Dt;
+            // The pearl stays by her while the ritual plays.
+            pearl.Position = Player.Position;
+            if (was < PearlRitual.ShatterAt && pearl.Ritual >= PearlRitual.ShatterAt)
+                Events.Add(new PlaneEvent(PlaneEventType.PearlShattered, pearl.Position, Vector2.Zero));
+            if (pearl.Ritual >= PearlRitual.Total) FinishRitual(pearl);
+        }
+    }
+
+    /// <summary>The ritual completes (or is cut short by a dive): her light bursts and the pearl is hers.</summary>
+    void FinishRitual(PlanePearl pearl)
+    {
+        if (pearl.Taken) return;
+        pearl.Taken = true;
+        Absorb(pearl.ItemId, Player.Position);
     }
 
     /// <summary>A pearl taken (found or bought): absorbed into her loadout; one that heals on pickup heals her now.</summary>

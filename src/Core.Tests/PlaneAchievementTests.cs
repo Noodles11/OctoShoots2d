@@ -230,7 +230,7 @@ public class PlaneAchievementTests
         w.Mobs.Clear();
         w.Pearls.Add(new PlanePearl { ItemId = "pirates_doubloon", Position = w.Player.Position });
         int shells = w.Run.Shells;
-        w.Step(default);
+        w.StepRitual();
         Assert.Equal(shells + 15, w.Run.Shells);
 
         // A level with a shell cache: half as many again in it.

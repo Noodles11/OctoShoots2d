@@ -957,7 +957,27 @@ public partial class TopDownMain : Node3D
                 CorruptionEvent(e);
                 if (e.Type == PlaneEventType.Dived) dived = true;
                 else if (e.Type == PlaneEventType.PlayerDefeated) dived = false;
-                else if (e.Type == PlaneEventType.PearlCollected && _world.LastPearl is { } pearl) _hud.ShowPearl(pearl);
+                else if (e.Type == PlaneEventType.PearlTouched)
+                {
+                    // The ritual begins: a soft rising chime.
+                    _sfx.PlayPitched("merge", 0.8f, -6f);
+                }
+                else if (e.Type == PlaneEventType.PearlShattered)
+                {
+                    _sfx.PlayPitched("merge", 1.6f, -4f);
+                    _combat.ShatterPearl(BellView.RitualAt(_bell.GlobalPosition, PearlRitual.ShatterAt));
+                    _haptics.Pulse(0.45f, 0.2f, 0.12f);
+                }
+                else if (e.Type == PlaneEventType.PearlCollected && _world.LastPearl is { } pearl)
+                {
+                    // The climax: her light bursts out and the pearl is hers.
+                    _bell.Burst();
+                    _combat.RitualBurst(_bell.GlobalPosition);
+                    _sfx.PlayPitched("bell_ring", 1.1f, -3f);
+                    _camera.Shake(0.25f);
+                    _haptics.Pulse(1f, 1f, 0.45f);
+                    _hud.ShowPearl(pearl);
+                }
                 else if (e.Type == PlaneEventType.ShellCollected) _hud.PulseShells();
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
                 else if (e.Type == PlaneEventType.AmbushSprung) Say("Ambush!");
@@ -1054,6 +1074,7 @@ public partial class TopDownMain : Node3D
         float alpha = (float)(_accumulator / PlaneWorld.Dt);
 
         _bell.Sync(_world, alpha, dt);
+        _combat.HerAt = _bell.GlobalPosition;
         _combat.Sync(_world, dt);
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
         _currents.Sync(_world, dt);
@@ -1714,6 +1735,15 @@ public partial class TopDownMain : Node3D
             var flow = _world!.Director.FlowAt(_world.Player.Position, _world.Time);
             float k = Mathf.Clamp(flow.Length() / ReefDirectorTuning.SurgeSpeedMax, 0f, 1f);
             if (k > 0.05f) _haptics.Hold(0.1f + 0.12f * k, 0.18f * k);
+            // The absorbing ritual: a hum that rises as she takes the pearl's look, to a trembling peak while she holds
+            // it (the shatter and the burst add their own pulses).
+            foreach (var q in _world.Pearls)
+            {
+                if (!q.Absorbing) continue;
+                float r = Mathf.Clamp(q.Ritual / PearlRitual.ShatterAt, 0f, 1f);
+                float tremble = q.Ritual > PearlRitual.Mimic ? 0.08f * (0.5f + 0.5f * Mathf.Sin(q.Ritual * 60f)) : 0f;
+                _haptics.Hold(0.08f + 0.5f * r * r + tremble, 0.55f * r * r * r + tremble);
+            }
         }
         _haptics.Tick(dt, playing && _pad && _view.Vibration);
     }

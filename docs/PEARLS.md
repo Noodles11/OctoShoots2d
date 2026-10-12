@@ -21,6 +21,27 @@
   copy adds the whole pearl again, or what the column notes in brackets (the catalog's `stack`: one more chain or
   bounce, more reach, +5% chance, +1 s, +1 HP).
 
+## Absorbing a pearl: the ritual
+
+Taking a pearl is a moment of its own. It plays round Clementine while she swims on, so it never interrupts play
+(`PearlRitual`, `BellView.SyncRitual`, `CombatView`).
+
+- **The pull:** whenever a pearl is within 6 m, her tentacles and oral arms are drawn toward it like a magnet. The
+  nearer it is, the harder the pull.
+- **Touch (0 s):** the ritual begins. One plays at a time. A bought pearl begins its ritual by her too. The pearl
+  lifts and circles her bell, and her strands reach for it.
+- **Mimic (0–1.2 s):** like a chameleon, she takes on the pearl's look: its colours laid out in its own pattern, and
+  its glow, spreading over her bell and strands. The pearl pales to a milky, empty vessel as its light leaves it. Her
+  light swells.
+- **Hold (1.2–1.65 s):** she wears the new look. The emptied pearl trembles.
+- **Shatter (1.65 s):** the pearl breaks into pieces that tumble out and dissolve, with a few last glints. Her
+  strands let go and fall back to their natural place.
+- **Burst (1.95 s):** her light bursts out in a strong pulse round her, like an explosion, with a bloom on the water.
+  She flashes white and returns to her own colours. Only now is the pearl hers: it is absorbed, and the pop-up shows.
+  A dive cut through a ritual completes it, so a pearl is never lost.
+- **Haptics:** a hum rising from touch to a trembling peak while she holds the look, a sharp tap on the shatter, and
+  the climax, a full-strength pulse, on the burst.
+
 ## Passive pearls
 
 ### Stats

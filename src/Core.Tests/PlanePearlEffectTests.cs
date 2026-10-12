@@ -50,7 +50,7 @@ public class PlanePearlEffectTests
         var w = World();
         w.Player.Hp = 50f;
         w.Pearls.Add(new PlanePearl { ItemId = "coral_crown", Position = w.Player.Position });
-        w.Step(default);
+        w.StepRitual();
         Assert.Equal(120f, w.Run.MaxHp);
         Assert.Equal(70f, w.Player.Hp);
 
@@ -65,7 +65,7 @@ public class PlanePearlEffectTests
         var w = World();
         w.Player.Hp = 90f;
         w.Pearls.Add(new PlanePearl { ItemId = "moon_jelly_heart", Position = w.Player.Position });
-        w.Step(default);
+        w.StepRitual();
         Assert.Equal(120f, w.Run.MaxHp);
         Assert.Equal(110f, w.Player.Hp);
     }
@@ -218,7 +218,7 @@ public class PlanePearlEffectTests
         var w = World("bubble_shield");
         w.Step(new PlaneInput { UseActive = true });
         w.Pearls.Add(new PlanePearl { ItemId = "whale_song", Position = w.Player.Position });
-        w.Step(default);
+        w.StepRitual();
         Assert.Equal("whale_song", w.Run.Active!.Id);
         Assert.Equal(1f, w.Run.ActiveCharge);
     }

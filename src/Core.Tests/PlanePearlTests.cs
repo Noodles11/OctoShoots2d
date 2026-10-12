@@ -48,7 +48,17 @@ public class PlanePearlTests
 
         w.Player.Position = w.Player.PrevPosition = pearl.Position;
         w.Step(default);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.PearlCollected);
+        // Touched: the ritual begins; it is hers only when it ends.
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.PearlTouched);
+        Assert.False(pearl.Taken);
+        Assert.DoesNotContain(pearl.ItemId, w.Run.Items);
+        bool collected = false;
+        for (int i = 0; i < (int)(PearlRitual.Total / PlaneWorld.Dt) + 2 && !collected; i++)
+        {
+            w.Step(default);
+            collected = w.Events.Any(e => e.Type == PlaneEventType.PearlCollected);
+        }
+        Assert.True(collected);
         Assert.True(pearl.Taken);
         Assert.Contains(pearl.ItemId, w.Run.Items);
     }
@@ -89,6 +99,7 @@ public class PlanePearlTests
         var pearl = w1.Pearls.Single();
         w1.Player.Position = w1.Player.PrevPosition = pearl.Position;
         w1.Step(default);
+        w1.StepRitual();
         w1.Player.Hp = 55f;
         w1.Step(default);
 

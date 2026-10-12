@@ -26,6 +26,35 @@ uniform float spin = 0.0;       // the bell's slow turn about its axis, undone s
 uniform vec3 body : source_color = vec3(1.0, 0.549, 0.259);   // tangerine #FF8C42
 uniform vec3 gold : source_color = vec3(1.0, 0.769, 0.420);   // warm gold #FFC46B
 uniform vec3 flash : source_color = vec3(1.0, 0.239, 0.498);  // hurt magenta #FF3D7F
+// The absorbing ritual (docs/PEARLS.md): `mimic` 0..1 is how far she has taken on the pearl's look (its three colours
+// laid out in its pattern, mimic_pattern as PearlPattern), like a chameleon; `burst` 1 → 0 is the light pulse as she
+// returns to her own colours.
+uniform float mimic = 0.0;
+uniform vec3 mimic_c0 : source_color = vec3(1.0);
+uniform vec3 mimic_c1 : source_color = vec3(1.0);
+uniform vec3 mimic_c2 : source_color = vec3(1.0);
+uniform int mimic_pattern = 0;
+uniform float burst = 0.0;
+
+vec3 mimic_ramp(float t) {
+	t = clamp(t, 0.0, 1.0);
+	return t < 0.5 ? mix(mimic_c0, mimic_c1, t * 2.0) : mix(mimic_c1, mimic_c2, t * 2.0 - 1.0);
+}
+
+float mimic_hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+// The pearl's pattern laid over the bell's plan (q, unit disk), each the bell's own version of the pearl's.
+float mimic_t(vec2 q, float fres) {
+	float r = length(q), a = atan(q.y, q.x);
+	if (mimic_pattern == 0) return 0.5 + 0.5 * sin(r * 11.0);
+	if (mimic_pattern == 1) return 0.5 + 0.5 * sin(a * 3.0 + r * 9.0);
+	if (mimic_pattern == 2) return step(0.68, mimic_hash(floor(q * 6.0)));
+	if (mimic_pattern == 3) return 0.5 + 0.5 * sin(q.x * 7.0 + 3.0 * sin(q.y * 5.0 + q.x * 3.0));
+	if (mimic_pattern == 4) return 0.5 + 0.5 * cos(r * 18.0);
+	if (mimic_pattern == 5) return mix(step(0.0, sin(a * 6.0)), 0.5, 0.15);
+	if (mimic_pattern == 6) return step(0.82, mimic_hash(floor(q * 14.0)));
+	return fres;
+}
 
 varying float along;
 
@@ -153,6 +182,11 @@ void fragment() {
 	col = mix(col, flash * 1.2, hurt * 0.55);
 	// The ink dash: a dark violet ghost with a bright rim.
 	col = mix(col, vec3(0.16, 0.08, 0.26) + fres * gold * 0.8, ink * 0.55);
+	// The ritual: her colours give way to the pearl's look, glowing as the pearl does; the burst whitens her for a
+	// beat as her own colours flood back.
+	vec3 worn = mimic_ramp(mimic_t(q, fres)) * (1.1 + 0.3 * fres);
+	col = mix(col, worn, clamp(mimic, 0.0, 1.0) * 0.88);
+	col = mix(col, vec3(1.0, 0.95, 0.85) * 1.6, clamp(burst, 0.0, 1.0) * 0.7);
 	ALBEDO = col * glow * breath;
 
 	float a = 0.6 + 0.2 * r * r + fres * 0.45 + gonad * 0.35 + rim_lit * 0.4 + canals * 0.2 + ring * 0.2 + margin * 0.15 + rho * 0.5 + warts * 0.15 + swell * 0.2;
