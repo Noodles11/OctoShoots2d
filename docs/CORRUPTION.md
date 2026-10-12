@@ -184,13 +184,16 @@ Cleared corruption never just vanishes. It evaporates.
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
   out from how fast each cell falls and fades over ~1.2 s. It uploads at most 30 times a second, and only while
   something changes. The level's floor, its blades and both maps read it.
-- **Blades** (`corruption_blades.gdshader`): ~45k swaying ink blades per level in 64 chunked MultiMeshes (only those
+- **Blades** (`corruption_blades.gdshader`): ~45k swaying drained blades per level in 64 chunked MultiMeshes (only those
   on screen are drawn). They are laid out off the main thread. A level below is laid out while she is still above it,
-  so a dive costs nothing. Thick ground grows tall glossy blades with a violet rim and a slow pulse up their tips. They
-  sway in the current and bend away from her light. As the ground is cleansed they shrivel, curl, ash, dissolve and
-  burn gold at the tips.
-- **The floor** (`reef_surface.gdshaderinc`): ink-black and glossy under the corruption, with faint violet veins. It
-  drinks the caustics. Where it dies it burns gold, and its retreating edge keeps a warm fringe. The level below shows
+  so a dive costs nothing. On corrupted ground they are pale, waxy bone-grey and limp, drooping over, with only the
+  faintest violet sheen. They sway in the current and bend away from her light. As the ground is cleansed the colour
+  floods back: they stand up and turn green while they shrivel and dissolve, burning gold at the tips.
+- **The floor** (`reef_surface.gdshaderinc`): the corruption drains the colour out of the ground rather than painting
+  it. It desaturates toward a flat, slightly warm ashen grey (about 75% of the ground's own luminance with a faint
+  dusty unevenness), lerped by density so it arrives as a film, then a stain, then full grey. It dims the ground by
+  28%, turns it matte, flattens the sand ripples as if dust had settled, and kills the caustics. Healthy ground stays
+  fully saturated, so Clementine's warm glow is the only saturated thing in a drained zone. Where it dies it burns gold, and its retreating edge keeps a warm fringe. The level below shows
   its own corruption through the shaft.
 - **Corrupted bodies** (`corruption_orb.gdshader`: murklings, sacs, stumps, throws, the crust) share one look:
   ink-black, glossy, a cold violet rim, and murklings carry a dim stolen ember.

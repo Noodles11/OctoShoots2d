@@ -1,7 +1,8 @@
-// The corruption's outgrowth (docs/CORRUPTION.md): ink blades on the floor, one MultiMesh instance each, drawn from
-// the level's corruption field (R density, G the gold of dying). Thick ground grows tall glossy blades that sway in
-// the current and recoil from her light; as the ground is cleansed they shrivel, curl, blacken to ash and dissolve,
-// their tips burning gold as they go: light spreading, never erasing. Instance custom: (seed, u, v, unused).
+// The corruption's outgrowth (docs/CORRUPTION.md): drained blades on the floor, one MultiMesh instance each, drawn
+// from the level's corruption field (R density, G the gold of dying). On corrupted ground they are pale, waxy,
+// bone-grey and limp, drooping over, swaying in the current and recoiling from her light. As the ground is cleansed
+// the colour floods back: they stand up and turn green while they shrivel and dissolve, their tips burning gold as
+// they go (light spreading, never erasing). Instance custom: (seed, u, v, unused).
 shader_type spatial;
 render_mode cull_disabled, world_vertex_coords, shadows_disabled;
 
@@ -9,7 +10,8 @@ uniform sampler2D corruption_map : filter_linear, repeat_disable;
 /// Her bell (world), and how far her light pushes the blades back.
 uniform vec3 her_pos = vec3(0.0, -1000.0, 0.0);
 uniform float her_reach = 3.4;
-uniform vec3 ink : source_color = vec3(0.014, 0.010, 0.022);
+uniform vec3 bone : source_color = vec3(0.60, 0.58, 0.53);
+uniform vec3 alive : source_color = vec3(0.30, 0.62, 0.30);
 uniform vec3 sheen : source_color = vec3(0.32, 0.10, 0.55);
 uniform vec3 gold : source_color = vec3(1.0, 0.72, 0.32);
 
@@ -48,8 +50,8 @@ void vertex() {
 		float d = length(away);
 		float push = (1.0 - smoothstep(0.0, her_reach, d)) * step(her_pos.y - 6.0, base.y + 0.01);
 		flow += (d > 1e-3 ? away / d : vec2(0.0)) * push * push * 0.75;
-		// Dying, they curl over and droop toward the floor.
-		float curl = (1.0 - grow) * 0.9;
+		// Corrupted, they hang limp, drooping toward the floor; as the gold of cleansing runs through them they stand up.
+		float curl = (0.35 + 0.55 * grow) * (1.0 - smoothstep(0.0, 0.5, fr.g));
 		float bend = t * t;
 		vec2 dir = normalize(vec2(cos(ph), sin(ph)) + 1e-4);
 		rel.xz += (flow + dir * curl) * bend * (0.6 + 0.4 * grow);
@@ -69,14 +71,15 @@ void fragment() {
 	NORMAL = nrm;
 	float facing = clamp(dot(nrm, VIEW), 0.0, 1.0);
 	float fres = pow(1.0 - facing, 3.0);
-	// Ink, slightly glossy; dying, it ashes to a warm brown before it goes.
-	vec3 col = mix(ink, vec3(0.16, 0.09, 0.05), (1.0 - v_grow) * 0.6);
+	// Pale, waxy bone-grey, a little lighter toward the tips; as the ground is cleansed the green floods back in.
+	float life = clamp(max(1.0 - v_grow, v_burn * 1.5), 0.0, 1.0);
+	vec3 col = mix(bone * (0.85 + 0.2 * v_t), alive * (0.8 + 0.35 * v_t), life);
 	ALBEDO = col;
-	ROUGHNESS = mix(0.16, 0.5, 1.0 - v_grow);
-	SPECULAR = 0.75;
-	// Light-drinking: only a cold violet sheen at the rim and a faint pulse up the tips, readable from far.
+	ROUGHNESS = 0.45;
+	SPECULAR = 0.4;
+	// Only the faintest cold violet sheen at the rim and up the tips.
 	float pulse = 0.6 + 0.4 * sin(TIME * 1.3 + v_seed * 20.0);
-	vec3 e = sheen * fres * 0.35 * v_grow + sheen * pow(v_t, 4.0) * 0.18 * pulse * v_grow;
+	vec3 e = sheen * fres * 0.08 * v_grow + sheen * pow(v_t, 4.0) * 0.04 * pulse * v_grow;
 	// The gold of dying, brightest at the tips.
 	e += gold * v_burn * (0.35 + 1.8 * v_t * v_t);
 	EMISSION = e;
