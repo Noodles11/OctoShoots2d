@@ -16,6 +16,10 @@
 - **Active** pearls are used with **F** and then recharge over time. She carries one at a time (a new one replaces
   the old); its charge is the rim of her bell, a light sweeping round it (DESIGN-TOPDOWN §2.5).
 - **Quality** is ★ to ★★★★ (rarer, stronger). **Found in** lists the item pools that can offer it.
+- **Unique** pearls are absorbed once a run and then leave the pools. A non-unique one (**No**) can be absorbed again:
+  it stays in the pools at a lower chance (×0.35 of its weight per copy held, `ItemPools.RepeatWeight`). Each extra
+  copy adds the whole pearl again, or what the column notes in brackets (the catalog's `stack`: one more chain or
+  bounce, more reach, +5% chance, +1 s, +1 HP).
 
 ## Passive pearls
 

@@ -262,7 +262,7 @@ public sealed partial class PlaneWorld
         {
             Vector2 at = boss.Position + new Vector2(-boss.Facing.Y, boss.Facing.X) * (PlaneBossTuning.BodyRadius + 2.5f);
             if (!Clear(at, 0.5f)) at = boss.Position + boss.Facing * (PlaneBossTuning.BodyRadius + 2.5f);
-            Pearls.Add(new PlanePearl { ItemId = pick[_bossRng.Int(pick.Count)], Position = at });
+            Pearls.Add(new PlanePearl { ItemId = Run.Pick(pick, _bossRng), Position = at });
         }
         Stats.BossesFreed++;
         Events.Add(new PlaneEvent(PlaneEventType.BossFreed, boss.Position, Vector2.Zero));

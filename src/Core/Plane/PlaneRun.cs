@@ -74,7 +74,31 @@ public sealed class PlaneRun
     /// </summary>
     public ISet<string> Unlocked { get; set; } = new HashSet<string>();
 
-    /// <summary>A pearl a treasure room may hold: a ported one the catalog knows, unlocked, and she does not have yet.</summary>
-    public bool CanOffer(string itemId) =>
-        Catalog is not null && Catalog.TryGet(itemId, out var item) && ItemPools.IsUnlocked(item, Unlocked) && !Items.Contains(itemId);
+    /// <summary>
+    /// A pearl a room may hold: a ported one the catalog knows, unlocked, and either not held yet or not unique
+    /// (docs/PEARLS.md).
+    /// </summary>
+    public bool CanOffer(string itemId) => OfferWeight(itemId) > 0f;
+
+    /// <summary>
+    /// Picks one pearl to offer from a list, by offer weight: a pearl she holds a copy of is less likely. (With every
+    /// weight equal it is a plain uniform pick, as before.)
+    /// </summary>
+    public string Pick(IReadOnlyList<string> offer, Rng rng)
+    {
+        var weights = offer.Select(OfferWeight).ToList();
+        if (weights.All(w => w == weights[0])) return offer[rng.Int(offer.Count)];
+        float roll = rng.NextFloat() * weights.Sum();
+        for (int i = 0; i < offer.Count; i++)
+        {
+            roll -= weights[i];
+            if (roll < 0f) return offer[i];
+        }
+        return offer[^1];
+    }
+
+    /// <summary>How likely a pearl is to be offered: its weight, lower for each copy of a non-unique one she holds, 0 if it may not be.</summary>
+    public float OfferWeight(string itemId) =>
+        Catalog is not null && Catalog.TryGet(itemId, out var item) && ItemPools.IsUnlocked(item, Unlocked)
+            ? ItemPools.WeightFor(item, Items.Count(id => id == itemId)) : 0f;
 }

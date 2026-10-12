@@ -126,7 +126,7 @@ public sealed partial class PlaneWorld
         var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id)).ToList();
         Vector2 Slot(int i) => shop.Position + side * ((i - (PlaneEconomyTuning.Slots - 1) * 0.5f) * 2.4f) - facing * 0.8f;
         if (offer.Count > 0 && rng.NextFloat() < PlaneEconomyTuning.PearlOffered)
-            Stands.Add(new ShopStand { Kind = StandKind.Pearl, ItemId = offer[rng.Int(offer.Count)], Price = PlaneEconomyTuning.PearlPrice, Position = Slot(PlaneEconomyTuning.PearlSlot) });
+            Stands.Add(new ShopStand { Kind = StandKind.Pearl, ItemId = Run.Pick(offer, rng), Price = PlaneEconomyTuning.PearlPrice, Position = Slot(PlaneEconomyTuning.PearlSlot) });
         Stands.Add(new ShopStand { Kind = StandKind.Health, Price = PlaneEconomyTuning.HealthPrice, Position = Slot(PlaneEconomyTuning.HeartSlot) });
     }
 
@@ -157,7 +157,9 @@ public sealed partial class PlaneWorld
     void StepEconomy()
     {
         var p = Player;
-        float magnet = Run.Loadout.Flags.Contains("magnet") ? PlaneEconomyTuning.RemoraMagnet : PlaneEconomyTuning.ShellMagnet;
+        // Remora Sucker: each extra copy reaches half as far again.
+        int remoras = Run.Loadout.Count("remora_sucker");
+        float magnet = Run.Loadout.Flags.Contains("magnet") ? PlaneEconomyTuning.RemoraMagnet * (1f + 0.5f * MathF.Max(remoras - 1, 0)) : PlaneEconomyTuning.ShellMagnet;
         foreach (var shell in Shells)
         {
             if (shell.Taken) continue;

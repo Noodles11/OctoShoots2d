@@ -381,6 +381,26 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void NonUniquePearlsStackAndStayOfferedUniqueOnesDoNot()
+    {
+        var run = new PlaneRun(Catalog.Value, new Tuning());
+        run.Add("mirror_scale");
+        run.Add("swordfish_bill");
+        // Mirror Scale may come again, less likely; Swordfish Bill (unique) may not.
+        Assert.True(run.CanOffer("mirror_scale"));
+        Assert.False(run.CanOffer("swordfish_bill"));
+        Assert.True(run.OfferWeight("mirror_scale") < run.OfferWeight("anglerfish_lure"));
+        // A second Mirror Scale adds its stack: one more bounce, not two.
+        run.Add("mirror_scale");
+        Assert.Equal(3, run.Loadout.Shot.Bounces);
+        Assert.Equal(2, run.Loadout.Count("mirror_scale"));
+        // A whole extra Shark Tooth stacks its damage.
+        float one = Loadout.Build(Catalog.Value, new[] { "shark_tooth" }, new Tuning()).Stats.Damage;
+        float two = Loadout.Build(Catalog.Value, new[] { "shark_tooth", "shark_tooth" }, new Tuning()).Stats.Damage;
+        Assert.Equal(one + 0.5f, two, 3);
+    }
+
+    [Fact]
     public void PassingAValveCostsHpAndClearsItForGood()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));

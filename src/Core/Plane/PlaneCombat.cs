@@ -267,7 +267,7 @@ public sealed partial class PlaneWorld
     /// <summary>The last pearl she picked up (for the HUD), with the event that announces it.</summary>
     public string? LastPearl { get; private set; }
 
-    /// <summary>A treasure room holds one pearl she does not have yet (chosen from the room's own seed).</summary>
+    /// <summary>A treasure room holds one pearl she may take: one she lacks, or another copy of a non-unique one (from the room's own seed).</summary>
     void PlacePearls()
     {
         var rng = new Rng(Map.Seed * 0x9E3779B97F4A7C15UL ^ (ulong)(Map.Cycle * 100000 + Map.Depth * 1000 + Map.Level) ^ ((ulong)Map.Attempt << 40));
@@ -276,7 +276,7 @@ public sealed partial class PlaneWorld
             if (poi.Kind != PoiKind.TreasureCave) continue;
             var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id)).ToList();
             if (offer.Count == 0) break;
-            Pearls.Add(new PlanePearl { ItemId = offer[rng.Int(offer.Count)], Position = poi.Position });
+            Pearls.Add(new PlanePearl { ItemId = Run.Pick(offer, rng), Position = poi.Position });
         }
     }
 
