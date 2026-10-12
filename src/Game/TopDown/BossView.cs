@@ -221,6 +221,7 @@ public partial class BossView : Node3D
         _landedAt = _freedAt = -10f;
         _burst = false;
         _pearl.MaterialOverride = _blackPearl;
+        _pearl.Visible = true;
         _burstLight.LightEnergy = 0f;
         _motes.Clear();
         _lastStage = BossStage.Waiting;
@@ -305,6 +306,9 @@ public partial class BossView : Node3D
                 _motes.Emit(at, _motes.RandDir() * _motes.RandRange(3f, 14f) + Vector3.Up * 1.5f, _motes.RandRange(0.8f, 1.8f), _motes.RandRange(0.12f, 0.3f), 0.02f,
                     new Color(1.6f, 1.5f, 1.3f), new Color(1f, 0.7f, 0.3f, 0f), drag: 1.4f, buoyancy: 0.3f);
         }
+        // Released, her cleansed pearl is the reward: the world's pearl takes its place where it sat, and she leaps
+        // away from under it.
+        _pearl.Visible = !(boss.Stage == BossStage.Freed && !world.ArenaSealed);
         if (_burst)
         {
             _burstLight.LightEnergy = Mathf.MoveToward(_burstLight.LightEnergy, 1.2f, dt * 10f);

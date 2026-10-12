@@ -148,10 +148,12 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
 - **Her pearls are corruption:** glossy ink orbs. Clementine's light passes through them and cannot clear them.
 - **Weak spot:** only the black pearl (0.9 m, `CoreRadius`) can be hurt, and only while she is open (the light flies
   over the raised lid). Shut, or on the shell, shots break harmlessly.
+- **Every boss's rule** (`CLAUDE.md`): a boss holds a corrupted pearl (`PlaneBoss.PearlAt`), the source of its
+  malice and its only weak spot; defeated, the cleansed pearl is the reward, left exactly where it was attached.
 - **Defeat:** the pearl bursts into bright light and stays white. The whole arena is wiped clean of corruption
   (`CorruptionField.Clear`), so the Crack opens as soon as the arena unseals. Her colour floods back. After a short
-  shudder she leaps 6.5 m aside in one arc (0.7 s) and lies there wide open. The reward pearl floats down on the
-  gateway's far side.
+  shudder she leaps 6.5 m aside in one arc (0.7 s) and lies there wide open. Her cleansed pearl is the reward: it
+  stays exactly where it sat in her (over the Crack's middle) as she leaps away from under it, ready to take.
 - **The arena is hers alone during the fight:** sealing it sets every murkling (clinging ones too) and Blotter inside
   down just outside. Murklings never bud in it. Murklings, Blotters and vines cannot cross the sealed rim, murkling
   throws stop at it, and a Blotter's bomb bound inside lands just outside.

@@ -434,7 +434,7 @@ public partial class CombatView : Node3D
             AddChild(node);
             _pearls.Add(node);
             // A bought pearl begins its ritual at once: no fall.
-            _pearlBorn.Add(pearl.Absorbing ? -10f : born);
+            _pearlBorn.Add(pearl.Absorbing || pearl.Placed ? -10f : born);
             _pearlLooks.Add((look_, light));
         }
     }

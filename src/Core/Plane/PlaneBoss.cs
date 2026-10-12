@@ -90,6 +90,12 @@ public sealed class PlaneBoss
     public bool Open => Stage == BossStage.Fight && Act is ClamAct.Volleys or ClamAct.Helix;
     /// <summary>On the floor of the arena (solid, and hurting while she fights).</summary>
     public bool Landed => Stage is BossStage.Fight or BossStage.Freed;
+
+    /// <summary>
+    /// Every boss holds a corrupted pearl (docs/CORRUPTION.md): it is what makes her fight, the one place her light can
+    /// hurt her, and once cleansed it is the reward, left where it sat. Queen Clam's lies in her middle, on her mantle.
+    /// </summary>
+    public Vector2 PearlAt => Position;
 }
 
 public sealed partial class PlaneWorld
@@ -271,20 +277,9 @@ public sealed partial class PlaneWorld
         if (!Clear(boss.RestAt, PlaneBossTuning.BodyRadius)) boss.RestAt = boss.Position - boss.Facing * PlaneBossTuning.ShuffleAside;
         boss.Leap = 0f;
         Events.Add(new PlaneEvent(PlaneEventType.BossLeap, boss.Position, boss.RestAt - boss.Position));
-        if (pick.Count > 0)
-        {
-            // On the gateway's far side from her leap, or round from there: in open water, never into the Crack.
-            var away = (boss.Position - boss.RestAt) / PlaneBossTuning.ShuffleAside;
-            Vector2 at = boss.Position + away * (PlaneBossTuning.BodyRadius + 2.5f);
-            for (int turn = 0; turn < 12; turn++)
-            {
-                var q = boss.Position + Rotate(away, turn * MathF.Tau / 12f) * (PlaneBossTuning.BodyRadius + 2.5f);
-                if (!Clear(q, 0.5f) || Map.Shaft.Contains(q)) continue;
-                at = q;
-                break;
-            }
-            Pearls.Add(new PlanePearl { ItemId = Run.Pick(pick, _bossRng), Position = at });
-        }
+        // Her pearl, cleansed, is the reward (every boss's rule, docs/CORRUPTION.md): it stays exactly where it sat in
+        // her as she leaps away from under it, for Clementine to take.
+        if (pick.Count > 0) Pearls.Add(new PlanePearl { ItemId = Run.Pick(pick, _bossRng), Position = boss.PearlAt, Placed = true });
         Stats.BossesFreed++;
         Events.Add(new PlaneEvent(PlaneEventType.BossFreed, boss.Position, Vector2.Zero));
     }
@@ -485,7 +480,7 @@ public sealed partial class PlaneWorld
     {
         var boss = Boss;
         if (boss is null || boss.Stage != BossStage.Fight) return false;
-        float d = Vector2.Distance(shot.Position, boss.Position);
+        float d = Vector2.Distance(shot.Position, boss.PearlAt);
         if (boss.Open)
         {
             if (d > PlaneBossTuning.CoreRadius + shot.Radius) return false;

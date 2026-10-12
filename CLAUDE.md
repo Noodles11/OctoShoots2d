@@ -19,6 +19,17 @@ and LIGHT-BUBBLES.md describe the current corruption war and her light).
 - **Creatures do not "see" in a cartoon way.** Bosses and mobs act from what they are (a clam throws from its
   opening and does not turn to face her); avoid behaviour that implies a face tracking her.
 
+## Bosses (standing rules)
+
+- **Every boss holds a corrupted pearl.** It is what makes the boss attack and "be evil". Beating a boss is always a
+  matter of finding that pearl and illuminating it with her light: it is the boss's only weak spot
+  (`PlaneBoss.PearlAt`), possibly reachable only at certain moments (Queen Clam: while her shell is open).
+- **On defeat the pearl is cleansed** (it bursts with light and turns white, washing the arena clean) and **becomes
+  the reward**: a pearl to collect, left at the exact place it was attached to the boss (`Placed`, no fall). The
+  boss moves away from under it.
+- The boss's own projectiles are corruption (ink) and cannot be cleared by her light; no other creature is inside
+  the arena during the fight.
+
 ## Workflow
 
 - Run `dotnet build OctoShoots.csproj` and `dotnet test src/Core.Tests` before committing.

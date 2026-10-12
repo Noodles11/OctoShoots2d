@@ -204,6 +204,8 @@ public sealed class PlanePearl
     /// only once the ritual completes (Taken).
     /// </summary>
     public float Ritual = -1f;
+    /// <summary>Set where it lies (a boss's cleansed pearl): it does not float down into place.</summary>
+    public bool Placed;
     public bool Absorbing => Ritual >= 0f && !Taken;
 }
 
