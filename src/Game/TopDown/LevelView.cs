@@ -32,6 +32,13 @@ public sealed class LevelShape
         for (int cy = 0; cy < LevelMap.Size; cy += chunk)
         for (int cx = 0; cx < LevelMap.Size; cx += chunk)
             shape.Ground.Add(LevelView.ChunkSurface(map, cx, cy, Math.Min(cx + chunk, LevelMap.Size), Math.Min(cy + chunk, LevelMap.Size))!);
+        // The reef carries on past the rim, so swimming along the edge never shows the void beyond the square.
+        var spans = new List<(int A, int B, bool Inside)> { (-LevelView.Skirt, 0, false) };
+        for (int c = 0; c < LevelMap.Size; c += chunk) spans.Add((c, Math.Min(c + chunk, LevelMap.Size), true));
+        spans.Add((LevelMap.Size, LevelMap.Size + LevelView.Skirt, false));
+        foreach (var sy in spans)
+        foreach (var sx in spans)
+            if (!sx.Inside || !sy.Inside) shape.Ground.Add(LevelView.SkirtSurface(map, sx.A, sy.A, sx.B, sy.B)!);
         foreach (var cave in map.Caves) shape.Lids.Add(LevelView.LidSurface(map, cave));
         if (!OS.GetCmdlineUserArgs().Contains("--dbg-nodecor")) LevelView.DecorItems(map, shape.Flora, shape.Rocks, shape.Glows);
         return shape;
@@ -212,7 +219,7 @@ public partial class LevelView : Node3D
         else if (h <= 6f) c = new Color(0.5f, 0.54f, 0.36f).Lerp(new Color(0.43f, 0.4f, 0.33f), h / 6f);
         else if (h <= 10f) c = new Color(0.43f, 0.4f, 0.33f).Lerp(new Color(0.4f, 0.36f, 0.32f), (h - 6f) / 4f);
         else c = new Color(0.4f, 0.36f, 0.32f).Lerp(new Color(0.66f, 0.43f, 0.52f), Mathf.Clamp((h - 10f) / 4f, 0f, 1f));
-        float e = Mathf.Min(Mathf.Min(x, y), Mathf.Min(LevelMap.Size - x, LevelMap.Size - y));
+        float e = Mathf.Max(Mathf.Min(Mathf.Min(x, y), Mathf.Min(LevelMap.Size - x, LevelMap.Size - y)), 0f);
         if (e < LevelMap.RimWidth) c = c.Lerp(new Color(0.24f, 0.23f, 0.26f), 1f - e / LevelMap.RimWidth);
         // A little grain so flat colour reads as ground.
         uint hash = unchecked((uint)((int)(x * Sub) * 73856093 ^ (int)(y * Sub) * 19349663));
@@ -252,6 +259,27 @@ public partial class LevelView : Node3D
     /// <summary>A chunk of the ground. The shaft has no floor: through it, the level below shows.</summary>
     internal static LevelShape.Surface? ChunkSurface(LevelMap map, int x0, int y0, int x1, int y1) =>
         SurfaceMesh((x, y) => SmoothHeight(map, x, y), x0, y0, x1, y1, (x, y) => SmoothHeight(map, x, y) > LevelMap.ShaftBottom + 0.3f);
+
+    /// <summary>How far (metres) the reef is drawn past the square on every side: wider than the view reaches.</summary>
+    internal const int Skirt = 32;
+
+    /// <summary>
+    /// The reef past the square, never reached: the rim's own rock where it meets the edge, rising within a few metres
+    /// into a ragged ridge at about the rim's top, so the edge reads as more reef rather than a cliff into nothing.
+    /// </summary>
+    internal static LevelShape.Surface? SkirtSurface(LevelMap map, int x0, int y0, int x1, int y1) =>
+        SurfaceMesh((x, y) => SkirtHeight(map, x, y), x0, y0, x1, y1, null);
+
+    static float SkirtHeight(LevelMap map, float x, float y)
+    {
+        float cx = Mathf.Clamp(x, 0f, LevelMap.Size), cy = Mathf.Clamp(y, 0f, LevelMap.Size);
+        float edge = SmoothHeight(map, cx, cy);
+        float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+        if (d <= 0f) return edge;
+        // Ragged, but the same every time (it is drawn from the position alone).
+        float ridge = ReefTerrain.HMax - 1f + 1.6f * Mathf.Sin(x * 0.37f + Mathf.Sin(y * 0.21f) * 2f) * Mathf.Sin(y * 0.29f + Mathf.Sin(x * 0.17f) * 2f);
+        return Mathf.Lerp(edge, ridge, Mathf.SmoothStep(0f, 6f, d));
+    }
 
     /// <summary>
     /// A cave's roof: the mountain as it stood before the cave was hollowed out, over the chambers and a little past them

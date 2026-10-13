@@ -914,7 +914,7 @@ at mist distance (inherited fade rule).
     makes it ×2.5. Queen Clam is never shoved.
   - **Remora Sucker:** shells drift to her from 7.5 m instead of 2.5 m.
   - **Bubble Coral:** her light lingers. Instead of going out at full speed at the end of its range, it slows (steady
-    slowing while fast, the water's drag below about 6.5 m/s) to a hover about 12 m out and hangs there for its own
+    slowing while fast, then the water's drag) to a hover about 6 m out — well inside the view — and hangs there for its own
     hover time (0.8–1.2 s, ×1.5 with the pearl) before going out — so the shots that follow catch up with it, and
     shots that touch merge into one, bigger and stronger, instead of bouncing apart (see Combat above).
   - **Lantern Pearl:** her glow (its light) reaches ×1.8 as far and shines brighter, and she reveals the minimap's fog

@@ -785,6 +785,9 @@ public partial class TopDownMain : Node3D
             "ambush" => _map.Pois.Where(p => p.Kind == PoiKind.Ambush).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             "treasure" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.TreasureCave).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 2.5f)).FirstOrDefault(),
             "mob" => _world.Mobs.Select(m => (System.Numerics.Vector2?)(m.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // The open water nearest the west rim, to look past the square's edge.
+            "edge" => Enumerable.Range(0, LevelMap.Size).SelectMany(y => Enumerable.Range(0, LevelMap.Size).Select(x => new System.Numerics.Vector2(x, y)))
+                .Where(q => _world.Clear(q, 0.8f)).OrderBy(q => q.X).Select(q => (System.Numerics.Vector2?)q).FirstOrDefault(),
             _ => null,
         };
         if (at is not { } p) return;
@@ -1807,8 +1810,8 @@ public partial class TopDownMain : Node3D
             : _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault()
               // With no creature to shoot, the nearest standing pot.
               ?? _world.Vases.Where(v => !v.Broken).OrderBy(v => System.Numerics.Vector2.Distance(v.Position, from)).Select(v => (System.Numerics.Vector2?)v.Position).FirstOrDefault();
-        if (target is not { } at || System.Numerics.Vector2.DistanceSquared(at, from) < 1e-4f) return false;
-        input.Aim = System.Numerics.Vector2.Normalize(at - from);
+        // Nothing to shoot at: straight ahead, the way she faces.
+        input.Aim = target is { } at && System.Numerics.Vector2.DistanceSquared(at, from) > 1e-4f ? System.Numerics.Vector2.Normalize(at - from) : _world.Player.Aim;
         // With Pearl Diver, let go once the pearl is fully charged.
         input.Fire = !(_world.Run.Loadout.Shot.Charge && _world.Player.Charge >= PlaneCombatTuning.ChargeSeconds);
         return true;

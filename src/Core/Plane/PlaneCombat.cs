@@ -34,12 +34,13 @@ public static class PlaneCombatTuning
     public const float BubbleStop = 0.9f;
     public const float BubbleHoverMin = 0.8f, BubbleHoverMax = 1.2f;
     /// <summary>
-    /// Bubble Coral: lingering light. Thrown at ShotSpeed, it slows steadily (the deceleration that would stop it at its
-    /// range), then — once the water's drag (LingerDrag × its speed, per second) is the gentler — eases off, the two
-    /// meeting smoothly at about 6.5 m/s. Slower than BubbleStop it hovers (still drifting, still slowing) for its own
-    /// hover time (BubbleHoverMin–Max × her bubble hover stat: Bubble Coral ×1.5), then goes out — about 12 m from her.
+    /// Bubble Coral: lingering light. Thrown at ShotSpeed, it slows steadily (the deceleration that would stop it at
+    /// LingerRange), then — once the water's drag (LingerDrag × its speed, per second) is the gentler — eases off.
+    /// Slower than BubbleStop it hovers (still drifting, still slowing) for its own hover time (BubbleHoverMin–Max × her
+    /// bubble hover stat: Bubble Coral ×1.5), then goes out. It settles about 6 m from her, well inside the view, so
+    /// the shots behind visibly catch up and merge with it.
     /// </summary>
-    public const float LingerDrag = 6f;
+    public const float LingerDrag = 6f, LingerRange = 5.5f;
     /// <summary>
     /// A bubble that bumps into rock or another bubble pops this often; otherwise it bounces off (Mirror Scale's bounces
     /// are sure; with Bubble Coral, bubbles that meet merge instead). A bubble that hits a mob always pops.
@@ -905,7 +906,7 @@ public sealed partial class PlaneWorld
         if (lingers)
         {
             // Steady slowing while fast, the water's drag once that is gentler; slow, it hovers its own time, then goes out.
-            float decel = shot.Speed0 * shot.Speed0 / (2f * shot.Range);
+            float decel = shot.Speed0 * shot.Speed0 / (2f * MathF.Min(shot.Range, PlaneCombatTuning.LingerRange));
             speed = MathF.Max(speed - MathF.Min(decel, PlaneCombatTuning.LingerDrag * speed) * Dt, 0f);
             if (speed < PlaneCombatTuning.BubbleStop)
             {
