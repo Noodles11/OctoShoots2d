@@ -20,7 +20,8 @@ public partial class BellView : Node3D
     const int Tentacles = 16, OralArms = 8;
     /// <summary>The strands' fixed step: steady motion at any frame rate.</summary>
     const float Step = 1f / 120f;
-    static readonly Color Glow = new(1f, 0.72f, 0.52f);
+    /// <summary>Her glow in the water (HerColor: derived from her body colour).</summary>
+    static Color Glow => OctoShoots.Game.Fx.HerColor.Glow;
 
     sealed class Strand
     {

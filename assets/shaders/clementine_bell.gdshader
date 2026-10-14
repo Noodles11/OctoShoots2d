@@ -23,8 +23,11 @@ uniform float health = 1.0;     // her HP as a share of her max, 0..1 (eased on 
 uniform float charge = -1.0;    // the active pearl's charge 0..1 (1 ready); below 0, she holds none
 uniform float snuff = 0.0;      // just used: 1 → 0, the gold whipping off the rim counter-clockwise
 uniform float spin = 0.0;       // the bell's slow turn about its axis, undone so the rim's top stays at the screen's top
-uniform vec3 body : source_color = vec3(1.0, 0.549, 0.259);   // tangerine #FF8C42
-uniform vec3 gold : source_color = vec3(1.0, 0.769, 0.420);   // warm gold #FFC46B
+// Her colours (HerColor.cs, data/clementine_color.cfg): body is the bell and tentacles, gold her light.
+global uniform vec3 her_body;
+global uniform vec3 her_light;
+#define body her_body
+#define gold her_light
 uniform vec3 flash : source_color = vec3(1.0, 0.239, 0.498);  // hurt magenta #FF3D7F
 // The absorbing ritual (docs/PEARLS.md): `mimic` 0..1 is how far she has taken on the pearl's look (its three colours
 // laid out in its pattern, mimic_pattern as PearlPattern), like a chameleon; `burst` 1 → 0 is the light pulse as she
@@ -133,7 +136,7 @@ void fragment() {
 			float head = exp(-pow((sweep - charge) * 40.0, 2.0)) * step(0.001, charge);
 			rim_lit = filled * 0.85 + head;
 			rim_track = 1.0 - filled;
-			rim_col = mix(vec3(1.0, 0.9, 0.72), vec3(1.0, 0.98, 0.9), head);
+			rim_col = mix(mix(gold, vec3(1.0), 0.5), vec3(1.0, 0.98, 0.9), head);
 		}
 		if (snuff > 0.0) {
 			float tail = 1.0 - step(snuff, sweep);
@@ -168,15 +171,15 @@ void fragment() {
 	col = mix(col, gonad_col, gonad_fill * 0.3);
 	col = mix(col, gonad_col, gonad);
 	col = mix(col, gold * 1.05, canals * 0.7 + ring * 0.6);
-	col = mix(col, vec3(1.0, 0.85, 0.7), warts * 0.45);
+	col = mix(col, mix(body, vec3(1.0), 0.6), warts * 0.45);
 	col = mix(col, body * 1.15 + 0.08, margin * 0.5);
 	vec3 organ = mix(gold * 1.4, flash * 1.6, hurt);
 	col = mix(col, organ, rho * (0.75 + 0.25 * glow));
 	col += gold * swell * 0.55;
-	// The silhouette: a deeper tangerine edge, so she reads against pale sand as well as in the dark.
-	col = mix(col, vec3(0.62, 0.12, 0.02), smoothstep(0.15, 0.7, fres) * 0.7);
+	// The silhouette: a deeper edge of her own colour, so she reads against pale sand as well as in the dark.
+	col = mix(col, body * body * 0.62, smoothstep(0.15, 0.7, fres) * 0.7);
 	// The rim gauge sits over the silhouette's edge so it reads from any angle.
-	col = mix(col, vec3(0.3, 0.07, 0.03), rim_track * 0.6);
+	col = mix(col, body * body * 0.3, rim_track * 0.6);
 	col = mix(col, rim_col, clamp(rim_lit, 0.0, 1.0));
 	// Hurt: the whole bell flushes magenta for a beat.
 	col = mix(col, flash * 1.2, hurt * 0.55);

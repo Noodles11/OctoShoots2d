@@ -21,7 +21,9 @@ instance uniform vec4 hole = vec4(0.0, 1.0, 0.0, 0.0);
 instance uniform float lantern = 0.0;
 instance uniform float warmth = 0.0;
 uniform float base_light = 0.0;
-uniform vec3 gold : source_color = vec3(1.0, 0.769, 0.420);
+// Her light (HerColor.cs, data/clementine_color.cfg).
+global uniform vec3 her_light;
+#define gold her_light
 const float CORE_MAX = 1.12;
 
 varying vec3 dir_local;

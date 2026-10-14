@@ -44,7 +44,10 @@ uniform float halo_strength = 0.16;
 /// leave where they pop: x, z (world), radius (metres), strength (a share of her halo's, ≤ 0.4).
 uniform vec4 bubble_lights[16];
 uniform int bubble_count = 0;
-uniform vec3 bubble_color : source_color = vec3(1.0, 0.769, 0.420);
+// Her light and the warm tint of her glow (HerColor.cs, data/clementine_color.cfg).
+global uniform vec3 her_light;
+global uniform vec3 her_warm;
+#define bubble_color her_light
 /// A big-merge kill: a white lift at the screen's edges only, 1 → 0 over 60 ms.
 uniform float edge_flash = 0.0;
 /// The faint refraction wobble (0 with reduced motion).
@@ -141,7 +144,7 @@ void fragment() {
 		float d = distance(world.xz, her_glow.xz);
 		float k = her_glow_strength * smoothstep(0.1, 0.5, gap) * (1.0 - smoothstep(5.0, 10.0, gap));
 		float pool = exp(-pow(d / (her_glow.w * 0.55), 2.0)) * k;
-		vec3 warm = vec3(1.0, 0.46, 0.18);
+		vec3 warm = her_warm;
 		col = mix(col, col * warm * 1.15 + warm * 0.06, pool * 0.65);
 		float shadow = (1.0 - smoothstep(0.1, 0.62, d)) * k * (1.0 - smoothstep(2.0, 5.0, gap));
 		col *= 1.0 - 0.6 * shadow;

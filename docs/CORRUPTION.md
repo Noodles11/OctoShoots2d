@@ -219,15 +219,11 @@ Cleared corruption never just vanishes. It evaporates.
   something changes. The level's floor, its blades and both maps read it.
 - **Blades** (`corruption_blades.gdshader`): ~45k swaying drained blades per level in 64 chunked MultiMeshes (only those
   on screen are drawn). They are laid out off the main thread. A level below is laid out while she is still above it,
-  so a dive costs nothing. On corrupted ground they are pale, waxy bone-grey and limp, drooping over, with only the
-  faintest violet sheen. They sway in the current and bend away from her light. As the ground is cleansed the colour
+  so a dive costs nothing. They are the corruption's only mark on the floor: about 0.4–1.3 m tall, pale, waxy and limp,
+  drooping over, with a faint violet sheen. They sway in the current and bend away from her light. As the ground is cleansed the colour
   floods back: they stand up and turn green while they shrivel and dissolve, burning gold at the tips.
-- **The floor** (`reef_surface.gdshaderinc`): the corruption drains the colour out of the ground rather than painting
-  it. It desaturates toward a flat, slightly warm ashen grey (about 75% of the ground's own luminance with a faint
-  dusty unevenness), lerped by density so it arrives as a film, then a stain, then full grey. It dims the ground by
-  28%, turns it matte, flattens the sand ripples as if dust had settled, and kills the caustics. Healthy ground stays
-  fully saturated, so Clementine's warm glow is the only saturated thing in a drained zone. Where it dies it burns gold, and its retreating edge keeps a warm fringe. The level below shows
-  its own corruption through the shaft.
+- **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the blades; nothing covers it.
+  Where the corruption dies the floor burns gold a moment. The level below shows its own corruption through the shaft.
 - **Corrupted bodies** (`corruption_orb.gdshader`: murklings, sacs, stumps, throws, the crust) share one look:
   ink-black, glossy, a cold violet rim, and murklings carry a dim stolen ember.
 - Other shaders:

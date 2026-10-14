@@ -8,7 +8,9 @@ instance uniform float lantern = 0.5;
 instance uniform float warmth = 0.0;
 instance uniform float ink = 0.0;
 instance uniform float seed = 0.0;
-uniform vec3 gold : source_color = vec3(1.0, 0.769, 0.420);
+// Her light (HerColor.cs, data/clementine_color.cfg).
+global uniform vec3 her_light;
+#define gold her_light
 
 void vertex() {
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);

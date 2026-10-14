@@ -71,7 +71,7 @@ public partial class LightTrails : Node3D
     {
         if (!_live.TryGetValue(shot, out var trail)) _live[shot] = trail = new Trail();
         trail.Fed = true;
-        trail.Color = new Color(1f, 0.769f, 0.42f).Lerp(new Color(1f, 0.95f, 0.84f), warmth);
+        trail.Color = OctoShoots.Game.Fx.HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth);
         trail.Strength = strength;
         var pts = trail.Points;
         if (pts.Count == 0 || pts[^1].At.DistanceTo(at) >= Spacing) pts.Add((at, _time, _ids++));
@@ -187,7 +187,9 @@ public partial class LightTrails : Node3D
         return true;
     }
 
-    static readonly Color SurgeCore = new(1f, 0.74f, 0.32f), SurgeFork = new(1f, 0.62f, 0.22f);
+    /// <summary>The surge's colours: her light, and a deeper shade of it for the forks.</summary>
+    static Color SurgeCore => OctoShoots.Game.Fx.HerColor.Light;
+    static Color SurgeFork => OctoShoots.Game.Fx.HerColor.Light.Lerp(OctoShoots.Game.Fx.HerColor.Warm, 0.5f);
 
     /// <summary>
     /// A surge: a jagged bolt from the impact to her, re-struck many times a second (each strike a new path, flickering

@@ -225,26 +225,12 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 		s.emission += ember * inside * breathe * flicker * reef_crack.w * crack_mask * 0.9;
 		s.albedo = mix(s.albedo, vec3(0.05, 0.03, 0.03), inside * 0.8);
 	}
-	// The corruption on the floor (docs/CORRUPTION.md): it does not paint the seabed, it drinks the life out of it.
-	// Where the field is dense the colour drains to a flat, slightly warm ashen grey (about 75% of the ground's own
-	// luminance), arriving gradually (a film, a stain, then full grey); it dims a little, kills the caustics, and the
-	// sand's ripples flatten as if dust had settled over everything. Walls above the floor stay alive, the grey only
-	// licking their feet. Where it dies it burns gold (light spreading, never erasing); its retreating edge keeps a
-	// warm fringe.
+	// The corruption on the floor (docs/CORRUPTION.md): the ground itself keeps its colour (the blades growing on it
+	// are the corruption's mark); only where it dies does the floor burn gold a moment (light spreading, never erasing).
 	if (corruption_on > 0.0) {
 		vec2 cr = texture(corruption_map, local.xz / reef_extent).rg;
 		float floor_k = 1.0 - smoothstep(-0.2, 0.9, h);
-		float drain = smoothstep(0.03, 0.7, cr.r) * floor_k * corruption_on;
-		float lum = dot(s.albedo, vec3(0.299, 0.587, 0.114));
-		// A faint unevenness in the dust, so the grey is not a flat sheet.
-		float dust = 0.94 + 0.12 * rs_noise(vec3(w.xz * 0.8, 3.0));
-		vec3 ash = vec3(lum * 0.75) * vec3(1.06, 1.0, 0.9) * dust;
-		s.albedo = mix(s.albedo, ash, drain) * (1.0 - 0.28 * drain);
-		s.normal = normalize(mix(s.normal, n, drain));
-		s.rough = mix(s.rough, 0.97, drain);
-		s.caustic *= 1.0 - drain * 0.9;
-		float fringe = smoothstep(0.02, 0.16, cr.r) * (1.0 - smoothstep(0.16, 0.42, cr.r));
-		s.emission += (vec3(1.0, 0.7, 0.3) * cr.g * 1.5 + vec3(1.0, 0.62, 0.26) * fringe * 0.07) * floor_k * corruption_on;
+		s.emission += vec3(1.0, 0.7, 0.3) * cr.g * 1.5 * floor_k * corruption_on;
 	}
 	return s;
 }

@@ -122,9 +122,10 @@ public partial class CombatView : Node3D
         node.AddChild(shell);
         var halo = new MeshInstance3D { Mesh = _haloQuad, MaterialOverride = _halo, Scale = Vector3.One * 0.8f * size, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         halo.SetInstanceShaderParameter("strength", 0.35f);
-        halo.SetInstanceShaderParameter("color", new Vector3(1f, 0.8f, 0.48f));
+        var her = HerColor.Light;
+        halo.SetInstanceShaderParameter("color", new Vector3(her.R, her.G, her.B));
         node.AddChild(halo);
-        node.AddChild(new OmniLight3D { LightColor = new Color(1f, 0.8f, 0.5f), LightEnergy = 0.9f * size, OmniRange = 2.8f * size, ShadowEnabled = false });
+        node.AddChild(new OmniLight3D { LightColor = her, LightEnergy = 0.9f * size, OmniRange = 2.8f * size, ShadowEnabled = false });
         return node;
     }
 
@@ -512,12 +513,12 @@ void fragment() {
         AddChild(node);
         var material = new StandardMaterial3D
         {
-            AlbedoColor = new Color(1f, 0.85f, 0.55f, 0.55f),
+            AlbedoColor = HerColor.Light.Lerp(Colors.White, 0.3f) with { A = 0.55f },
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             BlendMode = BaseMaterial3D.BlendModeEnum.Add,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             EmissionEnabled = true,
-            Emission = new Color(1f, 0.78f, 0.4f),
+            Emission = HerColor.Light,
             EmissionEnergyMultiplier = 1.6f,
             RimEnabled = true,
         };
@@ -810,7 +811,7 @@ void fragment() {
                 halo.Visible = true;
                 halo.Position = _shots[i].Position;
                 halo.SetInstanceShaderParameter("strength", Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 1.3f : 1f));
-                halo.SetInstanceShaderParameter("color", new Color(1f, 0.769f, 0.42f).Lerp(new Color(1f, 0.95f, 0.84f), warmth));
+                halo.SetInstanceShaderParameter("color", HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth));
                 _candidates.Add((shot.Position, GroundStrength * Mathf.Min(k, 1f) * (shot.Explosive ? 1.3f : 1f), GroundRadius));
             }
             else if (shot.BossPearl)

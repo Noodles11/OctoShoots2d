@@ -138,6 +138,13 @@ public partial class MinimapView : Control
 
     public void SetMap(LevelMap map) => _map.SetMap(map);
 
+    /// <summary>Her arrow on the map (her colour).</summary>
+    public Color ArrowColor
+    {
+        get => _map.ArrowColor;
+        set => _map.ArrowColor = value;
+    }
+
     /// <summary>The map fades to black (0 none → 1 all): in the curse den's dark she cannot see where she is. The bezel stays.</summary>
     public float Blackout
     {

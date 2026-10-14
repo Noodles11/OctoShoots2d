@@ -6,12 +6,14 @@ using OctoShoots.Core.Gen.TopDown;
 using OctoShoots.Core.Items;
 using OctoShoots.Core.Plane;
 using OctoShoots.Core.Run;
+using OctoShoots.Game.Fx;
 
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// F1, any time in a run: the debug menu. The game stands still under it. Jump to any level of the seed (cycle, depth,
-/// level; a depth ends at its boss level), and switch any pearl on or off. Pearls apply at once.
+/// level; a depth ends at its boss level), try Clementine's colour (HerColor: live, and savable to its file), and
+/// switch any pearl on or off. Pearls and colours apply at once.
 /// </summary>
 public partial class DebugMenu : Control
 {
@@ -34,6 +36,16 @@ public partial class DebugMenu : Control
     CheckBox _fullHp = null!;
     VBoxContainer _pearlList = null!;
     readonly Dictionary<string, CheckBox> _pearls = new();
+    ColorPickerButton _body = null!, _light = null!;
+    CheckBox _autoLight = null!;
+    Label _colourNote = null!;
+
+    /// <summary>A few colours to try at a click.</summary>
+    static readonly (string Name, string Html)[] Presets =
+    {
+        ("Tangerine", "#FF8C42"), ("Coral", "#FF6F61"), ("Gold", "#FFC14D"), ("Rose", "#FF6FA8"),
+        ("Violet", "#B07CFF"), ("Cyan", "#4FD6FF"), ("Mint", "#5FE3B0"), ("Lime", "#B6F05A"),
+    };
 
     public override void _Ready()
     {
@@ -83,7 +95,7 @@ public partial class DebugMenu : Control
         _cycle.ValueChanged += _ => ClampLevel();
         _depth.ValueChanged += _ => ClampLevel();
         _level.ValueChanged += _ => ClampLevel();
-        _bossNote = Caption("", 14, Soft);
+        _bossNote = Inline("", 14, Soft);
         pick.AddChild(_bossNote);
 
         var go = new HBoxContainer();
@@ -98,6 +110,54 @@ public partial class DebugMenu : Control
         _fullHp = new CheckBox { Text = "Arrive cleansed", ButtonPressed = true };
         _fullHp.AddThemeColorOverride("font_color", Ink);
         go.AddChild(_fullHp);
+
+        // Clementine's colour: her body, and her light (derived from it unless set).
+        box.AddChild(new HSeparator());
+        box.AddChild(Caption("CLEMENTINE'S COLOUR", 13, Head));
+        var colours = new HBoxContainer();
+        colours.AddThemeConstantOverride("separation", 10);
+        box.AddChild(colours);
+        colours.AddChild(Inline("Body", 15, Ink));
+        _body = new ColorPickerButton { CustomMinimumSize = new Vector2(70f, 30f), EditAlpha = false, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _body.ColorChanged += _ => ApplyColour();
+        colours.AddChild(_body);
+        colours.AddChild(Inline("   Light", 15, Ink));
+        _light = new ColorPickerButton { CustomMinimumSize = new Vector2(70f, 30f), EditAlpha = false, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        _light.ColorChanged += _ =>
+        {
+            _autoLight.SetPressedNoSignal(false);
+            ApplyColour();
+        };
+        colours.AddChild(_light);
+        _autoLight = new CheckBox { Text = "from body" };
+        _autoLight.Toggled += _ => ApplyColour();
+        colours.AddChild(_autoLight);
+        var save = new Button { Text = "Save to file" };
+        save.Pressed += () =>
+        {
+            var err = HerColor.Save();
+            _colourNote.Text = err == Error.Ok ? $"Saved to {HerColor.File}" : $"Could not save ({err})";
+        };
+        colours.AddChild(save);
+        var presets = new HFlowContainer();
+        presets.AddThemeConstantOverride("h_separation", 6);
+        box.AddChild(presets);
+        foreach (var (name, html) in Presets)
+        {
+            var c = Color.FromHtml(html);
+            var swatch = new Button { Text = name, CustomMinimumSize = new Vector2(0f, 28f) };
+            swatch.AddThemeColorOverride("font_color", c);
+            swatch.AddThemeColorOverride("font_hover_color", c.Lightened(0.3f));
+            swatch.Pressed += () =>
+            {
+                _body.Color = c;
+                _autoLight.ButtonPressed = true;
+                ApplyColour();
+            };
+            presets.AddChild(swatch);
+        }
+        _colourNote = Caption($"Applies at once. \"Save to file\" keeps it ({HerColor.File}).", 13, Soft);
+        box.AddChild(_colourNote);
 
         // Pearls: the ones on the plane first, then the rest of the catalog (not ported yet; they may do nothing).
         box.AddChild(new HSeparator());
@@ -122,6 +182,21 @@ public partial class DebugMenu : Control
         scroll.AddChild(_pearlList);
     }
 
+    /// <summary>The pickers into HerColor (the light follows the body while "from body" is on).</summary>
+    void ApplyColour()
+    {
+        HerColor.Set(_body.Color, _autoLight.ButtonPressed ? null : _light.Color);
+        if (_autoLight.ButtonPressed) _light.Color = HerColor.Light;
+    }
+
+    /// <summary>The pickers show HerColor as it is now.</summary>
+    void ShowColour()
+    {
+        _body.Color = HerColor.Body;
+        _light.Color = HerColor.Light;
+        _autoLight.SetPressedNoSignal(HerColor.LightOverride is null);
+    }
+
     LevelId Selected => new((int)_cycle.Value, (int)_depth.Value, (int)_level.Value);
 
     /// <summary>Fills the menu from the run and shows it.</summary>
@@ -139,6 +214,7 @@ public partial class DebugMenu : Control
         _level.SetValueNoSignal(current.Level);
         ClampLevel();
         Refresh(run);
+        ShowColour();
         Visible = true;
     }
 
@@ -198,10 +274,19 @@ public partial class DebugMenu : Control
 
     static SpinBox Spin(HBoxContainer row, string name, int min, int max)
     {
-        row.AddChild(Caption(name, 15, Ink));
+        row.AddChild(Inline(name, 15, Ink));
         var spin = new SpinBox { MinValue = min, MaxValue = max, Step = 1, Value = min, CustomMinimumSize = new Vector2(80f, 0f) };
         row.AddChild(spin);
         return spin;
+    }
+
+    /// <summary>A label in a row: one line, its own width (a wrapping label in a row squeezes to a letter a line).</summary>
+    static Label Inline(string text, int size, Color color)
+    {
+        var label = Caption(text, size, color);
+        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        return label;
     }
 
     static Label Caption(string text, int size, Color color)

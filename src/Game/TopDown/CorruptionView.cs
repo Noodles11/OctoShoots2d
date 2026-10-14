@@ -161,7 +161,7 @@ public partial class CorruptionView : Node3D
                 float floor = map.HeightAt(p);
                 if (floor > LevelMap.BlockHeight) continue;
                 float yaw = Rand() * MathF.Tau, c = MathF.Cos(yaw), s = MathF.Sin(yaw);
-                float height = (0.32f + 0.6f * Rand()) * (0.6f + 0.55f * start);
+                float height = 1.35f * (0.32f + 0.6f * Rand()) * (0.6f + 0.55f * start);
                 float width = 0.8f + 0.6f * Rand();
                 int chunk = Math.Clamp((int)(p.Y / ChunkSize), 0, Chunks - 1) * Chunks + Math.Clamp((int)(p.X / ChunkSize), 0, Chunks - 1);
                 var list = lists[chunk];

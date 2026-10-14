@@ -167,6 +167,8 @@ public partial class TopDownMain : Node3D
     {
         // The bundled fonts: Nunito is every screen's default (THEME-BIBLE §6.8).
         TitleStyle.InstallDefaultFont();
+        // Her colour (data/clementine_color.cfg), for every shader and view that wears it.
+        OctoShoots.Game.Fx.HerColor.Load();
         ParseArgs();
         TakeLaunch();
         InputSetup.Register();
@@ -425,6 +427,16 @@ public partial class TopDownMain : Node3D
             ShowDetail = false, EdgesOnly = true, ArrowScale = 1.3f, ArrowColor = new Color(1f, 0.72f, 0.35f),
         };
         layer.AddChild(_fullMap);
+        // Her arrow on both maps follows her colour.
+        void Arrows()
+        {
+            var arrow = OctoShoots.Game.Fx.HerColor.Light.Lerp(OctoShoots.Game.Fx.HerColor.Body, 0.35f);
+            _minimap.ArrowColor = arrow;
+            _fullMap.ArrowColor = arrow;
+        }
+        Arrows();
+        OctoShoots.Game.Fx.HerColor.Changed += Arrows;
+        TreeExiting += () => OctoShoots.Game.Fx.HerColor.Changed -= Arrows;
         // Achievement banners: above the HUD, below the pause menu.
         // The aim pointer: above the HUD, below the banners and the pause menu.
         var cursorLayer = new CanvasLayer { Layer = 4 };

@@ -38,6 +38,18 @@ MusicManager="*res://src/Game/Audio/MusicManager.cs"
 
 [shader_globals]
 
+her_body={
+"type": "vec3",
+"value": Vector3(1, 0.549, 0.259)
+}
+her_light={
+"type": "vec3",
+"value": Vector3(1, 0.769, 0.42)
+}
+her_warm={
+"type": "vec3",
+"value": Vector3(1, 0.46, 0.18)
+}
 sun_dir={
 "type": "vec3",
 "value": Vector3(0.42, -0.86, 0.28)
