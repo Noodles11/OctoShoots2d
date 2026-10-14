@@ -83,6 +83,9 @@ public partial class Sfx : Node
             + (t > 0.1f ? MathF.Sin(MathF.Tau * 1760f * (t - 0.1f)) * Env(t - 0.1f, 0.002f, 0.22f) * 0.18f : 0f));
         _sounds["curse_teleport"] = Make(1.3f, (t, n) => n * MathF.Pow(MathF.Min(1f, t / 0.9f), 2f) * MathF.Max(0f, 1f - (t - 0.9f) / 0.4f) * 0.5f
             + Sweep(t, 1.3f, 70f, 1100f) * MathF.Min(1f, t / 0.9f) * MathF.Max(0f, 1f - (t - 0.95f) / 0.35f) * 0.12f);
+        // The sand over the Crack draining away: a long low rumble with a hiss of pouring grains.
+        _sounds["sand_sink"] = Make(3.2f, (t, n) => (MathF.Sin(MathF.Tau * (48f - 6f * t) * t) * 0.5f + n * 0.6f) * MathF.Min(1f, t / 0.25f) * MathF.Max(0f, 1f - t / 3.2f) * 0.55f
+            + n * MathF.Abs(MathF.Sin(t * 31f)) * Env(t, 0.4f, 3.2f) * 0.2f);
         _sounds["nope"] = Make(0.12f, (t, n) => MathF.Sign(MathF.Sin(MathF.Tau * 140f * t)) * Env(t, 0.002f, 0.12f) * 0.15f);
 
         for (int i = 0; i < 10; i++)

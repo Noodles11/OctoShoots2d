@@ -47,8 +47,13 @@ public partial class TopDownMain : Node3D
     CurseDenView _curseDen = null!;
     CurseDarkness _dark = null!;
     bool _inCurse;
+    /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
+    float _crackOpen;
+    const float CrackOpenSeconds = 3f;
     /// <summary>Verification: `--curse=nothing|fountain|pearl|teleport` sets what the curse den's end holds.</summary>
     CurseReward? _dbgCurse;
+    /// <summary>Verification: `--dbg-goto=level` takes the debug menu's "Go to level" (this depth) a second into the run.</summary>
+    int _dbgGoTo;
     BannerView _banner = null!;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
@@ -248,6 +253,7 @@ public partial class TopDownMain : Node3D
             else if (arg == "--fire") _autoFire = true;
             else if (arg == "--use-active") _autoActive = true;
             else if (arg == "--dbg-surge") _dbgSurge = true;
+            else if (arg.StartsWith("--dbg-goto=") && int.TryParse(Value("--dbg-goto="), out int gotoLevel)) _dbgGoTo = gotoLevel;
             else if (arg.StartsWith("--curse=") && Enum.TryParse<CurseReward>(Value("--curse="), true, out var reward)) _dbgCurse = reward;
             else if (arg.StartsWith("--award=")) _debugAward = Value("--award=");
             else if (arg == "--reset-profile")
@@ -651,6 +657,8 @@ public partial class TopDownMain : Node3D
         _puffers.Show(_world);
         _reefFish.Show(_world);
         _curseDen.Show(_world);
+        _crackOpen = _world.ExitOpen ? 1f : 0f;
+        _level.SetCrackOpen(_crackOpen);
         _dark.Clear();
         _inCurse = false;
         _combat.Visible = _boss.Visible = _puffers.Visible = true;
@@ -804,6 +812,8 @@ public partial class TopDownMain : Node3D
             "boss" => Enumerable.Range(0, 24).Select(i => i * Mathf.Tau / 24f)
                 .Select(a => (System.Numerics.Vector2?)(_map.Exit.Position + new System.Numerics.Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (_map.Exit.Radius + 2.5f)))
                 .FirstOrDefault(q => q is { } v && _world.Clear(v, 0.8f) && _world.LineOfSight(v, _map.Exit.Position)),
+            // Inside Queen Clam's arena: the fight starts at once.
+            "arena" => _map.HasBoss ? _world.ArenaCenter + new System.Numerics.Vector2(0f, _world.ArenaRadius * 0.55f) : null,
             "shop" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 1.5f)).FirstOrDefault(),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
@@ -944,6 +954,11 @@ public partial class TopDownMain : Node3D
             return;
         }
         HandleKeys();
+        if (_dbgGoTo > 0 && _frame == 60)
+        {
+            DebugGoTo(_id with { Level = _dbgGoTo }, true);
+            _dbgGoTo = 0;
+        }
         // Paused: the sea stands still under the menu.
         if (Paused)
         {
@@ -998,7 +1013,7 @@ public partial class TopDownMain : Node3D
                     _combat.Surge(e.Position - e.Direction * 0.4f);
                     // A tap for a hit landed, a firmer one for a creature freed.
                     if (e.Type == PlaneEventType.MobDefeated) _haptics.Pulse(0.4f, 0.25f, 0.16f);
-                    else _haptics.Pulse(0.25f, 0.05f, 0.08f);
+                    else ShotKick(e.Size / PlaneCombatTuning.ShotDamage);
                 }
                 CorruptionEvent(e);
                 CurseEvent(e);
@@ -1060,10 +1075,7 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.Shot)
                 {
                     _bell.Spend(e.Size);
-                    // A kick with every volley, stronger the harder it hits: a default shot is a light tap, and more
-                    // shots at once (or a merged, charged or empowered one) add up.
-                    float power = _world.LastVolleyDamage / PlaneCombatTuning.ShotDamage;
-                    _haptics.Pulse(Mathf.Clamp(0.1f * Mathf.Pow(power, 0.8f), 0.06f, 0.85f), Mathf.Clamp(0.04f * power, 0f, 0.7f), 0.05f + 0.015f * Mathf.Min(power, 6f));
+                    ShotKick(_world.LastVolleyDamage / PlaneCombatTuning.ShotDamage);
                 }
                 else if (e.Type is PlaneEventType.MobHit or PlaneEventType.BossHit) _damage.Show(e);
                 else if (e.Type == PlaneEventType.ShotPopped) _combat.Pop(e.Position, e.Size * 1.7f, e.Direction);
@@ -1127,35 +1139,49 @@ public partial class TopDownMain : Node3D
         if (steps == 8) _accumulator = 0;
         float alpha = (float)(_accumulator / PlaneWorld.Dt);
 
-        _bell.Sync(_world, alpha, dt);
+        // The readouts first (her meter, the boss's bar, the clock), so they follow the world whatever the views do.
+        _hud.Elapsed = _elapsed;
+        _hud.Track(_world, _catalog, dt);
+        _minimap.SetHealth(_world.Run.MaxHp > 0f ? _world.Player.Hp / _world.Run.MaxHp : 0f);
+        // Each view on its own: one that fails is reported (once) and the rest carry on.
+        Guard("bell", () => _bell.Sync(_world, alpha, dt));
         _combat.HerAt = _bell.GlobalPosition;
-        _combat.Sync(_world, dt);
+        Guard("combat", () => _combat.Sync(_world, dt));
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
-        _currents.Sync(_world, dt);
-        _vases.Sync(dt);
-        _puffers.Sync(_world, dt);
-        _reefFish.Sync(_world, dt);
-        SyncCorruption(dt, alpha);
+        Guard("currents", () => _currents.Sync(_world, dt));
+        Guard("vases", () => _vases.Sync(dt));
+        Guard("pufferlings", () => _puffers.Sync(_world, dt));
+        Guard("reef fish", () => _reefFish.Sync(_world, dt));
+        Guard("corruption", () => SyncCorruption(dt, alpha));
         _damage.Tick(dt);
-        _boss.Sync(_world, dt);
-        if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) _banner.Sync(_world.Boss);
+        Guard("boss", () => _boss.Sync(_world, dt));
+        if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) Guard("banner", () => _banner.Sync(_world.Boss));
         if (_world.Boss is { } b)
         {
             _minimap.SetMud(_world.ArenaCenter, _world.ArenaRadius, b.Cloud);
             _fullMap.Mud = new Vector4(_world.ArenaCenter.X, _world.ArenaCenter.Y, _world.ArenaRadius, b.Cloud);
         }
-        _hud.Elapsed = _elapsed;
-        _hud.Track(_world, _catalog, dt);
         _camera.Track(Focus(alpha), dt);
         _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
         _bell.Dim = 1f - 0.65f * _dark.Amount;
         _minimap.Blackout = _dark.Amount;
         _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
         _level.UpdateCanopy(_world.Player.Position, dt);
+        // The Crack opens: the sand over it sags, turns and drains away into the dark, and its glow comes up.
+        if (_map.HasBoss && _world.ExitOpen && _crackOpen < 1f)
+        {
+            if (_crackOpen <= 0f)
+            {
+                _camera.Shake(0.3f);
+                _sfx.Play("sand_sink", -2f, 0f);
+                _haptics.Pulse(0.3f, 0.6f, 1.2f);
+            }
+            _crackOpen = Mathf.Min(1f, _crackOpen + dt / CrackOpenSeconds);
+            _level.SetCrackOpen(_crackOpen);
+        }
         var p = _world.Player;
         _debugMap.SetPlayer(_world.Player.Position);
         _minimap.Track(p.Position, p.Velocity);
-        _minimap.SetHealth(_world.Run.MaxHp > 0f ? p.Hp / _world.Run.MaxHp : 0f);
         // Lantern Pearl: a brighter glow shows more of the level around her.
         float glow = _world.Run.Loadout.Stats[Stat.Glow];
         // In the curse den's dark she learns nothing of the map.
@@ -1252,6 +1278,8 @@ public partial class TopDownMain : Node3D
         // then follows the iris.
         FadeLevelLife(hole, Mathf.Lerp(-5f, radius, Ease(t / 0.45f)), stay);
         _level.FadeCrack(stay);
+        // The minimap dives too: it zooms in on her and fades away (the new level's fades in once she is down).
+        _minimap.DiveOut(Ease(t / 0.9f));
         _damage.Tick(dt);
         _hud.Elapsed = _elapsed;
         _hud.Track(_world, _catalog, dt);
@@ -1289,6 +1317,7 @@ public partial class TopDownMain : Node3D
         _diving = false;
         _id = LevelPlan.NextOf(_seed, _id);
         EnterLevel(map, keepRun: true, 0, arrived);
+        _minimap.Arrive();
         foreach (var view in LevelLife) ResetFade(view);
         Route();
         if (_captureDir is not null) GD.Print($"Dive finishes at frame {_frame}");
@@ -1801,6 +1830,31 @@ public partial class TopDownMain : Node3D
     System.Numerics.Vector2 _padAim;
     AimCursor _cursor = null!;
     readonly Haptics _haptics = new();
+
+    readonly HashSet<string> _failedViews = new();
+
+    /// <summary>Runs one view's update; if it throws, the error is reported once and the frame carries on without it.</summary>
+    void Guard(string view, Action sync)
+    {
+        try
+        {
+            sync();
+        }
+        catch (Exception ex)
+        {
+            if (_failedViews.Add(view)) GD.PushError($"The {view} view failed: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// Her light leaving her or landing, by its power (in plain shots' damage): an ordinary shot is a barely-there
+    /// flicker; only a powerful one (a big volley, a merged, charged or empowered bubble) is a real kick.
+    /// </summary>
+    void ShotKick(float power)
+    {
+        float k = Mathf.SmoothStep(2.5f, 8f, power);
+        _haptics.Pulse(Mathf.Lerp(0.05f, 0.8f, k), Mathf.Lerp(0f, 0.65f, k), Mathf.Lerp(0.03f, 0.14f, k));
+    }
 
     /// <summary>
     /// The controller's buzz this frame: the pulses the sim's moments asked for, and a hum while a current carries her

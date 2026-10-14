@@ -405,7 +405,6 @@ public class CorruptionTests
     {
         var w = World(TestLevels.Get(new LevelId(1, 1, LevelPlan.BossLevel(TestLevels.Seed, 1, 1))));
         var boss = w.Boss!;
-        var facing = boss.Facing;
         // In she goes: the arena seals, and no creature but the clam is inside it from then on.
         w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + new Vector2(0f, 7f);
         if (!w.Clear(w.Player.Position, 0.6f)) w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + new Vector2(7f, 0f);
@@ -418,8 +417,9 @@ public class CorruptionTests
             open = boss.Open;
         }
         Assert.True(open);
-        // She never turned toward her.
-        Assert.Equal(facing, boss.Facing);
+        // Her opening faces the screen (south), whichever side Clementine came in from, and she never turns.
+        var facing = boss.Facing;
+        Assert.Equal(Vector2.UnitY, facing);
         // Open, a shot on her shell's rim does nothing; one on her black pearl hurts her.
         float hp = boss.Hp;
         var rim = boss.Position + facing * (PlaneBossTuning.BodyRadius - 0.3f);

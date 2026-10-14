@@ -521,7 +521,9 @@ levels: ~5–7 min rushed, ~30 min explored.
   numbers and currents (and Queen Clam) fade out as the iris's dissolving edge
   passes over them, the rest with the descent, casting no shadow once fading;
   the Crack's glow, light and rising bubbles fade as she sinks through it.
-  Nothing is switched off in one frame. If the level below is not made yet,
+  The minimap zooms in on her and fades to dark over the first 0.9 s; once she
+  is down, the new level's map fades in over 0.8 s, settling from a little
+  closer. Nothing is switched off in one frame. If the level below is not made yet,
   she holds at the lip of the shaft until it is.
 - **Arrival — seamless, no cut:** the level below becomes the level and the
   whole world moves back to the origin in one frame — camera, marine snow, her

@@ -142,7 +142,8 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
 - **Look** (`BossView`, `clam_shell.gdshader`): two heavy valves with radial ribs, growth lines and a scalloped lip.
   The corruption drains their colour to ash and settles ink into every groove. The mantle inside is dark. In her
   middle lies a **black pearl** (`corruption_orb`) with a cold glint that stirs while she is open.
-- **She does not see Clementine.** She lies facing wherever she settled (seeded) and never turns. She opens and
+- **She does not see Clementine.** She lies with her opening toward the screen (south, the camera's side, so the
+  black pearl shows) and never turns. She opens and
   closes her lid and throws pearls from her opening: rings, walls thrown in a random spread around her facing, the
   helix, and in phase 2 the homing royal pearl. The snap still comes if Clementine is close while she is open.
 - **Her pearls are corruption:** glossy ink orbs. Clementine's light passes through them and cannot clear them.
@@ -166,7 +167,10 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
   off as layers fall.
 - **Easing:** at the fight's start, her health and pattern density fall by up to 30% with the level cleansed (an
   explorer meets an easier boss).
-- **The Crack** opens only when she is freed **and** the arena is ≥ 60% cleansed. The HUD tracks both.
+- **The Crack** opens only when she is freed **and** the arena is ≥ 60% cleansed. The HUD tracks both. Until then it
+  lies sealed under sand, flush with the arena floor, with no glow. When it opens, the sand drains into it over 3 s
+  (the middle sags first and the sand turns as it goes, grains pour off its rim, the ground rumbles), and then its
+  orange glow, light and bubbles come up from below.
 
 ## Her corruption meter (replaces HP)
 

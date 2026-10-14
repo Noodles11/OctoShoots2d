@@ -24,7 +24,10 @@ public partial class MinimapView : Control
     public const float SpotRadius = Span / 2f / 2f;
 
     TopoMap _map = null!;
+    TextureRect _shown = null!;
     Frame _frame = null!;
+    /// <summary>The dive (DESIGN-TOPDOWN §4.6): 0 → 1 as the map zooms in and fades out; then the new level's fades in.</summary>
+    float _diveOut, _arrive = 1f;
     Shroud _shroud = null!;
     Label _place = null!;
     float _placeAlpha;
@@ -51,7 +54,9 @@ public partial class MinimapView : Control
         };
         viewport.AddChild(_map);
 
-        AddChild(new TextureRect
+        // A dark disc behind the map, so it fades to dark (between levels) rather than to the sea behind.
+        AddChild(new Backing { Size = new Vector2(Diameter, Diameter) });
+        AddChild(_shown = new TextureRect
         {
             Texture = viewport.GetTexture(),
             Size = new Vector2(Diameter, Diameter),
@@ -85,8 +90,48 @@ public partial class MinimapView : Control
         _place.AddThemeColorOverride("font_color", color);
     }
 
+    /// <summary>Diving (0 → 1): the old level's map zooms in on her and fades away.</summary>
+    public void DiveOut(float k)
+    {
+        _diveOut = Mathf.Clamp(k, 0f, 1f);
+        _arrive = 0f;
+        ApplyDive();
+    }
+
+    /// <summary>Down on the new level (its map set): it fades in, settling from a little closer.</summary>
+    public void Arrive()
+    {
+        _diveOut = 0f;
+        _arrive = 0f;
+        ApplyDive();
+    }
+
+    void ApplyDive()
+    {
+        float zoom, alpha;
+        if (_diveOut > 0f)
+        {
+            float e = Mathf.SmoothStep(0f, 1f, _diveOut);
+            zoom = 1f + 1.6f * e;
+            alpha = 1f - e;
+        }
+        else
+        {
+            float e = Mathf.SmoothStep(0f, 1f, _arrive);
+            zoom = 1.35f - 0.35f * e;
+            alpha = e;
+        }
+        _map.MetresAcross = Span / zoom;
+        _shown.Modulate = new Color(1f, 1f, 1f, alpha);
+    }
+
     public override void _Process(double delta)
     {
+        if (_arrive < 1f && _diveOut <= 0f)
+        {
+            _arrive = Mathf.MoveToward(_arrive, 1f, (float)delta / 0.8f);
+            ApplyDive();
+        }
         _placeAlpha = Mathf.MoveToward(_placeAlpha, _placeShown ? 1f : 0f, (float)delta * 2.5f);
         _place.Modulate = new Color(1f, 1f, 1f, _placeAlpha);
     }
@@ -103,6 +148,13 @@ public partial class MinimapView : Control
             _shroud.Amount = value;
             _shroud.QueueRedraw();
         }
+    }
+
+    partial class Backing : Control
+    {
+        public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
+
+        public override void _Draw() => DrawCircle(Size * 0.5f, Size.X * 0.5f - 3f, new Color(0.155f, 0.17f, 0.195f));
     }
 
     /// <summary>Black over the map's disc, under the bezel.</summary>
@@ -152,7 +204,10 @@ public partial class MinimapView : Control
     /// <summary>Her health as a share of her max (0..1): the bezel shows the rest as her corruption meter.</summary>
     public void SetHealth(float health)
     {
-        _frame.Health = Mathf.Clamp(health, 0f, 1f);
+        health = Mathf.Clamp(health, 0f, 1f);
+        // A hit: the ink's edge flares, so the meter is noticed the moment it moves.
+        if (health < _frame.Health - 1e-4f) _frame.Hit = 1f;
+        _frame.Health = health;
         _frame.QueueRedraw();
     }
 
@@ -172,6 +227,8 @@ public partial class MinimapView : Control
     {
         /// <summary>Her health as a share of her max (her corruption is what is missing).</summary>
         public float Health = 1f;
+        /// <summary>1 on a hit, fading.</summary>
+        public float Hit;
         /// <summary>The corruption shown (eased, so the ink flows rather than jumps).</summary>
         float _shown;
 
@@ -193,6 +250,7 @@ public partial class MinimapView : Control
         public override void _Process(double delta)
         {
             float dt = (float)delta;
+            Hit = Mathf.MoveToward(Hit, 0f, dt * 2.5f);
             float target = 1f - Health;
             float before = _shown;
             _shown = Mathf.MoveToward(_shown, target, dt * (target > _shown ? 1.2f : 0.9f));
@@ -234,7 +292,7 @@ public partial class MinimapView : Control
                 w.At += w.Velocity * dt;
                 _wisps[i] = w;
             }
-            if (_shown != before || _shown > 0.75f || _wisps.Count > 0) QueueRedraw();
+            if (_shown != before || _shown > 0.75f || _wisps.Count > 0 || Hit > 0f) QueueRedraw();
         }
 
         public override void _Draw()
@@ -247,7 +305,8 @@ public partial class MinimapView : Control
             float rr = r - 7.5f;
             // The track: her light, pale gold, all round.
             DrawArc(c, rr, 0f, Mathf.Tau, 96, new Color(0f, 0f, 0f, 0.6f), width + 3f, true);
-            DrawArc(c, rr, 0f, Mathf.Tau, 96, new Color(1f, 0.86f, 0.6f, 0.35f), width, true);
+            // Bright enough that the dark ink reads against it over any map (the boss arena's mud included).
+            DrawArc(c, rr, 0f, Mathf.Tau, 96, new Color(1f, 0.88f, 0.62f, 0.78f), width, true);
             var top = new Vector2(c.X, 3f);
             DrawColoredPolygon(new[] { top + new Vector2(0f, -1f), top + new Vector2(5f, 8f), top + new Vector2(-5f, 8f) }, new Color(0.85f, 0.88f, 0.9f));
             DrawString(ThemeDB.FallbackFont, top + new Vector2(-4.5f, 22f), "N", HorizontalAlignment.Left, -1, 12, new Color(0.85f, 0.88f, 0.9f));
@@ -257,6 +316,7 @@ public partial class MinimapView : Control
             float from = -Mathf.Pi * 0.5f, to = from + Mathf.Tau * Mathf.Clamp(_shown, 0f, 1f);
             int points = Mathf.Max(4, (int)(96 * _shown));
             float critical = _shown > 0.75f ? 0.5f + 0.5f * Mathf.Sin((float)Time.GetTicksMsec() * 0.008f) : 0f;
+            if (Hit > 0f) DrawArc(c, rr, from, to, points, new Color(0.8f, 0.55f, 1f, 0.85f * Hit), width + 6f, true);
             DrawArc(c, rr, from, to, points, new Color(0.04f, 0.015f, 0.07f, 0.97f), width, true);
             // A glossy violet sheen along its outer lip, brighter when she is close to lost.
             DrawArc(c, rr + width * 0.3f, from, to, points, new Color(0.45f, 0.18f, 0.8f, 0.45f + 0.4f * critical), width * 0.22f, true);

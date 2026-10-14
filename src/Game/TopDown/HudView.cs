@@ -35,7 +35,8 @@ public partial class HudView : Control
     /// <summary>Where the run stands ("Depth 1 · Level 2"), always shown beside the clock.</summary>
     public string LevelTitle = "";
 
-    float _bossHp, _bossTrail, _bossShown;
+    float _bossHp, _bossTrail, _bossShown, _bossFlash, _bossHold;
+    int _bossCrust;
     bool _bossFight;
     string _prompt = "";
     bool _promptReady;
@@ -49,8 +50,19 @@ public partial class HudView : Control
         _bossShown = Mathf.MoveToward(_bossShown, _bossFight ? 1f : 0f, dt * 2f);
         if (boss is not null)
         {
-            _bossHp = boss.Hp / Mathf.Max(boss.MaxHp, 1f);
-            _bossTrail = _bossTrail < _bossHp ? _bossHp : Mathf.MoveToward(_bossTrail, _bossHp, dt * 0.4f);
+            float hp = boss.Hp / Mathf.Max(boss.MaxHp, 1f);
+            // A hit flashes the bar; what it took stays pale for a moment (chip damage adds up where it can be seen),
+            // then drains away.
+            if (hp < _bossHp - 1e-5f)
+            {
+                _bossFlash = 1f;
+                _bossHold = 0.7f;
+            }
+            _bossHp = hp;
+            _bossHold -= dt;
+            _bossTrail = _bossTrail < _bossHp ? _bossHp : _bossHold > 0f ? _bossTrail : Mathf.MoveToward(_bossTrail, _bossHp, dt * 0.25f);
+            _bossFlash = Mathf.MoveToward(_bossFlash, 0f, dt * 5f);
+            _bossCrust = boss.Crust;
         }
         _run = world.Run;
         _catalog = catalog;
@@ -145,6 +157,19 @@ public partial class HudView : Control
             DrawRect(new Rect2(b, new Vector2(bw, bh)), new Color(0.08f, 0.1f, 0.14f, 0.9f * a));
             DrawRect(new Rect2(b, new Vector2(bw * Mathf.Clamp(_bossTrail, 0f, 1f), bh)), new Color(1f, 0.9f, 0.7f, 0.8f * a));
             DrawRect(new Rect2(b, new Vector2(bw * Mathf.Clamp(_bossHp, 0f, 1f), bh)), new Color(0.35f, 0.8f, 0.78f, a));
+            // Her crust (each layer soaks up a sixth of every hit until the arena is cleansed): an ink film over the bar,
+            // and a pip per layer at its right end.
+            if (_bossCrust > 0)
+            {
+                DrawRect(new Rect2(b, new Vector2(bw * Mathf.Clamp(_bossHp, 0f, 1f), bh)), new Color(0.3f, 0.12f, 0.5f, 0.09f * _bossCrust * a));
+                for (int i = 0; i < _bossCrust; i++)
+                {
+                    var pip = b + new Vector2(bw + 14f + i * 13f, bh * 0.5f);
+                    DrawCircle(pip, 5f, new Color(0.05f, 0.02f, 0.09f, 0.95f * a));
+                    DrawCircle(pip, 3.2f, new Color(0.55f, 0.3f, 0.85f, a));
+                }
+            }
+            DrawRect(new Rect2(b, new Vector2(bw * Mathf.Clamp(_bossHp, 0f, 1f), bh)), new Color(1f, 1f, 1f, 0.55f * _bossFlash * a));
             DrawRect(new Rect2(b, new Vector2(bw, bh * 0.35f)), new Color(1f, 1f, 1f, 0.12f * a));
             // The phase mark at half.
             DrawRect(new Rect2(b + new Vector2(bw * 0.5f - 1f, -2f), new Vector2(2f, bh + 4f)), new Color(0f, 0f, 0f, 0.7f * a));

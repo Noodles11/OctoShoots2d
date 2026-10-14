@@ -114,11 +114,11 @@ public sealed partial class PlaneWorld
     {
         if (!Map.HasBoss) return;
         Boss = new PlaneBoss { Position = ArenaCenter };
-        // She does not see Clementine: she lies as she settled, facing wherever she happens to face, and never turns.
+        // She lies with her opening toward the screen (south, the camera's side), so the black pearl inside shows, and
+        // never turns.
         ExitOpen = false;
         _bossRng = new Rng(Map.Seed ^ 0xB055C1A3UL ^ ((ulong)Map.Level << 24) ^ ((ulong)Map.Depth << 32) ^ ((ulong)Map.Attempt << 50));
-        float a = _bossRng.Range(0f, MathF.Tau);
-        Boss.Facing = new Vector2(MathF.Cos(a), MathF.Sin(a));
+        Boss.Facing = Vector2.UnitY;
     }
 
     /// <summary>True when the barrier lets a circle stand here.</summary>

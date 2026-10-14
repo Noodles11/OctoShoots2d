@@ -122,7 +122,8 @@ public partial class BossView : Node3D
             _mud[i].SetShaderParameter("layer", (float)i);
             _mudRoot.AddChild(new MeshInstance3D
             {
-                Mesh = new PlaneMesh { Size = new Vector2(120f, 120f) },
+                // Far wider than the level (and its skirt), so no layer's edge is ever on screen.
+                Mesh = new PlaneMesh { Size = new Vector2(400f, 400f) },
                 MaterialOverride = _mud[i],
                 Position = new Vector3(0f, LevelMap.SwimBand + heights[i], 0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -142,7 +143,8 @@ public partial class BossView : Node3D
     {
         foreach (var (mesh, _) in _crust)
             if (IsInstanceValid(mesh)) mesh.QueueFree();
-        foreach (var (mesh, _, _) in _falling) mesh.QueueFree();
+        foreach (var (mesh, _, _) in _falling)
+            if (IsInstanceValid(mesh)) mesh.QueueFree();
         // Lumps already broken off were moved to the view itself (and freed when they finished falling).
         _crust.Clear();
         _falling.Clear();
@@ -175,12 +177,17 @@ public partial class BossView : Node3D
     void SyncCrust(PlaneWorld world, PlaneBoss boss, float dt)
     {
         int crust = world.Corruption is null ? 0 : boss.Crust;
-        for (int i = 0; i < _crust.Count; i++)
+        for (int i = _crust.Count - 1; i >= 0; i--)
         {
             var (mesh, layer) = _crust[i];
-            if (!mesh.Visible || mesh.GetParent() != _top) continue;
+            if (!IsInstanceValid(mesh))
+            {
+                _crust.RemoveAt(i);
+                continue;
+            }
             if (layer < crust) continue;
-            // This layer is cleansed away: the lump breaks off and tumbles.
+            // This layer is cleansed away: the lump breaks off and tumbles (and is the falling list's from now on).
+            _crust.RemoveAt(i);
             var at = mesh.GlobalTransform;
             _top.RemoveChild(mesh);
             AddChild(mesh);

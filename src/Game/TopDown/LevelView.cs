@@ -134,6 +134,11 @@ public partial class LevelView : Node3D
             });
         }
         ShowDecor(shape);
+        _cover = null;
+        _sandFall = null;
+        _crackOpen = 0f;
+        _crackFade = 1f;
+        if (map.HasBoss) ShowCover(map);
         foreach (var m in _materials) m.SetShaderParameter("crack_mask", below ? 0f : 1f);
         if (!below) ShowCrack(map);
         if (OS.GetCmdlineUserArgs().Contains("--dbg-nocanopy")) foreach (var c in _canopies) c.Material.SetShaderParameter("fade", 0f);
@@ -448,8 +453,8 @@ public partial class LevelView : Node3D
     /// </summary>
     void ShowCrack(LevelMap map)
     {
-        // A blue hole is plain water; only a boss level's exit is the Crack.
-        RenderingServer.GlobalShaderParameterSet("reef_crack", map.HasBoss ? new Vector4(map.Exit.Position.X, map.Exit.Position.Y, 10f, 1f) : Vector4.Zero);
+        // A blue hole is plain water; only a boss level's exit is the Crack (and it glows only once it is open).
+        RenderingServer.GlobalShaderParameterSet("reef_crack", map.HasBoss ? new Vector4(map.Exit.Position.X, map.Exit.Position.Y, 10f, CrackGlow) : Vector4.Zero);
         if (!map.HasBoss) return;
         var rift = map.Exit.Position;
         var floor = new Vector3(rift.X, -6f, rift.Y);
@@ -481,10 +486,19 @@ public partial class LevelView : Node3D
             ScaleAmountMax = 1.6f,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
+        ApplyCrack();
     }
 
     OmniLight3D? _crackLight;
     CpuParticles3D? _crackBubbles;
+    MeshInstance3D? _cover;
+    ShaderMaterial? _coverMat;
+    CpuParticles3D? _sandFall;
+    /// <summary>How far the Crack has opened (0 sealed under sand → 1 open), and the dive's fade of it (1 → 0).</summary>
+    float _crackOpen, _crackFade = 1f;
+
+    /// <summary>The Crack's glow, light and bubbles: they come up as the last of the sand drains away.</summary>
+    float CrackGlow => Mathf.SmoothStep(0.45f, 1f, _crackOpen) * _crackFade;
 
     /// <summary>
     /// The dive through the Crack: its glow, its warm light and its rising bubbles fade together (1 full, 0 gone), so
@@ -492,10 +506,119 @@ public partial class LevelView : Node3D
     /// </summary>
     public void FadeCrack(float k)
     {
-        if (!_map.HasBoss) return;
-        RenderingServer.GlobalShaderParameterSet("reef_crack", new Vector4(_map.Exit.Position.X, _map.Exit.Position.Y, 10f, k));
+        _crackFade = k;
+        ApplyCrack();
+    }
+
+    /// <summary>
+    /// The Crack opening (0 sealed → 1 open): the sand over it sags, turns and drains down into it, grains pouring
+    /// off its rim, and then the Crack's glow, light and bubbles come up from below.
+    /// </summary>
+    public void SetCrackOpen(float t)
+    {
+        _crackOpen = Mathf.Clamp(t, 0f, 1f);
+        ApplyCrack();
+    }
+
+    void ApplyCrack()
+    {
+        if (_map is null || !_map.HasBoss) return;
+        float k = CrackGlow;
+        if (!_below) RenderingServer.GlobalShaderParameterSet("reef_crack", new Vector4(_map.Exit.Position.X, _map.Exit.Position.Y, 10f, k));
         if (_crackLight is not null) _crackLight.LightEnergy = 2.2f * k;
-        _crackBubbles?.SetInstanceShaderParameter("fade", k);
+        if (_crackBubbles is not null)
+        {
+            _crackBubbles.SetInstanceShaderParameter("fade", k);
+            _crackBubbles.Emitting = k > 0.01f;
+        }
+        _coverMat?.SetShaderParameter("sink", _crackOpen);
+        if (_cover is not null) _cover.Visible = _crackOpen < 1f;
+        if (_sandFall is not null) _sandFall.Emitting = _crackOpen > 0f && _crackOpen < 0.85f;
+    }
+
+    /// <summary>
+    /// The sand sealing a boss level's Crack: a cap over the shaft (a little past its rim), each rim point at the
+    /// ground's own height there and the middle at their average, so it meets the arena floor without a seam.
+    /// </summary>
+    void ShowCover(LevelMap map)
+    {
+        var sh = map.Shaft;
+        var across = new System.Numerics.Vector2(-sh.Axis.Y, sh.Axis.X);
+        const float grow = 0.8f;
+        const int rings = 14, segments = 64;
+        System.Numerics.Vector2 At(float r, float a, float extra) =>
+            sh.Center + sh.Axis * (Mathf.Cos(a) * (sh.HalfLength + grow + extra) * r) + across * (Mathf.Sin(a) * (sh.HalfWidth + grow + extra) * r);
+        var rim = new float[segments];
+        float mean = 0f;
+        for (int j = 0; j < segments; j++)
+        {
+            rim[j] = map.HeightAt(At(1f, j * Mathf.Tau / segments, 0.6f));
+            mean += rim[j] / segments;
+        }
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        st.SetNormal(Vector3.Up);
+        st.SetUV(new Vector2(0f, 0f));
+        st.AddVertex(new Vector3(sh.Center.X, mean + 0.03f, sh.Center.Y));
+        for (int i = 1; i <= rings; i++)
+        for (int j = 0; j < segments; j++)
+        {
+            float r = i / (float)rings, a = j * Mathf.Tau / segments;
+            var p = At(r, a, 0f);
+            st.SetNormal(Vector3.Up);
+            st.SetUV(new Vector2(r, 0f));
+            st.AddVertex(new Vector3(p.X, Mathf.Lerp(mean, rim[j], r * r) + 0.03f, p.Y));
+        }
+        int Index(int ring, int seg) => ring == 0 ? 0 : 1 + (ring - 1) * segments + (seg % segments);
+        for (int j = 0; j < segments; j++)
+        {
+            // Clockwise seen from above (Godot's front face).
+            st.AddIndex(0);
+            st.AddIndex(Index(1, j));
+            st.AddIndex(Index(1, j + 1));
+        }
+        for (int i = 1; i < rings; i++)
+        for (int j = 0; j < segments; j++)
+        {
+            int a0 = Index(i, j), a1 = Index(i, j + 1), b0 = Index(i + 1, j), b1 = Index(i + 1, j + 1);
+            st.AddIndex(a0);
+            st.AddIndex(b0);
+            st.AddIndex(a1);
+            st.AddIndex(a1);
+            st.AddIndex(b0);
+            st.AddIndex(b1);
+        }
+        _coverMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/crack_cover.gdshader") };
+        _coverMat.SetShaderParameter("cover_center", new Vector2(sh.Center.X, sh.Center.Y));
+        _coverMat.SetShaderParameter("drop", mean - LevelMap.ShaftBottom + 1f);
+        Track(_coverMat);
+        AddChild(_cover = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = _coverMat });
+
+        // Grains pouring off the cover's rim into the dark as it drains.
+        var grain = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            AlbedoColor = new Color(0.78f, 0.7f, 0.52f),
+            BillboardMode = BaseMaterial3D.BillboardModeEnum.Particles,
+        };
+        AddChild(_sandFall = new CpuParticles3D
+        {
+            Position = new Vector3(sh.Center.X, mean + 0.2f, sh.Center.Y),
+            Emitting = false,
+            Amount = 220,
+            Lifetime = 1.6f,
+            Mesh = new QuadMesh { Size = new Vector2(0.07f, 0.07f), Material = grain },
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere,
+            EmissionSphereRadius = Mathf.Max(sh.HalfLength, sh.HalfWidth) * 0.8f,
+            Direction = Vector3.Down,
+            Spread = 25f,
+            Gravity = new Vector3(0f, -7f, 0f),
+            InitialVelocityMin = 0.2f,
+            InitialVelocityMax = 1.2f,
+            ScaleAmountMin = 0.6f,
+            ScaleAmountMax = 1.6f,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        });
     }
 
     // ───────────────────────── places ─────────────────────────
