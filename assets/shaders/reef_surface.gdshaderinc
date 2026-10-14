@@ -225,12 +225,7 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 		s.emission += ember * inside * breathe * flicker * reef_crack.w * crack_mask * 0.9;
 		s.albedo = mix(s.albedo, vec3(0.05, 0.03, 0.03), inside * 0.8);
 	}
-	// The corruption on the floor (docs/CORRUPTION.md): the ground itself keeps its colour (the blades growing on it
-	// are the corruption's mark); only where it dies does the floor burn gold a moment (light spreading, never erasing).
-	if (corruption_on > 0.0) {
-		vec2 cr = texture(corruption_map, local.xz / reef_extent).rg;
-		float floor_k = 1.0 - smoothstep(-0.2, 0.9, h);
-		s.emission += vec3(1.0, 0.7, 0.3) * cr.g * 1.5 * floor_k * corruption_on;
-	}
+	// The corruption leaves the floor itself as it is (docs/CORRUPTION.md): its mark is the ink dripping up out of it
+	// (corruption_shards.gdshader), and when it is cleansed only those drops light up.
 	return s;
 }

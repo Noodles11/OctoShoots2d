@@ -129,7 +129,7 @@ public partial class TopDownMain : Node3D
     Task<LevelShape>? _belowTask;
     LevelView? _below;
     LevelMap? _belowMap;
-    // The corruption (docs/CORRUPTION.md): its blades and creatures, the live texture, and the blades being laid out.
+    // The corruption (docs/CORRUPTION.md): its shards and creatures, the live texture, and the shards being laid out.
     CorruptionView _corruption = null!;
     BlightView _blight = null!;
     SpringView _springs = null!;
@@ -738,7 +738,7 @@ public partial class TopDownMain : Node3D
         _belowOffset = new Vector3(hole.X - start.X, -LevelMap.LevelDrop, hole.Y - start.Y);
         _below.Place(_belowOffset, _origin + new Vector2(_belowOffset.X, _belowOffset.Z));
         _below.SetPortal(new Vector2(hole.X, hole.Y), Stamp.Pin, 2);
-        // Its corruption, laid out off the main thread: the floor's ink for the dive, the blades for when she lands.
+        // Its corruption, laid out off the main thread: the floor's ink for the dive, the shards for when she lands.
         if (PlaneOptions.Default.Corruption)
         {
             var map = _belowCorruptionMap = shape.Map;
@@ -750,7 +750,7 @@ public partial class TopDownMain : Node3D
         }
     }
 
-    /// <summary>A level's corruption on screen: the live texture on its floor and maps, its creatures, and its blades.</summary>
+    /// <summary>A level's corruption on screen: the live texture on its floor and maps, its creatures, and its shards.</summary>
     void SetupCorruption(LevelMap map)
     {
         _bladeTask = null;
@@ -773,7 +773,7 @@ public partial class TopDownMain : Node3D
         _fullMap.Corruption = _corruptTex.Texture;
         _blight.Show(_world);
         _springs.Show(_world);
-        // The blades were laid out already if she dived here; otherwise they are laid out now, off the main thread.
+        // The shards were laid out already if she dived here; otherwise they are laid out now, off the main thread.
         if (_belowLayout is { } ready && ReferenceEquals(_belowLayoutMap, map)) _corruption.Show(ready, _corruptTex.Texture);
         else
         {
@@ -784,7 +784,7 @@ public partial class TopDownMain : Node3D
         _belowLayoutMap = null;
     }
 
-    /// <summary>The corruption's per-frame work: its texture, blades arriving, her light pushing the blades, the creatures.</summary>
+    /// <summary>The corruption's per-frame work: its texture, shards arriving, the creatures.</summary>
     void SyncCorruption(float dt, float alpha)
     {
         if (_bladeTask is { IsCompleted: true } blades)
@@ -803,7 +803,6 @@ public partial class TopDownMain : Node3D
         if (_lastHp >= 0f && hp > _lastHp && max > 0f) _vapour.FromHer(Focus(alpha), (hp - _lastHp) / max);
         _lastHp = hp;
         _vapour.Tick(dt, _camera.Camera);
-        _corruption.SetHer(Focus(alpha));
         _blight.Sync(_world, dt, _camera.Camera);
         _springs.Sync(dt, _camera.Camera);
         _cleanse.Track(_world, dt);
@@ -1290,6 +1289,7 @@ public partial class TopDownMain : Node3D
         // then follows the iris.
         FadeLevelLife(hole, Mathf.Lerp(-5f, radius, Ease(t / 0.45f)), stay);
         _level.FadeCrack(stay);
+        _corruption.Fade(stay);
         // The minimap dives too: it zooms in on her and fades away (the new level's fades in once she is down).
         _minimap.DiveOut(Ease(t / 0.9f));
         _damage.Tick(dt);

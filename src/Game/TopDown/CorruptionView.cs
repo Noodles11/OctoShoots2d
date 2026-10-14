@@ -8,7 +8,7 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// The corruption field as a texture (docs/CORRUPTION.md): R its ink density, G the gold of corruption dying, one texel
-/// per half-metre cell. Every view of the corruption reads it: the floor's ink (reef_surface), the blades, the maps.
+/// per half-metre cell. Every view of the corruption reads it: the floor's gold where it dies (reef_surface), the shards, the maps.
 /// The gold is worked out here, from how fast each cell's density falls: cleansing always reads as light spreading.
 /// It uploads at most 30 times a second, and only while something changes.
 /// </summary>
@@ -74,9 +74,12 @@ public sealed class CorruptionTexture
 }
 
 /// <summary>
-/// The corruption's outgrowth: swaying ink blades over the floor (corruption_blades.gdshader), one MultiMesh per chunk
-/// of the level so only what the camera sees is drawn. Every blade is placed once, off the main thread, from the
-/// field's starting density; the shader grows, shrivels, burns and dissolves each one from the live texture.
+/// The corruption's mark on the reef: ink dripping upward out of the ground, as fine as plankton
+/// (corruption_shards.gdshader). From its own spot on corrupted ground each drop wells up, stretches up on a neck, snaps
+/// free and rises away, then another wells up, on its own loop; one MultiMesh per chunk of the level so only what the
+/// camera sees is drawn. Every spot is placed once, off the main thread, from the field's starting density, never on a
+/// dive's gateway (the shaft); the shader stops a spot's drops (the last lit gold) as its ground is cleansed. A level's drift
+/// fades in when it is shown and fades out with the dive (<see cref="Fade"/>), never switched in one frame.
 /// </summary>
 public partial class CorruptionView : Node3D
 {
@@ -84,28 +87,58 @@ public partial class CorruptionView : Node3D
     const float ChunkSize = LevelMap.Size / (float)Chunks;
     /// <summary>One MultiMesh instance: a 3×4 transform and a custom colour (seed, u, v, 0).</summary>
     const int Stride = 16;
+    /// <summary>A drop's radius (metres): plankton-fine, a speck at play distance.</summary>
+    const float RadiusMin = 0.022f, RadiusMax = 0.04f;
+    /// <summary>How high it rises before it is gone.</summary>
+    const float RiseMin = 0.6f, RiseMax = 1.5f;
+    /// <summary>Drops per half-metre cell: one on thin corruption, up to this many more where it is thick.</summary>
+    const int MorePerCell = 4;
+    /// <summary>The drift keeps this far (metres) off a dive's gateway, and fades in over AppearSeconds when shown.</summary>
+    const float GatewayClear = 2.5f, AppearSeconds = 1.2f;
 
-    /// <summary>Blades laid out for a level, chunk by chunk: the instance buffer and its count.</summary>
+    /// <summary>Shards laid out for a level, chunk by chunk: the instance buffer and its count.</summary>
     public sealed record Layout(float[][] Buffers, int[] Counts);
 
-    static ArrayMesh? _blade;
+    static Mesh? _spore;
     ShaderMaterial _material = null!;
+    float _fade = 1f, _appear = 1f;
+
+    /// <summary>The dive: 1 → 0 as the level is let go (its drift fades with the rest of its life).</summary>
+    public void Fade(float k)
+    {
+        _fade = Mathf.Clamp(k, 0f, 1f);
+        ApplyFade();
+    }
+
+    void ApplyFade() => _material.SetShaderParameter("fade", _fade * Mathf.SmoothStep(0f, 1f, _appear));
+
+    public override void _Process(double delta)
+    {
+        if (_appear >= 1f) return;
+        _appear = Mathf.Min(1f, _appear + (float)delta / AppearSeconds);
+        ApplyFade();
+    }
 
     public override void _Ready()
     {
-        _material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_blades.gdshader") };
+        // After the water pass (RenderPriority −100), so the sea does not tint them.
+        _material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_shards.gdshader"), RenderPriority = 0 };
     }
 
-    /// <summary>Lays out a level's blades (pure work on data: run it off the main thread).</summary>
+    /// <summary>Lays out a level's shards (pure work on data: run it off the main thread).</summary>
     public static Task<Layout> Plan(LevelMap map, CorruptionField field) => Task.Run(() => Build(map, field));
 
-    /// <summary>Shows a level's blades reading this texture (null clears them).</summary>
+    /// <summary>Shows a level's shards reading this texture (null clears them).</summary>
     public void Show(Layout? layout, Texture2D? texture)
     {
         foreach (var child in GetChildren()) child.QueueFree();
+        _fade = 1f;
+        _appear = 0f;
+        ApplyFade();
         if (layout is null || texture is null) return;
         _material.SetShaderParameter("corruption_map", texture);
-        var blade = _blade ??= BladeMesh();
+        // A quad: the shader turns it to the camera and shapes the drop on it.
+        var shard = _spore ??= new QuadMesh { Size = Vector2.One };
         for (int c = 0; c < layout.Buffers.Length; c++)
         {
             if (layout.Counts[c] == 0) continue;
@@ -113,7 +146,7 @@ public partial class CorruptionView : Node3D
             {
                 TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
                 UseCustomData = true,
-                Mesh = blade,
+                Mesh = shard,
                 InstanceCount = layout.Counts[c],
             };
             mm.Buffer = layout.Buffers[c];
@@ -122,19 +155,16 @@ public partial class CorruptionView : Node3D
                 Multimesh = mm,
                 MaterialOverride = _material,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                // Room for the sway and the recoil.
-                ExtraCullMargin = 1.5f,
+                // Room for the rise and the sway.
+                ExtraCullMargin = RiseMax + 0.6f,
             });
         }
     }
 
-    /// <summary>Her bell, for the blades' recoil from her light.</summary>
-    public void SetHer(Vector3 at) => _material.SetShaderParameter("her_pos", at);
-
     public static Layout Build(LevelMap map, CorruptionField field)
     {
         var lists = new System.Collections.Generic.List<float>[Chunks * Chunks];
-        for (int i = 0; i < lists.Length; i++) lists[i] = new System.Collections.Generic.List<float>(4096);
+        for (int i = 0; i < lists.Length; i++) lists[i] = new System.Collections.Generic.List<float>(2048);
         uint state = (uint)(map.Seed ^ (map.Seed >> 32)) | 1u;
         float Rand()
         {
@@ -147,29 +177,30 @@ public partial class CorruptionView : Node3D
         for (int y = 0; y < n; y++)
         for (int x = 0; x < n; x++)
         {
-            // Blades stand wherever corruption is or may spread (a Blotter's trail grows them where there were none);
+            // Shards hang wherever corruption is or may spread (a Blotter's trail brings them where there were none);
             // the shader hides them while their ground is clean.
             float start = field.Initial[CorruptionField.Index(x, y)];
             float guard = field.Guard[CorruptionField.Index(x, y)];
             if (start <= 0.05f && guard <= 0.05f) continue;
             if (start <= 0.05f) start = 0.6f * guard;
-            // Thicker ground, more blades (one or two a cell: a dense sward at half-metre spacing).
-            int blades = 1 + (Rand() < start * 0.75f ? 1 : 0);
-            for (int b = 0; b < blades; b++)
+            // Thicker ground, more drops.
+            int drops = 1 + (int)(start * MorePerCell + Rand());
+            for (int d = 0; d < drops; d++)
             {
                 var p = new System.Numerics.Vector2((x + Rand()) * CorruptionTuning.Cell, (y + Rand()) * CorruptionTuning.Cell);
                 float floor = map.HeightAt(p);
-                if (floor > LevelMap.BlockHeight) continue;
-                float yaw = Rand() * MathF.Tau, c = MathF.Cos(yaw), s = MathF.Sin(yaw);
-                float height = 1.35f * (0.32f + 0.6f * Rand()) * (0.6f + 0.55f * start);
-                float width = 0.8f + 0.6f * Rand();
+                if (floor > LevelMap.BlockHeight || map.Shaft.Contains(p, GatewayClear)) continue;
+                float radius = RadiusMin + (RadiusMax - RadiusMin) * Rand();
+                float rise = RiseMin + (RiseMax - RiseMin) * Rand();
+                // Its scale is the drop's radius (the shader reads it back).
+                var basis = Basis.Identity.Scaled(Vector3.One * radius);
                 int chunk = Math.Clamp((int)(p.Y / ChunkSize), 0, Chunks - 1) * Chunks + Math.Clamp((int)(p.X / ChunkSize), 0, Chunks - 1);
                 var list = lists[chunk];
-                // Rows of the 3×4 transform: a yaw, the blade's width (x, z) and height (y), at the floor.
-                list.Add(c * width); list.Add(0f); list.Add(s * width); list.Add(p.X);
-                list.Add(0f); list.Add(height); list.Add(0f); list.Add(floor);
-                list.Add(-s * width); list.Add(0f); list.Add(c * width); list.Add(p.Y);
-                list.Add(Rand()); list.Add(p.X / LevelMap.Size); list.Add(p.Y / LevelMap.Size); list.Add(0f);
+                // Rows of the 3×4 transform (at the floor, where it emerges), then the custom colour (seed, u, v, rise).
+                list.Add(basis.Row0.X); list.Add(basis.Row0.Y); list.Add(basis.Row0.Z); list.Add(p.X);
+                list.Add(basis.Row1.X); list.Add(basis.Row1.Y); list.Add(basis.Row1.Z); list.Add(floor);
+                list.Add(basis.Row2.X); list.Add(basis.Row2.Y); list.Add(basis.Row2.Z); list.Add(p.Y);
+                list.Add(Rand()); list.Add(p.X / LevelMap.Size); list.Add(p.Y / LevelMap.Size); list.Add(rise);
             }
         }
         var buffers = new float[lists.Length][];
@@ -180,27 +211,5 @@ public partial class CorruptionView : Node3D
             counts[i] = buffers[i].Length / Stride;
         }
         return new Layout(buffers, counts);
-    }
-
-    /// <summary>A blade: a tapering strip in four segments, 7 cm wide at the root, UV.y its height (0 root → 1 tip).</summary>
-    static ArrayMesh BladeMesh()
-    {
-        float[] ts = { 0f, 0.3f, 0.56f, 0.8f, 1f };
-        float[] half = { 0.035f, 0.03f, 0.022f, 0.012f, 0f };
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        for (int i = 0; i < ts.Length - 1; i++)
-        {
-            Vector3 a0 = new(-half[i], ts[i], 0f), a1 = new(half[i], ts[i], 0f), b0 = new(-half[i + 1], ts[i + 1], 0f), b1 = new(half[i + 1], ts[i + 1], 0f);
-            void V(Vector3 v, float u, float t)
-            {
-                st.SetNormal(new Vector3(0f, 0.25f, 1f).Normalized());
-                st.SetUV(new Vector2(u, t));
-                st.AddVertex(v);
-            }
-            V(a0, 0f, ts[i]); V(a1, 1f, ts[i]); V(b1, 1f, ts[i + 1]);
-            V(a0, 0f, ts[i]); V(b1, 1f, ts[i + 1]); V(b0, 0f, ts[i + 1]);
-        }
-        return st.Commit();
     }
 }

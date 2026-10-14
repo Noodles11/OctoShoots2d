@@ -64,7 +64,7 @@ Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
   guards alive (`Murkling.Guarding`).
 - **Looks** (`BlightView.Blotters.cs`): a chain of six glossy ink mounds from the floor up past her plane, following
   the head along its trail with a wave down its back. Two eye stalks are tipped with violet, and ink beads off it. On
-  both maps it is a fat ink slug shape pointing the way it creeps. The corruption blades now stand on all open floor,
+  both maps it is a fat ink slug shape pointing the way it creeps. The corruption shards now hang over all open floor,
   so a Blotter's trail grows them.
 
 ## Buried caches (`BuriedCache`) and light orbs
@@ -216,14 +216,22 @@ Cleared corruption never just vanishes. It evaporates.
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
   out from how fast each cell falls and fades over ~1.2 s. It uploads at most 30 times a second, and only while
-  something changes. The level's floor, its blades and both maps read it.
-- **Blades** (`corruption_blades.gdshader`): ~45k swaying drained blades per level in 64 chunked MultiMeshes (only those
-  on screen are drawn). They are laid out off the main thread. A level below is laid out while she is still above it,
-  so a dive costs nothing. They are the corruption's only mark on the floor: about 0.4–1.3 m tall, pale, waxy and limp,
-  drooping over, with a faint violet sheen. They sway in the current and bend away from her light. As the ground is cleansed the colour
-  floods back: they stand up and turn green while they shrivel and dissolve, burning gold at the tips.
-- **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the blades; nothing covers it.
-  Where the corruption dies the floor burns gold a moment. The level below shows its own corruption through the shaft.
+  something changes. The level's floor, its shards and both maps read it.
+- **Ink drip** (`corruption_shards.gdshader`, `CorruptionView`): the corruption's only mark on the floor, as if from
+  another dimension: ink dripping upward out of the ground, as fine as plankton (drops 4–8 cm across, about 70%
+  opaque). From its own spot on corrupted ground (no current moves the spot) each drop wells up out of the floor and
+  swells, lifts drawing a neck of ink up behind it that thins, snaps free with a small wobble, then rises buoyantly
+  0.6–1.5 m (slow off the mark, quicker, easing) with a small sway and fades near the top; then another wells up, on its
+  own loop (3.5–7.5 s, its own phase, so it never pulses together). One to five drops per half-metre cell, more where the
+  corruption is thicker. They take no light, shading or fog from the scene and are drawn after the water pass, so
+  nothing tints or blurs them; their roundness is their own (a fixed soft key, a cold violet rim, a glint). Rock in front
+  still hides them. None within 2.5 m of a dive's gateway (the shaft). Drawn as camera-facing quads shaped in the shader,
+  in 64 chunked MultiMeshes (only those on screen are drawn), laid out off the main thread (a level below while she is
+  still above it). Where the ground is cleansed a spot's drops stop coming, and the last of them light up gold as they
+  go: only the drops glow, never the ground. A level's drift fades in over 1.2 s when it is shown, and fades out with
+  the rest of the level's life as she dives.
+- **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the drops; nothing covers it and it
+  never glows. The level below shows its own corruption through the shaft.
 - **Corrupted bodies** (`corruption_orb.gdshader`: murklings, sacs, stumps, throws, the crust) share one look:
   ink-black, glossy, a cold violet rim, and murklings carry a dim stolen ember.
 - Other shaders:
