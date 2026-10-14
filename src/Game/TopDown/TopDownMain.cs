@@ -43,6 +43,12 @@ public partial class TopDownMain : Node3D
     string? _debugAward;
     BossView _boss = null!;
     PufferlingView _puffers = null!;
+    ReefFishView _reefFish = null!;
+    CurseDenView _curseDen = null!;
+    CurseDarkness _dark = null!;
+    bool _inCurse;
+    /// <summary>Verification: `--curse=nothing|fountain|pearl|teleport` sets what the curse den's end holds.</summary>
+    CurseReward? _dbgCurse;
     BannerView _banner = null!;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
@@ -182,6 +188,10 @@ public partial class TopDownMain : Node3D
         AddChild(_boss);
         _puffers = new PufferlingView();
         AddChild(_puffers);
+        _reefFish = new ReefFishView { Visible = !OS.GetCmdlineUserArgs().Contains("--dbg-nofish") };
+        AddChild(_reefFish);
+        _curseDen = new CurseDenView();
+        AddChild(_curseDen);
         _corruption = new CorruptionView();
         AddChild(_corruption);
         _blight = new BlightView();
@@ -238,6 +248,7 @@ public partial class TopDownMain : Node3D
             else if (arg == "--fire") _autoFire = true;
             else if (arg == "--use-active") _autoActive = true;
             else if (arg == "--dbg-surge") _dbgSurge = true;
+            else if (arg.StartsWith("--curse=") && Enum.TryParse<CurseReward>(Value("--curse="), true, out var reward)) _dbgCurse = reward;
             else if (arg.StartsWith("--award=")) _debugAward = Value("--award=");
             else if (arg == "--reset-profile")
             {
@@ -384,6 +395,11 @@ public partial class TopDownMain : Node3D
 
     void BuildUi()
     {
+        // The curse den's dark: over the reef, under the HUD.
+        var darkLayer = new CanvasLayer { Layer = 1 };
+        AddChild(darkLayer);
+        _dark = new CurseDarkness();
+        darkLayer.AddChild(_dark);
         var layer = new CanvasLayer { Layer = 2 };
         AddChild(layer);
         _debugMap = new DebugMapOverlay { Visible = OS.GetCmdlineUserArgs().Contains("--f3") };
@@ -615,6 +631,12 @@ public partial class TopDownMain : Node3D
             _world.Ambushes.Clear();
         }
         if (_dbgSurge) InjectSurge();
+        if (_dbgCurse is { } forced && _world.Curse is { } den && den.Reward != forced)
+        {
+            _world.Pearls.RemoveAll(q => q.Position == den.End);
+            den.Reward = forced;
+            if (forced == CurseReward.Pearl) _world.Pearls.Add(new PlanePearl { ItemId = PlaneRun.PortedPearls[0], Position = den.End, Placed = true });
+        }
         _achievements.EnterLevel();
         // A pearl unlocked by an achievement, offered here for the first time, wears a NEW chip.
         var fresh = new HashSet<string>();
@@ -627,6 +649,10 @@ public partial class TopDownMain : Node3D
         _currents.Clear();
         _vases.Show(_world);
         _puffers.Show(_world);
+        _reefFish.Show(_world);
+        _curseDen.Show(_world);
+        _dark.Clear();
+        _inCurse = false;
         _combat.Visible = _boss.Visible = _puffers.Visible = true;
         _damage.Clear();
         _springHealed = 0f;
@@ -785,7 +811,15 @@ public partial class TopDownMain : Node3D
             "ambush" => _map.Pois.Where(p => p.Kind == PoiKind.Ambush).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             "treasure" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.TreasureCave).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 2.5f)).FirstOrDefault(),
             "mob" => _world.Mobs.Select(m => (System.Numerics.Vector2?)(m.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // Outside the curse den's mouth, halfway down its tunnel, and at its end.
+            "curse" => _world.Curse is { } c ? _map.Caves[_map.Pois[c.Poi].Cave].Mouth + _map.Caves[_map.Pois[c.Poi].Cave].Facing * 2.5f : null,
+            "curse-deep" => _world.Curse is { } cd ? cd.Line[cd.Line.Count / 2] : null,
+            "curse-end" => _world.Curse is { } ce ? ce.End : null,
             // The open water nearest the west rim, to look past the square's edge.
+            // Beside the first anemone, its clownfish in view.
+            "fish" => _world.Anemones.Select(a => (System.Numerics.Vector2?)(a.Position + new System.Numerics.Vector2(0f, 3f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            "tang" => _world.ReefFish.Where(f => f.Kind == ReefFishKind.BlueTang).Select(f => (System.Numerics.Vector2?)(f.Position + new System.Numerics.Vector2(0f, 2.5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            "school" => _world.Schools.Select(sc => (System.Numerics.Vector2?)(sc.Position + new System.Numerics.Vector2(0f, 2.5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "edge" => Enumerable.Range(0, LevelMap.Size).SelectMany(y => Enumerable.Range(0, LevelMap.Size).Select(x => new System.Numerics.Vector2(x, y)))
                 .Where(q => _world.Clear(q, 0.8f)).OrderBy(q => q.X).Select(q => (System.Numerics.Vector2?)q).FirstOrDefault(),
             _ => null,
@@ -797,13 +831,18 @@ public partial class TopDownMain : Node3D
     Vector3 Focus(float alpha)
     {
         var p = System.Numerics.Vector2.Lerp(_world.Player.PrevPosition, _world.Player.Position, alpha);
-        // Verification: `--dbg-follow=mob|fish` keeps the camera on the nearest pufferling instead.
+        // Verification: `--dbg-follow=mob|fish` keeps the camera on the nearest pufferling instead, and
+        // `--dbg-follow=clownfish|bluetang|chromis` on the nearest reef fish of that kind.
         if (_follow is not null)
         {
             var from = p;
-            System.Numerics.Vector2? at = _follow == "fish"
-                ? _world.Fish.OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault()
-                : _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault();
+            System.Numerics.Vector2? at = _follow switch
+            {
+                "fish" => _world.Fish.OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
+                "mob" => _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault(),
+                _ => _world.ReefFish.Where(f => f.Kind.ToString().Equals(_follow, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
+            };
             if (at is { } q) p = q;
         }
         return new Vector3(p.X, LevelMap.SwimBand, p.Y);
@@ -924,6 +963,10 @@ public partial class TopDownMain : Node3D
             _world.Step(ReadInput());
             _recorder.Observe(_world);
             Earned(_achievements.Observe(_world));
+            // Into the curse den's dark: a low drone as it closes round her.
+            bool cursed = _world.CurseDepth > CurseTuning.Inside;
+            if (cursed && !_inCurse) _sfx.Play("curse_enter", -4f, 0f);
+            _inCurse = cursed;
             // Healing from any source shows as a green number: the HP she gained beyond the hits she took this step.
             float taken = 0f;
             foreach (var e in _world.Events)
@@ -958,6 +1001,7 @@ public partial class TopDownMain : Node3D
                     else _haptics.Pulse(0.25f, 0.05f, 0.08f);
                 }
                 CorruptionEvent(e);
+                CurseEvent(e);
                 if (e.Type == PlaneEventType.Dived) dived = true;
                 else if (e.Type == PlaneEventType.PlayerDefeated) dived = false;
                 else if (e.Type == PlaneEventType.PearlTouched)
@@ -1090,6 +1134,7 @@ public partial class TopDownMain : Node3D
         _currents.Sync(_world, dt);
         _vases.Sync(dt);
         _puffers.Sync(_world, dt);
+        _reefFish.Sync(_world, dt);
         SyncCorruption(dt, alpha);
         _damage.Tick(dt);
         _boss.Sync(_world, dt);
@@ -1102,6 +1147,9 @@ public partial class TopDownMain : Node3D
         _hud.Elapsed = _elapsed;
         _hud.Track(_world, _catalog, dt);
         _camera.Track(Focus(alpha), dt);
+        _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
+        _bell.Dim = 1f - 0.65f * _dark.Amount;
+        _minimap.Blackout = _dark.Amount;
         _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
         _level.UpdateCanopy(_world.Player.Position, dt);
         var p = _world.Player;
@@ -1110,7 +1158,8 @@ public partial class TopDownMain : Node3D
         _minimap.SetHealth(_world.Run.MaxHp > 0f ? p.Hp / _world.Run.MaxHp : 0f);
         // Lantern Pearl: a brighter glow shows more of the level around her.
         float glow = _world.Run.Loadout.Stats[Stat.Glow];
-        _fog.Reveal(p.Position, MinimapView.RevealRadius * (1f + 0.5f * (glow - 1f)), MinimapView.RevealSoft);
+        // In the curse den's dark she learns nothing of the map.
+        if (_dark.Amount < 0.5f) _fog.Reveal(p.Position, MinimapView.RevealRadius * (1f + 0.5f * (glow - 1f)), MinimapView.RevealSoft);
         for (int i = 0; i < _map.Pois.Count; i++)
             if (System.Numerics.Vector2.Distance(_map.Pois[i].Position, p.Position) <= MinimapView.SpotRadius) _spotted.Add(i);
         // Entering a place names it under the minimap.
@@ -1246,7 +1295,7 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>The views of a level's life: its creatures, pickups and shots, Queen Clam, damage numbers, currents.</summary>
-    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _boss, _damage, _currents, _vases };
+    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _boss, _damage, _currents, _vases };
 
     /// <summary>
     /// Fades the old level's life during the dive: each piece fades out over a few metres as the iris's dissolving edge
@@ -1462,6 +1511,26 @@ public partial class TopDownMain : Node3D
     {
         float max = Loadout.Build(_catalog, items.ToList(), _tuning).Stats.MaxHp;
         return $"{Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(max, 1f), 0f, 1f) * 100f)}% corrupted";
+    }
+
+    /// <summary>The curse den's moments (DESIGN-TOPDOWN §4.2): its dark closing in, the laugh, the fountain, being sent on.</summary>
+    void CurseEvent(in PlaneEvent e)
+    {
+        switch (e.Type)
+        {
+            case PlaneEventType.CurseLaugh:
+                _sfx.Play("curse_laugh", -1f, 0f);
+                break;
+            case PlaneEventType.FountainSpout:
+                _sfx.PlayAt("spout", new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y), -2f);
+                break;
+            case PlaneEventType.CurseTeleport:
+                // Black at once, so the jump is never seen; the camera is already there when the dark lifts.
+                _dark.Flash();
+                _camera.Track(Focus(1f), 0f, snap: true);
+                _sfx.Play("curse_teleport", -3f, 0f);
+                break;
+        }
     }
 
     /// <summary>The corruption war's moments: shakes, sounds and words (the sights are BlightView's).</summary>

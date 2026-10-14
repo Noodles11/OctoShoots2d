@@ -65,6 +65,24 @@ public partial class Sfx : Node
             return v * 0.13f;
         });
         _sounds["whoosh"] = Make(0.5f, (t, n) => n * Env(t, 0.12f, 0.5f) * 0.3f + Sweep(t, 0.5f, 300f, 900f) * Env(t, 0.1f, 0.45f) * 0.05f);
+        // The curse den: a low beating drone as the dark closes round her; at an empty end, a laugh with no one behind it
+        // — a hollow "ha-ha-ha" falling in pitch, echoing back down the tunnel; the fountain's gulp and clink; and the
+        // rushing swell of being sent on.
+        _sounds["curse_enter"] = Make(1.8f, (t, n) => (MathF.Sin(MathF.Tau * 55f * t) + MathF.Sin(MathF.Tau * 58.5f * t) + 0.4f * MathF.Sin(MathF.Tau * 110f * t)) * MathF.Min(1f, t / 0.5f) * MathF.Max(0f, 1f - t / 1.8f) * 0.22f + n * Env(t, 0.6f, 1.8f) * 0.12f);
+        float[] delays = { 0f, 0.42f, 0.88f, 1.4f };
+        float[] gains = { 1f, 0.5f, 0.28f, 0.15f };
+        var voices = new float[delays.Length][,];
+        for (int k = 0; k < delays.Length; k++) voices[k] = LaughVoice(1f - 0.05f * k);
+        _sounds["curse_laugh"] = Make(3.2f, (t, n) =>
+        {
+            float v = 0f;
+            for (int k = 0; k < delays.Length; k++) v += Laugh(t - delays[k], 1f - 0.05f * k, n, voices[k]) * gains[k];
+            return v * (0.8f + 0.2f * MathF.Sin(MathF.Tau * 3.1f * t)) * 0.5f;
+        });
+        _sounds["spout"] = Make(0.32f, (t, n) => Sweep(t, 0.2f, 170f, 520f) * Env(t, 0.008f, 0.2f) * 0.45f + n * Env(t, 0.002f, 0.06f) * 0.15f
+            + (t > 0.1f ? MathF.Sin(MathF.Tau * 1760f * (t - 0.1f)) * Env(t - 0.1f, 0.002f, 0.22f) * 0.18f : 0f));
+        _sounds["curse_teleport"] = Make(1.3f, (t, n) => n * MathF.Pow(MathF.Min(1f, t / 0.9f), 2f) * MathF.Max(0f, 1f - (t - 0.9f) / 0.4f) * 0.5f
+            + Sweep(t, 1.3f, 70f, 1100f) * MathF.Min(1f, t / 0.9f) * MathF.Max(0f, 1f - (t - 0.95f) / 0.35f) * 0.12f);
         _sounds["nope"] = Make(0.12f, (t, n) => MathF.Sign(MathF.Sin(MathF.Tau * 140f * t)) * Env(t, 0.002f, 0.12f) * 0.15f);
 
         for (int i = 0; i < 10; i++)
@@ -141,6 +159,43 @@ public partial class Sfx : Node
             data[i * 2 + 1] = (byte)((s >> 8) & 0xff);
         }
         return new AudioStreamWav { Format = AudioStreamWav.FormatEnum.Format16Bits, MixRate = Rate, Stereo = false, Data = data };
+    }
+
+    /// <summary>
+    /// A hollow laugh: five "ha"s falling in pitch, each a buzzing voice shaped by an "ah" vowel's formants, with a
+    /// breath of noise. Zero outside its 1.3 s.
+    /// </summary>
+    static readonly float[] LaughStarts = { 0f, 0.21f, 0.41f, 0.6f, 0.78f };
+    const int LaughHarmonics = 16;
+
+    /// <summary>Each "ha"'s harmonics weighted by the "ah" vowel's formants (about 760, 1220 and 2600 Hz).</summary>
+    static float[,] LaughVoice(float pitch)
+    {
+        var w = new float[LaughStarts.Length, LaughHarmonics];
+        for (int i = 0; i < LaughStarts.Length; i++)
+        for (int h = 1; h <= LaughHarmonics; h++)
+        {
+            float f = h * (205f - 13f * i) * pitch;
+            w[i, h - 1] = MathF.Exp(-MathF.Pow((f - 760f) / 230f, 2f)) + 0.6f * MathF.Exp(-MathF.Pow((f - 1220f) / 300f, 2f)) + 0.25f * MathF.Exp(-MathF.Pow((f - 2600f) / 500f, 2f));
+        }
+        return w;
+    }
+
+    static float Laugh(float t, float pitch, float noise, float[,] voices)
+    {
+        if (t < 0f || t > 1.3f) return 0f;
+        float v = 0f;
+        for (int i = 0; i < LaughStarts.Length; i++)
+        {
+            float s = t - LaughStarts[i];
+            if (s < 0f || s > 0.45f) continue;
+            float f0 = (205f - 13f * i) * pitch * (1f + 0.015f * MathF.Sin(s * 38f));
+            float env = MathF.Min(1f, s / 0.012f) * MathF.Exp(-s * (i == LaughStarts.Length - 1 ? 5f : 10f));
+            float voice = 0f;
+            for (int h = 1; h <= LaughHarmonics; h++) voice += MathF.Sin(MathF.Tau * h * f0 * s) * voices[i, h - 1];
+            v += (voice * 0.5f + noise * 0.35f) * env;
+        }
+        return v;
     }
 
     static float Sweep(float t, float duration, float from, float to)

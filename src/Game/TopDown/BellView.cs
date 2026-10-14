@@ -37,6 +37,8 @@ public partial class BellView : Node3D
     ShaderMaterial _bellMaterial = null!, _strandMaterial = null!;
     ImmediateMesh _strandMesh = null!;
     OmniLight3D _light = null!;
+    /// <summary>How much of her light gets through (1 all; the curse den's dark fades it).</summary>
+    public float Dim = 1f;
     StandardMaterial3D _inkMaterial = null!;
     readonly List<MeshInstance3D> _ink = new();
     readonly List<Strand> _strands = new();
@@ -380,8 +382,8 @@ public partial class BellView : Node3D
         _strandMaterial.SetShaderParameter("mimic", _mimic);
         _strandMaterial.SetShaderParameter("burst", _burst);
         // The pulse of light: her glow flares far out and falls back.
-        _light.LightEnergy *= 1f + 4f * _burst + 0.4f * _mimic;
-        _light.OmniRange *= 1f + 0.8f * _burst;
+        _light.LightEnergy *= (1f + 4f * _burst + 0.4f * _mimic) * Dim;
+        _light.OmniRange *= (1f + 0.8f * _burst) * (0.4f + 0.6f * Dim);
     }
 
     public override void _ExitTree() => RenderingServer.GlobalShaderParameterSet("her_glow_strength", 0f);

@@ -41,6 +41,13 @@ public static class TopDownGenerator
     const float ClearingRadius = 6f;       // open POIs (item spawn, ninja nests)
     const float PocketRadius = 6f;
     const float ChamberRadius = 6.5f;
+    /// <summary>
+    /// The curse den's tunnel (DESIGN-TOPDOWN §4.2): open TunnelHalfWidth each side of its line, TunnelMin–TunnelMax m
+    /// long (a target picked per level; the longest that fits, never under TunnelMin), in legs of TunnelLegMin–Max m
+    /// with a bend between each, ending in a chamber of TunnelEndRadius. Its passes keep TunnelWall of rock apart.
+    /// </summary>
+    public const float TunnelHalfWidth = 1.4f, TunnelEndRadius = 2.4f;
+    const float TunnelMin = 26f, TunnelMax = 44f, TunnelLegMin = 5f, TunnelLegMax = 9f, TunnelStep = 2.5f, TunnelWall = 3.5f;
 
     // Stage 2
     const float CorridorMinWidth = 6f, CorridorMaxWidth = 10f;
@@ -850,11 +857,12 @@ public static class TopDownGenerator
     // ───────────────────────── stage 3: topography ─────────────────────────
 
     /// <summary>Everything that must stay open at h = 0: corridors, plazas, the start and rift discs, open POI clearings.</summary>
-    static float DistanceToOpen(LevelMap map, Vector2 p)
+    static float DistanceToOpen(LevelMap map, Vector2 p, int skipSpurOf = -1)
     {
         float d = float.MaxValue;
         foreach (var c in map.Corridors)
         {
+            if (skipSpurOf >= 0 && c.Poi == skipSpurOf) continue;
             float half = c.HalfWidth;
             for (int i = 1; i < c.Points.Count; i++)
             {
@@ -1298,6 +1306,11 @@ public static class TopDownGenerator
             var poi = map.Pois[pi];
             if (!Poi.IsCaveHosted(poi.Kind)) continue;
             Vector2 facing = spurDirs[pi];
+            if (poi.Kind == PoiKind.CurseDen)
+            {
+                if (BuildTunnel(map, rng, poi, pi, facing) is { } why) return why;
+                continue;
+            }
             var cave = new CaveSite
             {
                 Kind = poi.Kind is PoiKind.TreasureCave or PoiKind.CurseDen ? CaveKind.MultiChamber : CaveKind.Pocket,
@@ -1497,6 +1510,132 @@ public static class TopDownGenerator
         Vector2.Distance(p, map.Start.Position) < MathF.Max(Stamp.Blend, map.Start.Radius) + margin
         || Vector2.Distance(p, map.Exit.Position) < MathF.Max(Stamp.Blend, map.Exit.Radius + 9f) + margin;
 
+    /// <summary>The curse den: a winding dead-end tunnel bored into the ridge behind its spur, roofed like any cave.</summary>
+    static string? BuildTunnel(LevelMap map, Rng rng, Poi poi, int pi, Vector2 facing)
+    {
+        var mouth = poi.Position + facing * poi.Radius;
+        var (path, length) = TunnelPath(map, rng, mouth, facing, pi);
+        if (length < TunnelMin) return $"no room for the curse den's tunnel ({length:0} m)";
+        var cave = new CaveSite { Kind = CaveKind.Tunnel, Poi = pi, Facing = facing, Mouth = mouth };
+        for (int i = 0; i < path.Count; i++) cave.Chambers.Add((path[i], i == path.Count - 1 ? TunnelEndRadius : TunnelHalfWidth));
+        RaiseCaveMountain(map, cave, rng.Range(8f, 11f));
+        RecordLid(map, cave);
+        for (int i = 1; i < path.Count; i++) CarveTunnel(map, path[i - 1], path[i], TunnelHalfWidth);
+        CarveDisc(map, path[^1], TunnelEndRadius - 0.4f);
+        for (int i = 0; i < path.Count; i++)
+            map.Canopies.Add(new Canopy
+            {
+                Kind = CanopyKind.CaveRoof,
+                Center = path[i],
+                Radius = (i == path.Count - 1 ? TunnelEndRadius : TunnelHalfWidth) + 1.6f,
+                Bottom = rng.Range(4.5f, 5.5f),
+                Top = rng.Range(9f, 11f),
+            });
+        poi.Cave = map.Caves.Count;
+        map.Caves.Add(cave);
+        return null;
+    }
+
+    /// <summary>
+    /// The tunnel's line, from the mouth: a first straight leg back into the ridge, then bends (mostly alternating,
+    /// so it snakes) until it is as long as this level's target. Every point keeps clear of the open water (a wall of
+    /// rock at least TunnelWall thick), of other caves and of its own earlier passes. Walks that run into something
+    /// try other bends; the longest walk wins, if it reaches TunnelMin.
+    /// </summary>
+    static (List<Vector2> Path, float Length) TunnelPath(LevelMap map, Rng rng, Vector2 mouth, Vector2 facing, int pi)
+    {
+        float target = rng.Range(TunnelMin + 8f, TunnelMax);
+        var best = new List<Vector2> { mouth };
+        float bestLength = 0f;
+        bool Clear(Vector2 q, List<Vector2> pts)
+        {
+            if (!Inside(q, Rim + TunnelHalfWidth + 4f)) return false;
+            if (DistanceToOpen(map, q, pi) < TunnelHalfWidth + TunnelWall) return false;
+            // Its own spur leads in to the mouth: the tunnel may lie straight on behind it, never alongside it.
+            foreach (var spur in map.Corridors)
+            {
+                if (spur.Poi != pi) continue;
+                float d = float.MaxValue;
+                for (int i = 1; i < spur.Points.Count; i++) d = MathF.Min(d, Geo.SegmentDistance(q, spur.Points[i - 1], spur.Points[i]));
+                if (Vector2.Distance(q, mouth) > d + 1.5f && d - spur.HalfWidth < TunnelHalfWidth + TunnelWall) return false;
+            }
+            foreach (var cave in map.Caves)
+                foreach (var (c, r) in cave.Chambers)
+                    if (Vector2.Distance(q, c) < r + TunnelHalfWidth + TunnelWall + 2f) return false;
+            for (int i = 0; i < map.Pois.Count; i++)
+                if (i != pi && Poi.IsCaveHosted(map.Pois[i].Kind) && Vector2.Distance(q, map.Pois[i].Position) < map.Pois[i].Radius + TunnelHalfWidth + TunnelWall + 4f) return false;
+            // Its own earlier passes (all but the last few points, which it is leaving).
+            for (int i = 0; i < pts.Count - 3; i++)
+                if (Vector2.Distance(q, pts[i]) < TunnelHalfWidth * 2f + TunnelWall) return false;
+            return true;
+        }
+        for (int walk = 0; walk < 60 && bestLength < target; walk++)
+        {
+            var pts = new List<Vector2> { mouth };
+            Vector2 dir = -facing;
+            float length = 0f, sign = rng.NextFloat() < 0.5f ? 1f : -1f;
+            float leg = rng.Range(8f, 10f);
+            bool firstLeg = true;
+            while (length < target)
+            {
+                // The bend into this leg: try the one picked, then the others, until the leg's start is clear.
+                var turns = new List<float>();
+                if (firstLeg) turns.Add(0f);
+                else
+                {
+                    float a = rng.Range(0.55f, 1.25f);
+                    sign = rng.NextFloat() < 0.7f ? -sign : sign;
+                    turns.AddRange(new[] { a * sign, -a * sign, 0.5f * a * sign, -0.5f * a * sign });
+                }
+                Vector2? way = null;
+                foreach (float t in turns)
+                {
+                    var d = Rotate(dir, t);
+                    if (Clear(pts[^1] + d * TunnelStep, pts) && Clear(pts[^1] + d * TunnelStep * 2f, pts))
+                    {
+                        way = d;
+                        break;
+                    }
+                }
+                if (way is not { } next) break;
+                dir = next;
+                firstLeg = false;
+                int before = pts.Count;
+                for (float s = TunnelStep; s <= leg + 1e-3f && length < target; s += TunnelStep)
+                {
+                    var q = pts[^1] + dir * TunnelStep;
+                    if (!Clear(q, pts)) break;
+                    pts.Add(q);
+                    length += TunnelStep;
+                }
+                if (pts.Count == before) break;
+                leg = rng.Range(TunnelLegMin, TunnelLegMax);
+            }
+            if (length > bestLength)
+            {
+                bestLength = length;
+                best = pts;
+            }
+        }
+        return (best, bestLength);
+    }
+
+    /// <summary>Bores a narrow passage under the swim level along a line: open halfWidth each side, rock just past it.</summary>
+    static void CarveTunnel(LevelMap map, Vector2 a, Vector2 b, float halfWidth)
+    {
+        float reach = halfWidth + 3f;
+        int x0 = Math.Max(0, (int)(MathF.Min(a.X, b.X) - reach)), x1 = Math.Min(LevelMap.Size, (int)(MathF.Max(a.X, b.X) + reach) + 1);
+        int y0 = Math.Max(0, (int)(MathF.Min(a.Y, b.Y) - reach)), y1 = Math.Min(LevelMap.Size, (int)(MathF.Max(a.Y, b.Y) + reach) + 1);
+        for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+        {
+            float d = Geo.SegmentDistance(new Vector2(x, y), a, b);
+            float k = 1f - Smooth(halfWidth, halfWidth + 1.4f, d);
+            float floor = -PassFloor - 0.8f * FloorDip(x, y, (uint)map.Seed ^ 0xC0125Eu);
+            if (k > 0f) map[x, y] = MathF.Min(map[x, y], MathUtil.Lerp(map[x, y], floor, k));
+        }
+    }
+
     static Vector2 Rotate(Vector2 v, float a) => new(v.X * MathF.Cos(a) - v.Y * MathF.Sin(a), v.X * MathF.Sin(a) + v.Y * MathF.Cos(a));
 
     static bool ChamberClear(LevelMap map, Vector2 c, float r, int poi)
@@ -1677,11 +1816,10 @@ public static class TopDownGenerator
 
         EnemyKind DenKind() => rng.NextFloat() < 0.75f ? Swimmers[rng.Int(Swimmers.Length)] : EnemyKind.Crabby;
 
-        // Dens in caves (the shop is safe water) and in pockets along the ridges.
+        // Dens in caves (the shop is safe water; the curse den's dark is danger enough) and in pockets along the ridges.
         for (int pi = 0; pi < map.Pois.Count; pi++)
         {
             var poi = map.Pois[pi];
-            if (poi.Kind is PoiKind.CurseDen) Add(SpawnRole.Den, DenKind(), Scaled(3 + rng.Int(2)), poi.Position, pi);
             if (poi.Kind is PoiKind.TreasureCave && poi.Cave >= 0 && map.Caves[poi.Cave].Chambers.Count > 1)
                 Add(SpawnRole.Den, DenKind(), Scaled(2 + rng.Int(2)), map.Caves[poi.Cave].Chambers[^1].Center, pi);
         }

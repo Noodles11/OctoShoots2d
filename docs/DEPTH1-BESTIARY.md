@@ -243,6 +243,8 @@ Freed creatures replace today's death burst, sound and despawn. Bosses free the 
   three might be one corrupted and two healthy). The share of corrupted creatures rises with depth, so the
   reef feels sadder the deeper she goes (DESIGN-2D §5.3): roughly 2 : 1 at Depth 1, 1 : 1 at Depth 3,
   1 : 3 at Depth 6.
+- **Reef fish.** Clownfish in their anemones, blue tangs and schools of blue-green chromis live on the reef as
+  background life only: never corrupted, never targets (docs/REEF-FISH-PROPOSAL.md, DESIGN-TOPDOWN §12.2).
 - **Healthy urchins are prickly** on touch: a small hazard, the reef defending itself (THEME-BIBLE §13).
 - **Not targets.** Bubbles pass through healthy creatures, aim assist ignores them, they never show on the
   minimap and they never attack. Like the neutral clownfish, they keep clear of Clementine's bubbles.

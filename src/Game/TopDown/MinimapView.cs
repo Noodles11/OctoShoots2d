@@ -25,6 +25,7 @@ public partial class MinimapView : Control
 
     TopoMap _map = null!;
     Frame _frame = null!;
+    Shroud _shroud = null!;
     Label _place = null!;
     float _placeAlpha;
     bool _placeShown;
@@ -57,6 +58,7 @@ public partial class MinimapView : Control
             MouseFilter = MouseFilterEnum.Ignore,
             Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/minimap_mask.gdshader") },
         });
+        AddChild(_shroud = new Shroud { Size = new Vector2(Diameter, Diameter) });
         AddChild(_frame = new Frame { Size = new Vector2(Diameter, Diameter) });
 
         // The place Clementine is in, named under the map.
@@ -90,6 +92,32 @@ public partial class MinimapView : Control
     }
 
     public void SetMap(LevelMap map) => _map.SetMap(map);
+
+    /// <summary>The map fades to black (0 none → 1 all): in the curse den's dark she cannot see where she is. The bezel stays.</summary>
+    public float Blackout
+    {
+        get => _shroud.Amount;
+        set
+        {
+            if (Mathf.IsEqualApprox(value, _shroud.Amount)) return;
+            _shroud.Amount = value;
+            _shroud.QueueRedraw();
+        }
+    }
+
+    /// <summary>Black over the map's disc, under the bezel.</summary>
+    partial class Shroud : Control
+    {
+        public float Amount;
+
+        public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
+
+        public override void _Draw()
+        {
+            if (Amount <= 0.001f) return;
+            DrawCircle(Size * 0.5f, Size.X * 0.5f - 2f, new Color(0.01f, 0.005f, 0.02f, Amount));
+        }
+    }
 
     /// <summary>The corruption's texture and works on the minimap (docs/CORRUPTION.md).</summary>
     public void SetCorruption(Texture2D? texture) => _map.Corruption = texture;

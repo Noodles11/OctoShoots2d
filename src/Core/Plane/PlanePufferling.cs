@@ -91,11 +91,15 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>Steers toward a wished velocity and turns toward a heading (its own course if none), smoothly.</summary>
-    void Swim(PlaneSwimmer s, Vector2 wish, float? face, float radius)
+    void Swim(PlaneSwimmer s, Vector2 wish, float? face, float radius) =>
+        Swim(s, wish, face, radius, PufferlingTuning.Accel, PufferlingTuning.TurnDegPerSec);
+
+    /// <summary>The same, for a swimmer of its own pace: how quickly it changes speed (m/s²) and turns (degrees a second).</summary>
+    void Swim(PlaneSwimmer s, Vector2 wish, float? face, float radius, float accel, float turnDeg)
     {
-        s.Velocity = MoveToward(s.Velocity, wish, PufferlingTuning.Accel * Dt);
+        s.Velocity = MoveToward(s.Velocity, wish, accel * Dt);
         float want = face ?? (s.Velocity.Length() > 0.25f ? MathF.Atan2(s.Velocity.Y, s.Velocity.X) : s.IdleHeading);
-        float max = PufferlingTuning.TurnDegPerSec * MathUtil.Deg2Rad;
+        float max = turnDeg * MathUtil.Deg2Rad;
         // Quick to start, easing out as it comes round.
         s.TurnRate = Math.Clamp(AngleDiff(want, s.Heading) * 5f, -max, max);
         s.Heading += s.TurnRate * Dt;

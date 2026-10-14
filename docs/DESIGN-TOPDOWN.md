@@ -411,6 +411,22 @@ between the places, before any rock exists:
 - Treasure cave, **Barnaby's shop** (safe water, inherited §24), curse den,
   **secret cave** (plugged by weak rock — one ink bomb), Mermaid's Grotto
   portal after bosses.
+- **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
+  into the ridge behind its spur, 26–44 m long (about 2.8 m wide, in bending legs of 5–10 m), so finding its end
+  in the dark takes a good few seconds. Black fog seeps out of its mouth into the canyon.
+  - **The dark:** past its mouth a dense black fog closes in over the first 6 m. Only the water within about 1–2.5 m
+    of Clementine stays faintly readable, and even her own light is faded (to about a third), so she feels her way
+    by the walls. The minimap fades to black (its corruption bezel stays) and the fog of war learns nothing while she
+    is inside. Leaving, the dark lifts slowly (about 1.5 s).
+  - **The curse:** inside the tunnel it corrupts her at a flat **1.5 HP a second**, like any drain (her dash and a
+    Bubble Shield hold it off; it can take her). A quick trip to the end and back costs about 20 HP.
+  - **At the end** (rolled per level): **65%** a **shell fountain**, a small vent of rock with a pale glow in its
+    throat: once she reaches it, it spouts a shell a second whenever the last one has been taken, for as long as she
+    stays and pays the curse for them. **30%** nothing: a hollow laugh with no one behind it echoes down the
+    tunnel. **4%** a **pearl** (from any pool). **1%** she is **sent on**: the screen goes black, and she is somewhere
+    else when the dark lifts — just outside a place she has not visited yet (never the way down, the boss's arena or
+    the start), or a visited one when none are left.
+  - No creatures live in it.
 - **Landmark light language** inherited: gold (treasure), green (shop),
   red (curse), violet (secret, **no beacon** — found, not advertised),
   orange (the Crack); and white (the start), teal (the shell cache), coral (ambushes; warm but not gold, so
@@ -536,8 +552,8 @@ Deterministic and cheap: the same level always schedules the same events.
   against it, slowly). It changes a fight's geometry mid-encounter.
   - **Felt in the canyon:** inside the canyon's channel the flow pushes at full
     strength, fading to nothing 2 m past its walls. It carries everything not
-    fixed to the reef — Clementine, pufferlings (mobs and healthy ones), every
-    shot (her bubbles, needles, Queen Clam's pearls), shells, hearts, loose
+    fixed to the reef — Clementine, pufferlings (mobs and healthy ones), the
+    reef fish (§12.2), every shot (her bubbles, needles, Queen Clam's pearls), shells, hearts, loose
     pearls, ink clouds — the swimmers sliding along rock as they go. Shop stands
     and Queen Clam hold fast.
   - **Seen beyond it:** pale streaks of moving water race down the canyon and
@@ -834,8 +850,8 @@ at mist distance (inherited fade rule).
    (DESIGN-2D §1, DEPTH1-BESTIARY §8) free a defeated ninja into its school for good, and the current Core does that.
 4. **Cave count vs special rooms:** Stage 4 asks for 1–2 pockets and 1–2 multi-chamber caves (2–4 caves), while
    §4.2 puts every special room in a cave: shop, treasure, 1–2 secrets and 0–1 curse den (3–5 rooms). Built: each
-   special room gets its own cave (treasure and curse den multi-chamber, shop and secrets pockets), so a level
-   can have 3 pockets and 5 caves.
+   special room gets its own cave (treasure multi-chamber, the curse den a tunnel, shop and secrets pockets), so a
+   level can have 3 pockets and 5 caves.
 5. **Secret cave vs reachability:** the secret cave is plugged by weak rock, but every POI must be flood-fill
    reachable. Built: the heightfield reaches it; the plug is a separate `WeakRock` that blocks swimming until it
    is broken (tested separately).
@@ -893,6 +909,14 @@ at mist distance (inherited fade rule).
   is out of sight; it never comes back as a mob. **8–12 healthy pufferlings** live on each level, in ones, twos and
   threes by the plazas and dens: never targets, unbothered by her. Running out of HP ends the run (see the death
   splash below).
+- **Reef fish** (`PlaneReefFish.cs`, `ReefFishView`, `reef_fish.gdshader`; docs/REEF-FISH-PROPOSAL.md): background
+  life, in the sim (seeded per level) but never targets, never in the way, off the minimap. **Clownfish**, a pair or
+  trio to each anemone on the seabed by the rock, dart out at most 1.6 m and back, and tuck in while she is within
+  2.5 m. **Blue tangs**, alone or in pairs, hop 6–14 m about home and graze at each spot, and veer off when she comes
+  within 1.5 m. **Blue-green chromis** school round a centre that roams the channels, parting round her and closing
+  behind. Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 1 has 4–6
+  anemones, 4–7 tangs and 3–5 schools of 15–30; Depth 2 fewer (2–3, 2–4, 2–3 of 10–20); Depth 3 at most one anemone,
+  1–2 tangs and one school; Depths 4 and below none.
 - **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
   her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
   mobs from then on: she may swim away, and they stay. An ambush springs once.

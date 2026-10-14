@@ -322,7 +322,7 @@ Everything derived from a single **run seed** (see §10).
 | Shop | 💰 | 2–5 items/pickups, paid with **Sand Dollars** |
 | Boss | 💀 | Arena with **The Crack**. Boss → item + Heart Container; Crack opens down (§5.2) |
 | Secret | ❓ | Bombable; rare items / big pickups |
-| Curse (Urchin Den) | ☠ | Enter costs damage; Abyss item pool |
+| Curse den | ☠ | A dark dead-end tunnel that corrupts her while she is in it; a gamble at its end (DESIGN-TOPDOWN §4.2) |
 | Sacrifice (Anemone Altar) | ⚱ | Step on spikes for escalating rewards |
 | Challenge (Arena) | ⚔ | Waves of enemies for an item |
 | Shipwreck Archive | 📜 | Scrolls (consumables) |
@@ -762,7 +762,7 @@ Inspired by Hollow Knight: each depth is a single, large, continuous level inste
   bottom-row chamber farthest from the start, reachable by a single tunnel.
 - **Carving:** chambers are noise-perturbed blobs, tunnels are wandering curves; cellular-automata
   smoothing, rock islands, and a connectivity pass keep it organic and fully traversable.
-- **Caves (dead ends):** treasure, Barnaby's shop, curse den (item among urchins), secret cave
+- **Caves (dead ends):** treasure, Barnaby's shop, curse den (a dark tunnel, DESIGN-TOPDOWN §4.2), secret cave
   (sealed by bombable weak rock), and side pockets with clams.
 - **Encounters:** each chamber has a seeded group of creatures placed on floors, walls, ceilings
   or in open water. Groups wake when Clementine approaches; clearing one rolls a reward and

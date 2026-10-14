@@ -26,11 +26,21 @@ public class PlaneVaseTests
         return w;
     }
 
-    /// <summary>A bubble just short of a pot, flying into it.</summary>
-    static PlaneShot BubbleAt(PlaneVase vase, float damage, int volley = 1)
+    /// <summary>A bubble just short of a pot, flying into it from a side clear of its neighbours (pots stand in groups).</summary>
+    static PlaneShot BubbleAt(PlaneWorld w, PlaneVase vase, float damage, int volley = 1)
     {
-        var at = vase.Position - Vector2.UnitX * (vase.Radius + 0.3f);
-        return new PlaneShot { Position = at, Line = at, Velocity = Vector2.UnitX * 8f, Speed0 = 8f, Range = 10f, Life = 2f, FromPlayer = true, Damage = damage, Radius = 0.15f, BaseRadius = 0.15f, Volley = volley };
+        var dir = Vector2.UnitX;
+        for (int k = 0; k < 8; k++)
+        {
+            float a = k * MathF.PI / 4f;
+            var d = new Vector2(MathF.Cos(a), MathF.Sin(a));
+            var from = vase.Position - d * (vase.Radius + 0.3f);
+            if (!w.Map.IsOpen(from) || w.Vases.Any(o => o != vase && !o.Broken && Vector2.Distance(o.Position, from) < o.Radius + 0.4f)) continue;
+            dir = d;
+            break;
+        }
+        var at = vase.Position - dir * (vase.Radius + 0.3f);
+        return new PlaneShot { Position = at, Line = at, Velocity = dir * 8f, Speed0 = 8f, Range = 10f, Life = 2f, FromPlayer = true, Damage = damage, Radius = 0.15f, BaseRadius = 0.15f, Volley = volley };
     }
 
     [Fact]
@@ -55,7 +65,7 @@ public class PlaneVaseTests
     {
         var w = World();
         var vase = w.Vases[0];
-        w.Shots.Add(BubbleAt(vase, PlaneCombatTuning.ShotDamage));
+        w.Shots.Add(BubbleAt(w, vase, PlaneCombatTuning.ShotDamage));
         for (int i = 0; i < 10; i++) w.Step(default);
         Assert.False(vase.Broken);
     }
@@ -71,7 +81,7 @@ public class PlaneVaseTests
             var vase = w.Vases[n];
             int shells = w.Shells.Count, hearts = w.Hearts.Count;
             w.Shots.Clear();
-            w.Shots.Add(BubbleAt(vase, 20f, volley: 100 + n));
+            w.Shots.Add(BubbleAt(w, vase, 20f, volley: 100 + n));
             for (int i = 0; i < 10 && !vase.Broken; i++) w.Step(default);
             Assert.True(vase.Broken, $"pot {n}");
             if (w.Shells.Count > shells || w.Hearts.Count > hearts) left++;
@@ -84,7 +94,7 @@ public class PlaneVaseTests
     {
         var w = World("captains_hook");
         var vase = w.Vases[0];
-        w.Shots.Add(BubbleAt(vase, PlaneCombatTuning.ShotDamage));
+        w.Shots.Add(BubbleAt(w, vase, PlaneCombatTuning.ShotDamage));
         for (int i = 0; i < 10; i++) w.Step(default);
         Assert.True(vase.Broken);
     }
@@ -94,8 +104,16 @@ public class PlaneVaseTests
     {
         var w = World();
         var vase = w.Vases[0];
+        // From a side clear of rock and of the pot's neighbours.
         var from = vase.Position - Vector2.UnitX * (vase.Radius + w.Radius + 1.2f);
-        if (!w.Clear(from, w.Radius)) from = vase.Position + Vector2.UnitX * (vase.Radius + w.Radius + 1.2f);
+        for (int k = 0; k < 8; k++)
+        {
+            float a = k * MathF.PI / 4f;
+            var q = vase.Position - new Vector2(MathF.Cos(a), MathF.Sin(a)) * (vase.Radius + w.Radius + 1.2f);
+            if (!w.Clear(q, w.Radius) || w.Vases.Any(o => o != vase && Geo.SegmentDistance(o.Position, q, vase.Position) < o.Radius + w.Radius + 0.1f)) continue;
+            from = q;
+            break;
+        }
         w.Player.Position = w.Player.PrevPosition = from;
         Vector2 dir = Vector2.Normalize(vase.Position - from);
         w.Step(new PlaneInput { Move = dir, Dash = true });

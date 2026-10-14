@@ -65,15 +65,18 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
     MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, BossLeap, PearlTouched, PearlShattered,
+    CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
-public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Valve, Blightroot, Blotter }
+public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Valve, Blightroot, Blotter, Curse }
 
 /// <summary>
 /// Direction: for ShotPopped, the unit direction from the bubble's centre to where its film gave way. Size: a popped
 /// bubble's radius; an ink blast's radius (InkBlast); the bubbles in a volley (Shot); the damage dealt
-/// or taken (MobHit, MobDefeated, BossHit, PlayerHit); HP healed (ActiveUsed by Whale Song); 0 otherwise. Source: what
+/// or taken (MobHit, MobDefeated, BossHit, PlayerHit); HP healed (ActiveUsed by Whale Song); the reward
+/// (CurseEndReached, as a CurseReward); 0 otherwise. For CurseTeleport, Direction is from where she arrived back to
+/// where she left; for FountainSpout, the way the shell flies. Source: what
 /// hurt her (PlayerHit, PlayerDefeated).
 /// </summary>
 public readonly record struct PlaneEvent(PlaneEventType Type, Vector2 Position, Vector2 Direction, float Size = 0f, DamageSource Source = DamageSource.None);
@@ -105,7 +108,9 @@ public sealed partial class PlaneWorld
         Director = new ReefDirector(map);
         if (Options.Pufferlings) PlaceMobs();
         PlaceFish();
+        PlaceReefFish();
         PlacePearls();
+        PlaceCurse();
         PlaceShop();
         PlaceShells();
         PlaceAmbushes();
@@ -235,6 +240,8 @@ public sealed partial class PlaneWorld
         StrikeBack();
         StepSprings();
         StepFish();
+        StepReefFish();
+        StepCurse();
         StepEconomy();
     }
 
@@ -268,6 +275,9 @@ public sealed partial class PlaneWorld
             flow = Director.FlowAt(fish.Position, Time);
             if (flow != Vector2.Zero) Move(ref fish.Position, ref flow, PufferlingTuning.CalmRadius, report: false, barrier: ArenaBarrier.Outside);
         }
+        // The reef fish ride it too (a school's centre with them, so it keeps its shape); light, they only drift.
+        foreach (var fish in ReefFish) Carry(ref fish.Position);
+        foreach (var school in Schools) Carry(ref school.Position);
         // Light things drift where there is water to drift into.
         foreach (var shot in Shots)
         {

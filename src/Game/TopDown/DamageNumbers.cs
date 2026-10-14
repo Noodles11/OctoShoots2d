@@ -29,6 +29,8 @@ public partial class DamageNumbers : Node3D
     public void Show(in PlaneEvent e)
     {
         if (e.Type is not (PlaneEventType.PlayerHit or PlaneEventType.PlayerDrained or PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit)) return;
+        // A drain cut short (a tick or two as she leaves the dark) would read as a hit of 0.
+        if (e.Type == PlaneEventType.PlayerDrained && e.Size < 0.5f) return;
         float lift = e.Type == PlaneEventType.BossHit ? Height * 2f : Height;
         Show(e.Position, -e.Size, hers: e.Type is PlaneEventType.PlayerHit or PlaneEventType.PlayerDrained, lift);
     }
