@@ -53,7 +53,8 @@ public partial class MusicManager : Node
         _dark = MakePlayer(Load("corruption_dark"), BusDark);
         _eerie = MakePlayer(Load("corruption_eerie"), BusEerie);
         _combat = MakePlayer(Load("combat"), BusCombat);
-        StartAllStems();
+        // The music is off for now: audio/theme.mp3 is a placeholder (not ours to ship). Uncomment to hear it again.
+        // StartAllStems();
         static string Of(AudioStreamPlayer p) => p.Stream is null ? "none" : $"{p.Stream.ResourcePath.GetFile()} ({p.Stream.GetLength():0} s)";
         GD.Print($"Music: theme {Of(_theme)}, dark {Of(_dark)}, eerie {Of(_eerie)}, combat {Of(_combat)}; playing {_theme.Playing}");
     }
