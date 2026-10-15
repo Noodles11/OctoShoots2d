@@ -22,6 +22,8 @@ public sealed class PlaneRun
         "coral_crown", "moon_jelly_heart", "shark_tooth", "pearl_diver", "starfish_arm", "ink_sac", "remora_sucker",
         "captains_hook", "lantern_pearl", "bubble_coral", "plankton_swarm", "mitosis", "giant_squid_eye",
         "lucky_sea_glass", "pirates_doubloon",
+        "squid_ink_espresso", "whale_lung", "pufferfish_pout", "cuttlebone", "cannonball", "dolphin_fin", "coral_polyp",
+        "abyssal_glow", "glass_squid", "sea_cucumber", "sardine_run", "pistol_shrimp", "brass_compass",
         "bubble_shield", "whale_song",
     };
 

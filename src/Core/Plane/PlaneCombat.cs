@@ -110,6 +110,19 @@ public static class PlaneCombatTuning
     /// The halves never split again.
     /// </summary>
     public const float SplitAngleDeg = 40f, SplitSize = 0.75f, SplitSpeed = 9f, SplitRange = 4f;
+    /// <summary>Pearl Necklace (Pearl Diver + Mitosis): a full-charge pearl bursts into a ring of this many.</summary>
+    public const int NecklaceCount = 8;
+    /// <summary>
+    /// Sardine Run: held, her fire rate spins up to MinigunMax times its own over SpinUp seconds, and spins down over
+    /// SpinDown once let go; each shot strays up to MinigunJitterDeg off her aim.
+    /// </summary>
+    public const float MinigunMax = 4f, SpinUp = 1.2f, SpinDown = 0.5f, MinigunJitterDeg = 6f;
+    /// <summary>
+    /// Pistol Shrimp Claw: a bubble collapses with a bang where it pops or goes out, striking everything within
+    /// CavitationRadius (plus its own size) for CavitationDamage of its damage. Depth Charge (with Pearl Diver): a
+    /// full-charge pearl's blast reaches DepthChargeReach times as far and hits DepthChargeDamage times as hard.
+    /// </summary>
+    public const float CavitationRadius = 2.2f, CavitationDamage = 0.7f, DepthChargeReach = 2f, DepthChargeDamage = 1.5f;
 }
 
 /// <summary>
@@ -153,6 +166,8 @@ public sealed class PlaneShot
     public bool Homing, Pierce, Boomerang, Returning, Wave;
     /// <summary>Starfish Arm: it grows as it flies. Starburst Gland: it bursts into light where it pops. Mitosis: it splits on a pop.</summary>
     public bool Grow, Explosive, Split;
+    /// <summary>Pistol Shrimp Claw: it collapses with a bang where it pops or goes out.</summary>
+    public bool Cavitation;
     /// <summary>Bubble Coral: the light slows to a hover near the end of its range instead of going out there at speed.</summary>
     public bool Lingers;
     /// <summary>Pearl Diver: how charged it was when thrown, 0–1 (the view draws a charged one as a pearl).</summary>
@@ -375,6 +390,13 @@ public sealed partial class PlaneWorld
         p.ShotTimer -= Dt;
         p.HurtTimer -= Dt;
         _shieldPing -= Dt;
+        // Coral Polyp: her corruption slowly ebbs on its own.
+        float regen = Run.Loadout.Stats[Stat.Regen];
+        if (regen > 0f && p.Hp < Run.MaxHp)
+        {
+            p.Hp = MathF.Min(Run.MaxHp, p.Hp + regen * Dt);
+            Run.Hp = p.Hp;
+        }
 
         StepAmbushes();
         StepActive(input);
@@ -396,7 +418,7 @@ public sealed partial class PlaneWorld
             }
             else if (p.Charge > 0f)
             {
-                p.ShotTimer = PlaneCombatTuning.ShotInterval;
+                p.ShotTimer = ShotInterval;
                 int thrown = Volley(p.Aim, p.Charge / PlaneCombatTuning.ChargeSeconds);
                 p.Charge = 0f;
                 Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
@@ -405,9 +427,13 @@ public sealed partial class PlaneWorld
         else
         {
             p.Charge = 0f;
+            // Sardine Run: the stream spins up while she holds fire, and down when she lets go.
+            if (Run.Loadout.Flags.Contains("minigun"))
+                p.Spin = input.Fire && aimed ? MathF.Min(1f, p.Spin + Dt / PlaneCombatTuning.SpinUp) : MathF.Max(0f, p.Spin - Dt / PlaneCombatTuning.SpinDown);
+            else p.Spin = 0f;
             if (input.Fire && p.ShotTimer <= 0f && aimed)
             {
-                p.ShotTimer = PlaneCombatTuning.ShotInterval;
+                p.ShotTimer = ShotInterval;
                 int thrown = Volley(p.Aim);
                 Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
             }
@@ -671,6 +697,14 @@ public sealed partial class PlaneWorld
     /// <summary>Her damage stat as a factor on a bubble's damage (1 with no pearls; Shark Tooth and Coral Crown raise it).</summary>
     float DamageScale => Run.Loadout.Stats.Damage / MathF.Max(Tuning.Damage, 0.01f);
 
+    /// <summary>Her stats against the tuning's own (1 with no pearls): how fast she throws, how fast and far her light flies.</summary>
+    float FireScale => Run.Loadout.Stats.FireRate / MathF.Max(Tuning.FireRate, 0.01f);
+    float ShotSpeedScale => Run.Loadout.Stats.ShotSpeed / MathF.Max(Tuning.ShotSpeed, 0.01f);
+    float RangeScale => Run.Loadout.Stats.Range / MathF.Max(Tuning.Range, 0.01f);
+
+    /// <summary>The time to her next throw: her fire rate's, and quicker as Sardine Run's stream spins up.</summary>
+    float ShotInterval => PlaneCombatTuning.ShotInterval / FireScale / (1f + (PlaneCombatTuning.MinigunMax - 1f) * Player.Spin);
+
     /// <summary>
     /// One volley along the aim: her loadout's shot count, fan or cone, and every flag on each shot. Charge (Pearl
     /// Diver, 0–1) makes each one bigger and harder.
@@ -681,9 +715,12 @@ public sealed partial class PlaneWorld
         var p = Player;
         var spec = Run.Loadout.Shot;
         int count = Math.Max(1, spec.Multishot);
-        float speed = PlaneCombatTuning.ShotSpeed;
+        float speed = PlaneCombatTuning.ShotSpeed * ShotSpeedScale;
         float damage = PlaneCombatTuning.ShotDamage * spec.DamageMult * DamageScale * (1f + (PlaneCombatTuning.ChargeDamage - 1f) * charge);
-        float radius = PlaneCombatTuning.ShotRadius * spec.SizeMult * (1f + (PlaneCombatTuning.ChargeSize - 1f) * charge);
+        float radius = PlaneCombatTuning.ShotRadius * spec.SizeMult * Run.Loadout.Stats[Stat.ShotSize] * (1f + (PlaneCombatTuning.ChargeSize - 1f) * charge);
+        bool minigun = Run.Loadout.Flags.Contains("minigun"), cavitation = Run.Loadout.Flags.Contains("cavitation");
+        // Sardine Run: the stream strays a little off her aim, shot by shot.
+        if (minigun) aim = Rotate(aim, _bubbleRng.Range(-1f, 1f) * PlaneCombatTuning.MinigunJitterDeg * MathUtil.Deg2Rad);
         _volleys++;
         for (int i = 0; i < count; i++)
         {
@@ -698,7 +735,7 @@ public sealed partial class PlaneWorld
                 Line = at,
                 Velocity = dir * speed,
                 Speed0 = speed,
-                Range = PlaneCombatTuning.BubbleRange,
+                Range = PlaneCombatTuning.BubbleRange * RangeScale,
                 Life = PlaneCombatTuning.ShotLife + hover,
                 FromPlayer = true,
                 Damage = damage,
@@ -706,6 +743,7 @@ public sealed partial class PlaneWorld
                 BaseRadius = radius,
                 Grow = spec.Grow,
                 Explosive = spec.Explosive,
+                Cavitation = cavitation,
                 Split = spec.Split,
                 Lingers = Run.Loadout.Flags.Contains("mergeBubbles"),
                 Charged = charge,
@@ -846,9 +884,15 @@ public sealed partial class PlaneWorld
         if (heading == Vector2.Zero) heading = Player.Aim;
         float speed = MathF.Max(PlaneCombatTuning.SplitSpeed, shot.Velocity.Length());
         int volley = ++_volleys;
-        foreach (float side in new[] { -1f, 1f })
+        // Pearl Necklace (Pearl Diver + Mitosis): a full-charge pearl bursts into a ring all round; otherwise two halves.
+        bool necklace = shot.Charged >= 0.99f && Run.Loadout.Has("pearl_necklace");
+        var turns = necklace
+            ? Enumerable.Range(0, PlaneCombatTuning.NecklaceCount).Select(i => MathF.Tau * i / PlaneCombatTuning.NecklaceCount).ToArray()
+            : new[] { -PlaneCombatTuning.SplitAngleDeg * MathUtil.Deg2Rad, PlaneCombatTuning.SplitAngleDeg * MathUtil.Deg2Rad };
+        if (necklace) Events.Add(new PlaneEvent(PlaneEventType.Necklace, shot.Position, heading, shot.Radius));
+        foreach (float turn in turns)
         {
-            Vector2 dir = Rotate(heading, side * PlaneCombatTuning.SplitAngleDeg * MathUtil.Deg2Rad);
+            Vector2 dir = Rotate(heading, turn);
             Vector2 at = shot.Position + dir * (shot.Radius + 0.15f);
             if (!Map.IsOpen(at)) continue;
             float radius = shot.BaseRadius * PlaneCombatTuning.SplitSize;
@@ -866,6 +910,7 @@ public sealed partial class PlaneWorld
                 BaseRadius = radius,
                 Volley = volley,
                 Explosive = shot.Explosive,
+                Cavitation = shot.Cavitation,
                 Lingers = shot.Lingers,
                 Hover = _bubbleRng.Range(PlaneCombatTuning.BubbleHoverMin, PlaneCombatTuning.BubbleHoverMax) * Run.Loadout.Stats[Stat.BubbleHover],
             };
@@ -1029,7 +1074,7 @@ public sealed partial class PlaneWorld
     void Extinguish(PlaneShot shot)
     {
         if (shot.Life < -100f) return;
-        if (shot.Explosive)
+        if (shot.Explosive || shot.Cavitation && shot.FromPlayer)
         {
             Pop(shot);
             return;
@@ -1069,7 +1114,29 @@ public sealed partial class PlaneWorld
         }
         Events.Add(new PlaneEvent(PlaneEventType.ShotPopped, shot.Position, at, shot.Radius));
         if (shot.FromPlayer && shot.Explosive) LightBurst(shot);
+        if (shot.FromPlayer && shot.Cavitation) Cavitate(shot);
         LightReleased(shot);
+    }
+
+    /// <summary>
+    /// Pistol Shrimp Claw: the bubble collapses with a bang, striking every creature within reach (pufferlings, the
+    /// corrupted, Queen Clam while open) and breaking pots. Unlike the Starburst Gland's light it does not cleanse the
+    /// ground. Depth Charge makes a full-charge pearl's blast wider and harder.
+    /// </summary>
+    void Cavitate(PlaneShot shot)
+    {
+        bool depth = shot.Charged >= 0.99f && Run.Loadout.Has("depth_charge");
+        float reach = (PlaneCombatTuning.CavitationRadius + shot.Radius) * (depth ? PlaneCombatTuning.DepthChargeReach : 1f);
+        float damage = shot.Damage * GrowFactor(shot) * PlaneCombatTuning.CavitationDamage * (depth ? PlaneCombatTuning.DepthChargeDamage : 1f);
+        var at = shot.Position;
+        Events.Add(new PlaneEvent(PlaneEventType.Cavitation, at, Vector2.Zero, reach));
+        BurstOnCorruption(at, reach, damage, cleanse: false);
+        foreach (var mob in Mobs)
+            if (mob.Alive && Vector2.Distance(mob.Position, at) < reach + mob.Radius)
+                DamageMob(mob, damage, mob.Position - at);
+        if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.Position, at) < reach + PlaneBossTuning.BodyRadius)
+            DamageBoss(boss, damage, boss.Position - at);
+        BlastVases(at, reach);
     }
 
     /// <summary>Her bubbles' own rolls (hover times, pops on a bump, where a film gives way), from the level's seed.</summary>

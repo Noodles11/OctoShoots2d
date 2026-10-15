@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 
@@ -64,6 +65,23 @@ public partial class CameraRig : Node3D
     public void SetReducedMotion(bool reduced) => _post.SetShaderParameter("wobble", reduced ? 0f : 1f);
 
     /// <summary>Light bubbles: the halos her bubbles and their pop blooms cast on the swim layer (x, z, radius, strength).</summary>
+    /// <summary>The clam rooms' gold glows on the water (xz, radius, strength), at most six.</summary>
+    public void SetClamGlows(IReadOnlyList<Vector4> glows)
+    {
+        int n = Mathf.Min(glows.Count, 6);
+        // Sent flattened, as the bubble lights are.
+        var flat = new float[24];
+        for (int i = 0; i < n; i++)
+        {
+            flat[i * 4] = glows[i].X;
+            flat[i * 4 + 1] = glows[i].Y;
+            flat[i * 4 + 2] = glows[i].Z;
+            flat[i * 4 + 3] = glows[i].W;
+        }
+        _post.SetShaderParameter("clam_glows", flat);
+        _post.SetShaderParameter("clam_count", n);
+    }
+
     public void SetBubbleLights(Vector4[] lights, int count)
     {
         // A vec4 array uniform, sent flattened (the form every renderer accepts).

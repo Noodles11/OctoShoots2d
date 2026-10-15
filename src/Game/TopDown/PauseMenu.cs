@@ -9,7 +9,9 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// ESC: the game stops under a dimmed screen. Resume, restart the run (a new random seed, level 1, no pearls, full HP),
-/// and every pearl Clementine has absorbed with its name, tagline and effects (the item caption lines).
+/// and three tabs: her stats as they stand (PlaneStatSheet: each against her bare base, better in green, worse in
+/// red), every pearl Clementine has absorbed with its name, tagline and exact effects (the item caption lines), and the
+/// achievements.
 /// </summary>
 public partial class PauseMenu : Control
 {
@@ -23,7 +25,8 @@ public partial class PauseMenu : Control
     public float Zoom { get; init; } = CameraRig.DefaultZoom;
 
     VBoxContainer _pearls = null!, _achievements = null!;
-    Button _pearlTab = null!, _achievementTab = null!;
+    GridContainer _stats = null!;
+    Button _statTab = null!, _pearlTab = null!, _achievementTab = null!;
     Label _summary = null!;
 
     public override void _Ready()
@@ -84,14 +87,17 @@ public partial class PauseMenu : Control
         box.AddChild(zoomRow);
 
         box.AddChild(new HSeparator());
-        // Two lists under tabs: the pearls she has absorbed, and the achievements (earned or not).
+        // Three lists under tabs: her stats, the pearls she has absorbed, and the achievements (earned or not).
         var tabs = new HBoxContainer();
         tabs.AddThemeConstantOverride("separation", 10);
         box.AddChild(tabs);
-        _pearlTab = new Button { Text = "Absorbed pearls", ToggleMode = true, ButtonPressed = true, CustomMinimumSize = new Vector2(170f, 34f) };
+        _statTab = new Button { Text = "Stats", ToggleMode = true, ButtonPressed = true, CustomMinimumSize = new Vector2(120f, 34f) };
+        _pearlTab = new Button { Text = "Absorbed pearls", ToggleMode = true, CustomMinimumSize = new Vector2(170f, 34f) };
         _achievementTab = new Button { Text = "Achievements", ToggleMode = true, CustomMinimumSize = new Vector2(170f, 34f) };
-        _pearlTab.Pressed += () => ShowList(false);
-        _achievementTab.Pressed += () => ShowList(true);
+        _statTab.Pressed += () => ShowList(0);
+        _pearlTab.Pressed += () => ShowList(1);
+        _achievementTab.Pressed += () => ShowList(2);
+        tabs.AddChild(_statTab);
         tabs.AddChild(_pearlTab);
         tabs.AddChild(_achievementTab);
 
@@ -99,7 +105,12 @@ public partial class PauseMenu : Control
         box.AddChild(scroll);
         var lists = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         scroll.AddChild(lists);
-        _pearls = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        // Her stats: two columns of name and value.
+        _stats = new GridContainer { Columns = 4, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _stats.AddThemeConstantOverride("h_separation", 18);
+        _stats.AddThemeConstantOverride("v_separation", 8);
+        lists.AddChild(_stats);
+        _pearls = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
         _pearls.AddThemeConstantOverride("separation", 14);
         lists.AddChild(_pearls);
         _achievements = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
@@ -107,12 +118,34 @@ public partial class PauseMenu : Control
         lists.AddChild(_achievements);
     }
 
-    void ShowList(bool achievements)
+    /// <summary>0 her stats, 1 the absorbed pearls, 2 the achievements.</summary>
+    void ShowList(int tab)
     {
-        _pearls.Visible = !achievements;
-        _achievements.Visible = achievements;
-        _pearlTab.ButtonPressed = !achievements;
-        _achievementTab.ButtonPressed = achievements;
+        _stats.Visible = tab == 0;
+        _pearls.Visible = tab == 1;
+        _achievements.Visible = tab == 2;
+        _statTab.ButtonPressed = tab == 0;
+        _pearlTab.ButtonPressed = tab == 1;
+        _achievementTab.ButtonPressed = tab == 2;
+    }
+
+    /// <summary>Her stats now: each value, and how far it is from her bare base (better green, worse red).</summary>
+    void FillStats(PlaneRun run)
+    {
+        foreach (var child in _stats.GetChildren()) child.QueueFree();
+        foreach (var line in PlaneStatSheet.Of(run))
+        {
+            var name = new Label { Text = line.Name, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            name.AddThemeColorOverride("font_color", new Color(0.62f, 0.72f, 0.75f));
+            _stats.AddChild(name);
+            bool better = line.LowerIsBetter ? line.Change < 0f : line.Change > 0f;
+            string change = MathF.Abs(line.Change) < 0.005f ? "" : $"  ({(line.Change > 0f ? "+" : "−")}{MathF.Abs(line.Change) * 100f:0}%)";
+            // Counts (luck, shots per throw, mending) change by a number, not a share.
+            if (line.Name is "Luck" or "Shots per throw" or "Mending" or "Critical hits") change = "";
+            var value = new Label { Text = line.Value + change, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            value.AddThemeColorOverride("font_color", MathF.Abs(line.Change) < 0.005f ? new Color(1f, 0.95f, 0.88f) : better ? new Color(0.55f, 0.95f, 0.65f) : new Color(1f, 0.55f, 0.5f));
+            _stats.AddChild(value);
+        }
     }
 
     /// <summary>
@@ -155,11 +188,12 @@ public partial class PauseMenu : Control
     public void Open(PlaneRun run, ItemCatalog? catalog, string seed, string where, float hp, AchievementCatalog? achievements = null)
     {
         FillAchievements(achievements, run.Unlocked, catalog);
+        FillStats(run);
         _summary.Text = $"Seed {seed} · {where} · {Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(run.MaxHp, 1f), 0f, 1f) * 100f)}% corrupted · {run.Items.Count} pearl{(run.Items.Count == 1 ? "" : "s")}";
         foreach (var child in _pearls.GetChildren()) child.QueueFree();
         if (run.Items.Count == 0 || catalog is null)
         {
-            var none = new Label { Text = "None yet — treasure rooms hold them.", AutowrapMode = TextServer.AutowrapMode.WordSmart };
+            var none = new Label { Text = "None yet — clam rooms hold them.", AutowrapMode = TextServer.AutowrapMode.WordSmart };
             none.AddThemeColorOverride("font_color", new Color(0.6f, 0.7f, 0.72f));
             _pearls.AddChild(none);
         }

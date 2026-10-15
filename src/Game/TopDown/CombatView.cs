@@ -284,7 +284,7 @@ public partial class CombatView : Node3D
             Roughness = 0.35f,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         };
-        // The shop's goods float on their own, like the treasure room's pearl: pearls in their colours, the top-up a red
+        // The shop's goods float on their own (a clam room's pearl lies on its tongue instead): pearls in their colours, the top-up a red
         // heart. Each hangs a little price tag on a string (its price and a shell), shown only while she is inside the shop.
         foreach (var stand in world.Stands)
         {
@@ -529,6 +529,49 @@ void fragment() {
 
     const float SongSeconds = 1.6f;
     readonly List<(Node3D Node, StandardMaterial3D Material, float Age)> _songs = new();
+
+    /// <summary>A shockwave: a flat ring racing out to its reach and thinning away, and a hard flash at its heart.</summary>
+    sealed class Shock
+    {
+        public Node3D Node = null!;
+        public StandardMaterial3D Ring = null!, Flash = null!;
+        public MeshInstance3D Core = null!;
+        public float Age, Reach, Life;
+        public Color Color;
+    }
+
+    readonly List<Shock> _shocks = new();
+
+    /// <summary>
+    /// Pistol Shrimp Claw: the bubble collapses with a bang. A white-blue shock ring races out to the blast's reach and
+    /// thins away, with a hard flash at its heart and a cold bloom on the water. (Pearl Necklace uses the same ring in
+    /// gold, smaller.)
+    /// </summary>
+    public void Shockwave(System.Numerics.Vector2 at, float reach, Color color, float life = 0.38f)
+    {
+        AddBloom(at, 1.4f, 0.5f, Mathf.Min(reach, 4f));
+        var node = new Node3D { Position = new Vector3(at.X, LevelMap.SwimBand, at.Y) };
+        AddChild(node);
+        var ring = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+            AlbedoColor = color,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+        };
+        node.AddChild(new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.86f, OuterRadius = 1f, Rings = 56, RingSegments = 6 }, MaterialOverride = ring, Scale = new Vector3(1f, 0.25f, 1f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        var flash = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            BlendMode = BaseMaterial3D.BlendModeEnum.Add,
+            AlbedoColor = Colors.White,
+        };
+        var core = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = flash, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        node.AddChild(core);
+        _shocks.Add(new Shock { Node = node, Ring = ring, Flash = flash, Core = core, Reach = reach, Life = life, Color = color });
+    }
 
     /// <summary>An active pearl was used: Whale Song sends three soft rings of sound out from her (the shield is drawn on her).</summary>
     public void ActiveUsed(PlaneWorld world)
@@ -885,6 +928,26 @@ void fragment() {
             blast.Material.EmissionEnergyMultiplier = 1.6f * fade;
         }
 
+        // Shockwaves: the ring races out (fast, then easing) and thins; the flash is gone in a blink.
+        for (int i = _shocks.Count - 1; i >= 0; i--)
+        {
+            var s = _shocks[i];
+            s.Age += dt;
+            float k = s.Age / s.Life;
+            if (k >= 1f)
+            {
+                s.Node.QueueFree();
+                _shocks.RemoveAt(i);
+                continue;
+            }
+            float ease = 1f - (1f - k) * (1f - k) * (1f - k);
+            s.Node.GetChild<MeshInstance3D>(0).Scale = new Vector3(s.Reach * ease, 0.25f, s.Reach * ease);
+            s.Ring.AlbedoColor = s.Color with { A = s.Color.A * (1f - k) * (1f - k) };
+            float f = Mathf.Clamp(1f - s.Age / 0.12f, 0f, 1f);
+            s.Core.Scale = Vector3.One * (0.25f + 0.5f * (1f - f)) * Mathf.Min(s.Reach, 3f) * 0.5f;
+            s.Flash.AlbedoColor = new Color(1f, 1f, 1f, 0.9f * f);
+        }
+
         // Whale Song: rings of sound swell out and fade.
         for (int i = _songs.Count - 1; i >= 0; i--)
         {
@@ -929,7 +992,10 @@ void fragment() {
             _pearls[i].Scale = Vector3.One;
             float fall = Mathf.Clamp((_time - _pearlBorn[i]) / PearlFall, 0f, 1f);
             float drop = PearlFallHeight * (1f - fall) * (1f - fall);
-            _pearls[i].Position = new Vector3(pearl.Position.X, LevelMap.SwimBand + drop + 0.25f * Mathf.Sin(_time * 1.6f + i), pearl.Position.Y);
+            // A clam room's pearl lies still on the clam's tongue (breathing a hair); others float and bob.
+            bool resting = world.Map.Pois.Exists(q => q.Kind == PoiKind.TreasureCave && q.Position == pearl.Position);
+            float y = resting ? ClamRoomView.RestHeight + 0.015f * Mathf.Sin(_time * 1.3f + i) : LevelMap.SwimBand + 0.25f * Mathf.Sin(_time * 1.6f + i);
+            _pearls[i].Position = new Vector3(pearl.Position.X, y + drop, pearl.Position.Y);
             _pearls[i].Rotation = new Vector3(0f, _time * 0.7f, 0f);
         }
         // The shattered pearl's pieces tumble out and dissolve.

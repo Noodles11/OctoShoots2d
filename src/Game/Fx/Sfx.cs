@@ -86,6 +86,9 @@ public partial class Sfx : Node
         // The sand over the Crack draining away: a long low rumble with a hiss of pouring grains.
         _sounds["sand_sink"] = Make(3.2f, (t, n) => (MathF.Sin(MathF.Tau * (48f - 6f * t) * t) * 0.5f + n * 0.6f) * MathF.Min(1f, t / 0.25f) * MathF.Max(0f, 1f - t / 3.2f) * 0.55f
             + n * MathF.Abs(MathF.Sin(t * 31f)) * Env(t, 0.4f, 3.2f) * 0.2f);
+        // Pistol Shrimp Claw: a bubble collapsing, a sharp crack over a short low thump.
+        _sounds["snap"] = Make(0.32f, (t, n) => n * MathF.Min(1f, t / 0.0008f) * MathF.Exp(-t * 90f) * 0.9f
+            + MathF.Sin(MathF.Tau * (95f - 120f * t) * t) * MathF.Exp(-t * 14f) * 0.55f);
         _sounds["nope"] = Make(0.12f, (t, n) => MathF.Sign(MathF.Sin(MathF.Tau * 140f * t)) * Env(t, 0.002f, 0.12f) * 0.15f);
 
         for (int i = 0; i < 10; i++)

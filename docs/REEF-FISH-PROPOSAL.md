@@ -47,14 +47,16 @@
 ### 2.3 Small schools: Blue-Green Chromis (*Chromis viridis*)
 
 - **Look:**
-  - about 0.26 m each;
+  - about 0.34 m each;
   - pale turquoise-green with a faint sheen;
   - a forked tail.
   - They suit the Sunlit Shallows palette.
-- **Lives:** in schools of 15–30 over open sand and the reef's flats. Each school has a slowly drifting centre that
+- **Lives:** in few, big schools of 45–90 (big enough to see them split and join) over open sand and the reef's flats. Each school has a slowly drifting centre that
   moves along the main channels.
 - **Swimming:** boids. Each fish keeps apart from its neighbours, lines up with them, and stays near the school. All
   of them turn together, which gives the school its glitter as the light catches their flanks.
+- **A guide:** on a level with a secret room she has not found, a school she swims into holds still and gathers into
+  an arrow pointing at the secret's way in (DESIGN-TOPDOWN §12.2).
 
 ## 3. How they behave
 
@@ -95,9 +97,9 @@
 
 | Depth | Clownfish | Blue Tang | Schools |
 |---|---|---|---|
-| 1 Sunlit Shallows | 4–6 anemones × 2–3 | 4–7 (in ones and pairs) | 3–5 × 15–30 |
-| 2 Kelp | 2–3 anemones; quicker to hide | 2–4 | 2–3, smaller |
-| 3 Galleon | 0–1 anemone | 1–2 | 1 |
+| 1 Sunlit Shallows | 4–6 anemones × 2–3 | 4–7 (in ones and pairs) | 1–2 × 45–90 |
+| 2 Kelp | 2–3 anemones; quicker to hide | 2–4 | 1 × 30–60 |
+| 3 Galleon | 0–1 anemone | 1–2 | 0–1 × 30–45 |
 | 4 Neon | none (the bible says "fish hide") | none | none |
 | 5 Abyss | none ("no schools") | none | none |
 | 6 The Tank | a few listless captives (a later design) | — | — |
@@ -139,4 +141,4 @@
 | Q4 | Place host anemones for the clownfish? | Yes |
 | Q5 | Thin out by depth, or the same everywhere? | **Thin out by depth** (§5) |
 | Q6 | Should the clownfish ninja's neutral schoolmates later reuse this clownfish? | Yes, when the ninja returns |
-| Q7 | Sizes | Clownfish 0.5 m, tang 0.7 m, chromis 0.26 m: stylised, read at play distance beside the pufferlings |
+| Q7 | Sizes | Clownfish 0.5 m, tang 0.7 m, chromis 0.34 m: stylised, read at play distance beside the pufferlings |

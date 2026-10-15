@@ -81,7 +81,7 @@ public class ReefFishTests
                     Assert.True(Vector2.Distance(f.Position, w.Anemones[f.Host].Position) < ReefFishTuning.ClownRange + 1f, "clownfish by its anemone");
                     break;
                 case ReefFishKind.Chromis:
-                    Assert.True(Vector2.Distance(f.Position, w.Schools[f.Host].Position) < 4f, "chromis with its school");
+                    Assert.True(Vector2.Distance(f.Position, w.Schools[f.Host].Position) < w.Schools[f.Host].Radius + 3f, "chromis with its school");
                     break;
                 default:
                     Assert.True(Vector2.Distance(f.Position, f.Home) < ReefFishTuning.TangHomeRange + 4f, "tang near home");
@@ -96,6 +96,9 @@ public class ReefFishTests
         var w = World();
         Assert.NotEmpty(w.Schools);
         var school = w.Schools[0];
+        // (A found secret: the school has nothing to point at, so it only makes room.)
+        for (int i = 0; i < w.Map.Pois.Count; i++)
+            if (w.Map.Pois[i].Kind == PoiKind.Secret) w.Visited[i] = true;
         // She hangs right in the middle of the school.
         for (int i = 0; i < 90; i++)
         {
@@ -128,5 +131,41 @@ public class ReefFishTests
             Assert.True(f.Hiding);
             Assert.True(Vector2.Distance(f.Position, host) < 0.6f, $"{Vector2.Distance(f.Position, host)} m from its anemone");
         }
+    }
+
+    [Fact]
+    public void ASchoolPointsHerToAHiddenSecret()
+    {
+        var id = TestLevels.All(p => p.Secrets > 0 && p.Id.Depth <= 2 && !p.HasBoss)
+            .FirstOrDefault(i => new PlaneWorld(TestLevels.Get(i), new Tuning()).Schools.Count > 0);
+        Assert.NotEqual(default, id);
+        var w = World(TestLevels.Get(id));
+        var school = w.Schools[0];
+        // She swims into the school and stays.
+        for (int i = 0; i < 3 * PlaneWorld.TickRate; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = school.Position;
+            w.Player.Velocity = Vector2.Zero;
+            w.Player.Hp = 100f;
+            w.Step(default);
+        }
+        Assert.True(school.Guiding);
+        Assert.Equal(1f, school.Form);
+        var toSecret = Vector2.Normalize(w.SecretWay - school.Position);
+        Assert.True(Vector2.Dot(school.Pointing, toSecret) > 0.99f);
+        var fish = w.ReefFish.Where(f => f.Kind == ReefFishKind.Chromis && f.Host == 0).ToList();
+        int placed = fish.Count(f => Vector2.Distance(f.Position, school.Position + PlaneWorld.ArrowSlot(school, f.Slot)) < 0.9f);
+        int facing = fish.Count(f => Vector2.Dot(f.Facing, toSecret) > 0.8f);
+        Assert.True(placed > fish.Count * 0.6f, $"{placed} of {fish.Count} in the arrow");
+        Assert.True(facing > fish.Count * 0.6f, $"{facing} of {fish.Count} facing the secret");
+        // She leaves: the arrow loosens back into a school.
+        for (int i = 0; i < 3 * PlaneWorld.TickRate; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
+            w.Player.Hp = 100f;
+            w.Step(default);
+        }
+        Assert.False(school.Guiding);
+        Assert.Equal(0f, school.Form);
     }
 }

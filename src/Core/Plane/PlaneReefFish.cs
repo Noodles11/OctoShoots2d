@@ -20,11 +20,20 @@ public static class ReefFishTuning
     public const float TangStartleSpeed = 1.9f, TangStartleSeconds = 1.2f;
 
     /// <summary>Chromis: schooling boids about a slowly roaming centre.</summary>
-    public const float ChromisRadius = 0.1f, ChromisMax = 3.6f, ChromisAccel = 9f, ChromisTurnDeg = 480f;
+    public const float ChromisRadius = 0.13f, ChromisMax = 3.6f, ChromisAccel = 9f, ChromisTurnDeg = 480f;
     /// <summary>Each keeps about Spacing from its neighbours, matches those within Align, and stays near the school.</summary>
-    public const float Spacing = 0.6f, Align = 1.5f;
-    /// <summary>The school's centre roams from spot to spot along the channels, within SchoolRoam of home.</summary>
-    public const float SchoolSpeed = 1.1f, SchoolRoam = 30f, SchoolRadius = 1f;
+    public const float Spacing = 0.7f, Align = 1.6f;
+    /// <summary>
+    /// The school as a guide: on a level with a secret room she has not found, swimming into a school (within its
+    /// radius plus GuideEnter) makes it gather into an arrow pointing at the secret's way in; it holds while she stays
+    /// within its radius plus GuideStay, forming over FormSeconds and loosening again over LooseSeconds.
+    /// </summary>
+    public const float GuideEnter = 0.6f, GuideStay = 2.5f, FormSeconds = 0.8f, LooseSeconds = 1.2f;
+    /// <summary>
+    /// The school's centre roams from spot to spot along the channels, within SchoolRoam of home. A school spreads over
+    /// SchoolSpread × √(its fish) metres (never under SchoolRadius), loose enough to part round her and close again.
+    /// </summary>
+    public const float SchoolSpeed = 1.1f, SchoolRoam = 30f, SchoolRadius = 1f, SchoolSpread = 0.38f;
 
     /// <summary>Every fish eases aside from her within Room, farther (DashRoom) when she dashes.</summary>
     public const float Room = 1.5f, DashRoom = 4f;
@@ -34,9 +43,10 @@ public static class ReefFishTuning
     /// <summary>How many live on a level of this depth (THEME-BIBLE §7: the reef empties as she dives).</summary>
     public static (int AnemoneMin, int AnemoneMax, int TangMin, int TangMax, int SchoolMin, int SchoolMax, int SizeMin, int SizeMax) ForDepth(int depth) => depth switch
     {
-        1 => (4, 6, 4, 7, 3, 5, 15, 30),
-        2 => (2, 3, 2, 4, 2, 3, 10, 20),
-        3 => (0, 1, 1, 2, 1, 1, 10, 15),
+        // Schools are few but big, so their splitting and joining reads.
+        1 => (4, 6, 4, 7, 1, 2, 45, 90),
+        2 => (2, 3, 2, 4, 1, 1, 30, 60),
+        3 => (0, 1, 1, 2, 0, 1, 30, 45),
         _ => (0, 0, 0, 0, 0, 0, 0, 0),
     };
 }
@@ -55,6 +65,14 @@ public sealed class PlaneSchool
 {
     public Vector2 Position, Velocity, Home, Target;
     public float Wait;
+    /// <summary>How far its fish spread round the centre (grows with how many there are).</summary>
+    public float Radius = ReefFishTuning.SchoolRadius;
+    /// <summary>How many fish it has (their Slot runs 0 → Count − 1).</summary>
+    public int Count;
+    /// <summary>Guiding her to the secret: the arrow it is forming (0 a loose school → 1 the full arrow), and its heading.</summary>
+    public bool Guiding;
+    public float Form;
+    public Vector2 Pointing = Vector2.UnitX;
     public Rng Rng = null!;
 }
 
@@ -70,6 +88,8 @@ public sealed class PlaneReefFish : PlaneSwimmer
     public float Startle;
     /// <summary>A darting clownfish's pace for this hop.</summary>
     public float Pace;
+    /// <summary>A chromis's place in its school (its spot in the arrow).</summary>
+    public int Slot;
 }
 
 public sealed partial class PlaneWorld
@@ -79,8 +99,22 @@ public sealed partial class PlaneWorld
     public List<PlaneAnemone> Anemones { get; } = new();
     public List<PlaneSchool> Schools { get; } = new();
 
+    /// <summary>The way into the level's secret room (its weak rock, else the room), and which place it is (−1: none).</summary>
+    public Vector2 SecretWay { get; private set; }
+    int _secret = -1;
+
+    /// <summary>A secret she has not found yet: the schools can guide her to it.</summary>
+    bool SecretHidden => _secret >= 0 && !(Visited.Length > _secret && Visited[_secret]);
+
     void PlaceReefFish()
     {
+        _secret = Map.Pois.FindIndex(p => p.Kind == PoiKind.Secret);
+        if (_secret >= 0)
+        {
+            var poi = Map.Pois[_secret];
+            var plug = Map.WeakRocks.FirstOrDefault(w => w.Cave == poi.Cave && poi.Cave >= 0);
+            SecretWay = plug.Radius > 0f ? plug.Center : poi.Position;
+        }
         var rng = new Rng(Map.Seed ^ 0x2EEF15UL ^ ((ulong)Map.Level << 20) ^ ((ulong)Map.Depth << 28) ^ ((ulong)Map.Attempt << 44));
         var n = ReefFishTuning.ForDepth(Map.Depth);
         int ids = 0;
@@ -148,18 +182,20 @@ public sealed partial class PlaneWorld
         foreach (var at in channel)
         {
             if (Schools.Count >= want) break;
-            if (!Allowed(at) || !Clear(at, ReefFishTuning.SchoolRadius + 0.5f) || Schools.Any(s => Vector2.Distance(s.Home, at) < 25f)) continue;
-            Schools.Add(new PlaneSchool { Position = at, Home = at, Target = at, Wait = rng.Range(0f, 2f), Rng = new Rng(rng.NextU64()) });
-            int school = Schools.Count - 1, size = n.SizeMin + rng.Int(n.SizeMax - n.SizeMin + 1);
+            if (!Allowed(at) || !Clear(at, 2f) || Schools.Any(s => Vector2.Distance(s.Home, at) < 25f)) continue;
+            int size = n.SizeMin + rng.Int(n.SizeMax - n.SizeMin + 1);
+            float spread = MathF.Max(ReefFishTuning.SchoolRadius, ReefFishTuning.SchoolSpread * MathF.Sqrt(size));
+            Schools.Add(new PlaneSchool { Position = at, Home = at, Target = at, Wait = rng.Range(0f, 2f), Radius = spread, Count = size, Rng = new Rng(rng.NextU64()) });
+            int school = Schools.Count - 1;
             for (int k = 0; k < size; k++)
             {
-                float a = rng.Range(0f, MathF.Tau), r = ReefFishTuning.SchoolRadius * MathF.Sqrt(rng.NextFloat());
+                float a = rng.Range(0f, MathF.Tau), r = spread * MathF.Sqrt(rng.NextFloat());
                 var q = at + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
                 if (!Clear(q, ReefFishTuning.ChromisRadius)) q = at;
                 float heading = rng.Range(-0.4f, 0.4f);
                 ReefFish.Add(new PlaneReefFish
                 {
-                    Kind = ReefFishKind.Chromis, Id = ids++, Host = school, Home = at, Position = q, Heading = heading,
+                    Kind = ReefFishKind.Chromis, Id = ids++, Host = school, Slot = k, Home = at, Position = q, Heading = heading,
                     Velocity = new Vector2(MathF.Cos(heading), MathF.Sin(heading)) * 0.5f, Rng = new Rng(rng.NextU64()),
                 });
             }
@@ -303,6 +339,20 @@ public sealed partial class PlaneWorld
     /// <summary>A school's centre: roams from spot to spot along the channels near home, lingering at each.</summary>
     void StepSchool(PlaneSchool s)
     {
+        // Guiding: she is in the school and a secret is still hidden. It holds still and gathers into the arrow.
+        float her = Vector2.Distance(Player.Position, s.Position);
+        bool guide = SecretHidden && her < s.Radius + (s.Guiding ? ReefFishTuning.GuideStay : ReefFishTuning.GuideEnter);
+        if (guide && !s.Guiding) Events.Add(new PlaneEvent(PlaneEventType.SchoolPoints, s.Position, Vector2.Normalize(SecretWay - s.Position)));
+        s.Guiding = guide;
+        s.Form = guide ? MathF.Min(1f, s.Form + Dt / ReefFishTuning.FormSeconds) : MathF.Max(0f, s.Form - Dt / ReefFishTuning.LooseSeconds);
+        if (guide)
+        {
+            Vector2 to = SecretWay - s.Position;
+            if (to.LengthSquared() > 1e-4f) s.Pointing = Vector2.Normalize(to);
+            s.Velocity = MoveToward(s.Velocity, Vector2.Zero, 3f * Dt);
+            Move(ref s.Position, ref s.Velocity, ReefFishTuning.SchoolRadius * 0.6f, report: false, barrier: ArenaBarrier.Outside);
+            return;
+        }
         if (s.Wait > 0f)
         {
             s.Wait -= Dt;
@@ -320,7 +370,7 @@ public sealed partial class PlaneWorld
                     float a = s.Rng.Range(0f, MathF.Tau), r = s.Rng.Range(6f, 14f);
                     var q = s.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
                     if (Vector2.Distance(q, s.Home) > ReefFishTuning.SchoolRoam) continue;
-                    if (!Clear(q, ReefFishTuning.SchoolRadius + 0.3f) || !LineOfSight(s.Position, q)) continue;
+                    if (!Clear(q, MathF.Min(s.Radius, 2f) + 0.3f) || !LineOfSight(s.Position, q)) continue;
                     s.Target = q;
                     break;
                 }
@@ -351,12 +401,56 @@ public sealed partial class PlaneWorld
         Vector2 toCentre = school.Position - f.Position;
         float c = toCentre.Length();
         // Loose inside the school, pulled in firmly from outside it.
-        Vector2 cohesion = toCentre * (c > ReefFishTuning.SchoolRadius ? 1.4f : 0.35f);
-        Vector2 wish = school.Velocity + cohesion + apart * 3f + Room(f.Position, RoomNow) * 7f;
+        Vector2 cohesion = toCentre * (c > school.Radius ? 1.4f : 0.35f);
+        float form = school.Form;
+        // Forming the arrow, they give her less room (the shape must hold round her).
+        Vector2 wish = school.Velocity + cohesion + apart * 3f + Room(f.Position, RoomNow * (1f - 0.6f * form)) * 7f;
         if (near > 0) wish += (along / near - f.Velocity) * 0.6f;
-        // Always on the move: a school mills even when its centre rests.
-        if (wish.LengthSquared() < 0.16f) wish = f.Facing * 0.4f;
+        if (form > 0f)
+        {
+            // Each to its place in the arrow, facing the way it points.
+            Vector2 slot = school.Position + ArrowSlot(school, f.Slot);
+            Vector2 toSlot = slot - f.Position;
+            // Close-packed in the arrow (they keep apart only a little), so the shape reads.
+            Vector2 arrow = toSlot * 4.5f + apart * 0.25f;
+            wish = Vector2.Lerp(wish, arrow, form);
+            f.IdleHeading = MathF.Atan2(school.Pointing.Y, school.Pointing.X);
+        }
+        // Always on the move: a school mills even when its centre rests (but an arrow holds still).
+        if (wish.LengthSquared() < 0.16f && form < 0.5f) wish = f.Facing * 0.4f;
         if (wish.Length() > ReefFishTuning.ChromisMax) wish = Vector2.Normalize(wish) * ReefFishTuning.ChromisMax;
-        Swim(f, wish, null, ReefFishTuning.ChromisRadius, ReefFishTuning.ChromisAccel, ReefFishTuning.ChromisTurnDeg);
+        // In the arrow, they all face along it.
+        float? face = form > 0.6f && SlotDistance(f, school) < 0.5f ? MathF.Atan2(school.Pointing.Y, school.Pointing.X) : null;
+        Swim(f, wish, face, ReefFishTuning.ChromisRadius, ReefFishTuning.ChromisAccel, ReefFishTuning.ChromisTurnDeg);
+    }
+
+    /// <summary>How far a chromis is from its place in the arrow.</summary>
+    static float SlotDistance(PlaneReefFish f, PlaneSchool s) => Vector2.Distance(f.Position, s.Position + ArrowSlot(s, f.Slot));
+
+    /// <summary>
+    /// A fish's place in its school's arrow (from the school's centre): the head, a short chevron of two lines swept
+    /// back from the tip at about 55°, takes the first 35% of the fish; the rest make the long shaft behind it, two
+    /// close lanes. Sized to the school, so a bigger school makes a bigger arrow.
+    /// </summary>
+    public static Vector2 ArrowSlot(PlaneSchool s, int slot)
+    {
+        Vector2 d = s.Pointing, across = new(-d.Y, d.X);
+        float r = s.Radius;
+        int n = Math.Max(s.Count, 2);
+        int head = Math.Max(2, (int)(n * 0.35f));
+        Vector2 tip = d * (r * 1.1f);
+        if (slot < head)
+        {
+            // Alternating sides, stepping back from the tip.
+            int k = slot / 2;
+            float side = slot % 2 == 0 ? 1f : -1f;
+            float t = (k + 1f) / (head / 2f + 1f);
+            Vector2 back = Rotate(-d, side * 0.95f);
+            return tip + back * (r * 0.9f * t);
+        }
+        int m = slot - head, shaft = n - head;
+        int lane = m % 2;
+        float u = (m / 2 + 0.5f) / MathF.Max(shaft / 2f, 1f);
+        return tip - d * (r * 0.15f + r * 2.4f * u) + across * (lane == 0 ? 0.16f : -0.16f);
     }
 }

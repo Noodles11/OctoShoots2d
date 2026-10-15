@@ -113,6 +113,13 @@ public partial class HudView : Control
         _captionTimer = 2.5f;
     }
 
+    /// <summary>Announces a synergy her pearls have just made.</summary>
+    public void ShowSynergy(string name, string description)
+    {
+        _caption = $"Synergy! {name} — {description}";
+        _captionTimer = 5f;
+    }
+
     /// <summary>Announces a pearl just taken.</summary>
     public void ShowPearl(string itemId)
     {

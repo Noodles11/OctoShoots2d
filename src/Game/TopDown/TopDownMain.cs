@@ -23,7 +23,7 @@ namespace OctoShoots.Game.TopDown;
 /// screen (RunLaunch); run directly with verification flags, it starts a run on its own and saves nothing.
 /// WASD swims (north is up), Space dashes, Shift dives (InputSetup), the mouse aims, F1 opens the debug menu (any
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
-/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|shop|cache|treasure|ambush|mob|boss,
+/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss,
 /// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --boss-hp=, --paused, --map, --f3, --no-focus,
 /// --capture=dir --frames=a,b.
 /// </summary>
@@ -45,6 +45,7 @@ public partial class TopDownMain : Node3D
     PufferlingView _puffers = null!;
     ReefFishView _reefFish = null!;
     CurseDenView _curseDen = null!;
+    ClamRoomView _clamRooms = null!;
     CurseDarkness _dark = null!;
     bool _inCurse;
     /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
@@ -77,8 +78,6 @@ public partial class TopDownMain : Node3D
     MinimapView _minimap = null!;
     TopoMap _fullMap = null!;
     readonly HashSet<int> _visited = new();
-    /// <summary>Unvisited places she has come near enough to see on the minimap.</summary>
-    readonly HashSet<int> _spotted = new();
     readonly FogOfWar _fog = new();
     LineEdit _seedField = null!;
     Label _info = null!;
@@ -199,6 +198,8 @@ public partial class TopDownMain : Node3D
         AddChild(_reefFish);
         _curseDen = new CurseDenView();
         AddChild(_curseDen);
+        _clamRooms = new ClamRoomView();
+        AddChild(_clamRooms);
         _corruption = new CorruptionView();
         AddChild(_corruption);
         _blight = new BlightView();
@@ -616,6 +617,7 @@ public partial class TopDownMain : Node3D
         if (!keepRun || _run is null)
         {
             ResetRunTotals();
+            _announced.Clear();
             _run = new PlaneRun(_catalog, _tuning);
             // Her earned achievements are the run's unlocks (the profile's own set: one earned mid-run applies at once).
             _run.Unlocked = _recorder.Profile.Achievements;
@@ -642,6 +644,8 @@ public partial class TopDownMain : Node3D
         }
         _run.Level = _id;
         _world = new PlaneWorld(_map, _tuning, _run);
+        // Synergies she came in with (a resumed run, debug pearls) are not news.
+        foreach (string id in _run.Loadout.Synergies) _announced.Add(id);
         if (arriveAt is { } at) _world.Player.Position = _world.Player.PrevPosition = at;
         if (_calm)
         {
@@ -669,6 +673,7 @@ public partial class TopDownMain : Node3D
         _puffers.Show(_world);
         _reefFish.Show(_world);
         _curseDen.Show(_world);
+        _clamRooms.Show(_world);
         _crackOpen = _world.ExitOpen ? 1f : 0f;
         _level.SetCrackOpen(_crackOpen);
         _dark.Clear();
@@ -688,14 +693,12 @@ public partial class TopDownMain : Node3D
         _visited.Add(_map.Pois.IndexOf(_map.Start));
         _minimap.SetVisited(_visited);
         _fog.Reset();
-        _spotted.Clear();
-        _minimap.SetFog(_fog, _spotted);
+        _minimap.SetFog(_fog);
         // No mud cloud until this level's boss raises one.
         _minimap.SetMud(default, 0f, 0f);
         _fullMap.Mud = default;
         _fullMap.Fog = _fog;
         _fullMap.Seen = _fog;
-        _fullMap.Spotted = _spotted;
         _fullMap.Visited = _visited;
         _seedField.Text = _seed.ToString();
         // The level's title, always on beside the clock (a new depth's first level names the depth too).
@@ -831,6 +834,10 @@ public partial class TopDownMain : Node3D
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "ambush" => _map.Pois.Where(p => p.Kind == PoiKind.Ambush).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             "treasure" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.TreasureCave).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 2.5f)).FirstOrDefault(),
+            // On a clam room's pearl: it is touched at once.
+            "clam-pearl" => _map.Pois.Where(p => p.Kind == PoiKind.TreasureCave).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
+            // Out in the canyon before a clam room's mouth, to see its light spill.
+            "treasure-out" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.TreasureCave).Select(c => (System.Numerics.Vector2?)(c.Mouth + c.Facing * 7f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "mob" => _world.Mobs.Select(m => (System.Numerics.Vector2?)(m.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // Outside the curse den's mouth, halfway down its tunnel, and at its end.
             "curse" => _world.Curse is { } c ? _map.Caves[_map.Pois[c.Poi].Cave].Mouth + _map.Caves[_map.Pois[c.Poi].Cave].Facing * 2.5f : null,
@@ -1041,6 +1048,31 @@ public partial class TopDownMain : Node3D
                     _combat.ShatterPearl(BellView.RitualAt(_bell.GlobalPosition, PearlRitual.ShatterAt));
                     _haptics.Pulse(0.45f, 0.2f, 0.12f);
                 }
+                else if (e.Type == PlaneEventType.Cavitation)
+                {
+                    // Pistol Shrimp Claw: the bang. Bigger blasts (Depth Charge) shake and kick harder.
+                    float big = Mathf.Clamp((e.Size - 2.4f) / 2.6f, 0f, 1f);
+                    _combat.Shockwave(e.Position, e.Size, new Color(0.75f, 0.92f, 1f, 0.85f), 0.38f + 0.2f * big);
+                    _sfx.PlayAt("snap", new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y), -4f + 5f * big);
+                    _camera.Shake(0.04f + 0.2f * big);
+                    _haptics.Pulse(0.05f + 0.6f * big, 0.5f * big, 0.04f + 0.12f * big);
+                }
+                else if (e.Type == PlaneEventType.SchoolPoints)
+                {
+                    // A school gathers into an arrow: a soft rising chime (and, the first time, a word on what it means).
+                    _sfx.PlayPitched("merge", 1.35f, -9f);
+                    if (!_saidSchool)
+                    {
+                        _saidSchool = true;
+                        Say("The school gathers into an arrow: something hidden lies that way");
+                    }
+                }
+                else if (e.Type == PlaneEventType.Necklace)
+                {
+                    // Pearl Necklace: the pearl bursts into its ring.
+                    _combat.Shockwave(e.Position, 2.2f, HerColor.Light with { A = 0.9f }, 0.45f);
+                    _sfx.PlayPitched("merge", 1.9f, -4f);
+                }
                 else if (e.Type == PlaneEventType.PearlCollected && _world.LastPearl is { } pearl)
                 {
                     // The climax: her light bursts out and the pearl is hers.
@@ -1050,6 +1082,7 @@ public partial class TopDownMain : Node3D
                     _camera.Shake(0.25f);
                     _haptics.Pulse(1f, 1f, 0.45f);
                     _hud.ShowPearl(pearl);
+                    AnnounceSynergies();
                 }
                 else if (e.Type == PlaneEventType.ShellCollected) _hud.PulseShells();
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
@@ -1166,6 +1199,8 @@ public partial class TopDownMain : Node3D
         Guard("corruption", () => SyncCorruption(dt, alpha));
         _damage.Tick(dt);
         Guard("boss", () => _boss.Sync(_world, dt));
+        Guard("clam rooms", () => _clamRooms.Sync(_world, dt));
+        _camera.SetClamGlows(_clamRooms.Glows);
         if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) Guard("banner", () => _banner.Sync(_world.Boss));
         if (_world.Boss is { } b)
         {
@@ -1197,8 +1232,8 @@ public partial class TopDownMain : Node3D
         float glow = _world.Run.Loadout.Stats[Stat.Glow];
         // In the curse den's dark she learns nothing of the map.
         if (_dark.Amount < 0.5f) _fog.Reveal(p.Position, MinimapView.RevealRadius * (1f + 0.5f * (glow - 1f)), MinimapView.RevealSoft);
-        for (int i = 0; i < _map.Pois.Count; i++)
-            if (System.Numerics.Vector2.Distance(_map.Pois[i].Position, p.Position) <= MinimapView.SpotRadius) _spotted.Add(i);
+        // Brass Compass: every place on both maps (secret rooms stay hidden).
+        _minimap.Landmarks = _fullMap.Landmarks = _world.Run.Loadout.Flags.Contains("landmarks");
         // Entering a place names it under the minimap.
         var inside = _map.Pois.Where(poi => System.Numerics.Vector2.Distance(poi.Position, p.Position) <= poi.Radius + 1.5f)
             .OrderBy(poi => System.Numerics.Vector2.Distance(poi.Position, p.Position)).FirstOrDefault();
@@ -1336,7 +1371,7 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>The views of a level's life: its creatures, pickups and shots, Queen Clam, damage numbers, currents.</summary>
-    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _boss, _damage, _currents, _vases };
+    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _clamRooms, _boss, _damage, _currents, _vases };
 
     /// <summary>
     /// Fades the old level's life during the dive: each piece fades out over a few metres as the iris's dissolving edge
@@ -1552,6 +1587,25 @@ public partial class TopDownMain : Node3D
     {
         float max = Loadout.Build(_catalog, items.ToList(), _tuning).Stats.MaxHp;
         return $"{Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(max, 1f), 0f, 1f) * 100f)}% corrupted";
+    }
+
+    /// <summary>Synergies her pearls have made that she has not been told of yet (each once a run).</summary>
+    readonly HashSet<string> _announced = new();
+    bool _saidSchool;
+
+    /// <summary>A pearl just made a synergy: its name and what it does, a chime, a flare of her light.</summary>
+    void AnnounceSynergies()
+    {
+        if (_catalog is null) return;
+        foreach (string id in _world.Run.Loadout.Synergies)
+        {
+            if (!_announced.Add(id)) continue;
+            var syn = _catalog.Synergies.FirstOrDefault(s => s.Id == id);
+            if (syn is null) continue;
+            _hud.ShowSynergy(syn.Name, syn.Description);
+            _sfx.Play("synergy", -2f, 0f);
+            _combat.Shockwave(_world.Player.Position, 3f, HerColor.Light with { A = 0.8f }, 0.6f);
+        }
     }
 
     /// <summary>The curse den's moments (DESIGN-TOPDOWN §4.2): its dark closing in, the laugh, the fountain, being sent on.</summary>

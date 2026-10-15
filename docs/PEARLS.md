@@ -1,15 +1,15 @@
 # Pearls
 
 > Every pearl in the item catalogue (`data/items.json`): what it does, where it is found and what unlocks it. Built
-> (✅) marks the pearls ported to the top-down game (`PlaneRun.PortedPearls`): they lie in treasure rooms, are sold in
+> (✅) marks the pearls ported to the top-down game (`PlaneRun.PortedPearls`): they lie in clam rooms, are sold in
 > shops and fall from Queen Clam. The rest are designed and in the catalogue (their numbers load and are tested) but
 > not yet in play. The effect lines are the game's own captions (`ItemCaption`). Generated from the catalogue; when
 > the catalogue changes, this page should be regenerated.
 
 | | Passive | Active | All |
 |---|---|---|---|
-| Pearls | 53 | 11 | 64 |
-| Built | 22 | 2 | 24 |
+| Pearls | 57 | 11 | 68 |
+| Built | 35 | 2 | 37 |
 
 - **Passive** pearls work on their own from the moment she absorbs one: her stats, her bubbles, or something that
   happens when she is hit or frees a creature. They stack.
@@ -46,14 +46,20 @@ Taking a pearl is a moment of its own. It plays round Clementine while she swims
 
 ### Stats
 
+Every stat counts on the plane: damage, max HP, fire rate, shot speed, range, shot size, swim speed, dash cooldown,
+HP regeneration (her corruption ebbing), luck, glow and knockback. Stat pearls are never unique, so each copy stacks
+(including the drawbacks: Glass Squid, Sea Cucumber, Pufferfish Pout and Cannonball all trade something away).
+
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
 | No | ✅ | **Coral Crown** | *A reef princess's lost tiara* | +20 max HP; +0.3 damage; Heals 20 HP | ★★ | treasure, boss |  |
-| No |  | **Squid Ink Espresso** | *The Galleon's cook swore by it* | +0.3 speed; +0.4 fire rate | ★★ | treasure, shop |  |
-| No |  | **Whale Lung** | *Deep breath!* | +1 range; ×1.3 shot size; No idle sinking | ★★ | treasure |  |
-| No |  | **Pufferfish Pout** | *Angry and proud of it* | ×1.5 damage; −0.2 shot speed | ★★★ | treasure, boss |  |
+| No | ✅ | **Squid Ink Espresso** | *The Galleon's cook swore by it* | +0.3 speed; +0.4 fire rate | ★★ | treasure, shop |  |
+| No | ✅ | **Whale Lung** | *Deep breath!* | +1 range; ×1.3 shot size | ★★ | treasure |  |
+| No | ✅ | **Pufferfish Pout** | *Angry and proud of it* | ×1.5 damage; −0.2 shot speed | ★★★ | treasure, boss |  |
 | No | ✅ | **Lucky Sea Glass** | *Found only on moonlit tides* | +2 luck | ★ | treasure, shop | untouchable |
 | No | ✅ | **Plankton Swarm** | *Tiny friends* | +0.5 fire rate; Fires 3 shots; ×0.6 shot size; ×0.5 shot damage | ★★ | treasure |  |
+| No | ✅ | **Glass Squid** | *See-through, and sharp for it* | +1 damage; −20 max HP | ★★ | treasure, curse |  |
+| No | ✅ | **Sea Cucumber** | *Slow, soft, and very hard to stop* | +30 max HP; −0.15 speed; Heals 30 HP | ★ | treasure, shop |  |
 | No |  | **Barnacle Armor** | *Clingy but protective* | −0.1 speed; +30 foam HP | ★ | treasure, shop |  |
 
 ### Shot modifiers
@@ -76,6 +82,8 @@ Taking a pearl is a moment of its own. It plays round Clementine while she swims
 | Yes | ✅ | **Triple Tentacle** | *Why squirt once?* | Fires 3 shots; ×0.8 shot damage | ★★★ | treasure, boss |  |
 | Yes | ✅ | **Starfish Arm** | *Grows back bigger* | Shots grow with distance | ★★ | treasure | big_bubble_energy |
 | Yes | ✅ | **Starburst Gland** | *Bursts with borrowed sun* | Shots burst into light (cleanses ground, strikes the corrupted near) | ★★★ | treasure, curse |  |
+| Yes | ✅ | **Sardine Run** | *A million small reasons* | Hold fire: she spins up to a stream of small shots, four times as fast; ×0.7 shot size; ×0.35 shot damage | ★★★ | treasure, boss |  |
+| Yes | ✅ | **Pistol Shrimp Claw** | *Snap. Bang.* | Shots collapse with a bang where they hit or go out, hurting everything near | ★★★ | treasure, boss |  |
 | Yes |  | **Siren Song** | *Come closer…* | 15% chance to charm foes for 3s | ★★ | treasure, siren |  |
 
 ### More passives (DESIGN-2D §28)
@@ -86,23 +94,23 @@ Taking a pearl is a moment of its own. It plays round Clementine while she swims
 | No | ✅ | **Shark Tooth** | *Still sharp* | +0.5 damage | ★★ | treasure, curse |  |
 | No (+range) | ✅ | **Remora Sucker** | *Sticks to everything* | Pulls pickups toward you | ★ | shop, treasure |  |
 | No |  | **Manta Shawl** | *Glide like a ray* | +0.2 speed; ×0.8 dash cooldown | ★★ | treasure, whale |  |
-| No |  | **Cuttlebone** | *Light as foam, hard as shell* | +0.3 shot speed; +1 range | ★ | treasure, shop |  |
+| No | ✅ | **Cuttlebone** | *Light as foam, hard as shell* | +0.3 shot speed; +1 range | ★ | treasure, shop |  |
 | No (+5% chance)| ✅ | **Giant Squid Eye** | *It sees your weak spot* | 10% chance of a ×3 critical hit | ★★★ | treasure, boss | shucked_in_fifteen |
-| No |  | **Coral Polyp** | *Slowly, the reef rebuilds* | +0.25 HP regeneration per second | ★★ | treasure, whale |  |
+| No | ✅ | **Coral Polyp** | *Slowly, the reef rebuilds* | +0.25 HP regeneration per second | ★★ | treasure, whale |  |
 | No |  | **Brain Coral** | *Thinks two moves ahead* | +1 luck; ×1.35 active item recharge speed | ★★ | treasure, shop |  |
 | No | ✅ | **Pirate's Doubloon** | *Finders keepers* | +15 sand dollars; Shell caches hold 50% more | ★ | treasure, goldenClam | hermit_hoarder |
-| No |  | **Cannonball** | *Fire in the hold!* | +0.8 damage; −0.15 shot speed; ×1.4 shot size; ×2 knockback | ★★ | treasure, boss |  |
+| No | ✅ | **Cannonball** | *Fire in the hold!* | +0.8 damage; −0.15 shot speed; ×1.4 shot size; ×2 knockback | ★★ | treasure, boss |  |
 | No | ✅ | **Captain's Hook** | *Get over here* | ×2.5 knockback | ★ | treasure, shop |  |
 | No (+1s) |  | **Stingray Barb** | *Numbs on contact* | 30% chance to slow foes for 2s | ★ | treasure |  |
 | No (+1HP) |  | **Lamprey Mouth** | *Every bite counts* | Each creature freed heals 3 HP | ★★★ | treasure, curse | hollow_maw |
 | Yes | ✅ | **Hammerhead** | *Wide-angle view* | Fires a 5-pellet cone; ×0.6 shot damage | ★★★ | treasure, boss |  |
 | Yes |  | **Rear Fin** | *Eyes in the back of your mantle* | Also fires backwards | ★ | treasure, shop |  |
-| No |  | **Abyssal Glow** | *Light from below the light* | +0.4 damage; ×1.3 glow radius | ★★ | treasure, curse |  |
+| No | ✅ | **Abyssal Glow** | *Light from below the light* | +0.4 damage; ×1.3 glow radius | ★★ | treasure, curse |  |
 | No (+x1.5 glow, +0.1HP regen) |  | **Glowing Moss** | *Soft and luminous* | ×1.5 glow radius; +0.1 HP regeneration per second | ★ | treasure, shop |  |
 | Yes |  | **Fire Urchin Spine** | *Pass it on* | Freed creatures burst into 6 spines | ★★★ | treasure, curse | jesters |
 | No |  | **Oyster Pearl** | *A little grit, a little shine* | +1 luck; +10 max HP; +5 sand dollars | ★ | treasure, goldenClam |  |
-| No |  | **Dolphin Fin** | *Born to sprint* | +0.25 speed; ×0.85 dash cooldown | ★★ | treasure |  |
-| Yes |  | **Brass Compass** | *Points to what matters* | Shows landmarks on the map | ★ | shop |  |
+| No | ✅ | **Dolphin Fin** | *Born to sprint* | +0.25 speed; ×0.85 dash cooldown | ★★ | treasure |  |
+| Yes | ✅ | **Brass Compass** | *Points to what matters* | Every place shows on the maps before you reach it (secret rooms stay hidden) | ★ | shop, treasure |  |
 | No | ✅ | **Lantern Pearl** | *Carry the light down* | ×1.8 glow radius | ★ | treasure, boss |  |
 
 ### Bubbles on the throwing tentacle
@@ -130,24 +138,26 @@ Taking a pearl is a moment of its own. It plays round Clementine while she swims
 
 ## Synergies and transformations
 
-Not pearls themselves, but what pearls do together (none are built yet).
+Not pearls themselves, but what pearls do together. Built (✅) synergies announce themselves when they form: the
+caption reads "Synergy!" with its name, a chime plays and a ring of her light goes out.
 
-| Synergy | Needs | What happens |
-|---|---|---|
-| **Pinball Storm** | Electric Eel Tail + Mirror Scale | Each wall bounce emits a lightning arc |
-| **Lighthouse** | Sunbeam + Nautilus Spiral | The beam sweeps in a rotating spiral |
-| **Cell Bloom** | Mitosis + Starfish Arm | Split shots also grow |
-| **Guided Inkfish** | Ink Sac + Anglerfish Lure | Homing bombs; explosions leave slowing ink clouds |
-| **Steam Vent** | Frost Kelp + Fire Coral | Frozen foes hit with fire explode into steam |
-| **Tuna Rang** | Boomerang Shrimp + Swordfish Bill | Piercing boomerang hits twice and grows on the way back |
-| **Pearl Necklace** | Pearl Diver + Mitosis | A full-charge pearl bursts into a ring of 8 pearls |
-| **Prism Pearl** | Sunbeam + Pearl Diver | A full-charge pearl fires lasers in 4 directions when it pops |
-| **Black Tide** | Tidal Wave + Ink Sac | The wave detonates ink on every foe it hits |
-| **Big Mad Puff** | Pufferfish Pout + Starfish Arm | Shots burst into a spiky shotgun blast when they pop |
-| **Will-o'-Wisp** | Ghost Jelly + Anglerfish Lure | Spectral wisps home twice as hard |
-| **Toxic Bloom** | Sea Nettle Sting + Mitosis | Split shots carry a double dose of poison |
-| **Feeding Frenzy** | Shark Tooth + Lamprey Mouth | Every creature freed sends you into a fast-firing frenzy |
-| **Broadside** | Cannonball + Rear Fin | Shots out of the back explode |
+| | Synergy | Needs | What happens |
+|:---:|---|---|---|
+|  | **Pinball Storm** | Electric Eel Tail + Mirror Scale | Each wall bounce emits a lightning arc |
+|  | **Lighthouse** | Sunbeam + Nautilus Spiral | The beam sweeps in a rotating spiral |
+|  | **Cell Bloom** | Mitosis + Starfish Arm | Split shots also grow |
+|  | **Guided Inkfish** | Ink Sac + Anglerfish Lure | Homing bombs; explosions leave slowing ink clouds |
+|  | **Steam Vent** | Frost Kelp + Fire Coral | Frozen foes hit with fire explode into steam |
+|  | **Tuna Rang** | Boomerang Shrimp + Swordfish Bill | Piercing boomerang hits twice and grows on the way back |
+| ✅ | **Pearl Necklace** | Pearl Diver + Mitosis | A full-charge pearl bursts into a ring of 8 pearls |
+|  | **Prism Pearl** | Sunbeam + Pearl Diver | A full-charge pearl fires lasers in 4 directions when it pops |
+|  | **Black Tide** | Tidal Wave + Ink Sac | The wave detonates ink on every foe it hits |
+|  | **Big Mad Puff** | Pufferfish Pout + Starfish Arm | Shots burst into a spiky shotgun blast when they pop |
+|  | **Will-o'-Wisp** | Ghost Jelly + Anglerfish Lure | Spectral wisps home twice as hard |
+|  | **Toxic Bloom** | Sea Nettle Sting + Mitosis | Split shots carry a double dose of poison |
+|  | **Feeding Frenzy** | Shark Tooth + Lamprey Mouth | Every creature freed sends you into a fast-firing frenzy |
+| ✅ | **Depth Charge** | Pistol Shrimp Claw + Pearl Diver | A full-charge pearl's blast is twice as wide and half again as strong |
+|  | **Broadside** | Cannonball + Rear Fin | Shots out of the back explode |
 
 | Transformation | Pearls with the tag | What happens |
 |---|---|---|

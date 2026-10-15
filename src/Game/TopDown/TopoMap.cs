@@ -32,18 +32,18 @@ public partial class TopoMap : Control
     public bool ShowLegend;
     /// <summary>Dashed routes, arch symbols, area outlines (the rift's arena, cave chambers), peak crosses and spot heights — the minimap leaves them out.</summary>
     public bool ShowDetail = true;
-    /// <summary>Places Clementine has been to (indices into the level's POIs): the rest show only as "?".</summary>
+    /// <summary>Places Clementine has been to (indices into the level's POIs): only these show.</summary>
     public IReadOnlySet<int> Visited = new HashSet<int>();
+    /// <summary>Brass Compass: every place shows, visited or not, except secret rooms (found, never advertised).</summary>
+    public bool Landmarks;
     /// <summary>Metres between contour lines (every fifth is an index contour).</summary>
     public float ContourInterval = 2f;
     /// <summary>Only the wall edges (the swim-level coastline), no contours or shading — the minimap.</summary>
     public bool EdgesOnly;
     /// <summary>Fog of war over everything not yet seen (null: no fog).</summary>
     public FogOfWar? Fog;
-    /// <summary>What she has seen, for places: a shop or treasure room shows its icon once revealed (or visited).</summary>
+    /// <summary>What she has seen (the minimap's own fog).</summary>
     public FogOfWar? Seen;
-    /// <summary>Unvisited places she has come near enough to spot show as "?"; null shows every unvisited place.</summary>
-    public IReadOnlySet<int>? Spotted;
     /// <summary>The corruption's texture (null: none), and its Blightroots and valves (shown once seen through the fog).</summary>
     public Texture2D? Corruption;
     public readonly List<(System.Numerics.Vector2 At, bool Alive)> Blights = new();
@@ -194,26 +194,19 @@ public partial class TopoMap : Control
         foreach (var (at, depth) in ShowDetail ? _soundings : Enumerable.Empty<(System.Numerics.Vector2, float)>())
             DrawString(font, P(at) + new Vector2(-6f, 4f), $"{depth:0}", HorizontalAlignment.Left, -1, 10, Pebble);
 
-        // Places: a "?" until Clementine has been there, then a dot in their landmark colour. The shop and treasure rooms
-        // show their icons ($, a trophy) as soon as the fog over them is lifted.
+        // Places: nothing until Clementine has been there (no hints), then a dot in their landmark colour, or the shop
+        // and clam room icons ($, a trophy). With the Brass Compass every place shows from the start, except secret rooms.
         for (int i = 0; i < map.Pois.Count; i++)
         {
             var poi = map.Pois[i];
+            bool shown = Visited.Contains(i) || Landmarks && poi.Kind != PoiKind.Secret;
+            if (!shown) continue;
             Color col = LevelView.PoiColor(poi.Kind);
             Vector2 p = P(poi.Position);
-            bool revealed = Visited.Contains(i) || (Seen?.At(poi.Position) ?? 0f) > 0.5f;
-            if (revealed && poi.Kind is PoiKind.Shop or PoiKind.TreasureCave)
+            if (poi.Kind is PoiKind.Shop or PoiKind.TreasureCave)
             {
                 if (poi.Kind == PoiKind.Shop) DrawShopIcon(p, font);
                 else DrawTrophyIcon(p);
-                continue;
-            }
-            if (!Visited.Contains(i))
-            {
-                if (Spotted is not null && !Spotted.Contains(i)) continue;
-                DrawCircle(p, 7f, new Color(1f, 1f, 1f, 0.75f));
-                DrawArc(p, 7f, 0f, Mathf.Tau, 24, Ink, 1.2f, true);
-                DrawString(font, p + new Vector2(-4f, 5f), "?", HorizontalAlignment.Left, -1, 14, Ink);
                 continue;
             }
             if (poi.Kind == PoiKind.Exit && ShowDetail)
@@ -300,7 +293,7 @@ public partial class TopoMap : Control
         DrawString(font, p + new Vector2(-4.5f, 5.5f), "$", HorizontalAlignment.Left, -1, 15, Ink);
     }
 
-    /// <summary>The treasure room: a gold trophy cup on a gold disc.</summary>
+    /// <summary>The clam room: a gold trophy cup on a gold disc.</summary>
     void DrawTrophyIcon(Vector2 p)
     {
         DrawCircle(p, 9.5f, Ink);
@@ -318,7 +311,7 @@ public partial class TopoMap : Control
         var rows = new (PoiKind Kind, string Name)[]
         {
             (PoiKind.Start, "Start"), (PoiKind.Exit, "Way down"), (PoiKind.ShellCache, "Shell cache"), (PoiKind.Shop, "Shop"),
-            (PoiKind.TreasureCave, "Treasure"), (PoiKind.CurseDen, "Curse den"), (PoiKind.Secret, "Secret"), (PoiKind.Ambush, "Ambush"),
+            (PoiKind.TreasureCave, "Clam room"), (PoiKind.CurseDen, "Curse den"), (PoiKind.Secret, "Secret"), (PoiKind.Ambush, "Ambush"),
         };
         var at = new Vector2(Size.X - 124f, Size.Y - rows.Length * 16f - 14f);
         DrawRect(new Rect2(at - Vector2.One * 6f, new Vector2(118f, rows.Length * 16f + 8f)), new Color(1f, 1f, 1f, 0.8f));

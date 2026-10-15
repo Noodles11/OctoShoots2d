@@ -43,6 +43,11 @@ uniform float halo_strength = 0.16;
 /// Light bubbles (docs/LIGHT-BUBBLES.md): up to 16 small halos on the swim layer, from her bubbles and the blooms they
 /// leave where they pop: x, z (world), radius (metres), strength (a share of her halo's, ≤ 0.4).
 uniform vec4 bubble_lights[16];
+// Clam rooms (ClamRoomView): warm gold glows filling the room and spilling from its mouth (xz, radius, strength), laid
+// over the water's veil so the room reads through the depth.
+uniform vec4 clam_glows[6];
+uniform int clam_count = 0;
+uniform vec3 clam_color : source_color = vec3(1.0, 0.78, 0.4);
 uniform int bubble_count = 0;
 // Her light and the warm tint of her glow (HerColor.cs, data/clementine_color.cfg).
 global uniform vec3 her_light;
@@ -195,6 +200,14 @@ void fragment() {
 		bubbles += exp(-dot(ob, ob) / (b.z * b.z)) * b.w;
 	}
 	col += bubble_color * bubbles * halo_strength * (0.35 + 0.65 * fog) * (1.0 - smoothstep(0.0, 4.0, above)) * (0.6 + 0.8 * reef_menace);
+	// The clam rooms' gold: lifting what lies in them toward warm light, and a haze of it in the water over them.
+	float clam = 0.0;
+	for (int i = 0; i < clam_count; i++) {
+		vec4 g = clam_glows[i];
+		vec2 og = on_layer.xz - g.xy;
+		clam += exp(-dot(og, og) / (g.z * g.z)) * g.w;
+	}
+	col = col * (1.0 + clam_color * clam * 0.9) + clam_color * clam * 0.22;
 
 	// Rock rising toward the camera: a soft silhouette in the water's colour, darker as the depths darken.
 	vec3 shade = mix(reef_murk * 0.45, vec3(0.01, 0.015, 0.02), reef_menace);

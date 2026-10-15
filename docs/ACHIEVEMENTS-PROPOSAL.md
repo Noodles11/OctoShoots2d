@@ -5,7 +5,7 @@
 
 ## 1. The idea
 
-A run starts with a **basic set** of pearls. Treasure rooms, shops and Queen Clam can offer any of them. Each
+A run starts with a **basic set** of pearls. Clam rooms, shops and Queen Clam can offer any of them. Each
 achievement unlocks **one specific pearl**, which joins the offers from then on. Unlocks are permanent: they are
 saved in the profile across runs.
 
@@ -129,7 +129,7 @@ achievement.
 
 - **Pause menu → Achievements.** All five appear, earned or not. Earned ones show their pearl. Unearned ones show a
   dark pearl silhouette, the title and how to earn it.
-- **First appearance in an offer.** Once an unlocked pearl turns up in a treasure room or shop, a small "NEW" chip
+- **First appearance in an offer.** Once an unlocked pearl turns up in a clam room or shop, a small "NEW" chip
   floats above it.
 
 ## 5. How it would be built

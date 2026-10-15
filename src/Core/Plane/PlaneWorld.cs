@@ -36,6 +36,8 @@ public sealed class PlaneBody
     public float DashCooldownTimer;
     public float Hp = PlaneCombatTuning.PlayerMaxHp;
     public float ShotTimer;
+    /// <summary>Sardine Run: how far the stream has spun up, 0 (her normal rate) → 1 (MinigunMax times as fast).</summary>
+    public float Spin;
     public float HurtTimer;
     /// <summary>Slowed (Queen Clam's royal pearl) while this counts down.</summary>
     public float SlowTimer;
@@ -65,7 +67,7 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
     MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, BossLeap, PearlTouched, PearlShattered,
-    CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout,
+    CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
@@ -137,7 +139,8 @@ public sealed partial class PlaneWorld
     public IReadOnlyList<WeakRock> WeakRocks => _rocks;
 
     public float Radius => Tuning.PlayerRadius;
-    public float CruiseSpeed => Tuning.PlaneCruiseSpeed;
+    /// <summary>Her cruising speed: the tuning's, times her speed stat (Squid Ink Espresso, Dolphin Fin, Sea Cucumber…).</summary>
+    public float CruiseSpeed => Tuning.PlaneCruiseSpeed * Run.Loadout.Stats.Speed;
 
     public void Step(in PlaneInput input)
     {
@@ -170,7 +173,7 @@ public sealed partial class PlaneWorld
             Vector2 dir = hasInput ? wishDir : p.Aim;
             p.DashTimer = t.DashCoast;
             p.DashInvulnerableTimer = t.DashInvulnerable;
-            p.DashCooldownTimer = t.DashCooldown;
+            p.DashCooldownTimer = t.DashCooldown * Run.Loadout.Stats[OctoShoots.Core.Items.Stat.DashCooldown];
             p.Velocity = dir * cruise * t.DashMultiplier;
             p.JetTimer = 0f;
             Clouds.Add(new PlaneInk { Position = p.Position, Radius = t.InkCloudRadius, Life = t.InkCloudLife, MaxLife = t.InkCloudLife });

@@ -286,11 +286,11 @@ seabed by the rules below.
   fissure 14–18 m long; the Crack is the shaft.
 - **The level's places** come from its plan. At most **5** besides the start
   and the exit (the boss arena counts); over the cap they are dropped in the
-  order ambushes, curse den, secret, shell cache (treasure rooms stay):
+  order ambushes, curse den, secret, shell cache (clam rooms stay):
 
   | Place | Level 1 of a depth | Level 2+ |
   |---|---|---|
-  | Treasure room | always 1 | at most 2 per depth: a 2nd at 50%, on one level from 2 to the boss level |
+  | Clam room | always 1 | at most 2 per depth: a 2nd at 50%, on one level from 2 to the boss level |
   | Secret room | 40% | 40% |
   | Curse den | 30% | 30% |
   | Shop | never | 45% |
@@ -298,7 +298,7 @@ seabed by the rules below.
   | Ambush | 0–2 | 0–2 |
   | Boss arena | — | level 4 at 50%, else level 5 |
 
-  The shop, secrets, treasure rooms and curse den sit in caves (Stage 4);
+  The shop, secrets, clam rooms and curse den sit in caves (Stage 4);
   ambushes and the shell cache are open clearings. The shell cache sits at
   40–60% of the start→exit axis, preferentially *off* the main corridors
   (rewards leaving the path).
@@ -306,7 +306,7 @@ seabed by the rules below.
   and ≥ 39 m from the start (their keep-outs never reach a stamp), and clear of
   the stamps' canyon lines; exactly one sits "early", 39–47 m from the start —
   the shop if the level has one (usually; to teach the economy), else a
-  treasure room, else another place. The shell cache never sits early (it keeps
+  clam room, else another place. The shell cache never sits early (it keeps
   to the middle of the way), so a level whose only place is the cache has no
   early place.
 
@@ -408,7 +408,7 @@ between the places, before any rock exists:
   champions by depth (all inherited).
 
 ### 4.2 Special places (caves, inherited from DESIGN-3D §6.4)
-- Treasure cave, **Barnaby's shop** (safe water, inherited §24), curse den,
+- Clam room, **Barnaby's shop** (safe water, inherited §24), curse den,
   **secret cave** (plugged by weak rock — one ink bomb), Mermaid's Grotto
   portal after bosses.
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
@@ -427,7 +427,7 @@ between the places, before any rock exists:
     else when the dark lifts — just outside a place she has not visited yet (never the way down, the boss's arena or
     the start), or a visited one when none are left.
   - No creatures live in it.
-- **Landmark light language** inherited: gold (treasure), green (shop),
+- **Landmark light language** inherited: gold (clam rooms), green (shop),
   red (curse), violet (secret, **no beacon** — found, not advertised),
   orange (the Crack); and white (the start), teal (the shell cache), coral (ambushes; warm but not gold, so
   they never read as treasure). In dark depths these lights are the level's signage —
@@ -714,7 +714,7 @@ The FP staging ("look up through the surface") is replaced:
 - **Achievements unlock pearls** (`data/achievements.json`, `PlaneAchievements`;
   the design is docs/ACHIEVEMENTS-PROPOSAL.md). A run starts with the **basic
   set**: every ported pearl without an `unlock` (DESIGN docs/PEARLS.md). Each of
-  the five achievements unlocks one pearl, which treasure rooms, shops and
+  the five achievements unlocks one pearl, which clam rooms, shops and
   Queen Clam offer from the moment it is earned — the rest of that run included
   — and in every run after. Earned once per profile and saved at once; **a run
   on a custom seed never earns one** (unlocks already earned still apply).
@@ -734,7 +734,7 @@ The FP staging ("look up through the surface") is replaced:
   luck: every freed foe leaves 2 more shells; **Pirate's Doubloon** — +15 shells
   when taken, and shell caches hold 50% more. **Plankton Swarm** (basic) adds
   two smaller, half-damage bubbles to every volley. A pearl newly unlocked wears
-  a mint **NEW** chip the first time a treasure room or shop offers it.
+  a mint **NEW** chip the first time a clam room or shop offers it.
 
 ---
 
@@ -843,16 +843,16 @@ at mist distance (inherited fade rule).
 2. **Minimap orientation:** §3 says north is always up and "the minimap and world agree"; §9 says the minimap
    "rotates so forward is up (inherited)". Built north-up, matching the fixed camera. The minimap (90 m across, a thin
    outline) shows only the wall edges (the swim-level coastline) under fog of war: Clementine reveals the water within
-   15 m of her (a third of its radius, with a soft 10 m gradient centred on that edge), and it stays revealed for the level. An unvisited place shows as
-   "?" once she has come within 22.5 m (half its radius), above the fog; a visited one as a dot in its landmark
-   colour. The shop and treasure rooms show their icons — a green "$" coin and a gold trophy — as soon as the fog
-   over them is lifted (on the Tab map too). Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
+   15 m of her (a third of its radius, with a soft 10 m gradient centred on that edge), and it stays revealed for the
+   level. A place shows on the maps (minimap and Tab) only once she has been there: a dot in its landmark colour, or
+   for the shop and clam rooms their icons (a green "$" coin, a gold trophy). There are no hints for places not
+   yet found. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
    names it under the minimap (all but the start); there are no beacons.
 3. **Ninja respawn:** §6.3 carries the ninja over "intact (… nest respawn)"; the inherited Ink Deep rules
    (DESIGN-2D §1, DEPTH1-BESTIARY §8) free a defeated ninja into its school for good, and the current Core does that.
 4. **Cave count vs special rooms:** Stage 4 asks for 1–2 pockets and 1–2 multi-chamber caves (2–4 caves), while
-   §4.2 puts every special room in a cave: shop, treasure, 1–2 secrets and 0–1 curse den (3–5 rooms). Built: each
-   special room gets its own cave (treasure multi-chamber, the curse den a tunnel, shop and secrets pockets), so a
+   §4.2 puts every special room in a cave: shop, clam room, 1–2 secrets and 0–1 curse den (3–5 rooms). Built: each
+   special room gets its own cave (clam room multi-chamber, the curse den a tunnel, shop and secrets pockets), so a
    level can have 3 pockets and 5 caves.
 5. **Secret cave vs reachability:** the secret cave is plugged by weak rock, but every POI must be flood-fill
    reachable. Built: the heightfield reaches it; the plug is a separate `WeakRock` that blocks swimming until it
@@ -916,13 +916,25 @@ at mist distance (inherited fade rule).
   trio to each anemone on the seabed by the rock, dart out at most 1.6 m and back, and tuck in while she is within
   2.5 m. **Blue tangs**, alone or in pairs, hop 6–14 m about home and graze at each spot, and veer off when she comes
   within 1.5 m. **Blue-green chromis** school round a centre that roams the channels, parting round her and closing
-  behind. Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 1 has 4–6
-  anemones, 4–7 tangs and 3–5 schools of 15–30; Depth 2 fewer (2–3, 2–4, 2–3 of 10–20); Depth 3 at most one anemone,
-  1–2 tangs and one school; Depths 4 and below none.
+  behind. **A school is a guide:** on a level with a secret room she has not found, swimming into a school makes it
+  hold still and gather into an arrow (a short chevron head, a long two-lane shaft, sized to the school) pointing at
+  the secret's way in (its weak rock), every fish facing along it, with a soft chime; it loosens back into a school
+  when she leaves, and once the secret is found it no longer points. Schools are few but big, so they visibly split and join: a school spreads over about 0.33 m × √(its fish).
+  Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 1 has 4–6
+  anemones, 4–7 tangs and 1–2 schools of 45–90; Depth 2 fewer (2–3, 2–4, one school of 30–60); Depth 3 at most one
+  anemone, 1–2 tangs and at most one school of 30–45; Depths 4 and below none.
 - **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
   her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
   mobs from then on: she may swim away, and they stay. An ambush springs once.
-- **Pearls (first pass):** each treasure room holds one pearl she does not have yet, from the 19 ported to the
+- **Clam rooms (look):** the room is the inside of a giant clam. A shell wall of mother-of-pearl lines the chamber
+  (ribbed, scalloped at the top, open at the mouth): iridescent and glowing faintly from inside, weathered shell outside.
+  In the middle the clam's lower valve holds a pink velvet tongue, and the pearl lies still on it. About 80 gold
+  motes spiral round the pearl. A warm gold light fills the room and spills out of its mouth into the canyon, with a
+  few motes drifting out, and the water pass lays a gold haze over the room and its mouth (ClamRoomView, `clam_glows`
+  in topdown_post). The light is brighter the deeper she is (0.6 at Depth 1, +0.3 per depth, at most 2.2), so in dark
+  depths the room is a beacon. When the pearl is taken, the motes fling out and dissolve over 1.2 s and the light
+  settles to an ember (35%).
+- **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
   plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json); the
   pearls she carries show as dots bottom left, and taking one shows its name and tagline.
   - **Shots:** Triple Tentacle (3-shot fan), Hammerhead (5-shot cone), Anglerfish Lure (homing), Swordfish Bill
@@ -968,7 +980,7 @@ at mist distance (inherited fade rule).
   a quarter of the time), else nothing — about one heart and six shells a level from mobs. The shop
   has three stand slots: a pearl she does not have on half the visits (30 shells), always a heart (a health top-up:
   +25 HP, 5 shells, only when hurt), and a third slot kept empty for wares to come. The
-  goods float on their own (pearls as in a treasure room, the top-up as a red heart), each with a small price tag on a
+  goods float on their own (pearls as in a clam room, the top-up as a red heart), each with a small price tag on a
   string (the price and a shell), shown only while she is inside the shop; she buys by touching one. The HUD counter (a shell icon and the number) sits above the pearls and brightens and
   swells with every shell collected. Shells carry down with her pearls and HP.
 - **Queen Clam (the Depth 1 boss, `PlaneBoss.cs`, adapted from DEPTH1-BESTIARY §5):** she guards the Crack on every

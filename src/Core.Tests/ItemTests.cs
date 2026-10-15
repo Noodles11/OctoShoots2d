@@ -17,8 +17,8 @@ public class ItemTests
     [Fact]
     public void CatalogLoadsTheFullSet()
     {
-        Assert.Equal(64, Catalog.Items.Count);
-        Assert.Equal(14, Catalog.Synergies.Count);
+        Assert.Equal(68, Catalog.Items.Count);
+        Assert.Equal(15, Catalog.Synergies.Count);
         Assert.Equal(5, Catalog.Transformations.Count);
         Assert.Equal(11, Catalog.Items.Count(i => i.Kind == ItemKind.Active));
     }
@@ -122,13 +122,15 @@ public class ItemTests
     }
 
     [Theory]
-    [InlineData("pufferfish_pout", "×1.5 damage")]
-    [InlineData("pufferfish_pout", "−0.2 shot speed")]
+    [InlineData("pufferfish_pout", "+50% damage")]
+    [InlineData("pufferfish_pout", "−20% shot speed")]
+    [InlineData("shark_tooth", "+14% damage")]
+    [InlineData("squid_ink_espresso", "+30% swim speed")]
     [InlineData("coral_crown", "+20 max HP")]
     [InlineData("frost_kelp", "12% chance to freeze foes for 1.6s")]
     [InlineData("conch_horn", "Recharges in 30s")]
     [InlineData("lamprey_mouth", "Kills heal 3 HP")]
-    [InlineData("whale_lung", "No idle sinking")]
+    [InlineData("whale_lung", "+30% shot size")]
     [InlineData("hammerhead", "Fires a 5-pellet cone")]
     [InlineData("barnacle_armor", "+30 foam HP")]
     public void CaptionsListRealNumbers(string item, string line)

@@ -16,7 +16,7 @@ clearings bud murklings instead. The healthy fish still swim the reef.
   60% of the floor near the deep end is corrupt against about 12% at the far side.
 - **Spreading:** Blotters smear corruption over clean floor (`CorruptionField.Spread`). Spread ink counts toward the
   level's total to cleanse, and Blightroots regrow it. It never reaches safe places (`Guard`).
-- **Safe places** (the start, shops and treasure caves) are clean out to their radius + 3 m, feathered over 4 m.
+- **Safe places** (the start, shops and clam rooms) are clean out to their radius + 3 m, feathered over 4 m.
   Blightroots never stand within 18 m of their edge.
 - The **boss arena** is the condensation zone: density 1 everywhere inside.
 - **Her light** cleanses a 2.4 m disc under her at 3.2 density/s. Lantern Pearl's glow widens it. The corruption

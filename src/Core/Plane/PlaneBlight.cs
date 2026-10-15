@@ -422,10 +422,10 @@ public sealed partial class PlaneWorld
     /// A burst of her light (the Starburst Gland): it cleanses the ground it floods and strikes every corrupted
     /// creature in reach, each taking the burst's light off its meter.
     /// </summary>
-    void BurstOnCorruption(Vector2 at, float reach, float light)
+    void BurstOnCorruption(Vector2 at, float reach, float light, bool cleanse = true)
     {
         if (Corruption is not { } field) return;
-        field.Cleanse(at, reach, 0.9f);
+        if (cleanse) field.Cleanse(at, reach, 0.9f);
         foreach (var m in Murklings)
         {
             if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, at) > reach + BlightTuning.MurkRadius) continue;

@@ -62,7 +62,7 @@ Each level is stocked from its own roll, at most **5 POIs**, not counting the st
 
 | POI | Level 1 | Level 2+ | Notes |
 |---|---|---|---|
-| Treasure room | 1, plus a 2nd at **20%** | **95%** for one; a 2nd at **3%** | Holds one pearl she does not have yet. |
+| Clam room | 1, plus a 2nd at **20%** | **95%** for one; a 2nd at **3%** | Holds one pearl she does not have yet. |
 | Secret room | 0–1 (**40%**) | 0–1 (**40%**) | 8–12 shells, trapped. |
 | Curse den | 0–1 (**30%**) | 0–1 (**30%**) | |
 | Shop | never | **45%** | 2 pearls at 15 shells each, plus a health top-up. |
@@ -301,7 +301,7 @@ Shells per level today vs. under the new roll:
 | **B. Make it a POI in the roll** (e.g. 60%) | Some levels have it, some don't | Fits the cap; more variety | Shells get swingier when the shop is rarer too |
 | **C. Drop it** | Shells come from secrets and mobs only | Simplest; fewer places on a smaller map | ~10–20 fewer shells per level, while a pearl costs 15 |
 
-**Decided: B at 60%, kept out of level 1** (where the treasure room already rewards exploring). Shell income
+**Decided: B at 60%, kept out of level 1** (where the clam room already rewards exploring). Shell income
 stays close to today's per level, on top of the drops. Level 1 gets an extra treasure chance instead.
 
 ### Q2. What does "it will loop" mean at the end?
@@ -342,7 +342,7 @@ change below is in DESIGN-TOPDOWN as the rule:
 | Arches, passes | 1–5 arches, ≥ 1 pass | **0–5 arches, 0–3 passes** | Fewer flanks and saddles fit outside the stamps. |
 | Side canyons, plazas | ≥ 4, 2–4 | **≥ 2, 1–4** | A smaller labyrinth. |
 | Routes | 3–5 | **3–4** | |
-| Treasure rooms | multi-chamber caves | a single pocket where the ridge behind is too thin | It was the commonest reason a level failed. |
+| Clam rooms | multi-chamber caves | a single pocket where the ridge behind is too thin | It was the commonest reason a level failed. |
 
 A level now generates in about 6 attempts on average (0.3–3 s). The level below is made on one thread while she
 plays, so the frame rate holds.

@@ -24,12 +24,7 @@ public partial class PadMenus : Node
 	public override void _Input(InputEvent e)
 	{
 		if (e is not (InputEventJoypadButton or InputEventJoypadMotion)) return;
-		if (InputSetup.FromEvent(e, pad: true) is { } code)
-		{
-			InputSetup.LastPad = code;
-			if (e is InputEventJoypadButton { Pressed: true } b)
-				GD.Print($"Pad {b.Device} ({Input.GetJoyName(b.Device)}, {(Input.IsJoyKnown(b.Device) ? "recognised" : "not recognised")}): {code}");
-		}
+		if (InputSetup.FromEvent(e, pad: true) is { } code) InputSetup.LastPad = code;
 		if (Capturing || !HasFocus()) return;
 		// The menu's pad input is ours: the GUI only sees the ui actions sent from _Process.
 		foreach (var (menu, _) in InputSetup.MenuActions)

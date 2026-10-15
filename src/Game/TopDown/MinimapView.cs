@@ -20,8 +20,6 @@ public partial class MinimapView : Control
     /// where the old 5 m rim was, so the area reads the same size with a softer edge.
     /// </summary>
     public const float RevealSoft = 10f, RevealRadius = Span / 2f / 3f - 2.5f + RevealSoft / 2f;
-    /// <summary>An unvisited place shows its "?" once she has been this close (half the minimap's radius).</summary>
-    public const float SpotRadius = Span / 2f / 2f;
 
     TopoMap _map = null!;
     TextureRect _shown = null!;
@@ -198,11 +196,17 @@ public partial class MinimapView : Control
 
     public void SetVisited(IReadOnlySet<int> visited) => _map.Visited = visited;
 
-    public void SetFog(FogOfWar fog, IReadOnlySet<int> spotted)
+    /// <summary>Brass Compass: every place on the map, visited or not (secret rooms excepted).</summary>
+    public bool Landmarks
+    {
+        get => _map.Landmarks;
+        set => _map.Landmarks = value;
+    }
+
+    public void SetFog(FogOfWar fog)
     {
         _map.Fog = fog;
         _map.Seen = fog;
-        _map.Spotted = spotted;
     }
 
     /// <summary>The mud cloud around the boss arena (0: none).</summary>

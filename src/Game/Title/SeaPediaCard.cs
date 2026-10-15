@@ -228,14 +228,14 @@ public partial class SeaPediaCard : PanelContainer
         if (state == Known.Unknown || item is null)
         {
             names.AddChild(TitleStyle.Text("Not found yet", 28, TitleStyle.Ink, TitleStyle.Display));
-            names.AddChild(Wrapped("Find it in a treasure room, a shop, or on a freed boss.", 15, TitleStyle.InkSoft, width: 230f));
+            names.AddChild(Wrapped("Find it in a clam room, a shop, or on a freed boss.", 15, TitleStyle.InkSoft, width: 230f));
             return;
         }
         names.AddChild(TitleStyle.Text(item.Name, 30, TitleStyle.Ink, TitleStyle.Display));
         names.AddChild(Wrapped(item.Tagline, 16, TitleStyle.InkSoft, width: 230f));
         if (state == Known.Seen) names.AddChild(Chip("SEEN, NOT TAKEN", new Color(1f, 0.9f, 0.86f), TitleStyle.InkSoft));
         foreach (string line in ItemCaption.Describe(item)) _detail.AddChild(Wrapped("+ " + line, 16, TitleStyle.Ink, TitleStyle.BodyBold));
-        _detail.AddChild(Wrapped("Found in: " + string.Join(", ", item.Pools.Select(p => p switch { "treasure" => "treasure rooms", "shop" => "shops", "boss" => "bosses", _ => p })), 14, TitleStyle.InkSoft));
+        _detail.AddChild(Wrapped("Found in: " + string.Join(", ", item.Pools.Select(p => p switch { "treasure" => "clam rooms", "shop" => "shops", "boss" => "bosses", _ => p })), 14, TitleStyle.InkSoft));
         _detail.AddChild(new HSeparator());
         var r = _profile.Pearls.GetValueOrDefault(id) ?? new PearlRecord();
         _detail.AddChild(Record(("Absorbed", r.Absorbed.ToString("N0")), ("Runs it was in", r.Runs.ToString("N0")),

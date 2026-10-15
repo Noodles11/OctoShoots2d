@@ -45,11 +45,11 @@ public static class ReefFishMeshes
 
     /// <summary>Blue-green chromis (Chromis viridis): small and slim, a deeply forked tail.</summary>
     public static readonly Spec Chromis = new(
-        Length: 0.26f, Height: 0.065f, Width: 0.028f, Peak: 0.38f, Stem: 0.22f, NoseK: 1.9f, Belly: 1.0f,
+        Length: 0.34f, Height: 0.085f, Width: 0.036f, Peak: 0.38f, Stem: 0.22f, NoseK: 1.9f, Belly: 1.0f,
         DorsalFrom: 0.28f, DorsalTo: 0.8f, DorsalHeight: 0.18f, DorsalNotch: 0f,
         AnalFrom: 0.58f, AnalTo: 0.8f, AnalHeight: 0.16f,
         Tail.Forked, TailLength: 0.36f, TailSpan: 0.42f, Pectoral: 0.2f, Pelvic: 0.1f,
-        EyeU: 0.15f, EyeAngle: 0.35f, EyeRadius: 0.017f);
+        EyeU: 0.15f, EyeAngle: 0.35f, EyeRadius: 0.022f);
 
     /// <summary>The body's rings along it and segments round it; a small fish (seen only small) needs fewer.</summary>
     static (int Rings, int Around) Detail(Spec s) => s.Length < 0.3f ? (18, 14) : (30, 28);
