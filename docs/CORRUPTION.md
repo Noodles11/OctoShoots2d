@@ -92,7 +92,11 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 - **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
   shines brighter than her). This makes bait and herding possible.
 - **Attack:** a black orb thrown when she is within 9 m and in sight, for 7 damage. It flies at 10 + 1.5 × Menace m/s
-  and is thrown every ~2.4 s / (1 + 0.25 × Menace).
+  and is thrown every ~2.4 s / (1 + 0.25 × Menace). A throw that flies 9 m without hitting anything falls: it sinks
+  to the sand over 0.45 s (harmless now, under her plane) and lands with a small splat, staining 0.9 m of the floor
+  toward 0.7 density (never in safe places). Struck in the air by her light (a shot or Firefly Squid's surge), it
+  bursts like a water balloon: a quick spray of ink droplets and a puff of violet mist, staining nothing and
+  cleansing nothing.
 - **Contact:** 6 damage, then it clings (at most 3 at once), draining 2.5 HP/s each and dimming her bell. Feeding shows
   as one corruption number a second, summed over it. A dash bursts her light: each clinging murkling is thrown off
   (9 m/s), losing one default shot's worth (10) of its meter, and is dazed for 0.7 s. Then it chases her again. One

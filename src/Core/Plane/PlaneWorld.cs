@@ -12,6 +12,11 @@ public struct PlaneInput
     public bool Dash;
     /// <summary>Unit aim direction on the plane (mouse or arrow keys).</summary>
     public Vector2 Aim;
+    /// <summary>
+    /// How far her light should fly (m): to the pointer, or as far as the right stick is pushed. 0 is all the way (her
+    /// range); nearer than PlaneCombatTuning.MinReach it flies MinReach.
+    /// </summary>
+    public float AimReach;
     /// <summary>Held: shoot along Aim (with Pearl Diver, held charges a pearl and letting go throws it).</summary>
     public bool Fire;
     /// <summary>Pressed: use the active pearl (F).</summary>
@@ -38,6 +43,8 @@ public sealed class PlaneBody
     public float ShotTimer;
     /// <summary>Sardine Run: how far the stream has spun up, 0 (her normal rate) → 1 (MinigunMax times as fast).</summary>
     public float Spin;
+    /// <summary>How far her light should fly (PlaneInput.AimReach; 0 is her full range).</summary>
+    public float AimReach;
     public float HurtTimer;
     /// <summary>Slowed (Queen Clam's royal pearl) while this counts down.</summary>
     public float SlowTimer;
@@ -66,7 +73,7 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     ChargeFull, LightBurst, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
     SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
-    MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, BossLeap, PearlTouched, PearlShattered,
+    MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
     ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
@@ -151,6 +158,7 @@ public sealed partial class PlaneWorld
         var t = Tuning;
         p.PrevPosition = p.Position;
         if (input.Aim.LengthSquared() > 1e-6f) p.Aim = Vector2.Normalize(input.Aim);
+        p.AimReach = input.AimReach;
 
         Vector2 wish = input.Move;
         float wishLen = wish.Length();

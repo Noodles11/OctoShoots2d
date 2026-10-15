@@ -326,8 +326,11 @@ public partial class BlightView : Node3D
             view.Visible = i < world.MurkShots.Count;
             if (!view.Visible) continue;
             var s = world.MurkShots[i];
-            view.Position = new Vector3(s.Position.X, LevelMap.SwimBand, s.Position.Y);
-            var along = new Vector3(s.Velocity.X, 0f, s.Velocity.Y);
+            // Flown its range, it drops to the sand, falling faster as it goes.
+            float drop = s.Airborne ? 0f : Mathf.Clamp(s.Fall / BlightTuning.ThrowFallSeconds, 0f, 1f);
+            float y = Mathf.Lerp(LevelMap.SwimBand, Floor(s.Position) + BlightTuning.ThrowRadius * 0.5f, drop * drop);
+            view.Position = new Vector3(s.Position.X, y, s.Position.Y);
+            var along = new Vector3(s.Velocity.X, -drop * 6f, s.Velocity.Y);
             // Stretched along its flight, a smear of dark.
             view.Basis = along.LengthSquared() > 1e-4f ? Basis.LookingAt(along.Normalized(), Vector3.Up).Scaled(new Vector3(1f, 1f, 1.8f)) : Basis.Identity;
             view.Scale = new Vector3(BlightTuning.ThrowRadius * 1.2f, BlightTuning.ThrowRadius * 1.2f, BlightTuning.ThrowRadius * 2.2f);
@@ -506,6 +509,26 @@ public partial class BlightView : Node3D
                 var from = new Vector3(e.Position.X, floor + 0.15f, e.Position.Y);
                 AddRipple(e.Position, floor + 0.07f, 0.3f, e.Size * 1.2f, 0.6f, new Color(Ink.R, Ink.G, Ink.B, 0.9f));
                 _droplets.Burst(from, Vector3.Up, 34, 5f, 0.85f, 0.7f, 0.2f, 0.04f, new Color(0.03f, 0.01f, 0.05f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2.5f);
+                break;
+            }
+            case PlaneEventType.MurkShotLanded:
+            {
+                // A throw that fell: it splats on the sand, a small dark ring spreading where it stains.
+                float floor = Floor(e.Position);
+                var from = new Vector3(e.Position.X, floor + 0.08f, e.Position.Y);
+                AddRipple(e.Position, floor + 0.06f, 0.15f, e.Size * 1.3f, 0.45f, new Color(Ink.R, Ink.G, Ink.B, 0.85f));
+                _droplets.Burst(from, Vector3.Up, 12, 2.2f, 0.9f, 0.45f, 0.09f, 0.02f, new Color(0.03f, 0.01f, 0.05f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 3f);
+                break;
+            }
+            case PlaneEventType.MurkShotBurst:
+            {
+                // Struck in the air, it bursts like a water balloon: a quick spray of ink droplets flung out all round
+                // (mostly on along its flight), a puff of violet mist, and nothing left behind.
+                var on = new Vector3(e.Direction.X, 0f, e.Direction.Y);
+                _droplets.Burst(at, Vector3.Up, 16, 3.6f, 1f, 0.32f, 0.08f, 0.015f, new Color(0.04f, 0.01f, 0.07f, 0.95f), new Color(0.3f, 0.1f, 0.5f, 0f), drag: 4f);
+                if (on.LengthSquared() > 1e-4f)
+                    _droplets.Burst(at, on.Normalized(), 8, 3f, 0.6f, 0.3f, 0.07f, 0.015f, new Color(0.04f, 0.01f, 0.07f, 0.95f), new Color(0.3f, 0.1f, 0.5f, 0f), drag: 4f);
+                _droplets.Burst(at, Vector3.Up, 5, 0.6f, 1f, 0.5f, 0.28f, 0.45f, new Color(0.25f, 0.1f, 0.4f, 0.35f), new Color(0.35f, 0.15f, 0.55f, 0f), drag: 2f);
                 break;
             }
             case PlaneEventType.CacheRevealed:

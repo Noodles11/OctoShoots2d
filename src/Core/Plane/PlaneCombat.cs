@@ -19,14 +19,17 @@ public static class PlaneCombatTuning
 
     /// <summary>
     /// Her shots are light (docs/LIGHT-BUBBLES.md; the rules still call them bubbles): thrown hard at ShotSpeed, light
-    /// has no friction, so it flies on undimmed at full speed to the end of its BubbleRange and goes out there like a
-    /// match (no hovering, no burst). ShotLife is only a safety net. With Bubble Coral her light lingers instead (see
+    /// has no friction, so it flies on undimmed at full speed to where she aims (the pointer, or as far as the right
+    /// stick is pushed; never nearer than MinReach) or the end of her range, whichever is nearer, and goes out there like
+    /// a match (no hovering, no burst), clearing a little of the ground's corruption where it does. BubbleRange is her
+    /// range with no pearls: half the screen's height at the 100% camera zoom (the framing shows 25.6 m of the swim
+    /// band top to bottom). ShotLife is only a safety net. With Bubble Coral her light lingers instead (see
     /// LingerDrag): it slows to a hover near the end of its range, so later shots catch up and merge with it.
     /// </summary>
     public const float ShotSpeed = 30f;
     /// <summary>The surge back to her after a hit cleanses a line of ground this wide, by this much density.</summary>
     public const float StrikeWidth = 0.6f, StrikeCleanse = 0.25f;
-    public const float BubbleRange = 11.5f, LightSettle = 8f;
+    public const float BubbleRange = 12.8f, MinReach = 1.5f, LightSettle = 8f;
     /// <summary>
     /// Below this speed a bubble hovers: still drifting and slowing, each bubble for its own time between BubbleHoverMin
     /// and BubbleHoverMax seconds (times her bubble hover stat), then it pops.
@@ -83,7 +86,10 @@ public static class PlaneCombatTuning
 
     /// <summary>A pearl is picked up within this distance of her edge.</summary>
     public const float PearlReach = 0.8f;
-    /// <summary>Homing shots turn this fast toward the nearest mob within reach.</summary>
+    /// <summary>
+    /// Homing shots lock onto the one creature nearest the shot (within reach, ahead of it) and turn this fast toward
+    /// it, keeping it until it is freed, struck by a piercing shot, out of reach or passed; then they pick the next.
+    /// </summary>
     public const float HomingDegPerSec = 240f;
     public const float HomingReach = 12f;
     /// <summary>Wave shots weave this far either side of their line, this many times a second.</summary>
@@ -164,6 +170,8 @@ public sealed class PlaneShot
     public float Age;
     public float Traveled;
     public bool Homing, Pierce, Boomerang, Returning, Wave;
+    /// <summary>A homing shot's locked target (a pufferling or a murkling).</summary>
+    public object? Quarry;
     /// <summary>Starfish Arm: it grows as it flies. Starburst Gland: it bursts into light where it pops. Mitosis: it splits on a pop.</summary>
     public bool Grow, Explosive, Split;
     /// <summary>Pistol Shrimp Claw: it collapses with a bang where it pops or goes out.</summary>
@@ -401,9 +409,11 @@ public sealed partial class PlaneWorld
         StepAmbushes();
         StepActive(input);
 
-        // Clementine's shots, toward her aim while fire is held, shaped by her pearls.
+        // Clementine's shots, toward her aim while fire is held, shaped by her pearls. Firefly Squid pours them out as
+        // one continuous surge instead (PlaneSurge.cs).
         bool aimed = p.Aim.LengthSquared() > 0.5f;
-        if (Run.Loadout.Shot.Charge)
+        if (Run.Loadout.Flags.Contains("surge")) StepSurge(input.Fire && aimed);
+        else if (Run.Loadout.Shot.Charge)
         {
             // Pearl Diver: held, the next throw charges; let go, it flies.
             if (input.Fire && aimed)
@@ -570,18 +580,19 @@ public sealed partial class PlaneWorld
     /// Starburst Gland: a popped shot bursts into light, striking every creature within reach (pufferlings, murklings,
     /// Blotters, a Blightroot's sac, Queen Clam while open), breaking pots, and cleansing the ground it floods.
     /// </summary>
-    void LightBurst(PlaneShot shot)
+    void LightBurst(PlaneShot shot) =>
+        LightBurst(shot.Position, PlaneCombatTuning.BurstRadius + shot.Radius, shot.Damage * GrowFactor(shot) * PlaneCombatTuning.BurstDamage);
+
+    void LightBurst(Vector2 at, float reach, float damage)
     {
-        float reach = PlaneCombatTuning.BurstRadius + shot.Radius;
-        float damage = shot.Damage * GrowFactor(shot) * PlaneCombatTuning.BurstDamage;
-        Events.Add(new PlaneEvent(PlaneEventType.LightBurst, shot.Position, Vector2.Zero, reach));
-        BurstOnCorruption(shot.Position, reach, damage);
+        Events.Add(new PlaneEvent(PlaneEventType.LightBurst, at, Vector2.Zero, reach));
+        BurstOnCorruption(at, reach, damage);
         foreach (var mob in Mobs)
-            if (mob.Alive && Vector2.Distance(mob.Position, shot.Position) < reach + mob.Radius)
-                DamageMob(mob, damage, mob.Position - shot.Position);
-        if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.Position, shot.Position) < reach + PlaneBossTuning.BodyRadius)
-            DamageBoss(boss, damage, boss.Position - shot.Position);
-        BlastVases(shot.Position, reach);
+            if (mob.Alive && Vector2.Distance(mob.Position, at) < reach + mob.Radius)
+                DamageMob(mob, damage, mob.Position - at);
+        if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.Position, at) < reach + PlaneBossTuning.BodyRadius)
+            DamageBoss(boss, damage, boss.Position - at);
+        BlastVases(at, reach);
     }
 
     void BeginRitual(PlanePearl pearl)
@@ -702,6 +713,16 @@ public sealed partial class PlaneWorld
     float ShotSpeedScale => Run.Loadout.Stats.ShotSpeed / MathF.Max(Tuning.ShotSpeed, 0.01f);
     float RangeScale => Run.Loadout.Stats.Range / MathF.Max(Tuning.Range, 0.01f);
 
+    /// <summary>How far this throw flies: to where she aims (never nearer than MinReach), at most her range.</summary>
+    float ThrowReach
+    {
+        get
+        {
+            float range = PlaneCombatTuning.BubbleRange * RangeScale;
+            return Player.AimReach > 0f ? Math.Clamp(Player.AimReach, PlaneCombatTuning.MinReach, range) : range;
+        }
+    }
+
     /// <summary>The time to her next throw: her fire rate's, and quicker as Sardine Run's stream spins up.</summary>
     float ShotInterval => PlaneCombatTuning.ShotInterval / FireScale / (1f + (PlaneCombatTuning.MinigunMax - 1f) * Player.Spin);
 
@@ -735,7 +756,7 @@ public sealed partial class PlaneWorld
                 Line = at,
                 Velocity = dir * speed,
                 Speed0 = speed,
-                Range = PlaneCombatTuning.BubbleRange * RangeScale,
+                Range = ThrowReach,
                 Life = PlaneCombatTuning.ShotLife + hover,
                 FromPlayer = true,
                 Damage = damage,
@@ -987,31 +1008,28 @@ public sealed partial class PlaneWorld
         }
         else if (shot.Homing)
         {
-            PlaneMob? target = null;
-            float best = PlaneCombatTuning.HomingReach;
-            foreach (var mob in Mobs)
+            // Locked on one creature: kept while it can still be had, else the nearest one ahead is taken.
+            if (shot.Quarry is not null && HomingOn(shot, shot.Quarry, dir) is null) shot.Quarry = null;
+            if (shot.Quarry is null)
             {
-                if (!mob.Alive || shot.Hit?.Contains(mob) == true) continue;
-                float d = Vector2.Distance(mob.Position, shot.Line);
-                if (d < best && Vector2.Dot(mob.Position - shot.Line, dir) > 0f)
+                float best = PlaneCombatTuning.HomingReach;
+                foreach (var mob in Mobs)
+                    Consider(mob);
+                // Murklings draw homing bubbles too.
+                foreach (var m in Murklings)
+                    Consider(m);
+
+                void Consider(object o)
                 {
+                    if (HomingOn(shot, o, dir) is not { } at) return;
+                    float d = Vector2.Distance(at, shot.Line);
+                    if (d >= best) return;
                     best = d;
-                    target = mob;
+                    shot.Quarry = o;
                 }
             }
-            Vector2? aimAt = target?.Position;
-            // Murklings draw homing bubbles too.
-            foreach (var m in Murklings)
-            {
-                if (!m.Alive || m.Budding || m.Clinging) continue;
-                float d = Vector2.Distance(m.Position, shot.Line);
-                if (d < best && Vector2.Dot(m.Position - shot.Line, dir) > 0f)
-                {
-                    best = d;
-                    aimAt = m.Position;
-                }
-            }
-            if (aimAt is { } homeOn) dir = Turn(dir, Vector2.Normalize(homeOn - shot.Line), PlaneCombatTuning.HomingDegPerSec * MathUtil.Deg2Rad * Dt);
+            if (shot.Quarry is not null && HomingOn(shot, shot.Quarry, dir) is { } homeOn && Vector2.DistanceSquared(homeOn, shot.Line) > 1e-6f)
+                dir = Turn(dir, Vector2.Normalize(homeOn - shot.Line), PlaneCombatTuning.HomingDegPerSec * MathUtil.Deg2Rad * Dt);
         }
         shot.Velocity = dir * speed;
 
@@ -1068,8 +1086,9 @@ public sealed partial class PlaneWorld
     /// its centre to where it was struck (the film tears open there first); none, it gives way at a random spot.
     /// </summary>
     /// <summary>
-    /// A shot of her light at the end of its range goes out like a match: no burst and no cleansing burst, only a wisp
-    /// (the view). With the Starburst Gland it still bursts into light.
+    /// A shot of her light at the end of its flight goes out like a match: no burst, only a wisp (the view), but its last
+    /// light still clears a little of the ground's corruption there (as a pop does). With the Starburst Gland it still
+    /// bursts into light, over a wider reach.
     /// </summary>
     void Extinguish(PlaneShot shot)
     {
@@ -1081,6 +1100,7 @@ public sealed partial class PlaneWorld
         }
         shot.Life = -1000f;
         Events.Add(new PlaneEvent(PlaneEventType.ShotOut, shot.Position, SafeNormalize(shot.Velocity), shot.Radius));
+        LightReleased(shot);
     }
 
     /// <summary>
@@ -1141,6 +1161,28 @@ public sealed partial class PlaneWorld
 
     /// <summary>Her bubbles' own rolls (hover times, pops on a bump, where a film gives way), from the level's seed.</summary>
     Rng _bubbleRng = null!;
+
+    /// <summary>
+    /// Where a homing shot would steer for this creature, or null if it cannot have it: freed, budding or clinging, struck
+    /// already by this (piercing) shot, out of reach, or behind it.
+    /// </summary>
+    Vector2? HomingOn(PlaneShot shot, object o, Vector2 dir)
+    {
+        Vector2 at;
+        switch (o)
+        {
+            case PlaneMob mob when mob.Alive && shot.Hit?.Contains(mob) != true:
+                at = mob.Position;
+                break;
+            case Murkling m when m.Alive && !m.Budding && !m.Clinging && shot.Struck != m:
+                at = m.Position;
+                break;
+            default:
+                return null;
+        }
+        if (Vector2.Distance(at, shot.Line) > PlaneCombatTuning.HomingReach || Vector2.Dot(at - shot.Line, dir) <= 0f) return null;
+        return at;
+    }
 
     /// <summary>Turns a unit direction toward another by at most maxRadians.</summary>
     static Vector2 Turn(Vector2 from, Vector2 to, float maxRadians)

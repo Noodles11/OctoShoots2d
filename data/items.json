@@ -223,6 +223,10 @@
       "pearl": { "colors": ["#b5651d", "#e6a157", "#5c3317"], "pattern": "rings" },
       "quality": 1, "pools": ["shop", "treasure"], "tags": ["galleon"],
       "flags": ["landmarks"] },
+    { "id": "firefly_squid", "name": "Firefly Squid", "tagline": "Never blinks",
+      "pearl": { "colors": ["#e8fbff", "#5ad7ff", "#2b2d8c"], "pattern": "speckle" },
+      "quality": 4, "pools": ["treasure", "boss"], "tags": ["glow"],
+      "flags": ["surge"] },
     { "id": "lantern_pearl", "unique": false, "name": "Lantern Pearl", "tagline": "Carry the light down",
       "pearl": { "colors": ["#fff1a8", "#ffe066", "#ff9f1c"], "pattern": "halo" },
       "quality": 1, "pools": ["treasure", "boss"], "tags": ["glow"],
@@ -326,7 +330,15 @@
     { "id": "depth_charge", "name": "Depth Charge", "requires": ["pistol_shrimp", "pearl_diver"],
       "description": "A full-charge pearl's blast is twice as wide and half again as strong" },
     { "id": "broadside", "name": "Broadside", "requires": ["cannonball", "rear_fin"],
-      "description": "Shots out of the back explode" }
+      "description": "Shots out of the back explode" },
+    { "id": "supernova", "name": "Supernova", "requires": ["firefly_squid", "ink_sac"],
+      "description": "The surge bursts into light at its tip and wherever it strikes" },
+    { "id": "lance_of_light", "name": "Lance of Light", "requires": ["firefly_squid", "swordfish_bill"],
+      "description": "The surge runs through every creature in its path" },
+    { "id": "helix_lamp", "name": "Helix Lamp", "requires": ["firefly_squid", "double_helix"],
+      "description": "The surge twists into two strands spiralling round each other" },
+    { "id": "searchlight", "name": "Searchlight", "requires": ["firefly_squid", "hammerhead"],
+      "description": "The surge opens into a wide cone of light" }
   ],
 
   "transformations": [

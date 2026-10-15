@@ -8,8 +8,8 @@
 
 | | Passive | Active | All |
 |---|---|---|---|
-| Pearls | 57 | 11 | 68 |
-| Built | 35 | 2 | 37 |
+| Pearls | 58 | 11 | 69 |
+| Built | 36 | 2 | 38 |
 
 - **Passive** pearls work on their own from the moment she absorbs one: her stats, her bubbles, or something that
   happens when she is hit or frees a creature. They stack.
@@ -78,6 +78,7 @@ HP regeneration (her corruption ebbing), luck, glow and knockback. Stat pearls a
 | Yes | ✅ | **Boomerang Shrimp** | *Always comes back* | Shots return to you | ★★ | treasure |  |
 | Yes | ✅ | **Pearl Diver** | *Patience makes pearls* | Hold to charge a pearl (up to ×3 damage) | ★★★ | treasure, boss |  |
 | Yes |  | **Sunbeam** | *A shaft of the surface, bottled* | Hold to charge a laser beam | ★★★★ | treasure, boss, whale |  |
+| Yes | ✅ | **Firefly Squid** | *Never blinks* | Fire pours out a continuous surge of light instead of shots: 90% of your shots' damage per second to all it touches, clearing a little corruption where it ends. Your other pearls shape it | ★★★★ | treasure, boss |  |
 | Yes | ✅ | **Double Helix** | *Twice the twist* | Fires 2 shots; Shots twist in a double helix | ★★★ | treasure |  |
 | Yes | ✅ | **Triple Tentacle** | *Why squirt once?* | Fires 3 shots; ×0.8 shot damage | ★★★ | treasure, boss |  |
 | Yes | ✅ | **Starfish Arm** | *Grows back bigger* | Shots grow with distance | ★★ | treasure | big_bubble_energy |
@@ -158,6 +159,10 @@ caption reads "Synergy!" with its name, a chime plays and a ring of her light go
 |  | **Feeding Frenzy** | Shark Tooth + Lamprey Mouth | Every creature freed sends you into a fast-firing frenzy |
 | ✅ | **Depth Charge** | Pistol Shrimp Claw + Pearl Diver | A full-charge pearl's blast is twice as wide and half again as strong |
 |  | **Broadside** | Cannonball + Rear Fin | Shots out of the back explode |
+| ✅ | **Supernova** | Firefly Squid + Starburst Gland | The surge bursts into light at its tip and wherever it strikes |
+| ✅ | **Lance of Light** | Firefly Squid + Swordfish Bill | The surge runs through every creature in its path |
+| ✅ | **Helix Lamp** | Firefly Squid + Double Helix | The surge twists into two strands spiralling round each other |
+| ✅ | **Searchlight** | Firefly Squid + Hammerhead | The surge opens into a wide cone of light |
 
 | Transformation | Pearls with the tag | What happens |
 |---|---|---|

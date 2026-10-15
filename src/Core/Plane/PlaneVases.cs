@@ -42,6 +42,8 @@ public sealed class PlaneVase
     public int Shape;
     public float Seed;
     public bool Broken;
+    /// <summary>Firefly Squid's surge on it so far: it breaks once this reaches VaseTuning.BreakImpact.</summary>
+    public float Warmth;
 }
 
 public sealed partial class PlaneWorld

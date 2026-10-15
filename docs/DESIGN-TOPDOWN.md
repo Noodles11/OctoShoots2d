@@ -886,8 +886,10 @@ at mist distance (inherited fade rule).
   thrown at 17 m/s, it slows steadily at first, then — once the water's drag (2.2 × its speed, per second) is the
   gentler — eases off exponentially, the two meeting smoothly at about 6.5 m/s. Slower than 0.9 m/s it hovers, still
   drifting and slowing (about 0.1 m/s left at the end), each bubble for its own time (0.8–1.2 s, rolled as it is
-  thrown, times her **bubble hover** stat, which pearls can change: Bubble Coral ×1.5); then it pops, about 11.5 m
-  from her. It only ever comes to rest by popping. They always pop on a mob (piercing and boomerang bubbles fly on through mobs). A bubble that bumps into rock
+  thrown, times her **bubble hover** stat, which pearls can change: Bubble Coral ×1.5); then it pops, where she aimed
+  (the pointer, or as far as the right stick is pushed) or at her range, 12.8 m (half the screen's height at the
+  100% camera zoom), whichever is nearer; it never flies nearer than 1.5 m. Where it goes out it clears a little of
+  the ground's corruption. It only ever comes to rest by popping. They always pop on a mob (piercing and boomerang bubbles fly on through mobs). A bubble that bumps into rock
   pops 40% of the time and otherwise bounces off (Mirror Scale's bounces are sure). Two of her bubbles that touch
   (bubbles of one volley never do) bounce off each other: pushed apart, the bigger moving less, and turned off each
   other like two balls (80% of the meeting speed kept; each keeps its own easing-out speed, so a bounce turns it, and
@@ -937,7 +939,7 @@ at mist distance (inherited fade rule).
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
   plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json); the
   pearls she carries show as dots bottom left, and taking one shows its name and tagline.
-  - **Shots:** Triple Tentacle (3-shot fan), Hammerhead (5-shot cone), Anglerfish Lure (homing), Swordfish Bill
+  - **Shots:** Triple Tentacle (3-shot fan), Hammerhead (5-shot cone), Anglerfish Lure (homing: each shot locks onto the one creature nearest it, ahead and within 12 m, and keeps it until it is freed, passed or out of reach), Swordfish Bill
     (pierce), Mirror Scale (2 bounces off rock), Boomerang Shrimp (returns to her), Double Helix (2 weaving shots).
   - **Pearl Diver:** holding fire charges the next throw instead of firing (full in 1 s); letting go throws it as a
     pearl, up to ×3 damage and ×2.2 size at full charge (a tap throws a plain bubble). A pearl swells in front of her
@@ -955,6 +957,30 @@ at mist distance (inherited fade rule).
     slowing while fast, then the water's drag) to a hover about 6 m out — well inside the view — and hangs there for its own
     hover time (0.8–1.2 s, ×1.5 with the pearl) before going out — so the shots that follow catch up with it, and
     shots that touch merge into one, bigger and stronger, instead of bouncing apart (see Combat above).
+  - **Firefly Squid** (`PlaneSurge.cs`, `SurgeView`): fire pours out one continuous, narrow surge of her light instead
+    of shots. It reaches where she aims (the pointer, or as far as the right stick is pushed; at most her range) and
+    stops on rock, a pot, Queen Clam's shut shell or the first creature it meets. Every 0.2 s it strikes everything it
+    touches for 90% of her shots' damage per second (her damage, fire rate and Sardine Run's spin all count); a pot
+    breaks once 18 of it has landed. It has no knockback and sends no surge back to her. Its tip and every impact clear
+    a little of the ground's corruption on each strike (1 m plus its width); the rest of its line does not. A ribbon of
+    white-hot light in her glow, pulses racing outward along it, a glow at her mouth, its tip and every impact; it
+    lights the swim layer along its way. Her other pearls shape it:
+    - shot size widens it (×0.11 m half-width, times her size stat and the pearls' size); **Starfish Arm** widens it
+      toward its tip (×2 at her range) and makes it hit harder there;
+    - every extra shot of a volley opens it into a **cone** with no gaps, as wide as the volley's fan (Hammerhead's cone
+      ×1.6 wider), drawn as one sheet of light soft at its sides; each foe in it takes +25% per extra shot;
+    - **Double Helix** twists it into two strands spiralling round its line (the helix's second strand is its second
+      shot), brighter on the near side of each turn;
+    - **Swordfish Bill:** it runs through every creature in its path; **Mirror Scale:** it reflects off rock (twice);
+      **Anglerfish Lure:** it locks onto the one creature nearest it ahead and bends for it (up to 28° a metre);
+    - **Mitosis:** where it first strikes something it forks into two half-strength branches 40° either side, 4 m long;
+    - **Starburst Gland:** it bursts into light at its tip (a cone's at its middle) and wherever it strikes, every 0.4 s (at most 6 bursts at
+      once, not on top of each other), each 60% of a shot's damage over 1.8 m plus its width;
+    - **Pearl Diver:** held, it focuses over 1 s, to 55% of its width and ×2 damage; **Sardine Run:** it spins up over
+      1.2 s to strike up to ×4 as fast.
+    The synergies Supernova (Starburst Gland), Lance of Light (Swordfish Bill), Helix Lamp (Double Helix) and
+    Searchlight (Hammerhead) announce the most striking of these. Boomerang Shrimp, Bubble Coral and Pistol Shrimp
+    Claw do nothing to it.
   - **Lantern Pearl:** her glow (its light) reaches ×1.8 as far and shines brighter, and she reveals the minimap's fog
     ×1.4 as far around her.
   - **Active pearls (F):** she holds one at a time (the last taken; a new one comes charged). Used, it empties and

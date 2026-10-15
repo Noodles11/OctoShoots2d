@@ -871,6 +871,21 @@ void fragment() {
         }
         (_seen, _seenNext) = (_seenNext, _seen);
         foreach (var gone in _merges.Keys.Where(key => !_seen.ContainsKey(key)).ToList()) _merges.Remove(gone);
+        // Firefly Squid's surge lights the swim layer along its way and brightest at its tip.
+        if (world.LightSurge is { } surge)
+            for (int r = 0; r < surge.Rays.Count; r += Mathf.Max(1, surge.Rays.Count / 5))
+            {
+                var ray = surge.Rays[r];
+                for (int k = 1; k < ray.Points.Count; k++)
+                {
+                    var a = ray.Points[k - 1];
+                    var b = ray.Points[k];
+                    float len = System.Numerics.Vector2.Distance(a, b);
+                    for (float d = 2f; d < len; d += 2.5f)
+                        _candidates.Add((a + (b - a) * (d / len), GroundStrength * 0.6f * surge.Power, GroundRadius));
+                }
+                _candidates.Add((ray.End, GroundStrength * 1.4f * surge.Power, GroundRadius * 1.6f));
+            }
         SyncLights(world, dt);
         _trails.Her = new Vector3(world.Player.Position.X, LevelMap.SwimBand, world.Player.Position.Y);
         _trails.Step(dt, _time);

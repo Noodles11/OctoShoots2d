@@ -46,6 +46,7 @@ public partial class TopDownMain : Node3D
     ReefFishView _reefFish = null!;
     CurseDenView _curseDen = null!;
     ClamRoomView _clamRooms = null!;
+    SurgeView _surgeView = null!;
     CurseDarkness _dark = null!;
     bool _inCurse;
     /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
@@ -200,6 +201,8 @@ public partial class TopDownMain : Node3D
         AddChild(_curseDen);
         _clamRooms = new ClamRoomView();
         AddChild(_clamRooms);
+        _surgeView = new SurgeView();
+        AddChild(_surgeView);
         _corruption = new CorruptionView();
         AddChild(_corruption);
         _blight = new BlightView();
@@ -1191,6 +1194,7 @@ public partial class TopDownMain : Node3D
         Guard("bell", () => _bell.Sync(_world, alpha, dt));
         _combat.HerAt = _bell.GlobalPosition;
         Guard("combat", () => _combat.Sync(_world, dt));
+        Guard("surge", () => _surgeView.Sync(_world, dt));
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
         Guard("currents", () => _currents.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
@@ -1683,6 +1687,13 @@ public partial class TopDownMain : Node3D
                 _sfx.PlayPitched("merge", 0.45f, -8f);
                 if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 8f) _camera.Shake(0.15f);
                 break;
+            case PlaneEventType.MurkShotBurst:
+                // A wet little pop, higher than a bomb's splash.
+                _sfx.PlayPitched("merge", 1.6f, -12f);
+                break;
+            case PlaneEventType.MurkShotLanded:
+                _sfx.PlayPitched("merge", 0.7f, -16f);
+                break;
             case PlaneEventType.CacheRevealed:
                 _sfx.PlayPitched("merge", e.Size > 0f ? 1.5f : 1.2f, -6f);
                 _haptics.Pulse(0.2f, 0.1f, 0.12f);
@@ -1851,9 +1862,11 @@ public partial class TopDownMain : Node3D
         Vector2 aim = Input.GetVector(InputSetup.AimLeft, InputSetup.AimRight, InputSetup.AimUp, InputSetup.AimDown);
         if (_pad)
         {
-            // Controller: the right stick aims (she keeps the last aim when it is let go), the trigger shoots.
+            // Controller: the right stick aims (she keeps the last aim when it is let go), the trigger shoots; the
+            // further the stick is pushed, the further her light flies.
             if (aim.LengthSquared() > 0.04f) _padAim = new System.Numerics.Vector2(aim.X, aim.Y);
             input.Aim = _padAim.LengthSquared() > 1e-6f ? System.Numerics.Vector2.Normalize(_padAim) : _world.Player.Aim;
+            input.AimReach = PadReach();
             input.Fire = held && !_fireBlocked;
         }
         else if (aim.LengthSquared() > 0f)
@@ -1864,8 +1877,10 @@ public partial class TopDownMain : Node3D
         }
         else
         {
-            // The mouse: shoot toward the pointer while the button is held.
-            input.Aim = MouseAim();
+            // The mouse: shoot toward the pointer while the button is held; her light goes out at the pointer.
+            var to = MouseOnBand() - _world.Player.Position;
+            input.Aim = to.LengthSquared() > 1e-4f ? System.Numerics.Vector2.Normalize(to) : default;
+            input.AimReach = to.Length();
             input.Fire = held && !_fireBlocked;
         }
         return input;
@@ -1934,6 +1949,8 @@ public partial class TopDownMain : Node3D
             var flow = _world!.Director.FlowAt(_world.Player.Position, _world.Time);
             float k = Mathf.Clamp(flow.Length() / ReefDirectorTuning.SurgeSpeedMax, 0f, 1f);
             if (k > 0.05f) _haptics.Hold(0.1f + 0.12f * k, 0.18f * k);
+            // Firefly Squid's surge: a faint steady hum while it pours out, firmer as it grows stronger.
+            if (_world.LightSurge is { } surge) _haptics.Hold(0.05f + 0.05f * surge.Power, 0.02f * surge.Power);
             // The absorbing ritual: a hum that rises as she takes the pearl's look, to a trembling peak while she holds
             // it (the shatter and the burst add their own pulses).
             foreach (var q in _world.Pearls)
@@ -1954,7 +1971,7 @@ public partial class TopDownMain : Node3D
 
     /// <summary>
     /// The in-game pointer, while she plays (not under a menu, splash, dive or level change): under the mouse, or with a
-    /// controller along her aim, from a small ring round her to a quarter of the screen's shorter side as the stick tilts. The system cursor hides while it shows, and
+    /// controller along her aim where her light will go out, from the nearest throw to her full range as the stick tilts. The system cursor hides while it shows, and
     /// whenever the controller plays.
     /// </summary>
     void SyncCursor(float dt = 0f)
@@ -1980,14 +1997,13 @@ public partial class TopDownMain : Node3D
             float k = dt > 0f ? 1f - Mathf.Exp(-20f * dt) : 1f;
             _cursorDir = _cursorDir.Slerp(toward.Normalized(), k).Normalized();
         }
-        // Its distance follows how far the stick is pushed: a small ring round her at the lightest tilt, a quarter of
-        // the screen's shorter side at full tilt.
+        // Its distance is where her light goes out: as far as the stick is pushed (PadReach), kept on the screen.
+        float world = PadReach();
+        float reach = (cam.UnprojectPosition(at + new Vector3(aim.X, 0f, aim.Y) * world) - from).Length();
         var size = GetViewport().GetVisibleRect().Size;
-        float shorter = Mathf.Min(size.X, size.Y);
-        float tilt = Mathf.Clamp((_padAim.Length() - 0.2f) / 0.75f, 0f, 1f);
-        float reach = Mathf.Lerp(shorter * 0.06f, shorter * 0.25f, tilt);
         _cursorReach = dt > 0f ? Mathf.Lerp(_cursorReach, reach, 1f - Mathf.Exp(-18f * dt)) : reach;
-        _cursor.Place(from + _cursorDir * _cursorReach);
+        var place = from + _cursorDir * _cursorReach;
+        _cursor.Place(new Vector2(Mathf.Clamp(place.X, 24f, size.X - 24f), Mathf.Clamp(place.Y, 24f, size.Y - 24f)));
     }
 
     /// <summary>Verification: fire at the boss in her fight, else at the nearest mob.</summary>
@@ -2001,23 +2017,29 @@ public partial class TopDownMain : Node3D
               ?? _world.Vases.Where(v => !v.Broken).OrderBy(v => System.Numerics.Vector2.Distance(v.Position, from)).Select(v => (System.Numerics.Vector2?)v.Position).FirstOrDefault();
         // Nothing to shoot at: straight ahead, the way she faces.
         input.Aim = target is { } at && System.Numerics.Vector2.DistanceSquared(at, from) > 1e-4f ? System.Numerics.Vector2.Normalize(at - from) : _world.Player.Aim;
+        // Through the target, so the light reaches it.
+        input.AimReach = target is { } t ? System.Numerics.Vector2.Distance(t, from) + 1.5f : 0f;
         // With Pearl Diver, let go once the pearl is fully charged.
         input.Fire = !(_world.Run.Loadout.Shot.Charge && _world.Player.Charge >= PlaneCombatTuning.ChargeSeconds);
         return true;
     }
 
-    /// <summary>Mouse aim on the plane: from Clementine toward the point under the cursor on the swim band.</summary>
-    System.Numerics.Vector2 MouseAim()
+    /// <summary>The point under the mouse on the swim band (her own position if the ray misses it).</summary>
+    System.Numerics.Vector2 MouseOnBand()
     {
         var cam = _camera.Camera;
         Vector2 mouse = GetViewport().GetMousePosition();
         Vector3 origin = cam.ProjectRayOrigin(mouse), dir = cam.ProjectRayNormal(mouse);
-        if (Mathf.Abs(dir.Y) < 1e-4f) return default;
-        float t = (LevelMap.SwimBand - origin.Y) / dir.Y;
-        Vector3 hit = origin + dir * t;
-        var aim = new System.Numerics.Vector2(hit.X, hit.Z) - _world.Player.Position;
-        return aim.LengthSquared() > 1e-4f ? System.Numerics.Vector2.Normalize(aim) : default;
+        if (Mathf.Abs(dir.Y) < 1e-4f) return _world.Player.Position;
+        Vector3 hit = origin + dir * ((LevelMap.SwimBand - origin.Y) / dir.Y);
+        return new System.Numerics.Vector2(hit.X, hit.Z);
     }
+
+    /// <summary>Her range now (her pearls' range stat on the base reach).</summary>
+    float HerRange => PlaneCombatTuning.BubbleRange * _world.Run.Loadout.Stats.Range / Mathf.Max(_world.Tuning.Range, 0.01f);
+
+    /// <summary>The right stick's reach: from the nearest throw at the lightest tilt to her full range pushed all the way.</summary>
+    float PadReach() => Mathf.Lerp(PlaneCombatTuning.MinReach, HerRange, Mathf.Clamp((_padAim.Length() - 0.2f) / 0.75f, 0f, 1f));
 
     void Capture()
     {

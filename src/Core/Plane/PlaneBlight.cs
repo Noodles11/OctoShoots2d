@@ -68,7 +68,13 @@ public static class BlightTuning
     public const float CapPerMenace = 1.5f;
     public const float ContactDamage = 6f, ClingDrain = 2.5f;
     public const int MaxClingers = 3;
-    public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 10f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 1.5f;
+    public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 10f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 3f;
+    /// <summary>
+    /// A throw that flies ThrowFallAt metres without hitting anything falls: it sinks to the sand over ThrowFallSeconds
+    /// (harmless now, under her plane) and stains it, corrupting ThrowStainRadius toward ThrowStainInk. One her light
+    /// strikes in the air bursts in a splatter instead, staining nothing and cleansing nothing.
+    /// </summary>
+    public const float ThrowFallAt = 9f, ThrowFallSeconds = 0.45f, ThrowStainRadius = 0.9f, ThrowStainInk = 0.7f;
     /// <summary>Deeper, its throws come faster and more often (per point of Menace).</summary>
     public const float ThrowSpeedPerMenace = 1.5f, ThrowRatePerMenace = 0.25f;
     /// <summary>A bubble that bursts a murkling or meets its throw keeps this much of its light.</summary>
@@ -199,6 +205,11 @@ public sealed class MurkShot
 {
     public Vector2 Position, Velocity;
     public float Life = BlightTuning.ThrowLife;
+    /// <summary>How far it has flown.</summary>
+    public float Traveled;
+    /// <summary>Seconds it has been falling to the sand (0: still flying on her plane).</summary>
+    public float Fall;
+    public bool Airborne => Fall <= 0f;
 }
 
 /// <summary>Where murklings bud: a Blightroot's reach, or the arena.</summary>
@@ -839,12 +850,27 @@ public sealed partial class PlaneWorld
             }
         }
 
-        // Its throws: they drain light on hit; rock stops them.
+        // Its throws: they drain light on hit; rock stops them. Flown their range, they fall and stain the sand.
         foreach (var s in MurkShots)
         {
             var was = s.Position;
-            s.Position += s.Velocity * Dt;
             s.Life -= Dt;
+            if (!s.Airborne)
+            {
+                s.Fall += Dt;
+                s.Velocity *= MathF.Exp(-3f * Dt);
+                s.Position += s.Velocity * Dt;
+                if (s.Fall >= BlightTuning.ThrowFallSeconds)
+                {
+                    s.Life = 0f;
+                    Corruption?.Spread(s.Position, BlightTuning.ThrowStainRadius, BlightTuning.ThrowStainInk, 1f);
+                    Events.Add(new PlaneEvent(PlaneEventType.MurkShotLanded, s.Position, Vector2.Zero, BlightTuning.ThrowStainRadius));
+                }
+                continue;
+            }
+            s.Position += s.Velocity * Dt;
+            s.Traveled += s.Velocity.Length() * Dt;
+            if (s.Traveled >= BlightTuning.ThrowFallAt) s.Fall = Dt;
             if (!Map.IsOpen(s.Position) || CrossesRim(was, s.Position)) s.Life = 0f;
             else if (Vector2.Distance(s.Position, p.Position) < Radius + BlightTuning.ThrowRadius)
             {
@@ -877,14 +903,21 @@ public sealed partial class PlaneWorld
             if (shot.Life <= 0f) continue;
             foreach (var s in MurkShots)
             {
-                if (s.Life <= 0f || Vector2.Distance(s.Position, shot.Position) > BlightTuning.ThrowRadius + shot.Radius) continue;
-                s.Life = 0f;
+                if (s.Life <= 0f || !s.Airborne || Vector2.Distance(s.Position, shot.Position) > BlightTuning.ThrowRadius + shot.Radius) continue;
+                SplatterThrow(s);
                 DimBubble(shot, BlightTuning.BubbleDim);
                 if (shot.Life <= 0f) break;
             }
         }
         MurkShots.RemoveAll(s => s.Life <= 0f);
         Murklings.RemoveAll(m => !m.Alive);
+    }
+
+    /// <summary>Her light strikes a throw in the air: it bursts in a splatter, like a water balloon, staining nothing.</summary>
+    void SplatterThrow(MurkShot s)
+    {
+        s.Life = 0f;
+        Events.Add(new PlaneEvent(PlaneEventType.MurkShotBurst, s.Position, SafeNormalize(s.Velocity)));
     }
 
     Murkling Bud(Vector2 at, int area)

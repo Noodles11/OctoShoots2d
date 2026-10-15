@@ -503,6 +503,77 @@ public class CorruptionTests
     }
 
     /// <summary>No budding or murklings, so a test sees only what it sets up.</summary>
+    [Fact]
+    public void HerLightFliesToWhereSheAimsAndClearsALittleWhereItGoesOut()
+    {
+        var w = Level(p => !p.HasBoss);
+        Quiet(w);
+        // The longest open line from her start; she aims 6 m along it.
+        var from = w.Player.Position;
+        var aim = Enumerable.Range(0, 32).Select(i => new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f)))
+            .OrderByDescending(d => Enumerable.Range(0, 40).TakeWhile(k => w.Map.IsOpen(from + d * (k * 0.5f))).Count()).First();
+        const float reach = 6f;
+        var end = from + aim * (reach + 0.5f);
+        var field = w.Corruption!;
+        for (int i = 0; i < CorruptionField.N * CorruptionField.N; i++)
+            if (Vector2.Distance(CellAt(i), end) < 2.5f) field.Density[i] = 1f;
+        float before = field.At(end);
+        w.Step(new PlaneInput { Aim = aim, AimReach = reach, Fire = true });
+        var shot = w.Shots.Single(s => s.FromPlayer);
+        bool gone = false;
+        for (int i = 0; i < 200 && !gone; i++)
+        {
+            w.Step(new PlaneInput { Aim = aim, AimReach = reach });
+            gone = !w.Shots.Contains(shot);
+        }
+        Assert.True(gone);
+        Assert.InRange(shot.Traveled, reach - 0.1f, reach + 0.6f);
+        Assert.True(field.At(shot.Position) < before - 0.3f, "its last light clears a little of the ground");
+    }
+
+    [Fact]
+    public void AThrowFallsAtItsRangeAndStainsTheSand_ButStruckInTheAirItSplattersAndStainsNothing()
+    {
+        var w = Level(p => !p.HasBoss);
+        Quiet(w);
+        var field = w.Corruption!;
+        // A throw along an open stretch of the level, its landing well clear of the safe places; she watches from
+        // just behind it.
+        var safe = CorruptionField.SafeOf(w.Map).ToList();
+        bool Clear(Vector2 q) => safe.All(c => Vector2.Distance(q, c.Centre) > c.Radius + 8f);
+        var (from, dir) = Enumerable.Range(0, CorruptionField.N * CorruptionField.N).Where(i => i % 7 == 0).Select(CellAt)
+            .SelectMany(q => Enumerable.Range(0, 8).Select(k => (q, new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)))))
+            .First(t => Enumerable.Range(-4, 30).All(k => w.Map.IsOpen(t.Item1 + t.Item2 * (k * 0.5f))) && Clear(t.Item1 + t.Item2 * BlightTuning.ThrowFallAt));
+        w.Player.Position = w.Player.PrevPosition = from - dir * 1.5f;
+        w.MurkShots.Add(new MurkShot { Position = from, Velocity = dir * BlightTuning.ThrowSpeed });
+        float total = field.Total;
+        bool landed = false;
+        for (int i = 0; i < 120 && !landed; i++)
+        {
+            w.Step(default);
+            landed = w.Events.Any(e => e.Type == PlaneEventType.MurkShotLanded);
+        }
+        Assert.True(landed);
+        var at = w.Events.First(e => e.Type == PlaneEventType.MurkShotLanded).Position;
+        Assert.InRange(Vector2.Distance(at, from), BlightTuning.ThrowFallAt, BlightTuning.ThrowFallAt + 3f);
+        Assert.True(field.Total > total, "it stains the sand");
+
+        // Struck in the air by her light: a splatter, the ground untouched.
+        var shot = new MurkShot { Position = w.Player.Position + dir * 4f, Velocity = -dir * BlightTuning.ThrowSpeed };
+        w.MurkShots.Add(shot);
+        float before = field.Total;
+        w.Step(new PlaneInput { Aim = dir, Fire = true });
+        bool burst = false;
+        for (int i = 0; i < 30 && !burst; i++)
+        {
+            w.Step(new PlaneInput { Aim = dir, Fire = true });
+            burst = w.Events.Any(e => e.Type == PlaneEventType.MurkShotBurst);
+        }
+        Assert.True(burst);
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.MurkShotLanded);
+        Assert.Equal(before, field.Total, 1);
+    }
+
     static void Quiet(PlaneWorld w)
     {
         foreach (var area in w.Areas) area.Spent = true;

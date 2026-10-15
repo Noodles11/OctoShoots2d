@@ -31,6 +31,35 @@ public class PlanePearlEffectTests
     static readonly PlaneInput Fire = new() { Aim = Vector2.UnitX, Fire = true };
 
     [Fact]
+    public void AHomingShotLocksOntoOneCreatureAndHitsIt_NotTheGapBetweenTwo()
+    {
+        var w = World("anglerfish_lure");
+        // An open stretch from her start; two pufferlings ahead, either side of her aim, the same distance off.
+        var from = w.Player.Position;
+        var aim = Enumerable.Range(0, 32).Select(i => new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f)))
+            .OrderByDescending(d => Enumerable.Range(0, 30).TakeWhile(k => w.Map.IsOpen(from + d * (k * 0.5f)) && w.Map.IsOpen(from + d * (k * 0.5f) + new Vector2(-d.Y, d.X) * 2f) && w.Map.IsOpen(from + d * (k * 0.5f) - new Vector2(-d.Y, d.X) * 2f)).Count()).First();
+        var side = new Vector2(-aim.Y, aim.X);
+        var left = new PlaneMob { Position = from + aim * 7f + side * 1.2f, Rng = new Rng(1), FireTimer = 99f, Hp = 1000f };
+        var right = new PlaneMob { Position = from + aim * 7f - side * 1.2f, Rng = new Rng(2), FireTimer = 99f, Hp = 1000f };
+        left.Home = left.Position;
+        right.Home = right.Position;
+        w.Mobs.Add(left);
+        w.Mobs.Add(right);
+        w.Step(new PlaneInput { Aim = aim, Fire = true });
+        var shot = w.Shots.Single(s => s.FromPlayer);
+        bool popped = false;
+        for (int i = 0; i < 120 && w.Shots.Contains(shot); i++)
+        {
+            left.Position = left.Home;
+            right.Position = right.Home;
+            w.Step(new PlaneInput { Aim = aim });
+            popped |= w.Events.Any(e => e.Type == PlaneEventType.ShotPopped);
+        }
+        Assert.True(left.Hp < 1000f || right.Hp < 1000f, "it struck one of them");
+        Assert.True(popped);
+    }
+
+    [Fact]
     public void EveryPortedPearlIsInTheCatalogAndDoesSomethingOnThePlane()
     {
         foreach (string id in PlaneRun.PortedPearls)

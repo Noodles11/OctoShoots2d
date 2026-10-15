@@ -331,7 +331,7 @@ public class PlaneCombatTests
             if (!gone) Assert.Equal(first, bubble.Velocity.Length(), 2);
         }
         Assert.True(gone);
-        if (bestRun >= 14f)
+        if (bestRun >= PlaneCombatTuning.BubbleRange + 2f)
         {
             // Out like a match at its range: no burst.
             Assert.False(popped);
