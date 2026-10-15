@@ -204,8 +204,10 @@ public sealed class LevelMap
     public int Depth => Id.Depth;
     public int Level => Id.Level;
     public int Attempt;
-    /// <summary>The boss stands in the exit's arena; the Crack opens when she is freed.</summary>
+    /// <summary>The exit is an arena round the Crack: the boss stands in it, and the Crack opens when she is freed.</summary>
     public bool HasBoss;
+    /// <summary>The tutorial's open rift: the arena holds no boss, and the Crack stands open from the start.</summary>
+    public bool Rift;
     public float Menace;
     public ulong EntryStampSeed, ExitStampSeed;
     public bool EntryFromArena;
@@ -310,6 +312,7 @@ public sealed class LevelMap
         w.Write(Level);
         w.Write(Attempt);
         w.Write(HasBoss);
+        w.Write(Rift);
         w.Write(Menace);
         w.Write(EntryStampSeed);
         w.Write(ExitStampSeed);

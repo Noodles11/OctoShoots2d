@@ -11,7 +11,7 @@ namespace OctoShoots.Core.Tests;
 /// <summary>Plane-locked movement and heightfield collision (DESIGN-TOPDOWN §2.2, §4.5).</summary>
 public class PlaneWorldTests
 {
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), LevelId.First));
+    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), new LevelId(1, 2, 3)));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 
@@ -122,7 +122,8 @@ public class PlaneWorldTests
     [Fact]
     public void WeakRockPlugsTheSecretCave()
     {
-        var w = World();
+        // A level with a secret (the tutorial's first always has one).
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Secrets > 0)), new Tuning());
         var rock = w.WeakRocks.First();
         Assert.False(w.Clear(rock.Center, w.Radius));
     }

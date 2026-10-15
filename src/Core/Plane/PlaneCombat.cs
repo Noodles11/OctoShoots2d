@@ -563,13 +563,15 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>A mob takes a hit: it notices her, flashes, is shoved along dir, and is freed when its health runs out.</summary>
-    void DamageMob(PlaneMob mob, float damage, Vector2 dir)
+    /// <remarks>Quiet (Firefly Squid's surge, which tells its hits summed): no hit event unless it frees the mob.</remarks>
+    void DamageMob(PlaneMob mob, float damage, Vector2 dir, bool quiet = false)
     {
         mob.Hp -= damage;
         if (!mob.Aggro) Notice(mob);
         mob.HitFlash = PlaneCombatTuning.HitFlash;
         mob.Knock += SafeNormalize(dir) * Tuning.ShotKnockback * Run.Loadout.Stats[Stat.Knockback];
-        Events.Add(new PlaneEvent(mob.Alive ? PlaneEventType.MobHit : PlaneEventType.MobDefeated, mob.Position, dir, damage));
+        if (!quiet || !mob.Alive)
+            Events.Add(new PlaneEvent(mob.Alive ? PlaneEventType.MobHit : PlaneEventType.MobDefeated, mob.Position, dir, damage));
         if (mob.Alive) return;
         Stats.MobsDefeated++;
         Drop(mob.Position);

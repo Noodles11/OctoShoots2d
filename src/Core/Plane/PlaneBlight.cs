@@ -253,7 +253,8 @@ public sealed partial class PlaneWorld
     {
         _blightRng = new Rng(Map.Seed ^ 0xB1167UL ^ ((ulong)Map.Level << 22) ^ ((ulong)Map.Depth << 30) ^ ((ulong)Map.Attempt << 46));
         var field = Corruption = CorruptionField.ForMap(Map);
-        if (Map.HasBoss)
+        // The tutorial's open rift has no arena to cleanse: its Crack is open from the start.
+        if (Map.HasBoss && !Map.Rift)
         {
             ArenaArea = new CorruptArea { Center = ArenaCenter, Radius = ArenaRadius, Arena = true, Cells = field.CellsWithin(ArenaCenter, ArenaRadius) };
             Areas.Add(ArenaArea);

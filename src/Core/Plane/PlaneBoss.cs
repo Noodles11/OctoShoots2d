@@ -109,10 +109,13 @@ public sealed partial class PlaneWorld
 
     Rng _bossRng = null!;
 
-    /// <summary>Only a boss level has her: she waits on the Crack, which stays shut until she is freed.</summary>
+    /// <summary>
+    /// Only a boss level has her: she waits on the Crack, which stays shut until she is freed. The tutorial's open rift
+    /// has the arena but not her, and its Crack is open.
+    /// </summary>
     void PlaceBoss()
     {
-        if (!Map.HasBoss) return;
+        if (!Map.HasBoss || Map.Rift) return;
         Boss = new PlaneBoss { Position = ArenaCenter };
         // She lies with her opening toward the screen (south, the camera's side), so the black pearl inside shows, and
         // never turns.
@@ -493,12 +496,13 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>She hurts Queen Clam while her shell is open: past half health she staggers; at none she is freed.</summary>
-    void DamageBoss(PlaneBoss boss, float damage, Vector2 dir)
+    /// <remarks>Quiet (Firefly Squid's surge, which tells its hits summed): no hit event.</remarks>
+    void DamageBoss(PlaneBoss boss, float damage, Vector2 dir, bool quiet = false)
     {
         if (boss.Stage != BossStage.Fight) return;
         boss.Hp -= damage;
         boss.HitFlash = PlaneCombatTuning.HitFlash;
-        Events.Add(new PlaneEvent(PlaneEventType.BossHit, boss.Position, dir, damage));
+        if (!quiet) Events.Add(new PlaneEvent(PlaneEventType.BossHit, boss.Position, dir, damage));
         if (boss.Hp <= 0f) FreeBoss(boss);
         else if (boss.Phase == 1 && boss.Hp <= boss.MaxHp * 0.5f)
         {

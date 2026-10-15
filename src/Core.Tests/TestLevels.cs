@@ -13,7 +13,7 @@ static class TestLevels
 
     public static LevelMap Get(LevelId id) => Maps.GetOrAdd(id, i => TopDownGenerator.Generate(new RunStreams(Seed), i));
 
-    /// <summary>The first level of the seed's first loop whose plan matches.</summary>
+    /// <summary>The first level of the seed's first loop whose plan matches (from the tutorial on).</summary>
     public static LevelId Find(Func<LevelPlan, bool> match)
     {
         var id = LevelId.First;

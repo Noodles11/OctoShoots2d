@@ -85,7 +85,7 @@ public sealed class CorruptionField
     public static CorruptionField ForMap(LevelMap map)
     {
         var field = new CorruptionField();
-        field.Lay(map, SafeOf(map), map.HasBoss ? (map.Exit.Position, map.Exit.Radius) : null, Focus(map));
+        field.Lay(map, SafeOf(map), map.HasBoss && !map.Rift ? (map.Exit.Position, map.Exit.Radius) : null, Focus(map));
         return field;
     }
 

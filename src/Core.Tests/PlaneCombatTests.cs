@@ -14,7 +14,7 @@ namespace OctoShoots.Core.Tests;
 /// <summary>Plane combat: Clementine's shots, the pufferlings (corrupted and healthy), their spawns, and the dive down the hole.</summary>
 public class PlaneCombatTests
 {
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), LevelId.First));
+    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), new LevelId(1, 2, 3)));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 

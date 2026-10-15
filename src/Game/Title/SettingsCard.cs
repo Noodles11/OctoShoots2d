@@ -87,6 +87,18 @@ public partial class SettingsCard : PanelContainer
         });
         box.AddChild(Row("Controller vibration", "A buzz when her light strikes, when she is hurt, when she dashes and in a current.", vibration));
 
+        // Once she has passed the tutorial, runs start below it; she may choose to start in it again.
+        if (GameSave.Current.Profile.TutorialPassed)
+        {
+            box.AddChild(Heading("Runs"));
+            var tutorial = Toggle(_view.ReplayTutorial, on =>
+            {
+                _view.ReplayTutorial = on;
+                Save();
+            });
+            box.AddChild(Row("Start in the Shallows", "New runs begin in Depth 0, the Sunlit Shallows, instead of Depth 1.", tutorial));
+        }
+
         // Controls: every binding, keyboard and mouse or controller, rebindable (saved at once).
         box.AddChild(Heading("Controls"));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0f, 220f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };

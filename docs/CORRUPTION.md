@@ -46,7 +46,7 @@ Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
 - **Waking:** 2 + 1 per Menace (at most 6 alive) wake with the level. They start on thick ground (≥ 0.6), at least
   25 m from her start and 15 m apart, out of the arena and the shaft.
 - **Born from corruption:** every 20 s there is a 5% chance (+3% per Menace) that one rises out of thick ground at
-  least 18 m from her. It takes 1.5 s, with a dark ripple and a hint.
+  least 18 m from her. It takes 1.5 s, with a dark ripple.
 - **Creeping:** 1.2 m/s (+0.2 per Menace), with a surging slug gait. It turns slowly (1.6 rad/s) toward clean floor
   in sight 4–20 m off, the nearer the better, avoiding safe places and the arena. It re-picks a target on arrival,
   after 10 s, when stuck for 2.5 s, or once its target has been corrupted.
@@ -76,8 +76,7 @@ With the corruption on there are no pots (`PlaneOptions.Vases` is off). Loot lie
   stay clear of places, the arena and the shaft.
 - **Look:** a glossy bump in the ink (`BlightView.Caches.cs`). A faint warm glint shows through now and then. The bump
   sinks as the ink over it thins.
-- **Uncovering:** once the ground over it is cleansed (her light, a pop), it breaks open in a puff of gold with a chime
-  (and a hint the first time). Its loot floats up: a light orb (45%) or 2–4 shells.
+- **Uncovering:** once the ground over it is cleansed (her light, a pop), it breaks open in a puff of gold with a chime. Its loot floats up: a light orb (45%) or 2–4 shells.
 
 **Light orbs** replace hearts everywhere: drops, the shop's top-up stand and caches. Each is a bubble with her light
 inside, like her old bubble shots, with a soft halo and a warm light. It washes 12 corruption away. The sim still calls
@@ -196,7 +195,10 @@ A pool of clear, luminous water where her corruption washes away. Each level has
 field never seeds there.
 
 - While she is inside, her meter drains by 30 % of the whole each second until it is empty (`StepSprings`).
-- Entering it while corrupted raises `SpringEntered`: a chime, plus a hint the first time. Reaching clean raises
+- **It heals once a level.** The first visit on which it washes her uses it (a visit while she is already clean does
+  not); when she leaves the water it is spent (`SpringSpent`): it heals no more, and it fades away over 2.5 s and is
+  gone, from the maps too. So she must plan when to use it: going in early wastes most of it.
+- Entering it while corrupted raises `SpringEntered`: a chime. Reaching clean raises
   `SpringCleansed`: a bell and "Wholly cleansed".
 - Visuals (`SpringView`):
   - `light_spring.gdshader`: drifting caustics, a bright rim, and under the water her emblem, the four gold gonad

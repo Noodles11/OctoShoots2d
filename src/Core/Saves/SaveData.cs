@@ -24,6 +24,11 @@ public sealed class Profile
     public Dictionary<string, PearlRecord> Pearls { get; set; } = new();
     /// <summary>Per creature or boss id: how it has done against her.</summary>
     public Dictionary<string, CreatureRecord> Creatures { get; set; } = new();
+    /// <summary>
+    /// She has dived out of the tutorial (Depth 0) once: from now on runs start in Depth 1, unless the settings ask to
+    /// replay it.
+    /// </summary>
+    public bool TutorialPassed { get; set; }
     /// <summary>The last few seeds she played, newest first.</summary>
     public List<string> RecentSeeds { get; set; } = new();
 

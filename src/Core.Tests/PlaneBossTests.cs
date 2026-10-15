@@ -20,7 +20,7 @@ public class PlaneBossTests
     static readonly Lazy<LevelMap> Shared = new(() =>
     {
         var seed = SeedCode.Parse("KELP7Q2Z");
-        return TopDownGenerator.Generate(new RunStreams(seed), new LevelId(1, 1, LevelPlan.BossLevel(seed, 1, 1)));
+        return TopDownGenerator.Generate(new RunStreams(seed), new LevelId(1, 2, LevelPlan.BossLevel(seed, 1, 2)));
     });
 
     static PlaneWorld World() => new(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));

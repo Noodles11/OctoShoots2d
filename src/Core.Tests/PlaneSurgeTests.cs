@@ -102,6 +102,24 @@ public class PlaneSurgeTests
     }
 
     [Fact]
+    public void ItDrainsACreatureEveryStep_AndTellsItsHitsSummedAFewTimesASecond()
+    {
+        var w = World();
+        var aim = OpenAim(w);
+        var mob = Mob(w, w.Player.Position + aim * 5f);
+        Hold(w, aim, 0.1f);
+        int hits = 0;
+        for (int i = 0; i < 60; i++)
+        {
+            float before = mob.Hp;
+            w.Step(new PlaneInput { Aim = aim, Fire = true });
+            Assert.True(mob.Hp < before, "it drains every step");
+            hits += w.Events.Count(e => e.Type == PlaneEventType.MobHit);
+        }
+        Assert.InRange(hits, 3, 5);
+    }
+
+    [Fact]
     public void MoreShotsOpenAConeWithNoGaps()
     {
         var w = World("hammerhead");
@@ -140,6 +158,38 @@ public class PlaneSurgeTests
         Mob(split, split.Player.Position + aim * 5f);
         Hold(split, aim, 0.1f);
         Assert.Equal(2, split.LightSurge!.Rays.Count(r => r.Fork));
+    }
+
+    [Fact]
+    public void BoomerangShrimpLoopsItOutToItsReachAndBackToHer()
+    {
+        var w = World("boomerang_shrimp");
+        // Somewhere the whole loop runs through open water (out 8 m, its widest 22% of that either side, and a margin).
+        bool Free(Vector2 q, Vector2 d)
+        {
+            var side = new Vector2(-d.Y, d.X);
+            for (int i = 0; i <= 40; i++)
+            {
+                float t = i / 40f;
+                var p = q + d * (8.6f * MathF.Sin(MathF.PI * t)) + side * (8.6f * SurgeTuning.LoopWidth * MathF.Sin(MathF.Tau * t));
+                if (!w.Map.IsOpen(p) || !w.Map.IsOpen(p + side * 0.6f) || !w.Map.IsOpen(p - side * 0.6f)) return false;
+            }
+            return true;
+        }
+        var (spot, aim) = Enumerable.Range(0, 6000).Select(i => new Vector2(4f + (i % 75) * 2f, 4f + (i / 75) * 2f))
+            .SelectMany(q => Enumerable.Range(0, 8).Select(k => (q, new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)))))
+            .First(t => Free(t.Item1, t.Item2));
+        w.Player.Position = w.Player.PrevPosition = spot - aim * (w.Radius + 0.1f);
+        Hold(w, aim, 0.1f, reach: 8f);
+        var ray = Assert.Single(w.LightSurge!.Rays);
+        Assert.True(ray.Loop);
+        Assert.False(ray.Blocked);
+        var start = ray.Points[0];
+        float far = ray.Points.Max(q => Vector2.Dot(q - start, aim));
+        Assert.InRange(far, 7.5f, 8.2f);
+        Assert.True(ray.Points.Max(q => MathF.Abs(Vector2.Dot(q - start, new Vector2(-aim.Y, aim.X)))) > 1f, "a loop, not a line");
+        Assert.True(Vector2.Distance(ray.End, start) < 0.5f, "it comes back to her");
+        Assert.InRange(Vector2.Dot(ray.Tip - start, aim), 7.5f, 8.2f);
     }
 
     [Fact]

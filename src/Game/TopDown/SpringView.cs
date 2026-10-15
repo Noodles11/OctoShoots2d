@@ -9,7 +9,8 @@ namespace OctoShoots.Game.TopDown;
 /// <summary>
 /// The light springs (docs/CORRUPTION.md): a pool of clear, luminous water on the floor with her emblem flowing under
 /// it, a soft column of light rising to her plane, sparkles drifting up, and an aqua-gold light on the rocks around.
-/// While she bathes it brightens, the emblem turns faster and the sparkles stream.
+/// While she bathes it brightens, the emblem turns faster and the sparkles stream. Once spent (it has healed her and she
+/// has left it), the water, the column, the light and the sparkles fade away over SpentFade seconds and it is gone.
 /// </summary>
 public partial class SpringView : Node3D
 {
@@ -19,8 +20,10 @@ public partial class SpringView : Node3D
         public required MeshInstance3D Pool, Column;
         public required OmniLight3D Light;
         public required float Floor;
-        public float Bathe, Spark;
+        public float Bathe, Spark, Fade = 1f;
     }
+
+    const float SpentFade = 2.5f;
 
     readonly List<View> _views = new();
     ShaderMaterial _pool = null!, _column = null!;
@@ -88,13 +91,21 @@ public partial class SpringView : Node3D
     {
         foreach (var v in _views)
         {
+            if (v.Spring.Spent) v.Fade = Mathf.MoveToward(v.Fade, 0f, dt / SpentFade);
+            bool shown = v.Fade > 0f;
+            v.Pool.Visible = v.Column.Visible = v.Light.Visible = shown;
+            if (!shown) continue;
+            // Fading, it eases out (slow at first, then gone).
+            float k = v.Fade * v.Fade;
             v.Bathe = Mathf.MoveToward(v.Bathe, v.Spring.Bathing ? 1f : 0f, dt * 2.5f);
             v.Pool.SetInstanceShaderParameter("bathing", v.Bathe);
             v.Column.SetInstanceShaderParameter("bathing", v.Bathe);
-            v.Light.LightEnergy = 1.4f + 1.6f * v.Bathe;
+            v.Pool.SetInstanceShaderParameter("fade", k);
+            v.Column.SetInstanceShaderParameter("fade", k);
+            v.Light.LightEnergy = (1.4f + 1.6f * v.Bathe) * k;
             v.Light.LightColor = new Color(0.55f, 0.95f, 1f).Lerp(new Color(1f, 0.85f, 0.55f), 0.4f * v.Bathe);
             // Sparkles rise from the water: a few always, a stream while she bathes.
-            v.Spark += dt * (5f + 30f * v.Bathe);
+            v.Spark += dt * (5f + 30f * v.Bathe) * k;
             while (v.Spark >= 1f)
             {
                 v.Spark -= 1f;

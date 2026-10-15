@@ -53,11 +53,19 @@ public static class LightSprings
     }
 }
 
-/// <summary>A light spring in the world: whether she is in it now.</summary>
+/// <summary>
+/// A light spring in the world: whether she is in it now, and whether its one washing is used. It heals her once a
+/// level: from the first time it washes her until she leaves it; then it is spent, and fades away.
+/// </summary>
 public sealed class LightSpring
 {
     public Vector2 Position;
+    /// <summary>She is in it and it is washing her.</summary>
     public bool Bathing;
+    /// <summary>It has washed her on this visit: when she leaves, it is spent.</summary>
+    public bool Used;
+    /// <summary>Its washing is gone: it heals no more, and fades away.</summary>
+    public bool Spent;
 }
 
 public sealed partial class PlaneWorld
@@ -71,19 +79,26 @@ public sealed partial class PlaneWorld
 
     /// <summary>
     /// A light spring washes her corruption away: inside it, her meter drains (a share of the whole each second) until
-    /// she is wholly clean.
+    /// she is wholly clean. It does so once: the first visit on which it washes her uses it, and when she leaves the
+    /// water it is spent (it fades away). A visit while she is already clean does not use it.
     /// </summary>
     void StepSprings()
     {
         var p = Player;
         foreach (var spring in Springs)
         {
-            bool inside = Vector2.Distance(p.Position, spring.Position) <= SpringTuning.Radius;
+            bool inside = !spring.Spent && Vector2.Distance(p.Position, spring.Position) <= SpringTuning.Radius;
             bool was = spring.Bathing;
             spring.Bathing = inside;
+            if (!inside && spring.Used && !spring.Spent)
+            {
+                spring.Spent = true;
+                Events.Add(new PlaneEvent(PlaneEventType.SpringSpent, spring.Position, Vector2.Zero));
+            }
             if (!inside || Defeated) continue;
             float max = Run.MaxHp;
             if (p.Hp >= max) continue;
+            spring.Used = true;
             if (!was) Events.Add(new PlaneEvent(PlaneEventType.SpringEntered, spring.Position, Vector2.Zero));
             p.Hp = MathF.Min(max, p.Hp + max * SpringTuning.CleansePerSecond * Dt);
             Run.Hp = p.Hp;

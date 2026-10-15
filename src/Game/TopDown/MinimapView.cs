@@ -189,7 +189,9 @@ public partial class MinimapView : Control
         map.Blotters.Clear();
         foreach (var b in world.Blotters) map.Blotters.Add((b.Position, b.Heading));
         map.Springs.Clear();
-        foreach (var sp in world.Springs) map.Springs.Add((sp.Position, sp.Bathing));
+        // A spent spring is gone from the maps too.
+        foreach (var sp in world.Springs)
+            if (!sp.Spent) map.Springs.Add((sp.Position, sp.Bathing));
         map.Valves.Clear();
         foreach (var v in world.Valves) map.Valves.Add((v.Center - v.Across * v.HalfWidth, v.Center + v.Across * v.HalfWidth, v.Seen, v.Cleared));
     }

@@ -4,6 +4,8 @@ shader_type spatial;
 render_mode blend_add, unshaded, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 instance uniform float bathing = 0.0;
+// Spent (its one washing used): it fades away, 1 → 0.
+instance uniform float fade = 1.0;
 uniform vec3 colour : source_color = vec3(0.6, 0.95, 1.0);
 
 void fragment() {
@@ -12,5 +14,5 @@ void fragment() {
 	float edge = pow(1.0 - abs(dot(NORMAL, VIEW)), 1.5);
 	float a = (1.0 - smoothstep(0.0, 1.0, up)) * streaks * (0.25 + 0.75 * edge) * (0.22 + 0.3 * bathing);
 	ALBEDO = mix(colour, vec3(1.0, 0.88, 0.6), 0.35 + 0.3 * bathing) * a;
-	ALPHA = 1.0;
+	ALPHA = fade;
 }

@@ -23,6 +23,11 @@ public sealed class ViewOptions
     /// to the window; the HUD stays sharp. Keeps big screens cool (0 = always native).
     /// </summary>
     [Tune("View", 0f, 2160f)] public int MaxRenderHeight = 1080;
+    /// <summary>
+    /// New runs start in the tutorial (Depth 0) again. Offered only once she has passed it; until then every run starts
+    /// there anyway.
+    /// </summary>
+    public bool ReplayTutorial = false;
     /// <summary>Strength of sunlight under water: god rays, caustics and dappled light (0 turns them off).</summary>
     [Tune("Light", 0f, 2f)] public float SunLight = 1f;
 }

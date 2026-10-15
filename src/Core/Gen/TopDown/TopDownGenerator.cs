@@ -94,7 +94,7 @@ public static class TopDownGenerator
             // Every attempt starts from the bare seabed at level −1.
             var map = new LevelMap
             {
-                Seed = streams.Seed.Value, Id = id, Attempt = attempt, HasBoss = plan.HasBoss, Menace = plan.Menace,
+                Seed = streams.Seed.Value, Id = id, Attempt = attempt, HasBoss = plan.HasBoss, Rift = plan.Rift, Menace = plan.Menace,
                 EntryStampSeed = plan.EntryStamp, ExitStampSeed = plan.ExitStamp, EntryFromArena = plan.EntryFromArena,
             };
             Array.Fill(map.Heights, -PathDepth);

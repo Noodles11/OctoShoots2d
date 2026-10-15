@@ -60,13 +60,13 @@ public sealed class PlaneProfileRecorder
     }
 
     /// <summary>
-    /// She is on a new level: the furthest reach (depths count on through the loops: the second pass's first depth is
-    /// depth 8), and the pearls the level offers are now seen.
+    /// She is on a new level: the furthest reach (depths count on through the loops, the tutorial as 1 and only in the
+    /// first: the second pass's first depth is 8), and the pearls the level offers are now seen.
     /// </summary>
     public void EnterLevel(PlaneWorld world, LevelId level)
     {
         var s = Profile.Stats;
-        int depth = (level.Cycle - 1) * LevelPlan.Depths + level.Depth;
+        int depth = (level.Cycle - 1) * (LevelPlan.Depths - LevelPlan.Tutorial) + level.Depth;
         if (depth > s.BestDepth || depth == s.BestDepth && level.Level > s.BestRoom)
         {
             s.BestDepth = depth;

@@ -403,7 +403,7 @@ public class CorruptionTests
     [Fact]
     public void TheClamIsHurtOnlyThroughHerOpenPearlAndItsBurstWashesTheArenaClean()
     {
-        var w = World(TestLevels.Get(new LevelId(1, 1, LevelPlan.BossLevel(TestLevels.Seed, 1, 1))));
+        var w = World(TestLevels.Get(new LevelId(1, 2, LevelPlan.BossLevel(TestLevels.Seed, 1, 2))));
         var boss = w.Boss!;
         // In she goes: the arena seals, and no creature but the clam is inside it from then on.
         w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + new Vector2(0f, 7f);
@@ -459,7 +459,7 @@ public class CorruptionTests
     public void TheArenaIsCondensedAndItsCleansingStripsTheCrust()
     {
         var code = TestLevels.Seed;
-        var w = World(TestLevels.Get(new LevelId(1, 1, LevelPlan.BossLevel(code, 1, 1))));
+        var w = World(TestLevels.Get(new LevelId(1, 2, LevelPlan.BossLevel(code, 1, 2))));
         Assert.NotNull(w.ArenaArea);
         Assert.Equal(1f, w.Corruption!.At(w.ArenaCenter));
         var boss = w.Boss!;
@@ -500,6 +500,38 @@ public class CorruptionTests
         }
         Assert.True(cleansed);
         Assert.Equal(w.Run.MaxHp, w.Player.Hp);
+    }
+
+    [Fact]
+    public void ASpringHealsOnceALevel_ItIsSpentWhenSheLeavesAfterUsingIt()
+    {
+        var map = TestLevels.Get(TestLevels.All(_ => true).First(id => LightSprings.Of(TestLevels.Get(id)).Count > 0));
+        var w = World(map);
+        Quiet(w);
+        var spring = Assert.Single(w.Springs);
+        var outside = spring.Position + new Vector2(SpringTuning.Radius + 2f, 0f);
+        void Go(Vector2 at, int steps = 1)
+        {
+            w.Player.Position = w.Player.PrevPosition = at;
+            for (int i = 0; i < steps; i++) w.Step(default);
+        }
+        // Clean, she swims through: it is not used.
+        w.Player.Hp = w.Run.MaxHp;
+        Go(spring.Position, 10);
+        Go(outside);
+        Assert.False(spring.Used || spring.Spent);
+        // Hurt, she bathes a moment and leaves: used, then spent.
+        w.Player.Hp = w.Run.MaxHp * 0.3f;
+        Go(spring.Position, 20);
+        Assert.True(spring.Used && !spring.Spent);
+        Go(outside);
+        Assert.True(spring.Spent);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.SpringSpent);
+        // Back in it, hurt: it heals no more.
+        float hp = w.Player.Hp = w.Run.MaxHp * 0.3f;
+        Go(spring.Position, 60);
+        Assert.Equal(hp, w.Player.Hp, 2);
+        Assert.False(spring.Bathing);
     }
 
     /// <summary>No budding or murklings, so a test sees only what it sets up.</summary>

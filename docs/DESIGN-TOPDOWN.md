@@ -298,6 +298,9 @@ seabed by the rules below.
   | Ambush | 0–2 | 0–2 |
   | Boss arena | — | level 4 at 50%, else level 5 |
 
+  The tutorial (Depth 0, §8) is the exception: its two levels' places are set,
+  not rolled, so that every kind appears in it.
+
   The shop, secrets, clam rooms and curse den sit in caves (Stage 4);
   ambushes and the shell cache are open clearings. The shell cache sits at
   40–60% of the start→exit axis, preferentially *off* the main corridors
@@ -625,9 +628,9 @@ projectile speed/count up, telegraph 0.8→0.35 s (never lower), tactics
 none→flanking, champion 0→25%, budget ×1.0→1.8. **Visual menace** in 2D:
 round eyes → glowing slit eyes, smile → teeth, smooth → jagged silhouette,
 desaturation + rim light. A Depth-1 gumdrop is a Depth-6 toothy shadow.
-**Menace** is 0 at the first depth and 1 at the seventh, and keeps rising by the
-same step through every loop (`LevelPlan.MenaceOf`); it changes only on a dive
-through the Crack. In the sim (current pass, the corrupted pufferlings, capped at 3):
+**Menace** is 0 in the tutorial (Depth 0) and at Depth 1, 1 at Depth 6, and
+keeps rising by the same step (0.2) through every loop (`LevelPlan.MenaceOf`); it
+changes only on a dive through the Crack. In the sim (current pass, the corrupted pufferlings, capped at 3):
 creatures ×(1 + 0.4·menace) per level, their speed ×(1 + 0.5·menace), their
 needles ×(1 + 0.4·menace) faster, their cooldown ÷(1 + 0.6·menace), and the
 telegraph up to 0.35 s shorter (never under 0.45 s); the spawn budget
@@ -694,10 +697,27 @@ The FP staging ("look up through the surface") is replaced:
 ## 8. World Structure & Progression (inherited, restated)
 
 - **7 depths** (Shallows → Kelp → Galleon → Carnival → Trench → Abyss → Tank),
-  each a chain of **4–5 levels**: the boss stands on level 4 (50%) or else
-  level 5. HUD `Depth x · Level y`. After the Tank's boss **the run loops**
-  endlessly: Depth 1 again, with Menace still rising (the cycle shows in the
-  HUD from the second pass). Menace rises only through the Crack (§6.2).
+  numbered from **Depth 0**: the Sunlit Shallows are Depth 0, the tutorial, and
+  the run proper is Depths 1–6. Each real depth is a chain of **4–5 levels**: the
+  boss stands on level 4 (50%) or else level 5. HUD `Depth x · Level y`. After
+  the Tank's boss **the run loops** endlessly: Depth 1 again (never the
+  tutorial), with Menace still rising (the cycle shows in the HUD from the second
+  pass). Menace rises only through the Crack (§6.2). (In code and saves a depth
+  keeps its 1-based index, the tutorial `LevelPlan.Tutorial` = 1; only its name
+  is one less, `LevelId.ShownDepth`.)
+- **The tutorial (Depth 0, the Sunlit Shallows):** where new players learn the
+  ropes, alone — the game says nothing to guide them (it has no hint messages
+  anywhere). Two levels, set rather than rolled, holding every kind of place
+  between them: level 1 a clam room, a secret, a shell cache and an ambush;
+  level 2 a shop, a curse den, an ambush and the **open rift** — the arena round
+  the Crack with no boss in it, the Crack standing open from the start and the
+  arena not condensed. Menace 0. Diving the rift passes the tutorial (saved on
+  the profile, `TutorialPassed`) and starts the run proper in Depth 1: the run's
+  clock and totals start from zero and it counts as a run from there, but
+  everything she gathered (pearls, shells, HP, the active pearl's charge) is
+  still hers. Until she has passed it, every run starts in the tutorial; after
+  that, runs start in Depth 1, unless the settings' **Start in the Shallows**
+  (shown only once it is passed) asks for the tutorial again.
 - **Progressive dives** inherited (§5.1 spirit adapted to open floors): early
   runs end at Depth 1; each first boss kill deepens the Crack's reach. Admiral's
   Chart / unlock table inherited.
@@ -745,7 +765,7 @@ The FP staging ("look up through the surface") is replaced:
   counter needed); the HUD keeps sand dollars, ink bombs, the minimap. At the
   top centre: the run's clock, and beside it, always on, where the run stands
   ("Depth 1 · Level 2"; a depth's first level names the depth too: "Sunlit
-  Shallows · Depth 1 · Level 1"). Moving between levels shows no other message.
+  Shallows · Depth 0 · Level 1"). Moving between levels shows no other message.
 - **The minimap's bezel is a quiet health bar**: four warm-gold segments just
   inside its rim, parted at north, east, south and west — one for each gonad
   ring — each as opaque as its quarter of her HP is full, over a faint track
@@ -922,9 +942,9 @@ at mist distance (inherited fade rule).
   hold still and gather into an arrow (a short chevron head, a long two-lane shaft, sized to the school) pointing at
   the secret's way in (its weak rock), every fish facing along it, with a soft chime; it loosens back into a school
   when she leaves, and once the secret is found it no longer points. Schools are few but big, so they visibly split and join: a school spreads over about 0.33 m × √(its fish).
-  Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 1 has 4–6
-  anemones, 4–7 tangs and 1–2 schools of 45–90; Depth 2 fewer (2–3, 2–4, one school of 30–60); Depth 3 at most one
-  anemone, 1–2 tangs and at most one school of 30–45; Depths 4 and below none.
+  Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 0 (the Shallows) has
+  4–6 anemones, 4–7 tangs and 1–2 schools of 45–90; Depth 1 fewer (2–3, 2–4, one school of 30–60); Depth 2 at most
+  one anemone, 1–2 tangs and at most one school of 30–45; Depths 3 and below none.
 - **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
   her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
   mobs from then on: she may swim away, and they stay. An ambush springs once.
@@ -933,7 +953,7 @@ at mist distance (inherited fade rule).
   In the middle the clam's lower valve holds a pink velvet tongue, and the pearl lies still on it. About 80 gold
   motes spiral round the pearl. A warm gold light fills the room and spills out of its mouth into the canyon, with a
   few motes drifting out, and the water pass lays a gold haze over the room and its mouth (ClamRoomView, `clam_glows`
-  in topdown_post). The light is brighter the deeper she is (0.6 at Depth 1, +0.3 per depth, at most 2.2), so in dark
+  in topdown_post). The light is brighter the deeper she is (0.6 at Depth 0, +0.3 per depth, at most 2.2), so in dark
   depths the room is a beacon. When the pearl is taken, the motes fling out and dissolve over 1.2 s and the light
   settles to an ember (35%).
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
@@ -959,12 +979,16 @@ at mist distance (inherited fade rule).
     shots that touch merge into one, bigger and stronger, instead of bouncing apart (see Combat above).
   - **Firefly Squid** (`PlaneSurge.cs`, `SurgeView`): fire pours out one continuous, narrow surge of her light instead
     of shots. It reaches where she aims (the pointer, or as far as the right stick is pushed; at most her range) and
-    stops on rock, a pot, Queen Clam's shut shell or the first creature it meets. Every 0.2 s it strikes everything it
-    touches for 90% of her shots' damage per second (her damage, fire rate and Sardine Run's spin all count); a pot
-    breaks once 18 of it has landed. It has no knockback and sends no surge back to her. Its tip and every impact clear
-    a little of the ground's corruption on each strike (1 m plus its width); the rest of its line does not. A ribbon of
-    white-hot light in her glow, pulses racing outward along it, a glow at her mouth, its tip and every impact; it
-    lights the swim layer along its way. Her other pearls shape it:
+    stops on rock, a pot, Queen Clam's shut shell or the first creature it meets. It strikes everything it touches every
+    step, smoothly, for 90% of her shots' damage per second (her damage, fire rate and Sardine Run's spin all count),
+    so a creature's meter drains steadily for as long as it is held in the light; its hit numbers and flashes come
+    summed four times a second (a creature it frees shows at once). A pot breaks once 18 of it has landed. It has no
+    knockback and sends no surge back to her. Its tip and every impact steadily clear the ground's corruption round
+    them (1 m plus its width, 2.25 density a second); the rest of its line does not. A ribbon of
+    white-hot light in her glow, pulses racing outward along it, a glow at her mouth and every impact; it lights the
+    swim layer along its way. Its end always burns: where it strikes nothing, its last 1.6 m bend down to the seabed
+    and it burns there, a ragged ring of orange flame on a dark scorch (1 m plus its width), embers lifting off and a
+    thread of smoke; a cone's whole far edge comes down and burns in a line. Her other pearls shape it:
     - shot size widens it (×0.11 m half-width, times her size stat and the pearls' size); **Starfish Arm** widens it
       toward its tip (×2 at her range) and makes it hit harder there;
     - every extra shot of a volley opens it into a **cone** with no gaps, as wide as the volley's fan (Hammerhead's cone
@@ -973,14 +997,16 @@ at mist distance (inherited fade rule).
       shot), brighter on the near side of each turn;
     - **Swordfish Bill:** it runs through every creature in its path; **Mirror Scale:** it reflects off rock (twice);
       **Anglerfish Lure:** it locks onto the one creature nearest it ahead and bends for it (up to 28° a metre);
+    - **Boomerang Shrimp:** each ray runs out in a leaf-shaped loop to its usual reach (its widest 22% of that either
+      side) and curls back to her; it burns at the loop's far end;
     - **Mitosis:** where it first strikes something it forks into two half-strength branches 40° either side, 4 m long;
     - **Starburst Gland:** it bursts into light at its tip (a cone's at its middle) and wherever it strikes, every 0.4 s (at most 6 bursts at
       once, not on top of each other), each 60% of a shot's damage over 1.8 m plus its width;
     - **Pearl Diver:** held, it focuses over 1 s, to 55% of its width and ×2 damage; **Sardine Run:** it spins up over
       1.2 s to strike up to ×4 as fast.
     The synergies Supernova (Starburst Gland), Lance of Light (Swordfish Bill), Helix Lamp (Double Helix) and
-    Searchlight (Hammerhead) announce the most striking of these. Boomerang Shrimp, Bubble Coral and Pistol Shrimp
-    Claw do nothing to it.
+    Searchlight (Hammerhead) announce the most striking of these. Bubble Coral and Pistol Shrimp Claw do nothing to
+    it.
   - **Lantern Pearl:** her glow (its light) reaches ×1.8 as far and shines brighter, and she reveals the minimap's fog
     ×1.4 as far around her.
   - **Active pearls (F):** she holds one at a time (the last taken; a new one comes charged). Used, it empties and
@@ -1092,8 +1118,8 @@ at mist distance (inherited fade rule).
   - its water, sand, rock, coral, algae and sponge colours;
   - its sun (pale gold, never Clementine's tangerine) and ambient light;
   - its caustic and god-ray strength, and its saturation, vignette and murk;
-  - its Menace (0 in the Shallows → 1 at the Tank).
-  Depth 1 (Sunlit Shallows) is tuned; the other six carry the bible's palettes, ready to be tuned as they are built.
+  - its Menace (0 in the Shallows and the Kelp Jungle → 1 at the Tank, 0.2 a depth).
+  Depth 0 (Sunlit Shallows) is tuned; the other six carry the bible's palettes, ready to be tuned as they are built.
 - **The reef's skin** (one shader for the ground, arches, cave roofs, boulders and weak rock, worked out in world
   space, so separate pieces meet seamlessly):
   - **Seabed:** rippled sand in patchy fields with flat sand between, sinuous crests, shell grit, soft algae drifts,

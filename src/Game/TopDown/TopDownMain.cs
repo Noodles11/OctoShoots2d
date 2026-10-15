@@ -302,7 +302,15 @@ public partial class TopDownMain : Node3D
         }
         _seed = RunLaunch.Seed;
         _customSeed = mode == LaunchMode.Seeded;
+        _id = RunStart();
     }
+
+    /// <summary>
+    /// Where a new run starts: in the tutorial (Depth 0) until she has passed it once, then in Depth 1 — unless the
+    /// settings ask to replay the tutorial.
+    /// </summary>
+    LevelId RunStart() =>
+        _recorder.Profile.TutorialPassed && !(_view ?? SettingsStore.LoadView()).ReplayTutorial ? LevelId.FirstRun : LevelId.First;
 
     /// <summary>Saves the run as it stands at the start of this level (continuing puts her back here).</summary>
     void SaveRun()
@@ -474,7 +482,7 @@ public partial class TopDownMain : Node3D
             _recorder.RunAbandoned(_elapsed);
             _seed = SeedCode.NewRandom();
             _customSeed = false;
-            _id = LevelId.First;
+            _id = RunStart();
             Regenerate();
             Say("New run");
         };
@@ -520,7 +528,7 @@ public partial class TopDownMain : Node3D
         random.Pressed += () =>
         {
             _seed = SeedCode.NewRandom();
-            _id = LevelId.First;
+            _id = RunStart();
             _seedField.Text = _seed.ToString();
             Regenerate();
         };
@@ -580,7 +588,7 @@ public partial class TopDownMain : Node3D
                 _info.Text = "Not a seed: 8 characters from A–Z and 2–9 (no 0, O, 1 or I)";
                 return;
             }
-            if (!parsed.Equals(_seed)) _id = LevelId.First;
+            if (!parsed.Equals(_seed)) _id = RunStart();
             _seed = parsed;
         }
         var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -643,7 +651,8 @@ public partial class TopDownMain : Node3D
                 _runShells = saved.ShellsCollected;
                 _resume = null;
             }
-            _recorder.StartRun(_seed.ToString(), _customSeed, _run.Items, continuing);
+            // The tutorial is not a run of its own: the run is counted when she dives out of it (TutorialPassed).
+            _recorder.StartRun(_seed.ToString(), _customSeed, _run.Items, continuing || _id.IsTutorial);
         }
         _run.Level = _id;
         _world = new PlaneWorld(_map, _tuning, _run);
@@ -832,6 +841,8 @@ public partial class TopDownMain : Node3D
             // Inside Queen Clam's arena: the fight starts at once.
             "arena" => _map.HasBoss ? _world.ArenaCenter + new System.Numerics.Vector2(0f, _world.ArenaRadius * 0.55f) : null,
             "shop" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 1.5f)).FirstOrDefault(),
+            // Beside the level's light spring, if it has one.
+            "spring" => _world.Springs.Select(sp => (System.Numerics.Vector2?)(sp.Position + new System.Numerics.Vector2(0f, SpringTuning.Radius + 1.5f))).FirstOrDefault(),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1062,13 +1073,8 @@ public partial class TopDownMain : Node3D
                 }
                 else if (e.Type == PlaneEventType.SchoolPoints)
                 {
-                    // A school gathers into an arrow: a soft rising chime (and, the first time, a word on what it means).
+                    // A school gathers into an arrow: a soft rising chime. What it means she finds out herself (no hints).
                     _sfx.PlayPitched("merge", 1.35f, -9f);
-                    if (!_saidSchool)
-                    {
-                        _saidSchool = true;
-                        Say("The school gathers into an arrow: something hidden lies that way");
-                    }
                 }
                 else if (e.Type == PlaneEventType.Necklace)
                 {
@@ -1158,8 +1164,7 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.BossFreed)
                 {
                     _camera.Shake(0.4f);
-                    Say(_world.ExitOpen ? $"{PlaneBossTuning.Name} is freed! The Crack is open"
-                        : $"{PlaneBossTuning.Name} is freed! Cleanse the arena to open the Crack ({Mathf.RoundToInt(_world.ArenaCleansed * 100f)}% of {Mathf.RoundToInt(CorruptionTuning.ArenaToOpen * 100f)}%)");
+                    Say($"{PlaneBossTuning.Name} is freed!");
                 }
             }
         }
@@ -1366,7 +1371,9 @@ public partial class TopDownMain : Node3D
         _banner.Visible = true;
         _hud.Diving = false;
         _diving = false;
+        bool leftTutorial = _id.IsTutorial && !LevelPlan.NextOf(_seed, _id).IsTutorial;
         _id = LevelPlan.NextOf(_seed, _id);
+        if (leftTutorial) TutorialPassed();
         EnterLevel(map, keepRun: true, 0, arrived);
         _minimap.Arrive();
         foreach (var view in LevelLife) ResetFade(view);
@@ -1423,6 +1430,17 @@ public partial class TopDownMain : Node3D
             }
             ResetFade(child);
         }
+    }
+
+    /// <summary>
+    /// She dived out of the tutorial: it is passed (runs start below it from now on), and the run proper begins here —
+    /// its clock and totals from zero, with everything she gathered in the tutorial still hers.
+    /// </summary>
+    void TutorialPassed()
+    {
+        _recorder.Profile.TutorialPassed = true;
+        ResetRunTotals();
+        if (_run is not null) _recorder.StartRun(_seed.ToString(), _customSeed, _run.Items, continuing: false);
     }
 
     /// <summary>Adds the level she is leaving to the run's totals.</summary>
@@ -1549,7 +1567,7 @@ public partial class TopDownMain : Node3D
                     // A clean new game: new seed, the first level, no pearls or shells.
                     _seed = SeedCode.NewRandom();
                     _customSeed = false;
-                    _id = LevelId.First;
+                    _id = RunStart();
                     ResetRunTotals();
                     _splash.Working("Shaping a new reef");
                     StartLoading();
@@ -1595,7 +1613,6 @@ public partial class TopDownMain : Node3D
 
     /// <summary>Synergies her pearls have made that she has not been told of yet (each once a run).</summary>
     readonly HashSet<string> _announced = new();
-    bool _saidSchool;
 
     /// <summary>A pearl just made a synergy: its name and what it does, a chime, a flare of her light.</summary>
     void AnnounceSynergies()
@@ -1647,18 +1664,6 @@ public partial class TopDownMain : Node3D
                 break;
             case PlaneEventType.VineCoiled:
                 _camera.Shake(0.22f);
-                if (!_saidCoil)
-                {
-                    _saidCoil = true;
-                    Say("A gloomvine has you: dash to break free");
-                }
-                break;
-            case PlaneEventType.ValveSeen:
-                if (!_saidValve)
-                {
-                    _saidValve = true;
-                    Say("A valve of darkness: dash through it free, or cleanse its edges");
-                }
                 break;
             case PlaneEventType.ValveCleared:
                 _sfx.PlayPitched("merge", 0.8f, -6f);
@@ -1670,18 +1675,10 @@ public partial class TopDownMain : Node3D
                 break;
             case PlaneEventType.SpringEntered:
                 _sfx.PlayPitched("merge", 1.2f, -8f);
-                if (!_saidSpring)
-                {
-                    _saidSpring = true;
-                    Say("A light spring: its clear water washes the corruption away");
-                }
                 break;
             case PlaneEventType.SpringCleansed:
                 _sfx.PlayPitched("bell_ring", 1.4f, -10f);
                 Say("Wholly cleansed");
-                break;
-            case PlaneEventType.CrackOpened:
-                Say("The arena is clean: the Crack opens");
                 break;
             case PlaneEventType.BombSplash:
                 _sfx.PlayPitched("merge", 0.45f, -8f);
@@ -1697,15 +1694,9 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.CacheRevealed:
                 _sfx.PlayPitched("merge", e.Size > 0f ? 1.5f : 1.2f, -6f);
                 _haptics.Pulse(0.2f, 0.1f, 0.12f);
-                if (!_saidCache)
-                {
-                    _saidCache = true;
-                    Say("Something was buried under the ink");
-                }
                 break;
             case PlaneEventType.BlotterBorn:
                 _sfx.PlayPitched("merge", 0.5f, -6f);
-                Say("A Blotter rises from the ink");
                 break;
             case PlaneEventType.BlotterBurst:
                 _camera.Shake(0.3f);
@@ -1713,18 +1704,11 @@ public partial class TopDownMain : Node3D
                 _haptics.Pulse(0.5f, 0.5f, 0.3f);
                 break;
         }
-        // The first time she nears a Blotter: what it is.
-        if (!_saidBlotter && _world.Blotters.Exists(b => System.Numerics.Vector2.Distance(b.Position, _world.Player.Position) < 14f))
-        {
-            _saidBlotter = true;
-            Say("A Blotter: it spreads the ink wherever it crawls. Cleanse it");
-        }
     }
 
     /// <summary>Corruption a light spring has washed off her since she entered it (shown as one number when she is done).</summary>
     float _springHealed;
 
-    bool _saidCoil, _saidValve, _saidSpring, _saidBlotter, _saidCache;
 
     void CloseDebug()
     {

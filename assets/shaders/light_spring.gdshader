@@ -5,6 +5,8 @@ shader_type spatial;
 render_mode blend_add, unshaded, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 instance uniform float bathing = 0.0;
+// Spent (its one washing used): it fades away, 1 → 0.
+instance uniform float fade = 1.0;
 uniform vec3 water : source_color = vec3(0.38, 0.95, 1.0);
 uniform vec3 gold : source_color = vec3(1.0, 0.769, 0.420);
 
@@ -41,5 +43,5 @@ void fragment() {
 	float glow = 1.0 + 0.8 * bathing;
 	vec3 col = water * (0.16 + 0.32 * c) * body + water * rim * 0.45 + gold * emblem * (1.1 + 0.9 * bathing) * breathe * body;
 	ALBEDO = col * glow;
-	ALPHA = 1.0;
+	ALPHA = fade;
 }

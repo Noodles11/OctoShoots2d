@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using OctoShoots.Core.Gen.TopDown;
 using OctoShoots.Core.Plane;
 using OctoShoots.Core.Saves;
 
@@ -36,7 +37,8 @@ public partial class StatsCard : PanelContainer
         _ => "Something unseen",
     };
 
-    public static string Reach(ProfileStats s) => s.BestDepth > 0 ? $"Depth {s.BestDepth} · Level {s.BestRoom}" : "—";
+    /// <summary>The furthest she has reached (BestDepth counts the tutorial as 1, so the depth she sees is one less).</summary>
+    public static string Reach(ProfileStats s) => s.BestDepth > 0 ? $"Depth {s.BestDepth - LevelPlan.Tutorial} · Level {s.BestRoom}" : "—";
 
     public override void _Ready()
     {

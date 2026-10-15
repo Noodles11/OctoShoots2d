@@ -20,12 +20,12 @@ public class TopDownGenTests
     public static readonly TheoryData<string> Seeds = new() { "KELP7Q2Z", "AAAAAAAA", "REEF2345", "DEEPSEA9", "WAVEDRFT", "CRABSHLL", "TANKHAND", "CRACKRFT" };
 
     static LevelMap Fresh(string seed, LevelId? id = null, string salt = "") =>
-        TopDownGenerator.Generate(new RunStreams(SeedCode.Parse(seed)), id ?? LevelId.First, cosmeticSalt: salt);
+        TopDownGenerator.Generate(new RunStreams(SeedCode.Parse(seed)), id ?? LevelId.FirstRun, cosmeticSalt: salt);
 
-    static LevelMap Map(string seed, LevelId? id = null) => Cache.GetOrAdd((seed, id ?? LevelId.First), k => Fresh(k.Item1, k.Item2));
+    static LevelMap Map(string seed, LevelId? id = null) => Cache.GetOrAdd((seed, id ?? LevelId.FirstRun), k => Fresh(k.Item1, k.Item2));
 
     /// <summary>The boss level of the seed's first depth.</summary>
-    static LevelId BossLevel(string seed) => new(1, 1, LevelPlan.BossLevel(SeedCode.Parse(seed), 1, 1));
+    static LevelId BossLevel(string seed) => new(1, 2, LevelPlan.BossLevel(SeedCode.Parse(seed), 1, 2));
 
     // ───────────────────────── determinism ─────────────────────────
 
@@ -42,7 +42,7 @@ public class TopDownGenTests
     public void DifferentSeedsAndLevelsGiveDifferentLevels()
     {
         Assert.NotEqual(Map("KELP7Q2Z").ToBytes(), Map("AAAAAAAA").ToBytes());
-        Assert.NotEqual(Map("KELP7Q2Z").ToBytes(), Map("KELP7Q2Z", new LevelId(1, 1, 2)).ToBytes());
+        Assert.NotEqual(Map("KELP7Q2Z").ToBytes(), Map("KELP7Q2Z", new LevelId(1, 2, 2)).ToBytes());
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class TopDownGenTests
     {
         // A level that needs several attempts: the attempt that succeeds is always the same one.
         var (seed, id) = Seeds.Cast<object[]>().Select(row => (string)row[0])
-            .SelectMany(s => Enumerable.Range(1, 3).Select(l => (s, new LevelId(1, 1, l))))
+            .SelectMany(s => Enumerable.Range(1, 3).Select(l => (s, new LevelId(1, 2, l))))
             .First(x => Map(x.s, x.Item2).Attempt > 0);
         var a = Fresh(seed, id);
         var b = Fresh(seed, id);
@@ -97,7 +97,7 @@ public class TopDownGenTests
     public void EveryDepthEndsWithItsBossOnLevelFourOrFive(string seed)
     {
         var code = SeedCode.Parse(seed);
-        var id = LevelId.First;
+        var id = LevelId.FirstRun;
         for (int step = 0; step < 40; step++)
         {
             var plan = LevelPlan.For(code, id);
@@ -117,7 +117,7 @@ public class TopDownGenTests
             if (plan.HasBoss)
             {
                 Assert.Equal(1, next.Level);
-                Assert.Equal(id.Depth == LevelPlan.Depths ? new LevelId(id.Cycle + 1, 1, 1) : new LevelId(id.Cycle, id.Depth + 1, 1), next);
+                Assert.Equal(id.Depth == LevelPlan.Depths ? new LevelId(id.Cycle + 1, LevelPlan.Tutorial + 1, 1) : new LevelId(id.Cycle, id.Depth + 1, 1), next);
                 Assert.True(LevelPlan.MenaceOf(next) > plan.Menace);
             }
             else
@@ -141,7 +141,7 @@ public class TopDownGenTests
     public void TheNextLevelStartsInTheRockAroundTheHole(string seed)
     {
         var code = SeedCode.Parse(seed);
-        foreach (var id in new[] { LevelId.First, BossLevel(seed) })
+        foreach (var id in new[] { LevelId.First, new LevelId(1, LevelPlan.Tutorial, 2), BossLevel(seed) })
         {
             var above = Map(seed, id);
             var below = Map(seed, LevelPlan.NextOf(code, id));
@@ -348,7 +348,7 @@ public class TopDownGenTests
     [MemberData(nameof(Seeds))]
     public void PoisFollowThePlanAndTheScatterRules(string seed)
     {
-        foreach (var id in new[] { LevelId.First, new LevelId(1, 1, 2), new LevelId(1, 1, 3) })
+        foreach (var id in new[] { LevelId.First, new LevelId(1, LevelPlan.Tutorial, 2), LevelId.FirstRun })
         {
             var map = Map(seed, id);
             var plan = LevelPlan.For(SeedCode.Parse(seed), id);
