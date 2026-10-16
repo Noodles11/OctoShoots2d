@@ -170,4 +170,28 @@ public class PlaneStatPearlTests
         Assert.True(sheet["Dash cooldown"].Change < 0f && sheet["Dash cooldown"].LowerIsBetter);
         Assert.Equal($"{w.CruiseSpeed:0.#} m/s", sheet["Swim speed"].Value);
     }
+
+    [Fact]
+    public void StringOfPearlsStreamsChargedPearlsWithoutHolding()
+    {
+        var w = World("sardine_run", "pearl_diver");
+        Assert.Contains("string_of_pearls", w.Run.Loadout.Synergies);
+        var aim = OpenAim(w);
+        int shots = 0;
+        float first = -1f, last = 0f;
+        for (int i = 0; i < (int)(2f * PlaneWorld.TickRate); i++)
+        {
+            w.Player.Hp = 100f;
+            w.Step(new PlaneInput { Aim = aim, Fire = true });
+            foreach (var s in w.Shots.Where(s => s.FromPlayer && s.Age <= PlaneWorld.Dt))
+            {
+                if (first < 0f) first = s.Charged;
+                last = s.Charged;
+            }
+            shots += w.Events.Count(e => e.Type == PlaneEventType.Shot);
+        }
+        // It fires while held (never waiting for a release), faster and faster, and its pearls charge with the spin.
+        Assert.True(shots > 10, $"{shots} shots");
+        Assert.True(first < 0.3f && last > 0.9f && last < 0.99f, $"charge {first} → {last}");
+    }
 }

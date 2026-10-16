@@ -24,7 +24,7 @@ public static class ReefDirectorTuning
     public const float ForceFeather = 2f, CosmeticReach = 5f;
 }
 
-public enum ReefEventKind { CurrentSurge }
+public enum ReefEventKind { CurrentSurge, GeyserSpray }
 
 /// <summary>Something the reef does on its own, at a set time in the level.</summary>
 public sealed class ReefEvent
@@ -34,6 +34,8 @@ public sealed class ReefEvent
     public float Start, Duration;
     /// <summary>A surge: the canyon it runs through (an index into the map's corridors), which way, and its full flow (m/s).</summary>
     public int Corridor;
+    /// <summary>A geyser's spray: which vent (an index into the director's geysers).</summary>
+    public int Geyser;
     public bool Reverse;
     public float Speed;
 
@@ -68,6 +70,7 @@ public sealed class ReefDirector
     {
         Map = map;
         var rng = new RunStreams(SeedCode.FromValue(map.Seed)).Events(map.Id);
+        ScheduleGeysers(rng.Stream("geysers"));
         // Canyons a surge can run through: the main routes and the side passages (spurs are short dead ends).
         var canyons = new List<int>();
         for (int i = 0; i < map.Corridors.Count; i++)
@@ -93,7 +96,39 @@ public sealed class ReefDirector
 
     public LevelMap Map { get; }
 
-    /// <summary>Everything scheduled for the level, in order (for tests and debug views).</summary>
+    /// <summary>The level's bubble geysers' vents.</summary>
+    public IReadOnlyList<Vector2> Geysers => _geysers;
+    readonly List<Vector2> _geysers = new();
+    readonly List<ReefEvent> _sprays = new();
+
+    /// <summary>Every geyser's sprays for the level, in order of start.</summary>
+    public IReadOnlyList<ReefEvent> GeyserSchedule => _sprays;
+
+    /// <summary>Each vent sprays on its own clock: a first spray early on, then one every while after its last.</summary>
+    void ScheduleGeysers(Rng rng)
+    {
+        _geysers.AddRange(Plane.Geysers.Of(Map));
+        for (int g = 0; g < _geysers.Count; g++)
+        {
+            float t = rng.Range(GeyserTuning.FirstMin, GeyserTuning.FirstMax);
+            while (t < ReefDirectorTuning.Horizon)
+            {
+                var e = new ReefEvent
+                {
+                    Kind = ReefEventKind.GeyserSpray,
+                    Start = t,
+                    Duration = GeyserTuning.Warn + rng.Range(GeyserTuning.SprayMin, GeyserTuning.SprayMax),
+                    Geyser = g,
+                };
+                _queue.Enqueue(e, e.Start);
+                _sprays.Add(e);
+                t = e.End + rng.Range(GeyserTuning.GapMin, GeyserTuning.GapMax);
+            }
+        }
+        _sprays.Sort((a, b) => a.Start.CompareTo(b.Start));
+    }
+
+    /// <summary>Every surge scheduled for the level, in order (for tests and debug views).</summary>
     public IReadOnlyList<ReefEvent> Schedule => _all;
 
     /// <summary>The events running now.</summary>
@@ -132,6 +167,11 @@ public sealed class ReefDirector
         Vector2 flow = Vector2.Zero;
         foreach (var e in _active)
         {
+            if (e.Kind == ReefEventKind.GeyserSpray)
+            {
+                flow += Plane.Geysers.PushAt(_geysers[e.Geyser], e, p, time);
+                continue;
+            }
             if (e.Kind != ReefEventKind.CurrentSurge) continue;
             float k = e.Envelope(time);
             if (k <= 0f) continue;

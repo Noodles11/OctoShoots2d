@@ -327,6 +327,8 @@
     { "id": "feeding_frenzy", "name": "Feeding Frenzy", "requires": ["shark_tooth", "lamprey_mouth"],
       "description": "Every kill sends you into a fast-firing frenzy",
       "effects": [ { "trigger": "onKill", "action": "frenzy", "value": 1.5, "duration": 3 } ] },
+    { "id": "string_of_pearls", "name": "String of Pearls", "requires": ["sardine_run", "pearl_diver"],
+      "description": "No holding: the stream fires pearls, charged as far as it has spun up" },
     { "id": "depth_charge", "name": "Depth Charge", "requires": ["pistol_shrimp", "pearl_diver"],
       "description": "A full-charge pearl's blast is twice as wide and half again as strong" },
     { "id": "broadside", "name": "Broadside", "requires": ["cannonball", "rear_fin"],

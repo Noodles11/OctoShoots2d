@@ -13,8 +13,11 @@ public partial class CurseDarkness : Control
 {
     /// <summary>The dark closes in over this many metres past the mouth.</summary>
     const float Deepens = 6f;
-    /// <summary>Round her (metres): the water stays readable within Inner, black from Outer.</summary>
-    const float Inner = 0.9f, Outer = 2.6f;
+    /// <summary>
+    /// Round her (metres): the water stays readable within Inner, black from Outer — wide enough that both of the
+    /// tunnel's walls (1.4 m each side of its line) show — and Veil of the dark still lies over her.
+    /// </summary>
+    const float Inner = 1.35f, Outer = 3.9f, Veil = 0.25f;
     /// <summary>It closes in fast (per second) and lifts slowly.</summary>
     const float CloseRate = 1.6f, LiftRate = 0.65f;
 
@@ -55,6 +58,7 @@ public partial class CurseDarkness : Control
         _material.SetShaderParameter("centre", at);
         _material.SetShaderParameter("inner", Inner * metre);
         _material.SetShaderParameter("outer", Outer * metre);
+        _material.SetShaderParameter("veil", Veil);
         QueueRedraw();
     }
 }

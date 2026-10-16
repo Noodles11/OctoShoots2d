@@ -358,7 +358,7 @@ public sealed partial class PlaneWorld
         foreach (var m in Mobs)
             if (m.Alive && Vector2.Distance(m.Position, p) < m.Radius + r) yield return m;
         foreach (var m in Murklings)
-            if (m.Alive && !m.Clinging && Vector2.Distance(m.Position, p) < BlightTuning.MurkRadius + r) yield return m;
+            if (m.Alive && !m.Clinging && Vector2.Distance(m.Position, p) < m.Radius + r) yield return m;
         foreach (var b in Blotters)
             if (b.Alive && b.Rise <= 0f && b.Touches(p, r)) yield return b;
         foreach (var root in Blightroots)

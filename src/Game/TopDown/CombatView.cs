@@ -284,7 +284,7 @@ public partial class CombatView : Node3D
             Roughness = 0.35f,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         };
-        // The shop's goods float on their own (a clam room's pearl lies on its tongue instead): pearls in their colours, the top-up a red
+        // The shop's goods float on their own (a clam room's pearl hangs still instead): pearls in their colours, the top-up a red
         // heart. Each hangs a little price tag on a string (its price and a shell), shown only while she is inside the shop.
         foreach (var stand in world.Stands)
         {
@@ -1007,7 +1007,7 @@ void fragment() {
             _pearls[i].Scale = Vector3.One;
             float fall = Mathf.Clamp((_time - _pearlBorn[i]) / PearlFall, 0f, 1f);
             float drop = PearlFallHeight * (1f - fall) * (1f - fall);
-            // A clam room's pearl lies still on the clam's tongue (breathing a hair); others float and bob.
+            // A clam room's pearl hangs still (breathing a hair); others float and bob.
             bool resting = world.Map.Pois.Exists(q => q.Kind == PoiKind.TreasureCave && q.Position == pearl.Position);
             float y = resting ? ClamRoomView.RestHeight + 0.015f * Mathf.Sin(_time * 1.3f + i) : LevelMap.SwimBand + 0.25f * Mathf.Sin(_time * 1.6f + i);
             _pearls[i].Position = new Vector3(pearl.Position.X, y + drop, pearl.Position.Y);

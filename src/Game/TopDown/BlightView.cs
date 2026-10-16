@@ -287,8 +287,10 @@ public partial class BlightView : Node3D
             if (!view.Visible) continue;
             var m = world.Murklings[i];
             float y = LevelMap.SwimBand + 0.08f * Mathf.Sin(_time * 2.3f + m.Seed);
-            float scale = BlightTuning.MurkRadius;
-            float ember = 0.45f;
+            float scale = m.Radius;
+            // A lesser one carries a dim ember in its fish's old colour, so it shows what it was.
+            float ember = m.Lesser ? 0.7f : 0.45f;
+            view.SetInstanceShaderParameter("ember_tint", m.Fish is { } fish ? FishEmber(fish.Kind) : new Color(0f, 0f, 0f, 0f));
             if (m.Budding)
             {
                 // Budding: a dark bead swelling up out of the floor.
@@ -304,7 +306,40 @@ public partial class BlightView : Node3D
                 scale *= 0.75f;
                 ember = 0.9f + 0.3f * Mathf.Sin(_time * 9f + m.Seed);
             }
+            // Throwing: the slingshot bend back, the snap forward with the piece swelling out of its front, and once it
+            // has flown, a wobble back to round.
+            float pull = 0f, bud = 0f;
+            if (!m.Budding && !m.Clinging)
+            {
+                if (m.Windup > 0f)
+                {
+                    float draw = Mathf.Max(m.WindupTotal - BlightTuning.SnapSeconds, 1e-3f);
+                    if (m.Windup > BlightTuning.SnapSeconds)
+                    {
+                        float k = Mathf.Clamp((m.WindupTotal - m.Windup) / draw, 0f, 1f);
+                        pull = -(1f - (1f - k) * (1f - k));
+                        bud = 0.25f * k;
+                    }
+                    else
+                    {
+                        float s = 1f - m.Windup / BlightTuning.SnapSeconds;
+                        pull = Mathf.Lerp(-1f, 1f, s * s);
+                        bud = 0.25f + 0.75f * s;
+                    }
+                }
+                else if (m.ThrowAge < 0.7f)
+                {
+                    float t = m.ThrowAge;
+                    pull = Mathf.Exp(-7f * t) * Mathf.Cos(24f * t);
+                    bud = 0.6f * (1f - Mathf.SmoothStep(0f, 0.08f, t));
+                }
+            }
+            view.SetInstanceShaderParameter("aim", new Vector3(m.Aim.X, 0f, m.Aim.Y));
+            view.SetInstanceShaderParameter("pull", pull);
+            view.SetInstanceShaderParameter("bud", bud);
             view.Position = new Vector3(m.Position.X, y, m.Position.Y);
+            // Drawing the bend is an effort: the whole body trembles across its aim.
+            if (pull < 0f) view.Position += new Vector3(-m.Aim.Y, 0f, m.Aim.X) * Mathf.Sin(_time * 55f + m.Seed) * 0.035f * -pull;
             view.Scale = Vector3.One * scale;
             view.SetInstanceShaderParameter("seed", m.Seed);
             view.SetInstanceShaderParameter("ember", ember);
@@ -317,6 +352,8 @@ public partial class BlightView : Node3D
             var t = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             t.SetInstanceShaderParameter("ember", 0f);
             t.SetInstanceShaderParameter("wobble", 0.5f);
+            // It flies along its local −Z (Basis.LookingAt): its neck trails behind.
+            t.SetInstanceShaderParameter("aim", new Vector3(0f, 0f, -1f));
             AddChild(t);
             _throws.Add(t);
         }
@@ -333,7 +370,12 @@ public partial class BlightView : Node3D
             var along = new Vector3(s.Velocity.X, -drop * 6f, s.Velocity.Y);
             // Stretched along its flight, a smear of dark.
             view.Basis = along.LengthSquared() > 1e-4f ? Basis.LookingAt(along.Normalized(), Vector3.Up).Scaled(new Vector3(1f, 1f, 1.8f)) : Basis.Identity;
-            view.Scale = new Vector3(BlightTuning.ThrowRadius * 1.2f, BlightTuning.ThrowRadius * 1.2f, BlightTuning.ThrowRadius * 2.2f);
+            // Just thrown, it pinches off from the murkling's body on a neck that thins and snaps, then wobbles into its
+            // flying drop.
+            float age = BlightTuning.ThrowLife - s.Life;
+            view.SetInstanceShaderParameter("drip", 1f - Mathf.SmoothStep(0f, 0.12f, age));
+            float jiggle = 1f + 0.3f * Mathf.Exp(-9f * age) * Mathf.Sin(30f * age);
+            view.Scale = new Vector3(BlightTuning.ThrowRadius * 1.2f / Mathf.Sqrt(jiggle), BlightTuning.ThrowRadius * 1.2f / Mathf.Sqrt(jiggle), BlightTuning.ThrowRadius * 2.2f * jiggle);
             if (((int)(_time * 60f) + i) % 3 == 0)
                 _droplets.Emit(view.Position, Vector3.Up * 0.2f, 0.35f, 0.16f, 0.04f, new Color(0.03f, 0.01f, 0.06f, 0.7f), new Color(0.05f, 0.02f, 0.1f, 0f), drag: 1f);
         }
@@ -451,7 +493,7 @@ public partial class BlightView : Node3D
         foreach (var meter in _meters.Values) meter.Seen = false;
         foreach (var m in world.Murklings)
             if (m.Alive && !m.Budding)
-                ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), 1.7f, dt);
+                ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), Mathf.Max(1.7f * m.Radius / BlightTuning.MurkRadius, 0.8f), dt);
         foreach (var b in world.Blotters)
             if (b.Alive && b.Rise <= 0f) ShowMeter(b, b.Corruption, new Vector3(b.Position.X, LevelMap.SwimBand + 1.6f, b.Position.Y), 3.4f, dt);
         foreach (var root in world.Blightroots)
@@ -520,6 +562,7 @@ public partial class BlightView : Node3D
                 _droplets.Burst(from, Vector3.Up, 12, 2.2f, 0.9f, 0.45f, 0.09f, 0.02f, new Color(0.03f, 0.01f, 0.05f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 3f);
                 break;
             }
+            case PlaneEventType.FishStruck:
             case PlaneEventType.MurkShotBurst:
             {
                 // Struck in the air, it bursts like a water balloon: a quick spray of ink droplets flung out all round
@@ -553,6 +596,19 @@ public partial class BlightView : Node3D
                 for (int i = 0; i < 70; i++)
                     _motes.Emit(at + _motes.RandDir() * 0.8f, _motes.RandDir() * _motes.RandRange(1f, 4f) + Vector3.Up * 1.5f, _motes.RandRange(0.8f, 1.6f), _motes.RandRange(0.1f, 0.24f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
                 break;
+            case PlaneEventType.FishTurned:
+                // The ink closes over it: a puff of violet mist.
+                _droplets.Burst(at, Vector3.Up, 6, 0.5f, 0.9f, 0.45f, 0.18f, 0.3f, new Color(0.25f, 0.1f, 0.4f, 0.4f), new Color(0.35f, 0.15f, 0.55f, 0f), drag: 2f);
+                break;
+            case PlaneEventType.FishFreed:
+            {
+                // A fish again: its ink cracks off in flakes, and a little burst of its own colour and light.
+                var tint = FishEmber(e.Size < 0.2f ? ReefFishKind.Chromis : e.Size < 0.28f ? ReefFishKind.Clownfish : ReefFishKind.BlueTang);
+                _droplets.Burst(at, Vector3.Up, 8, 2f, 0.7f, 0.35f, 0.06f, 0.015f, new Color(0.03f, 0.01f, 0.05f, 0.9f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 4f);
+                for (int i = 0; i < 12; i++)
+                    _motes.Emit(at, _motes.RandDir() * _motes.RandRange(0.5f, 1.8f) + Vector3.Up * 0.6f, _motes.RandRange(0.4f, 0.8f), _motes.RandRange(0.05f, 0.11f), 0.02f, new Color(tint.R, tint.G, tint.B, 1f), new Color(tint.R, tint.G, tint.B, 0f), drag: 2f, buoyancy: 0.5f);
+                break;
+            }
             case PlaneEventType.MurklingBud:
                 AddRipple(e.Position, Floor(e.Position) + 0.06f, 0.2f, 1.6f, BlightTuning.BudSeconds, new Color(Ink.R, Ink.G, Ink.B, 0.9f));
                 break;
@@ -568,6 +624,14 @@ public partial class BlightView : Node3D
                 break;
         }
     }
+
+    /// <summary>A reef fish's colour, for the ember a lesser murkling carries and the burst when it is freed.</summary>
+    static Color FishEmber(ReefFishKind kind) => kind switch
+    {
+        ReefFishKind.Chromis => new Color(0.3f, 0.95f, 0.85f, 1f),
+        ReefFishKind.Clownfish => new Color(1f, 0.5f, 0.15f, 1f),
+        _ => new Color(0.3f, 0.55f, 1f, 1f),
+    };
 
     void AddRipple(System.Numerics.Vector2 at, float y, float from, float to, float life, Color tint)
     {

@@ -11,8 +11,8 @@ namespace OctoShoots.Game.TopDown;
 /// in her light's glow, pulses racing outward along it); a cone (more shots) is one filled fan of light, soft at its
 /// sides, with its middle ray drawn hotter; Double Helix twists two strands round each ray, brighter on the near side
 /// of their turn; Boomerang Shrimp's rays are loops back to her. Where a ray ends without striking anything it comes
-/// down to the seabed and burns it: a patch of flame (a cone's whole far edge burns in a line), embers lifting off and
-/// a thread of smoke. Hot glows mark her mouth and every impact, and a light at the tip lights what it touches.
+/// down to the seabed and the water there boils: bubbles well up and rise to the surface (along a cone's whole far
+/// edge), with a fizz of froth at the touch. Hot glows mark her mouth and every impact, and a light at the tip lights what it touches.
 /// </summary>
 public partial class SurgeView : Node3D
 {
@@ -23,27 +23,25 @@ public partial class SurgeView : Node3D
     const float Twist = 1.6f, TwistSpeed = 9f;
     /// <summary>The last Dip metres of a ray that strikes nothing bend down to the seabed.</summary>
     const float Dip = 1.6f;
-    /// <summary>A ground burn's radius: this plus its ray's width.</summary>
-    const float BurnRadius = 1f;
+    /// <summary>Where it touches the seabed the bubbles well up over this radius plus its ray's width.</summary>
+    const float TouchRadius = 1f;
 
     readonly ImmediateMesh _mesh = new();
-    ShaderMaterial _beam = null!, _burn = null!, _scorch = null!, _glow = null!;
+    ShaderMaterial _beam = null!, _glow = null!;
     readonly List<MeshInstance3D> _glows = new();
     OmniLight3D _tip = null!;
-    FxParticles _embers = null!, _smoke = null!;
+    FxParticles _bubbles = null!, _froth = null!;
     LevelMap? _map;
     float _time;
     int _vertices;
 
     readonly List<(System.Numerics.Vector2 P, System.Numerics.Vector2 Dir, float S)> _samples = new();
-    readonly List<(System.Numerics.Vector2 At, float Radius)> _burns = new();
+    readonly List<(System.Numerics.Vector2 At, float Radius)> _touches = new();
     readonly List<(System.Numerics.Vector2 A, System.Numerics.Vector2 B)> _front = new();
 
     public override void _Ready()
     {
         _beam = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_surge.gdshader") };
-        _burn = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_burn.gdshader") };
-        _scorch = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_scorch.gdshader"), RenderPriority = -1 };
         _glow = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_shot.gdshader") };
         AddChild(new MeshInstance3D { Mesh = _mesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 16384f });
         var quad = new QuadMesh { Size = Vector2.One };
@@ -56,10 +54,10 @@ public partial class SurgeView : Node3D
         }
         _tip = new OmniLight3D { LightColor = new Color(1f, 0.8f, 0.5f), OmniRange = 4.5f, ShadowEnabled = false, Visible = false };
         AddChild(_tip);
-        _embers = new FxParticles(512, additive: true);
-        AddChild(_embers);
-        _smoke = new FxParticles(256, additive: false);
-        AddChild(_smoke);
+        _bubbles = new FxParticles(1200, additive: false, FxParticles.Bubble());
+        AddChild(_bubbles);
+        _froth = new FxParticles(300, additive: false);
+        AddChild(_froth);
     }
 
     /// <summary>The seabed's height under a point (capped at the rock tops).</summary>
@@ -72,8 +70,8 @@ public partial class SurgeView : Node3D
         _mesh.ClearSurfaces();
         if (GetViewport().GetCamera3D() is { } camera)
         {
-            _embers.Tick(dt, camera.GlobalBasis);
-            _smoke.Tick(dt, camera.GlobalBasis);
+            _bubbles.Tick(dt, camera.GlobalBasis);
+            _froth.Tick(dt, camera.GlobalBasis);
         }
         var surge = world.LightSurge;
         if (surge is null || surge.Rays.Count == 0)
@@ -85,7 +83,7 @@ public partial class SurgeView : Node3D
         // Light comes on in a flash rather than at once.
         float on = Mathf.Clamp(surge.Age / 0.08f, 0.3f, 1f);
         float bright = on * Mathf.Clamp(0.75f + 0.25f * surge.Power, 0.75f, 1.6f);
-        _burns.Clear();
+        _touches.Clear();
         _front.Clear();
         _mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _beam);
         _vertices = 0;
@@ -104,25 +102,14 @@ public partial class SurgeView : Node3D
         if (_vertices == 0) Quad(Vector3.Zero, Vector3.Zero, Vector3.Zero, Vector3.Zero, 0f, 0f, 0f, 0f, 0f, 0f);
         _mesh.SurfaceEnd();
 
-        // Where it comes down on the seabed it burns: a loop's far end, a ray that struck nothing, a cone's far edge.
+        // Where it comes down on the seabed it boils the water there: a loop's far end, a ray that struck nothing, a
+        // cone's far edge — bubbles well up and rise to the surface.
         foreach (var ray in surge.Rays)
         {
             if (ray.Blocked || fan && !ray.Fork) continue;
-            _burns.Add((ray.Tip, BurnRadius + ray.WidthAt(ray.Length) * 3f));
+            _touches.Add((ray.Tip, TouchRadius + ray.WidthAt(ray.Length) * 3f));
         }
-        if (_burns.Count > 0 || _front.Count > 0)
-        {
-            // A warm tint on the ground first (the same size, fading to nothing at its edge), then the flame over it.
-            _mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _scorch);
-            foreach (var (at, radius) in _burns) BurnPatch(at, radius, bright, lift: 0.04f);
-            foreach (var (a, b) in _front) BurnStrip(a, b, bright, 0.55f, lift: 0.05f);
-            _mesh.SurfaceEnd();
-            _mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _burn);
-            foreach (var (at, radius) in _burns) BurnPatch(at, radius, bright);
-            foreach (var (a, b) in _front) BurnStrip(a, b, bright, 0.55f);
-            _mesh.SurfaceEnd();
-        }
-        Embers(dt, bright);
+        Bubbles(dt, bright);
 
         // Glows: her mouth and every impact (not on top of each other).
         var spots = new List<(System.Numerics.Vector2 At, float Size)>();
@@ -208,7 +195,7 @@ public partial class SurgeView : Node3D
             left = c - off;
             right = c + off;
             // In over its first half metre; one that strikes something fades out over its last 0.3 m (one that dips
-            // runs on into its burn).
+            // runs on into the seabed).
             float fade = Mathf.SmoothStep(0f, 0.5f, s + ray.StartAt) * (dips ? 1f : 1f - Mathf.SmoothStep(length - 0.3f, length, s));
             b = bright * k * fade;
             core = w / half;
@@ -217,7 +204,7 @@ public partial class SurgeView : Node3D
 
     /// <summary>
     /// The cone: one fan of light between neighbouring rays, from her mouth to where each ray ends. Where a ray struck
-    /// nothing, the fan's far edge comes down to the seabed and burns there.
+    /// nothing, the fan's far edge comes down to the seabed and the water boils there.
     /// </summary>
     void Fan(List<SurgeRay> rays, float bright)
     {
@@ -259,77 +246,30 @@ public partial class SurgeView : Node3D
         }
     }
 
-    /// <summary>A burning patch on the seabed round a point, laid on the ground's own height.</summary>
-    void BurnPatch(System.Numerics.Vector2 at, float radius, float bright, float lift = 0.07f)
-    {
-        const int Ring = 16;
-        float y0 = Floor(at) + lift;
-        var centre = new Vector3(at.X, y0, at.Y);
-        for (int i = 0; i < Ring; i++)
-        {
-            float a0 = Mathf.Tau * i / Ring, a1 = Mathf.Tau * (i + 1) / Ring;
-            var d0 = new System.Numerics.Vector2(Mathf.Cos(a0), Mathf.Sin(a0));
-            var d1 = new System.Numerics.Vector2(Mathf.Cos(a1), Mathf.Sin(a1));
-            var p0 = at + d0 * radius;
-            var p1 = at + d1 * radius;
-            V(centre, Vector2.Zero);
-            V(new Vector3(p0.X, Floor(p0) + lift, p0.Y), new Vector2(d0.X, d0.Y));
-            V(new Vector3(p1.X, Floor(p1) + lift, p1.Y), new Vector2(d1.X, d1.Y));
-        }
-
-        void V(Vector3 p, Vector2 uv)
-        {
-            _mesh.SurfaceSetColor(new Color(bright, 0f, 0f, 1f));
-            _mesh.SurfaceSetUV(uv);
-            _mesh.SurfaceAddVertex(p);
-        }
-    }
-
-    /// <summary>A burning line on the seabed between two of a cone's ray ends.</summary>
-    void BurnStrip(System.Numerics.Vector2 a, System.Numerics.Vector2 b, float bright, float half, float lift = 0.08f)
-    {
-        float len = System.Numerics.Vector2.Distance(a, b);
-        if (len < 1e-3f) return;
-        var d = (b - a) / len;
-        var n = new System.Numerics.Vector2(-d.Y, d.X) * half;
-        // Along the strip, measured from the cone's middle so neighbouring pieces' flames run on.
-        float s0 = a.X * 0.7f + a.Y * 0.7f, s1 = s0 + len;
-        Vector3 P(System.Numerics.Vector2 p) => new(p.X, Floor(p) + lift, p.Y);
-        void V(System.Numerics.Vector2 p, float s, float u)
-        {
-            _mesh.SurfaceSetColor(new Color(bright, 0f, 1f, 1f));
-            _mesh.SurfaceSetUV(new Vector2(s, u));
-            _mesh.SurfaceAddVertex(P(p));
-        }
-        V(a - n, s0, -1f);
-        V(a + n, s0, 1f);
-        V(b + n, s1, 1f);
-        V(a - n, s0, -1f);
-        V(b + n, s1, 1f);
-        V(b - n, s1, -1f);
-    }
-
-    /// <summary>Embers lifting off the burns, cooling from gold to red, and a thin smoke rising and spreading.</summary>
-    void Embers(float dt, float bright)
+    /// <summary>
+    /// Bubbles welling up where her light meets the seabed (as a geyser's do: GeyserView's BubbleFx), and a fizz of
+    /// fine froth at the touch.
+    /// </summary>
+    void Bubbles(float dt, float bright)
     {
         void From(System.Numerics.Vector2 at, float spread, float rate)
         {
             float n = rate * dt * bright;
-            int count = (int)n + (_embers.RandRange(0f, 1f) < n - (int)n ? 1 : 0);
+            int count = (int)n + (_bubbles.RandRange(0f, 1f) < n - (int)n ? 1 : 0);
             float floor = Floor(at);
             for (int i = 0; i < count; i++)
             {
-                var off = new Vector3(_embers.RandRange(-spread, spread), 0f, _embers.RandRange(-spread, spread));
+                var off = new Vector3(_bubbles.RandRange(-spread, spread), 0f, _bubbles.RandRange(-spread, spread));
                 var p = new Vector3(at.X, floor + 0.1f, at.Y) + off;
-                _embers.Emit(p, new Vector3(_embers.RandRange(-0.4f, 0.4f), _embers.RandRange(0.8f, 2f), _embers.RandRange(-0.4f, 0.4f)), _embers.RandRange(0.4f, 0.9f),
-                    _embers.RandRange(0.05f, 0.1f), 0.01f, new Color(1f, 0.75f, 0.3f, 1f), new Color(1f, 0.2f, 0.05f, 0f), drag: 1.5f, buoyancy: 0.6f);
-                if (_smoke.RandRange(0f, 1f) < 0.35f)
-                    _smoke.Emit(p + Vector3.Up * 0.2f, new Vector3(0f, _smoke.RandRange(0.4f, 0.8f), 0f), _smoke.RandRange(0.9f, 1.5f),
-                        0.2f, 0.7f, new Color(0.2f, 0.18f, 0.16f, 0.35f), new Color(0.3f, 0.28f, 0.25f, 0f), drag: 1f, buoyancy: 0.3f);
+                var v = new Vector3(_bubbles.RandRange(-0.5f, 0.5f), _bubbles.RandRange(1.5f, 3.5f), _bubbles.RandRange(-0.5f, 0.5f));
+                BubbleFx.Rise(_bubbles, p, v, _bubbles.RandRange(0.06f, 0.16f), new Color(0.95f, 1f, 1f, 1f));
+                if (_froth.RandRange(0f, 1f) < 0.4f)
+                    _froth.Emit(p, new Vector3(_froth.RandRange(-0.6f, 0.6f), _froth.RandRange(0.3f, 0.9f), _froth.RandRange(-0.6f, 0.6f)), _froth.RandRange(0.3f, 0.6f),
+                        0.12f, 0.3f, new Color(0.95f, 1f, 1f, 0.55f), new Color(0.9f, 0.98f, 1f, 0f), drag: 3f, buoyancy: 0.5f);
             }
         }
-        foreach (var (at, radius) in _burns) From(at, radius * 0.6f, 28f);
-        foreach (var (a, b) in _front) From((a + b) * 0.5f, System.Numerics.Vector2.Distance(a, b) * 0.5f, 10f);
+        foreach (var (at, radius) in _touches) From(at, radius * 0.5f, 40f);
+        foreach (var (a, b) in _front) From((a + b) * 0.5f, System.Numerics.Vector2.Distance(a, b) * 0.5f, 14f);
     }
 
     /// <summary>Two triangles: left/right at the near end (along s0, brightness b0, core share g0), then the far end.</summary>

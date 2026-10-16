@@ -35,6 +35,13 @@ uniform float focus_below = 0.6;
 uniform float below_blur = 5.2;
 uniform float above_blur = 3.4;
 uniform float deep_fog = 0.06;
+// The mountains' tall tops (DESIGN-TOPDOWN §4.1): above peak_from metres over her plane, rock softens further out of
+// focus and fades toward the water's blue, rising to full over peak_span — so the range reads as distant and calm, and
+// the floor she plays on stays the sharpest thing on screen.
+uniform float peak_from = 4.0;
+uniform float peak_span = 6.0;
+uniform float peak_blur = 2.2;
+uniform float peak_blue = 0.6;
 /// Clementine's glow scattering in the water around her: a warm halo on the swim layer, the scene's lantern.
 uniform vec3 player_pos = vec3(0.0);
 uniform vec3 halo_color : source_color = vec3(1.0, 0.77, 0.42);
@@ -47,7 +54,8 @@ uniform vec4 bubble_lights[16];
 // over the water's veil so the room reads through the depth.
 uniform vec4 clam_glows[6];
 uniform int clam_count = 0;
-uniform vec3 clam_color : source_color = vec3(1.0, 0.78, 0.4);
+// Each glow in the colour of the pearl lying in its room.
+uniform vec3 clam_colors[6];
 uniform int bubble_count = 0;
 // Her light and the warm tint of her glow (HerColor.cs, data/clementine_color.cfg).
 global uniform vec3 her_light;
@@ -123,6 +131,8 @@ void fragment() {
 
 	float lod = below_blur * (below > 0.0 ? 0.55 + 0.45 * smoothstep(0.0, 10.0, below) : 0.0) * smoothstep(0.0, 0.8, below)
 		+ above_blur * smoothstep(0.0, 9.0, above);
+	float peak = open_deep ? 0.0 : smoothstep(peak_from, peak_from + peak_span, h);
+	lod += peak_blur * peak;
 	vec3 col = blurred(suv, lod);
 
 	// Everything is seen through water: reds fade and a turquoise in-scatter rises with the water between the sea
@@ -137,6 +147,9 @@ void fragment() {
 	float veil = mix(0.18, 0.5, reef_fog);
 	float fog = smoothstep(0.0, 1.8, below) * (veil + (0.85 - veil) * (1.0 - exp(-below * deep_fog * (0.6 + reef_fog))));
 	col = mix(col, water, fog);
+	// Tall tops take on the water's blue (the shallow turquoise toward the depth's own deep water).
+	vec3 haze = mix(reef_water_shallow, reef_water_deep, 0.45) * 1.05;
+	col = mix(col, haze, peak * peak_blue);
 
 	// Her glow lands on the floor (DESIGN-TOPDOWN §5): in daylight bioluminescence reads not as brightness but as a
 	// warm tint on what is near, and as shadow contrast. A broad warm pool (her_glow.w metres, showing on pale sand
@@ -200,14 +213,15 @@ void fragment() {
 		bubbles += exp(-dot(ob, ob) / (b.z * b.z)) * b.w;
 	}
 	col += bubble_color * bubbles * halo_strength * (0.35 + 0.65 * fog) * (1.0 - smoothstep(0.0, 4.0, above)) * (0.6 + 0.8 * reef_menace);
-	// The clam rooms' gold: lifting what lies in them toward warm light, and a haze of it in the water over them.
-	float clam = 0.0;
+	// The clam rooms' light, each in its pearl's colour: lifting what lies in them toward it, and a haze of it in the
+	// water over them, so a room shows from afar what it holds.
+	vec3 clam = vec3(0.0);
 	for (int i = 0; i < clam_count; i++) {
 		vec4 g = clam_glows[i];
 		vec2 og = on_layer.xz - g.xy;
-		clam += exp(-dot(og, og) / (g.z * g.z)) * g.w;
+		clam += clam_colors[i] * exp(-dot(og, og) / (g.z * g.z)) * g.w;
 	}
-	col = col * (1.0 + clam_color * clam * 0.9) + clam_color * clam * 0.22;
+	col = col * (1.0 + clam * 0.9) + clam * 0.22;
 
 	// Rock rising toward the camera: a soft silhouette in the water's colour, darker as the depths darken.
 	vec3 shade = mix(reef_murk * 0.45, vec3(0.01, 0.015, 0.02), reef_menace);

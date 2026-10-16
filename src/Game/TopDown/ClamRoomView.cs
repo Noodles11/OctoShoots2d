@@ -9,11 +9,11 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// Clam rooms (the treasure caves, DESIGN-TOPDOWN §4.2): the room is the inside of a giant clam. Its chamber is lined
-/// with a shell wall of glowing mother-of-pearl (open at the mouth); in the middle a giant clam's lower valve holds a
-/// pink velvet tongue, and the pearl lies on it. Gold motes spiral round the pearl, and a warm gold light fills the room
-/// and spills out of its mouth into the canyon, with a few motes drifting out, so it can be found; it shines brighter
-/// the deeper she is (the water is darker there). When the pearl is taken the motes fling out and dissolve, and the
-/// light settles to an ember.
+/// with a shell wall of glowing mother-of-pearl (open at the mouth) and floored with it; the pearl hangs still in the
+/// middle, and its light paints its pattern over all of it. Gold motes spiral round the pearl, its light in its colour
+/// fills the room and spills out of the mouth into the canyon, with a few motes drifting out, so it can be found; it
+/// shines brighter the deeper she is (the water is darker there). When the pearl is taken the motes fling out and
+/// dissolve, and its light fades out.
 /// </summary>
 public partial class ClamRoomView : Node3D
 {
@@ -21,20 +21,25 @@ public partial class ClamRoomView : Node3D
     {
         public Node3D Root = null!;
         public ShaderMaterial Sparks = null!;
+        /// <summary>The shell's material (wall and floor): the pearl's light in its pattern is painted through it.</summary>
+        public ShaderMaterial Nacre = null!;
         public OmniLight3D Inner = null!, Spill = null!;
         public CpuParticles3D Drift = null!;
         public System.Numerics.Vector2 At, Mouth;
         public float Gone, Bright;
+        /// <summary>The pearl's own colour (its light's mean), for the spill and the water's haze.</summary>
+        public Color Tint = new(1f, 0.8f, 0.45f);
     }
 
     const int Motes = 80;
-    /// <summary>The pearl's tongue: its top just under the pearl's middle less its radius, so the pearl sinks into it a little.</summary>
+    /// <summary>Where the pearl hangs in the room: at the swim level.</summary>
     public const float RestHeight = LevelMap.SwimBand + 0.02f;
 
     readonly List<Room> _rooms = new();
 
-    /// <summary>The rooms' gold glows for the water pass (xz, radius, strength): the room, and its mouth.</summary>
+    /// <summary>The rooms' glows for the water pass (xz, radius, strength): the room, and its mouth; and their colours.</summary>
     public List<Vector4> Glows { get; } = new();
+    public List<Color> GlowColors { get; } = new();
     static readonly Color Gold = new(1f, 0.8f, 0.45f);
 
     /// <summary>A new level: its clam rooms.</summary>
@@ -46,7 +51,26 @@ public partial class ClamRoomView : Node3D
         // Brighter the deeper she goes: the rooms are beacons in the dark.
         float bright = Mathf.Clamp(0.6f + 0.3f * (map.Depth - 1), 0.6f, 2.2f);
         foreach (var poi in map.Pois.Where(p => p.Kind == PoiKind.TreasureCave && p.Cave >= 0))
-            _rooms.Add(Build(map, poi, map.Caves[poi.Cave], bright));
+        {
+            var room = Build(map, poi, map.Caves[poi.Cave], bright);
+            // Lit by the pearl that lies in it: its colours, in its pattern, painted over the whole room.
+            var pearl = world.Pearls.FirstOrDefault(p => p.Position == poi.Position);
+            if (pearl is not null && world.Run.Catalog?.TryGet(pearl.ItemId, out var item) == true)
+            {
+                room.Tint = OctoShoots.Game.Fx.PearlLight.Mean(item);
+                room.Inner.LightColor = room.Tint;
+                var look = item.Pearl ?? new OctoShoots.Core.Items.PearlLook { Colors = { "#ffffff" } };
+                var m = room.Nacre;
+                m.SetShaderParameter("glow_pos", new Vector3(poi.Position.X, RestHeight, poi.Position.Y));
+                m.SetShaderParameter("glow_c0", Color.FromHtml(look.Colors[0]));
+                m.SetShaderParameter("glow_c1", Color.FromHtml(look.Colors[System.Math.Min(1, look.Colors.Count - 1)]));
+                m.SetShaderParameter("glow_c2", Color.FromHtml(look.Colors[^1]));
+                m.SetShaderParameter("glow_pattern", (int)look.Pattern);
+                m.SetShaderParameter("glow_seed", (float)(System.StringComparer.Ordinal.GetHashCode(item.Id) % 97));
+                room.Spill.LightColor = room.Tint;
+            }
+            _rooms.Add(room);
+        }
     }
 
     Room Build(LevelMap map, Poi poi, CaveSite cave, float bright)
@@ -56,7 +80,6 @@ public partial class ClamRoomView : Node3D
         var root = new Node3D();
         AddChild(root);
         var nacre = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clam_nacre.gdshader") };
-        var velvet = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clam_velvet.gdshader") };
 
         // The shell wall round the chamber, open toward the mouth.
         float chamber = cave.Chambers[0].Radius;
@@ -68,19 +91,12 @@ public partial class ClamRoomView : Node3D
             MaterialOverride = nacre,
             Position = new Vector3(at.X, floor, at.Y),
         });
-        // The giant clam: its lower valve from the floor up to just under the swim level, the velvet tongue in it.
-        float rim = LevelMap.SwimBand - 0.25f;
+        // The chamber's floor, mother-of-pearl as the wall is, laid over the rock from the middle to the wall's foot.
         root.AddChild(new MeshInstance3D
         {
-            Mesh = ClamRoomMeshes.LowerValve(1.9f, rim - floor + 0.4f),
+            Mesh = ClamRoomMeshes.Floor(0f, chamber - 0.3f, p => map.HeightAt(new System.Numerics.Vector2(at.X + p.X, at.Y + p.Y)) - floor + 0.05f),
             MaterialOverride = nacre,
-            Position = new Vector3(at.X, rim, at.Y),
-        });
-        root.AddChild(new MeshInstance3D
-        {
-            Mesh = ClamRoomMeshes.Tongue(1.4f, 0.44f),
-            MaterialOverride = velvet,
-            Position = new Vector3(at.X, RestHeight - 0.42f - 0.2f, at.Y),
+            Position = new Vector3(at.X, floor, at.Y),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
 
@@ -96,7 +112,8 @@ public partial class ClamRoomView : Node3D
         root.AddChild(new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = sparks, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 4f });
 
         // The light: filling the room, and spilling out of its mouth into the canyon.
-        var inner = new OmniLight3D { LightColor = Gold, LightEnergy = 3f * bright, OmniRange = 12f, OmniAttenuation = 1.2f, ShadowEnabled = false, Position = new Vector3(at.X, LevelMap.SwimBand + 2.5f, at.Y) };
+        // The pearl's light: just over it, filling the room in its colour.
+        var inner = new OmniLight3D { LightColor = Gold, LightEnergy = 1.2f * bright, OmniRange = 10f, OmniAttenuation = 0.7f, ShadowEnabled = false, Position = new Vector3(at.X, RestHeight + 1.4f, at.Y) };
         root.AddChild(inner);
         var mouth = cave.Mouth + cave.Facing * 3f;
         var spill = new OmniLight3D { LightColor = Gold, LightEnergy = 2f * bright, OmniRange = 11f, OmniAttenuation = 1.4f, ShadowEnabled = false, Position = new Vector3(mouth.X, LevelMap.SwimBand + 3f, mouth.Y) };
@@ -135,28 +152,34 @@ public partial class ClamRoomView : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         root.AddChild(drift);
-        return new Room { Root = root, Sparks = sparks, Inner = inner, Spill = spill, Drift = drift, At = at, Mouth = cave.Mouth + cave.Facing * 1.5f, Bright = bright };
+        return new Room { Root = root, Sparks = sparks, Nacre = nacre, Inner = inner, Spill = spill, Drift = drift, At = at, Mouth = cave.Mouth + cave.Facing * 1.5f, Bright = bright };
     }
 
     public void Sync(PlaneWorld world, float dt)
     {
         foreach (var room in _rooms)
         {
-            // Its pearl still waiting? Once taken (or being absorbed), the motes dissolve and the light settles.
+            // Its pearl still waiting? Once taken (or being absorbed), the motes dissolve and its light fades out.
             bool waiting = world.Pearls.Any(p => p.Position == room.At && !p.Taken && !p.Absorbing);
             room.Gone = Mathf.MoveToward(room.Gone, waiting ? 0f : 1f, dt / 1.2f);
             room.Sparks.SetShaderParameter("gone", room.Gone);
-            float k = 1f - 0.65f * room.Gone;
-            room.Inner.LightEnergy = 3f * room.Bright * k;
+            float k = 1f - room.Gone;
+            room.Inner.LightEnergy = 1.2f * room.Bright * k;
+            // The pearl's patterned light over the room, fading out once it is taken.
+            room.Nacre.SetShaderParameter("glow_strength", 1.3f * room.Bright * k);
             room.Spill.LightEnergy = 2f * room.Bright * k;
+            room.Inner.Visible = room.Spill.Visible = k > 0.001f;
             room.Drift.Emitting = room.Gone < 0.5f;
         }
         Glows.Clear();
+        GlowColors.Clear();
         foreach (var room in _rooms)
         {
-            float k = (1f - 0.65f * room.Gone) * room.Bright;
+            float k = (1f - room.Gone) * room.Bright;
             Glows.Add(new Vector4(room.At.X, room.At.Y, 5.5f, 0.55f * k));
             Glows.Add(new Vector4(room.Mouth.X, room.Mouth.Y, 4.5f, 0.35f * k));
+            GlowColors.Add(room.Tint);
+            GlowColors.Add(room.Tint);
         }
     }
 }

@@ -31,10 +31,39 @@ public partial class FxParticles : Node3D
 
     public FxParticles() : this(512, false) { }
 
-    public FxParticles(int capacity, bool additive)
+    readonly Texture2D? _texture;
+
+    /// <param name="texture">The sprite (a soft dot by default; <see cref="Bubble"/> for bubbles).</param>
+    public FxParticles(int capacity, bool additive, Texture2D? texture = null)
     {
         _particles = new Particle[capacity];
         _additive = additive;
+        _texture = texture;
+    }
+
+    static Texture2D? _bubble;
+
+    /// <summary>
+    /// A bubble: nearly clear inside, a bright thin film at its rim and a soft halo past it, so it reads as a bubble
+    /// of air in water rather than a dot of light.
+    /// </summary>
+    public static Texture2D Bubble()
+    {
+        if (_bubble is not null) return _bubble;
+        var gradient = new Gradient
+        {
+            Offsets = new[] { 0f, 0.55f, 0.78f, 0.9f, 1f },
+            Colors = new[] { new Color(1, 1, 1, 0.06f), new Color(1, 1, 1, 0.14f), new Color(1, 1, 1, 0.55f), new Color(1, 1, 1, 0.95f), new Color(1, 1, 1, 0) },
+        };
+        return _bubble = new GradientTexture2D
+        {
+            Gradient = gradient,
+            Fill = GradientTexture2D.FillEnum.Radial,
+            FillFrom = new Vector2(0.5f, 0.5f),
+            FillTo = new Vector2(1f, 0.5f),
+            Width = 64,
+            Height = 64,
+        };
     }
 
     public static Texture2D SoftCircle()
@@ -63,7 +92,7 @@ public partial class FxParticles : Node3D
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             BlendMode = _additive ? BaseMaterial3D.BlendModeEnum.Add : BaseMaterial3D.BlendModeEnum.Mix,
             VertexColorUseAsAlbedo = true,
-            AlbedoTexture = SoftCircle(),
+            AlbedoTexture = _texture ?? SoftCircle(),
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
         };
         _multimesh = new MultiMesh

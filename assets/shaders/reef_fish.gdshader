@@ -27,6 +27,8 @@ varying vec2 eye_uv;
 varying float v;
 varying float sun;
 varying float seed;
+// A murkling's throw turning it (0 → 1, from the instance colour's red): ink creeps over it from the tail.
+varying float ink;
 
 vec3 rot_y(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z); }
 vec3 rot_x(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x, c * p.y - s * p.z, s * p.y + c * p.z); }
@@ -46,6 +48,7 @@ void vertex() {
 	eye_uv = CUSTOM2.xy;
 	v = part < 0.5 ? CUSTOM2.z : (part > 3.5 && part < 4.5 ? 1.0 : (part > 4.5 && part < 5.5 ? -1.0 : 0.0));
 	seed = fract(float(INSTANCE_ID) * 0.6180339);
+	ink = COLOR.r;
 	float phase = INSTANCE_CUSTOM.x, fin_phase = INSTANCE_CUSTOM.y, swim = INSTANCE_CUSTOM.z, turn = INSTANCE_CUSTOM.w;
 	float drive = 0.3 + 0.7 * min(swim, 1.4);
 	vec3 p = VERTEX;
@@ -188,6 +191,12 @@ void fragment() {
 	col *= 0.95 + 0.07 * hash2(floor(vec2(u * 260.0, v * 40.0)) + seed * 13.0);
 	glow += col * sun * 0.2;
 	if (!FRONT_FACING) NORMAL = -NORMAL;
+	if (ink > 0.0) {
+		// Turning: ink-black creeping up from the tail, a cold violet sheen over it.
+		float k = smoothstep(0.0, 0.2, ink * 1.4 - (1.0 - u) * 0.4);
+		col = mix(col, vec3(0.01, 0.006, 0.02), k);
+		glow = mix(glow, vec3(0.3, 0.09, 0.6) * 0.5, k);
+	}
 	ALBEDO = col;
 	ROUGHNESS = rough;
 	SPECULAR = spec;

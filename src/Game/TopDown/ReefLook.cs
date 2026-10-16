@@ -5,8 +5,9 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// How a depth looks (THEME-BIBLE §6.2 light budget, §6.3 palette, §7 the depths): its water, seabed and reef colours,
-/// its sun, how sharp its caustics and how strong its god rays, and its Menace (0 at Depth 1 → 1 at the Tank), which
-/// thickens the murk, darkens the vignette and drains the colour. One look drives every reef shader through the
+/// its sun, how sharp its caustics and how strong its god rays, and its look's Menace (0 in the Shallows, about 0.6 at
+/// most), which thickens the murk, darkens the vignette and drains the colour. No depth is much darker than the Coral
+/// Carnival: the dark grows with the descent, but every level stays readable. One look drives every reef shader through the
 /// reef_* shader globals, the environment and the sun, so the descent is felt everywhere at once.
 /// Warmth belongs to Clementine and to healthy life: the sun is a pale gold, never her tangerine.
 /// </summary>
@@ -117,21 +118,26 @@ public sealed record ReefLook
         Caustics = 0f, Rays = 0f, Menace = 0.5f, Saturation = 1.15f, Vignette = 0.6f, Fog = 0.6f,
     };
 
+    /// <summary>
+    /// The deepest two stay readable: no darker than a little past the Coral Carnival (Depth 3). The Trench is about as
+    /// light as the Carnival in its own cold blue; the Abyss a shade darker in indigo, its life glowing neon.
+    /// </summary>
     public static readonly ReefLook Trench = Shallows with
     {
         Name = "Twilight Trench",
-        WaterShallow = C("#12284A"), WaterDeep = C("#0B1B33"), Murk = C("#050B16"),
-        Sand = C("#2A3346"), Rock = C("#1A2438"), Coral = C("#2E4A6A"), Coral2 = C("#22385A"), Algae = C("#1E3A4A"), Sponge = C("#7FE7FF"),
-        Sun = C("#7FA8D8"), SunEnergy = 0.08f, Ambient = C("#16284A"), AmbientEnergy = 0.25f,
-        Caustics = 0f, Rays = 0f, Menace = 0.72f, Saturation = 0.8f, Vignette = 0.75f, Fog = 0.8f,
+        WaterShallow = C("#304878"), WaterDeep = C("#1F3460"), Murk = C("#0D1830"),
+        Sand = C("#4E5A74"), Rock = C("#3A4866"), Coral = C("#4F7099"), Coral2 = C("#3E5C86"), Algae = C("#3A6070"), Sponge = C("#7FE7FF"),
+        Sun = C("#7FA8D8"), SunEnergy = 0.32f, Ambient = C("#3A5080"), AmbientEnergy = 0.44f,
+        Caustics = 0f, Rays = 0f, Menace = 0.55f, Saturation = 0.85f, Vignette = 0.62f, Fog = 0.62f,
     };
 
     public static readonly ReefLook Abyss = Trench with
     {
         Name = "The Abyss",
-        WaterShallow = C("#0A0E1C"), WaterDeep = C("#05070F"), Murk = C("#020308"),
-        Rock = C("#0A0D16"), Sand = C("#10141E"), Coral = C("#FF3FA4"), Sponge = C("#2FF3E0"), Butter = C("#FFD25E"),
-        SunEnergy = 0f, AmbientEnergy = 0.12f, Menace = 0.92f, Saturation = 0.75f, Vignette = 0.85f, Fog = 0.9f,
+        WaterShallow = C("#34407A"), WaterDeep = C("#222A55"), Murk = C("#10132C"),
+        Rock = C("#30364F"), Sand = C("#44486A"), Coral = C("#FF3FA4"), Sponge = C("#2FF3E0"), Butter = C("#FFD25E"),
+        Sun = C("#8C90D8"), SunEnergy = 0.26f, Ambient = C("#343C70"), AmbientEnergy = 0.4f,
+        Menace = 0.6f, Saturation = 0.8f, Vignette = 0.66f, Fog = 0.66f,
     };
 
     public static readonly ReefLook Tank = Shallows with

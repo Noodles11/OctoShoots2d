@@ -395,6 +395,14 @@ between the places, before any rock exists:
 - The shaft: open water all the way down; nothing grows in it. Buried-coin X
   marks and sealed pockets in the seabed under the paths (§4.2).
 
+**Mountains (after the checks):** once a level is valid, every stretch of open floor she can never swim to —
+pockets sealed off by rock, or behind gaps too narrow for her, and the dead floor outside the reef walls — is raised
+into rock (`Mountains.Fill`). It meets the walls round it at their own height, climbs from her plane at open water's
+edge, and rises toward ridged peaks in its middle (0.9 m per metre in, up to 7 m over the rock round it, ridges up to
+2.2 m), so the reef reads as one mountain range, not walls with flat holes between them. Open floor within 2 m of
+water she can reach stays open (the walls' foot), and secret rooms count as reachable (their weak rock opens).
+Running after the checks, it never changes what she can reach.
+
 **Stage 6 — Mob spawn rules:**
 - **Dens:** caves and ridge pockets hold themed groups from the depth pool
   (inherited den system).
@@ -417,9 +425,9 @@ between the places, before any rock exists:
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
   into the ridge behind its spur, 26–44 m long (about 2.8 m wide, in bending legs of 5–10 m), so finding its end
   in the dark takes a good few seconds. Black fog seeps out of its mouth into the canyon.
-  - **The dark:** past its mouth a dense black fog closes in over the first 6 m. Only the water within about 1–2.5 m
-    of Clementine stays faintly readable, and even her own light is faded (to about a third), so she feels her way
-    by the walls. The minimap fades to black (its corruption bezel stays) and the fog of war learns nothing while she
+  - **The dark:** past its mouth a dense black fog closes in over the first 6 m. Only the water within about 1.35–3.9 m
+    of Clementine stays readable — wide enough that both of the tunnel's walls show beside her — with a quarter of the
+    dark still over her, and her own light is faded to about half, so she feels her way along the walls. The minimap fades to black (its corruption bezel stays) and the fog of war learns nothing while she
     is inside. Leaving, the dark lifts slowly (about 1.5 s).
   - **The curse:** inside the tunnel it corrupts her at a flat **1.5 HP a second**, like any drain (her dash and a
     Bubble Shield hold it off; it can take her). A quick trip to the end and back costs about 20 HP.
@@ -565,6 +573,17 @@ Deterministic and cheap: the same level always schedules the same events.
     spill up to 5 m past its walls, where the current is only cosmetic. They
     appear as the surge builds (the warning), race at full strength, and thin
     out as it eases off.
+- **Bubble geysers** (`PlaneGeysers.cs`, `GeyserView`): each level has 2–4 small vents in the seabed (on open floor,
+  18 m from the start, clear of the way down, the places and the light spring, 14 m apart), seeded. Each sprays on its
+  own clock (from its own `geysers` stream, so the surges' schedule is untouched): the first spray 6–25 s into the
+  level, each next 14–35 s after the vent's last. A spray begins with **1.5 s of fizzing** (a stream of small
+  bubbles: the warning, no push), then sprays for **5–10 s**: a froth bursts from the vent, a ring runs out over the
+  floor, and a column of bubbles rises all the way to the surface, leaving fast, wobbling, swelling as they climb.
+  An idle vent trickles a bubble now and then.
+  - **The push:** while it sprays, the water within 5 m is pushed straight out from the vent like a wave — 4 m/s at
+    the vent, plus a burst of 10 m/s at the start that dies away (to a third in half a second), fading to nothing at
+    the edge — through the same flow as the surges, so it moves her, the creatures, the fish, her shots, shells and
+    loose pearls alike, and may topple a pot. A deep bubbling pop marks it, with a jolt when she is near.
 
 ## 5. Lighting & Atmosphere — the core pillar
 
@@ -590,16 +609,21 @@ a dive. She is drawn after that pass, so the shadow never darkens her.
 
 | Depth | Ambient | God rays | Player glow radius | Primary scenery light |
 |---|---|---|---|---|
-| 1 Shallows | High — sunlit turquoise | Strong, broad | Small (supplemental) | Sun + caustics |
-| 2 Kelp | Dappled green | Broken by canopy | Small | Light shafts |
-| 3 Galleon | Amber, dusty | Only through wreck holes | Medium | Lanternfish, loot glints |
-| 4 Carnival | Neon but flickering | None — "stage lights" | Medium | Corrupted neon, bounce pads |
-| 5 Trench | Near zero | None | **Large — she is the lantern** | Bioluminescent flora specks |
-| 6 Abyss | Black | None | **Large, bloom-heavy** | Neon outlines + distant glowing eyes |
-| 7 Tank | Flat fluorescent LED | None — *wrong* | Irrelevant — everything is lit | Harsh, shadowless, artificial |
+| 0 Shallows | High — sunlit turquoise | Strong, broad | Small (supplemental) | Sun + caustics |
+| 1 Kelp | Dappled green | Broken by canopy | Small | Light shafts |
+| 2 Galleon | Amber, dusty | Only through wreck holes | Medium | Lanternfish, loot glints |
+| 3 Carnival | Neon but flickering | None — "stage lights" | Medium | Corrupted neon, bounce pads |
+| 4 Trench | Dim cold blue, about as light as the Carnival | None | **Large — she is the lantern** | Bioluminescent flora specks |
+| 5 Abyss | Dim indigo, the darkest — a shade darker than the Carnival | None | **Large, bloom-heavy** | Neon outlines + distant glowing eyes |
+| 6 Tank | Flat fluorescent LED | None — *wrong* | Irrelevant — everything is lit | Harsh, shadowless, artificial |
 
-- Menace drives fog density, saturation falloff, and how far the player glow
-  carries (inherited "glow items feel precious" presentation rule).
+The darkest depth is only a little darker than the Coral Carnival: the descent darkens, but every level stays
+readable (`ReefLook`: the Trench's sun 0.32 and ambient 0.44, the Abyss's 0.26 and 0.4, against the Carnival's 0.35
+and 0.45; their look's Menace at most 0.6).
+
+- A depth's look Menace (0 in the Shallows, at most 0.6) drives fog density, saturation falloff, the shade under
+  overhead rock and how far the player glow carries (inherited "glow items feel precious" presentation rule). It is
+  the look's own; the difficulty's Menace (§6.2) rises on regardless.
 - **Volumetric god rays** rake the floor at the sun's angle in lit depths;
   inherited raymarch water pass, re-aimed: rays now cross the view instead of
   the lens. Caustics play over upward faces and fade with depth (inherited).
@@ -933,8 +957,10 @@ at mist distance (inherited fade rule).
   is out of sight; it never comes back as a mob. **8–12 healthy pufferlings** live on each level, in ones, twos and
   threes by the plazas and dens: never targets, unbothered by her. Running out of HP ends the run (see the death
   splash below).
-- **Reef fish** (`PlaneReefFish.cs`, `ReefFishView`, `reef_fish.gdshader`; docs/REEF-FISH-PROPOSAL.md): background
-  life, in the sim (seeded per level) but never targets, never in the way, off the minimap. **Clownfish**, a pair or
+- **Reef fish** (`PlaneReefFish.cs`, `ReefFishView`, `reef_fish.gdshader`; docs/REEF-FISH-PROPOSAL.md): reef life,
+  in the sim (seeded per level), never her targets, never in her way, off the minimap. The murklings hunt them and may
+  turn them into lesser murklings, which she frees back into fish (docs/CORRUPTION.md, Lesser murklings); fish flee
+  murklings. **Clownfish**, a pair or
   trio to each anemone on the seabed by the rock, dart out at most 1.6 m and back, and tuck in while she is within
   2.5 m. **Blue tangs**, alone or in pairs, hop 6–14 m about home and graze at each spot, and veer off when she comes
   within 1.5 m. **Blue-green chromis** school round a centre that roams the channels, parting round her and closing
@@ -944,26 +970,36 @@ at mist distance (inherited fade rule).
   when she leaves, and once the secret is found it no longer points. Schools are few but big, so they visibly split and join: a school spreads over about 0.33 m × √(its fish).
   Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 0 (the Shallows) has
   4–6 anemones, 4–7 tangs and 1–2 schools of 45–90; Depth 1 fewer (2–3, 2–4, one school of 30–60); Depth 2 at most
-  one anemone, 1–2 tangs and at most one school of 30–45; Depths 3 and below none.
+  one anemone, 1–2 tangs and at most one school of 30–45; Depth 3 the same with a school of 25–40; Depth 4 at most one
+  anemone, up to 2 tangs and at most one school of 20–35; Depth 5 at most one tang and one school of 20–30; Depth 6
+  none.
 - **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
   her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
   mobs from then on: she may swim away, and they stay. An ambush springs once.
 - **Clam rooms (look):** the room is the inside of a giant clam. A shell wall of mother-of-pearl lines the chamber
   (ribbed, scalloped at the top, open at the mouth): iridescent and glowing faintly from inside, weathered shell outside.
-  In the middle the clam's lower valve holds a pink velvet tongue, and the pearl lies still on it. About 80 gold
-  motes spiral round the pearl. A warm gold light fills the room and spills out of its mouth into the canyon, with a
-  few motes drifting out, and the water pass lays a gold haze over the room and its mouth (ClamRoomView, `clam_glows`
-  in topdown_post). The light is brighter the deeper she is (0.6 at Depth 0, +0.3 per depth, at most 2.2), so in dark
-  depths the room is a beacon. When the pearl is taken, the motes fling out and dissolve over 1.2 s and the light
-  settles to an ember (35%).
+  The chamber's floor is mother-of-pearl too, and the pearl hangs still in the middle of the room. About 80 gold
+  motes spiral round the pearl. **The pearl lights the room:** the light leaving it takes its own colours in its own
+  pattern (its bands, swirl, spots, marble, rings, stripes, speckle or halo, as on the pearl itself), painted over the
+  whole room, the shell wall and the floor (`pearl_glow.gdshaderinc`), reaching right across to the wall; a fill light, the light
+  spilling out of the mouth into the canyon and the water pass's haze over the room and its mouth (ClamRoomView,
+  `clam_glows` and `clam_colors` in topdown_post) are in its colour too, so from a distance the room shows what it
+  holds. A few gold motes drift out of the mouth. The light is brighter the deeper she is (0.6 at Depth 0, +0.3 per
+  depth, at most 2.2), so in dark depths the room is a beacon. When the pearl is taken, the motes fling out and
+  dissolve over 1.2 s and its light fades out with them.
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
-  plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json); the
-  pearls she carries show as dots bottom left, and taking one shows its name and tagline.
+  plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json). The
+  pearls she has absorbed circle her bell (`PearlOrbitView`): one small pearl each (non-unique ones as often as she took
+  them), in its own colours and pattern, evenly spaced on a ring 0.8 m out from her middle that turns slowly; a new one
+  slots in and the ring respaces itself. The HUD shows no list of them. Taking one shows its name and tagline.
   - **Shots:** Triple Tentacle (3-shot fan), Hammerhead (5-shot cone), Anglerfish Lure (homing: each shot locks onto the one creature nearest it, ahead and within 12 m, and keeps it until it is freed, passed or out of reach), Swordfish Bill
     (pierce), Mirror Scale (2 bounces off rock), Boomerang Shrimp (returns to her), Double Helix (2 weaving shots).
   - **Pearl Diver:** holding fire charges the next throw instead of firing (full in 1 s); letting go throws it as a
     pearl, up to ×3 damage and ×2.2 size at full charge (a tap throws a plain bubble). A pearl swells in front of her
-    while she charges.
+    while she charges. With **Sardine Run** (the synergy *String of Pearls*) there is no holding: the stream fires as
+    Sardine Run's does, spinning up to ×4 the rate, and every shot is a pearl charged as far as the stream has spun up
+    (to 98% at full spin), its charge multiplying Sardine Run's own damage and size (×0.35, ×0.7). The full-charge
+    pearl's tricks (Pearl Necklace, Depth Charge) stay with the held throw.
   - **Starfish Arm:** a bubble grows as it flies, to ×2 its size and damage at the end of its range.
   - **Ink Sac:** her bubbles are dark with ink; wherever one pops (on a mob, on rock, at rest, or popped by a needle)
     it bursts into a violet ink cloud that hurts everything within 1.8 m of its edge for 60% of its damage, on top of
@@ -986,9 +1022,9 @@ at mist distance (inherited fade rule).
     knockback and sends no surge back to her. Its tip and every impact steadily clear the ground's corruption round
     them (1 m plus its width, 2.25 density a second); the rest of its line does not. A ribbon of
     white-hot light in her glow, pulses racing outward along it, a glow at her mouth and every impact; it lights the
-    swim layer along its way. Its end always burns: where it strikes nothing, its last 1.6 m bend down to the seabed
-    and it burns there, a ragged ring of orange flame on a dark scorch (1 m plus its width), embers lifting off and a
-    thread of smoke; a cone's whole far edge comes down and burns in a line. Her other pearls shape it:
+    swim layer along its way. Where it strikes nothing, its last 1.6 m bend down to the seabed and the water there
+    boils: bubbles well up over 1 m plus its width and rise to the surface (as a geyser's do), with a fizz of froth at
+    the touch; a cone's whole far edge comes down and bubbles along it. Her other pearls shape it:
     - shot size widens it (×0.11 m half-width, times her size stat and the pearls' size); **Starfish Arm** widens it
       toward its tip (×2 at her range) and makes it hit harder there;
     - every extra shot of a volley opens it into a **cone** with no gaps, as wide as the volley's fan (Hammerhead's cone
@@ -998,7 +1034,7 @@ at mist distance (inherited fade rule).
     - **Swordfish Bill:** it runs through every creature in its path; **Mirror Scale:** it reflects off rock (twice);
       **Anglerfish Lure:** it locks onto the one creature nearest it ahead and bends for it (up to 28° a metre);
     - **Boomerang Shrimp:** each ray runs out in a leaf-shaped loop to its usual reach (its widest 22% of that either
-      side) and curls back to her; it burns at the loop's far end;
+      side) and curls back to her; its bubbles well up at the loop's far end;
     - **Mitosis:** where it first strikes something it forks into two half-strength branches 40° either side, 4 m long;
     - **Starburst Gland:** it bursts into light at its tip (a cone's at its middle) and wherever it strikes, every 0.4 s (at most 6 bursts at
       once, not on top of each other), each 60% of a shot's damage over 1.8 m plus its width;
@@ -1033,8 +1069,10 @@ at mist distance (inherited fade rule).
   has three stand slots: a pearl she does not have on half the visits (30 shells), always a heart (a health top-up:
   +25 HP, 5 shells, only when hurt), and a third slot kept empty for wares to come. The
   goods float on their own (pearls as in a clam room, the top-up as a red heart), each with a small price tag on a
-  string (the price and a shell), shown only while she is inside the shop; she buys by touching one. The HUD counter (a shell icon and the number) sits above the pearls and brightens and
-  swells with every shell collected. Shells carry down with her pearls and HP.
+  string (the price and a shell), shown only while she is inside the shop; she buys by touching one. The HUD counter (a shell icon and the number) sits bottom left. Each shell she
+  picks up flies there, so a pickup is never missed: in 0.55 s, from where she took it, as a small glowing shell with a
+  short wisp of warm light behind it, on a slight arc (several at once bow alternately to either side); the counter
+  counts it only as it lands, brightening and swelling with a ring of light spreading from it. Shells carry down with her pearls and HP.
 - **Bosses are generated** (docs/BOSS-GENERATOR.md, `src/Core/Bosses`, the fight in `PlaneBoss.cs`, the bodies in
   `src/Game/TopDown/Bosses`): every real depth's boss level meets a boss grown from the run seed, the loop and the depth
   — a body plan, a designed fight concept, its mutation, its pearl and its attacks — run through the same arena and
@@ -1148,6 +1186,9 @@ at mist distance (inherited fade rule).
     down.
   - **Above** it, rock blurs into soft foreground silhouettes tinted by the water. Their edges are softened, so the
     mesh's steps never show.
+  - **The tall tops** (above 4 m over her plane, fully by 10 m): softer still and faded toward the water's own
+    colour (the depth's shallow water toward its deep: turquoise in the Shallows, green in the Kelp Jungle), so the
+    mountains read as distant and calm and the floor she plays on stays the sharpest thing on screen.
 - **The water over everything:**
   - Everything is seen through water: red fades and turquoise is scattered in with the water column.
   - God rays rake across the view, marched along each view ray parallel to the sun and drifting with the swell.

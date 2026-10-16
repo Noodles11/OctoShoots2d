@@ -101,6 +101,8 @@ public static class PlaneCombatTuning
     /// to ChargeDamage× the damage and ChargeSize× the size of a bubble (a tap throws a plain one).
     /// </summary>
     public const float ChargeSeconds = 1f, ChargeDamage = 3f, ChargeSize = 2.2f;
+    /// <summary>String of Pearls: the stream's shots are charged this far at full spin.</summary>
+    public const float StreamCharge = 0.98f;
     /// <summary>Starfish Arm: a bubble grows as it flies, reaching GrowMax× its size and damage at the end of its range.</summary>
     public const float GrowMax = 2f;
     /// <summary>
@@ -412,8 +414,11 @@ public sealed partial class PlaneWorld
         // Clementine's shots, toward her aim while fire is held, shaped by her pearls. Firefly Squid pours them out as
         // one continuous surge instead (PlaneSurge.cs).
         bool aimed = p.Aim.LengthSquared() > 0.5f;
+        // String of Pearls (Sardine Run + Pearl Diver): no holding to charge — the stream fires as Sardine Run's does,
+        // and each shot is a pearl charged as far as the stream has spun up.
+        bool pearlStream = Run.Loadout.Has("string_of_pearls");
         if (Run.Loadout.Flags.Contains("surge")) StepSurge(input.Fire && aimed);
-        else if (Run.Loadout.Shot.Charge)
+        else if (Run.Loadout.Shot.Charge && !pearlStream)
         {
             // Pearl Diver: held, the next throw charges; let go, it flies.
             if (input.Fire && aimed)
@@ -444,7 +449,9 @@ public sealed partial class PlaneWorld
             if (input.Fire && p.ShotTimer <= 0f && aimed)
             {
                 p.ShotTimer = ShotInterval;
-                int thrown = Volley(p.Aim);
+                // Just short of a full charge: the full-charge pearl's own tricks (Pearl Necklace, Depth Charge) stay
+                // the held throw's.
+                int thrown = Volley(p.Aim, pearlStream ? p.Spin * PlaneCombatTuning.StreamCharge : 0f);
                 Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
             }
         }

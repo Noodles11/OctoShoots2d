@@ -58,9 +58,15 @@ public class ReefFishTests
     }
 
     [Fact]
-    public void TheDeepReefHasNone()
+    public void TheReefThinsWithDepthAndDepthSixHasNone()
     {
-        var deep = TestLevels.All(p => p.Id.Depth >= 4).FirstOrDefault();
+        // Thinning: by Depth 5 at most a lone school, a tang or two and an anemone (internal depth = shown + 1).
+        for (int depth = 4; depth <= 6; depth++)
+        {
+            var n = ReefFishTuning.ForDepth(depth);
+            Assert.True(n.SchoolMax <= 1 && n.TangMax <= 2 && n.AnemoneMax <= 1 && n.SizeMax <= 40);
+        }
+        var deep = TestLevels.All(p => p.Id.Depth >= 7).FirstOrDefault();
         if (deep == default) return;
         var w = World(TestLevels.Get(deep));
         Assert.Empty(w.ReefFish);

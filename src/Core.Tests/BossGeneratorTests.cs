@@ -78,6 +78,30 @@ public class BossGeneratorTests
     }
 
     [Fact]
+    public void TwoBossesInARowNeverShareABodyAndRarelyAFight()
+    {
+        int sameFight = 0, pairs = 0;
+        for (int s = 0; s < 300; s++)
+        {
+            ulong seed = 0xC0FFEEUL * (ulong)(s + 1);
+            BossSpec? before = null;
+            for (int cycle = 1; cycle <= 2; cycle++)
+            for (int depth = 1; depth <= BossGenerator.LastDepth; depth++)
+            {
+                var boss = BossGenerator.For(seed, cycle, depth);
+                if (before is not null)
+                {
+                    pairs++;
+                    Assert.NotEqual(before.Plan, boss.Plan);
+                    if (boss.Exposure == before.Exposure && boss.Signature == before.Signature) sameFight++;
+                }
+                before = boss;
+            }
+        }
+        Assert.True(sameFight < pairs * 0.01f, $"{sameFight} of {pairs} pairs fight alike");
+    }
+
+    [Fact]
     public void TheValidatorRejectsWhatCannotBeWonOrRead()
     {
         var q = BossGenerator.QueenClam(1UL, 1, 1);

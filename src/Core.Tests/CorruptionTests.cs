@@ -577,8 +577,9 @@ public class CorruptionTests
             .SelectMany(q => Enumerable.Range(0, 8).Select(k => (q, new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)))))
             .First(t => Enumerable.Range(-4, 30).All(k => w.Map.IsOpen(t.Item1 + t.Item2 * (k * 0.5f))) && Clear(t.Item1 + t.Item2 * BlightTuning.ThrowFallAt));
         w.Player.Position = w.Player.PrevPosition = from - dir * 1.5f;
+        // Clean sand where it will land, so its stain shows.
+        field.Cleanse(from + dir * BlightTuning.ThrowFallAt, 3f, 1f);
         w.MurkShots.Add(new MurkShot { Position = from, Velocity = dir * BlightTuning.ThrowSpeed });
-        float total = field.Total;
         bool landed = false;
         for (int i = 0; i < 120 && !landed; i++)
         {
@@ -588,7 +589,8 @@ public class CorruptionTests
         Assert.True(landed);
         var at = w.Events.First(e => e.Type == PlaneEventType.MurkShotLanded).Position;
         Assert.InRange(Vector2.Distance(at, from), BlightTuning.ThrowFallAt, BlightTuning.ThrowFallAt + 3f);
-        Assert.True(field.Total > total, "it stains the sand");
+        // The sand where it fell (cleaned before) is stained now (her own glow, 9 m off, does not reach it).
+        Assert.True(field.At(at) > 0.2f, "it stains the sand");
 
         // Struck in the air by her light: a splatter, the ground untouched.
         var shot = new MurkShot { Position = w.Player.Position + dir * 4f, Velocity = -dir * BlightTuning.ThrowSpeed };
@@ -604,6 +606,33 @@ public class CorruptionTests
         Assert.True(burst);
         Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.MurkShotLanded);
         Assert.Equal(before, field.Total, 1);
+    }
+
+    [Fact]
+    public void AMurklingBendsBackBeforeItThrowsAndLocksItsAimForTheSnap()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var her = w.Player.Position;
+        var m = new Murkling { Position = her + new Vector2(0f, -5f), Bud = 0f, ThrowTimer = 0f };
+        w.Murklings.Add(m);
+        int windup = -1, thrown = -1;
+        for (int i = 0; i < 120 && thrown < 0; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = her;
+            w.Player.Hp = 100f;
+            w.Step(default);
+            if (windup < 0 && w.Events.Any(e => e.Type == PlaneEventType.MurklingWindup)) windup = i;
+            if (w.Events.Any(e => e.Type == PlaneEventType.MurklingThrow)) thrown = i;
+            // No throw leaves it while it bends back.
+            if (thrown < 0) Assert.Empty(w.MurkShots);
+        }
+        Assert.True(windup >= 0 && thrown > windup);
+        // The telegraph lasts its wind-up (Menace 0 here).
+        Assert.InRange((thrown - windup) / 60f, BlightTuning.WindupSeconds - 0.03f, BlightTuning.WindupSeconds + 0.03f);
+        var shot = Assert.Single(w.MurkShots);
+        Assert.True(Vector2.Dot(Vector2.Normalize(shot.Velocity), Vector2.Normalize(her - m.Position)) > 0.95f);
+        Assert.True(m.ThrowAge < 0.05f);
     }
 
     static void Quiet(PlaneWorld w)

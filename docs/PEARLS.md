@@ -157,6 +157,7 @@ caption reads "Synergy!" with its name, a chime plays and a ring of her light go
 |  | **Will-o'-Wisp** | Ghost Jelly + Anglerfish Lure | Spectral wisps home twice as hard |
 |  | **Toxic Bloom** | Sea Nettle Sting + Mitosis | Split shots carry a double dose of poison |
 |  | **Feeding Frenzy** | Shark Tooth + Lamprey Mouth | Every creature freed sends you into a fast-firing frenzy |
+| ✅ | **String of Pearls** | Sardine Run + Pearl Diver | No holding: the stream fires pearls, charged as far as it has spun up |
 | ✅ | **Depth Charge** | Pistol Shrimp Claw + Pearl Diver | A full-charge pearl's blast is twice as wide and half again as strong |
 |  | **Broadside** | Cannonball + Rear Fin | Shots out of the back explode |
 | ✅ | **Supernova** | Firefly Squid + Starburst Gland | The surge bursts into light at its tip and wherever it strikes |

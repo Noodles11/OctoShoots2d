@@ -40,13 +40,19 @@ public static class ReefFishTuning
     /// <summary>None live this close to the level's start, so the opening stays calm.</summary>
     public const float StartClear = 20f;
 
-    /// <summary>How many live on a level of this depth (THEME-BIBLE §7: the reef empties as she dives).</summary>
+    /// <summary>
+    /// How many live on a level of this depth (THEME-BIBLE §7: the reef empties as she dives): plenty in the Shallows
+    /// and Depth 1, thinning to a lone school and a tang by Depth 5, none in Depth 6 (internal depth = shown + 1).
+    /// </summary>
     public static (int AnemoneMin, int AnemoneMax, int TangMin, int TangMax, int SchoolMin, int SchoolMax, int SizeMin, int SizeMax) ForDepth(int depth) => depth switch
     {
         // Schools are few but big, so their splitting and joining reads.
         1 => (4, 6, 4, 7, 1, 2, 45, 90),
         2 => (2, 3, 2, 4, 1, 1, 30, 60),
         3 => (0, 1, 1, 2, 0, 1, 30, 45),
+        4 => (0, 1, 1, 2, 0, 1, 25, 40),
+        5 => (0, 1, 0, 2, 0, 1, 20, 35),
+        6 => (0, 0, 0, 1, 1, 1, 20, 30),
         _ => (0, 0, 0, 0, 0, 0, 0, 0),
     };
 }
@@ -76,9 +82,20 @@ public sealed class PlaneSchool
     public Rng Rng = null!;
 }
 
-/// <summary>Background reef life: never a target, never in the way. It only makes room for her.</summary>
+/// <summary>
+/// Reef life: never her target, never in her way; it makes room for her and flees murklings. A murkling's throw may turn
+/// it into a lesser murkling (docs/CORRUPTION.md); freed, it is a fish again, and can't be turned again that level.
+/// </summary>
 public sealed class PlaneReefFish : PlaneSwimmer
 {
+    /// <summary>Struck and turning (seconds left), a lesser murkling now (out of the reef until freed), freed once.</summary>
+    public float Turning;
+    public bool Corrupted, Freed;
+    /// <summary>Healthy, out in the water: one a murkling may hunt (a clownfish tucked in its anemone is safe).</summary>
+    public bool Huntable => !Corrupted && !Freed && Turning <= 0f && !(Kind == ReefFishKind.Clownfish && Hiding);
+    /// <summary>A startled chromis darting off (seconds left), and which way.</summary>
+    public float Dart;
+    public Vector2 DartAway;
     public ReefFishKind Kind;
     public int Id;
     /// <summary>A clownfish's anemone, a chromis's school (indices into the world's lists); −1 for a tang.</summary>
@@ -219,6 +236,16 @@ public sealed partial class PlaneWorld
         foreach (var s in Schools) StepSchool(s);
         foreach (var f in ReefFish)
         {
+            if (f.Corrupted) continue;
+            if (f.Turning > 0f)
+            {
+                // Struck: it falters as the ink creeps over it, then it is a lesser murkling.
+                f.Velocity = MoveToward(f.Velocity, Vector2.Zero, 4f * Dt);
+                f.Position += f.Velocity * Dt;
+                f.Turning -= Dt;
+                if (f.Turning <= 0f) TurnFish(f);
+                continue;
+            }
             switch (f.Kind)
             {
                 case ReefFishKind.Clownfish: StepClownfish(f); break;
@@ -244,7 +271,9 @@ public sealed partial class PlaneWorld
         var host = Anemones[f.Host].Position;
         float her = Vector2.Distance(Player.Position, host);
         float hide = Player.DashTimer > 0f ? ReefFishTuning.DashRoom : ReefFishTuning.ClownHide;
-        if (her < hide) f.Hiding = true;
+        // A murkling near the anemone sends it in too, until the murkling is gone.
+        bool murk = MurklingNear(host, MurkFishTuning.ClownHide);
+        if (her < hide || murk) f.Hiding = true;
         else if (f.Hiding && her > ReefFishTuning.ClownSafe)
         {
             f.Hiding = false;
@@ -293,7 +322,7 @@ public sealed partial class PlaneWorld
     void StepTang(PlaneReefFish f)
     {
         const float max = ReefFishTuning.TangTurnDeg;
-        Vector2 room = Room(f.Position, RoomNow);
+        Vector2 room = Room(f.Position, RoomNow) + Fear(f.Position);
         if (room != Vector2.Zero && f.Startle <= 0f)
         {
             // Off and away from her: a new spot on her far side.
@@ -389,7 +418,7 @@ public sealed partial class PlaneWorld
         int near = 0;
         foreach (var o in ReefFish)
         {
-            if (o == f || o.Kind != ReefFishKind.Chromis || o.Host != f.Host) continue;
+            if (o == f || o.Kind != ReefFishKind.Chromis || o.Host != f.Host || o.Corrupted || o.Turning > 0f) continue;
             Vector2 d = f.Position - o.Position;
             float l2 = d.LengthSquared();
             if (l2 > ReefFishTuning.Align * ReefFishTuning.Align) continue;
@@ -404,7 +433,13 @@ public sealed partial class PlaneWorld
         Vector2 cohesion = toCentre * (c > school.Radius ? 1.4f : 0.35f);
         float form = school.Form;
         // Forming the arrow, they give her less room (the shape must hold round her).
-        Vector2 wish = school.Velocity + cohesion + apart * 3f + Room(f.Position, RoomNow * (1f - 0.6f * form)) * 7f;
+        Vector2 wish = school.Velocity + cohesion + apart * 3f + Room(f.Position, RoomNow * (1f - 0.6f * form)) * 7f + Fear(f.Position) * 7f;
+        if (f.Dart > 0f)
+        {
+            // Startled by a throw that did not take: off and away for a moment.
+            f.Dart -= Dt;
+            wish += f.DartAway * ReefFishTuning.ChromisMax;
+        }
         if (near > 0) wish += (along / near - f.Velocity) * 0.6f;
         if (form > 0f)
         {

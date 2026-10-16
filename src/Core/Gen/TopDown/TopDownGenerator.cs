@@ -102,7 +102,13 @@ public static class TopDownGenerator
             string text = id == LevelId.First && attempt == 0 ? streams.Seed.ToString() : $"{streams.Seed} {id.Cycle}-{id.Depth}-{id.Level}-{attempt}";
             string? problem = Build(map, streams, plan, entry, exit, attempt, cosmeticSalt, text, parallel) ?? LevelValidator.Validate(map);
             log?.Invoke($"Top-down level {id} attempt {attempt + 1}: {problem ?? "ok"}");
-            if (problem is null) return map;
+            if (problem is null)
+            {
+                // Water she can never reach becomes mountains (after the checks: it never changes what she can reach).
+                int raised = Mountains.Fill(map);
+                log?.Invoke($"Top-down level {id}: {raised} unreachable points raised into mountains");
+                return map;
+            }
             reasons.Add(problem);
         }
         throw new InvalidOperationException($"No valid top-down level for {id} after {MaxAttempts} attempts: {string.Join("; ", reasons.Distinct())}");

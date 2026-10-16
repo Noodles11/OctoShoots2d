@@ -71,8 +71,8 @@ public sealed class PlaneInk
 
 public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, MobNoticed, PlayerHit, PlayerDefeated, Dived, PufferSwells, NeedlesFired, PearlCollected, ShellCollected, HeartCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped, BubbleFull,
     ChargeFull, LightBurst, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
-    SurgeStarted, SurgeEnded, VaseHit, VaseBroken, FullBubbleFreed,
-    BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
+    SurgeStarted, SurgeEnded, GeyserFizz, GeyserSpray, GeyserEnded, VaseHit, VaseBroken, FullBubbleFreed,
+    BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, FishStruck, FishTurned, FishFreed,
     MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
     ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
@@ -268,8 +268,18 @@ public sealed partial class PlaneWorld
         _started.Clear();
         _ended.Clear();
         Director.Step(Time, _started, _ended);
-        foreach (var e in _started) Events.Add(new PlaneEvent(PlaneEventType.SurgeStarted, Vector2.Zero, Vector2.Zero, e.Speed));
-        foreach (var e in _ended) Events.Add(new PlaneEvent(PlaneEventType.SurgeEnded, Vector2.Zero, Vector2.Zero, e.Speed));
+        foreach (var e in _started)
+            Events.Add(e.Kind == ReefEventKind.GeyserSpray
+                ? new PlaneEvent(PlaneEventType.GeyserFizz, Director.Geysers[e.Geyser], Vector2.Zero, e.Duration)
+                : new PlaneEvent(PlaneEventType.SurgeStarted, Vector2.Zero, Vector2.Zero, e.Speed));
+        foreach (var e in _ended)
+            Events.Add(e.Kind == ReefEventKind.GeyserSpray
+                ? new PlaneEvent(PlaneEventType.GeyserEnded, Director.Geysers[e.Geyser], Vector2.Zero)
+                : new PlaneEvent(PlaneEventType.SurgeEnded, Vector2.Zero, Vector2.Zero, e.Speed));
+        // A geyser's fizz turns into its spray.
+        foreach (var e in Director.Active)
+            if (e.Kind == ReefEventKind.GeyserSpray && Time - Dt < e.Start + GeyserTuning.Warn && Time >= e.Start + GeyserTuning.Warn)
+                Events.Add(new PlaneEvent(PlaneEventType.GeyserSpray, Director.Geysers[e.Geyser], Vector2.Zero, e.Duration - GeyserTuning.Warn));
         if (Director.Active.Count == 0) return;
 
         var p = Player;

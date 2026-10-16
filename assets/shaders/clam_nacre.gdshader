@@ -7,11 +7,15 @@ render_mode cull_disabled;
 uniform float ribs = 18.0;
 uniform vec3 nacre_base : source_color = vec3(0.96, 0.88, 0.9);
 uniform vec3 shell_outer : source_color = vec3(0.62, 0.52, 0.5);
-uniform float glow = 0.8;
+// Its own faint glow; the room is lit by the pearl in it (ClamRoomView), whose pattern its light paints here.
+uniform float glow = 0.35;
+
+#include "res://assets/shaders/pearl_glow.gdshaderinc"
 
 varying vec3 v_normal;
 
 void vertex() {
+	glow_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// The mesh's normals point to the nacre side; which side the camera sees decides the look.
 	v_normal = normalize((MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
@@ -31,7 +35,8 @@ void fragment() {
 		SPECULAR = 0.9;
 		CLEARCOAT = 1.0;
 		CLEARCOAT_ROUGHNESS = 0.05;
-		EMISSION = col * glow * (0.6 + 0.4 * fres);
+		// Its own faint glow, and the pearl's light in its pattern over it.
+		EMISSION = col * glow * (0.6 + 0.4 * fres) + pearl_glow(glow_world) * (0.45 + 0.55 * col);
 	} else {
 		// The outside: rough shell, ribbed, banded with growth lines toward the rim.
 		float bands = 0.85 + 0.15 * sin(UV.y * 90.0);

@@ -38,8 +38,12 @@ Each step picks from authored tables, filtered by what is already chosen:
 
 1. **Band** from the depth: *early* (Depths 1–2), *middle* (3), *deep* (4–6). Menace (0 at Depth 1 → 1 at Depth 6)
    drives every continuous number.
-2. **Body plan** (§3), weighted by band.
-3. **Concept** (§4): the fight's designed idea, chosen from those the plan supports, weighted by band and tier.
+2. **Body plan** (§3), weighted by band — never the body of the boss met just before (the last depth's, or at
+   Depth 1 the previous loop's last), and preferring bodies that can carry a fight unlike that boss's.
+3. **Concept** (§4): the fight's designed idea, chosen from those the plan supports, weighted by band and tier. Never
+   the very same kind of fight as the boss before (its weak-spot rule and its signature both) while the body has
+   another; one that shares either is much less likely. Two bosses in a row are never the same animal and almost
+   never the same puzzle.
 4. **Rarity tier** (§11): Common 70 % · Rare 25 % · Legendary 5 %. It unlocks concepts, extras and phases.
 5. **Anatomy**: the plan's rig parameters (silhouette, surface, proportions) within the plan's authored ranges, then
    the transforms (§3.3).

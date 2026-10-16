@@ -5,7 +5,8 @@ Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruptio
 `PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, gloomvines, valves, murklings, the arena). The
 presentation is in `src/Game/TopDown/CorruptionView.cs`, `BlightView.cs` and `CleanseMeter.cs`, and in the shaders
 named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed, and ambush
-clearings bud murklings instead. The healthy fish still swim the reef.
+clearings bud murklings instead. The healthy fish still swim the reef, and the murklings hunt them (see Lesser
+murklings).
 
 ## The field
 
@@ -90,7 +91,17 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 - **The arena** buds every 6 s, but only while its boss fights.
 - **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
   shines brighter than her). This makes bait and herding possible.
-- **Attack:** a black orb thrown when she is within 9 m and in sight, for 7 damage. It flies at 10 + 1.5 × Menace m/s
+- **Its purpose is to corrupt every creature:** while she is more than 14 m off, it hunts the reef's fish instead. It
+  goes after the nearest healthy fish within 14 m that it can see (looking again twice a second), keeps about 6 m from
+  it and throws at it at its usual rate, led a little to where the fish is swimming. A clownfish tucked into its
+  anemone is safe. Once she is within 14 m it turns to her as above.
+- **Attack:** a black orb, a piece of itself, thrown when she is within 9 m and in sight, for 7 damage (its radius
+  0.1 m). **The telegraph is a slingshot** (0.55 s ÷ (1 + 0.3 × Menace)): it bends back away from its aim into a
+  C, its middle hauled back and its tips left reaching toward her, trembling and shivering with the effort, its aim
+  following her as it draws; it crawls at a quarter of its pace meanwhile. For the last 0.12 s its aim is locked and it
+  snaps forward through the opposite arc, the piece swelling out of its front on a narrowing neck. The drop parts
+  from it like a drop leaving a surface (its back drawn into a neck that thins and snaps, then a wobble into its
+  flying drop) and the murkling springs back to round with a wobble. It flies at 10 + 1.5 × Menace m/s
   and is thrown every ~2.4 s / (1 + 0.25 × Menace). A throw that flies 9 m without hitting anything falls: it sinks
   to the sand over 0.45 s (harmless now, under her plane) and lands with a small splat, staining 0.9 m of the floor
   toward 0.7 density (never in safe places). Struck in the air by her light (a shot or Firefly Squid's surge), it
@@ -105,6 +116,40 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   with Menace) after 0.8 s without a hit, and one strong (merged) shot empties it at once. Each shot bursts on it, and
   a piercing one flies on. Passing through a throw halves a shot's light. A murkling burst over cleansed ground drops
   its ember, which blooms a 2.6 m patch of colour.
+
+## Lesser murklings (`PlaneMurkFish.cs`)
+
+The reef's fish (DESIGN-TOPDOWN, Reef fish) are what the murklings corrupt.
+
+- **Struck:** fish never dodge a throw. One that meets a fish bursts there (the airborne splatter) and rolls for every
+  healthy fish within 0.8 m of it: in a school that is about 4–6 fish, a lone tang or clownfish only itself. Each turns
+  with a chance of 35% + 60% × Menace, at most 90% (35% in Depths 0 and 1, 47% in Depth 2, 83% in Depth 5). One that
+  does not turn bolts: a chromis darts off, a tang veers away, a clownfish tucks in. One murkling turns a school of 60
+  in about a minute and a half, several faster.
+- **Fear:** fish veer off from any murkling (lesser ones too) within 4 m, as they make room for her; clownfish tuck
+  into their anemone while one is within 3 m of it.
+- **Turning:** over 0.6 s the fish falters and ink creeps over it from the tail as it shrinks; then it is a lesser
+  murkling, with a puff of violet mist.
+- **The lesser murkling:** a small glossy ink bead in the murklings' look, carrying a dim ember in its fish's old colour
+  (teal for a chromis, orange for a clownfish, blue for a tang), so it shows what it was. By the fish it was:
+
+  | Fish | Radius | Corruption meter | Drain while clinging |
+  |---|---|---|---|
+  | Chromis | 0.16 m | 8 | 0.8 HP/s |
+  | Clownfish | 0.24 m | 14 | 1.2 HP/s |
+  | Blue tang | 0.32 m | 20 | 1.6 HP/s |
+
+  Its meter grows with Menace and regrows as a murkling's does. It never throws. It chases her once she is within
+  14 m, at 1.25 × a murkling's speed (about 3.3 m/s, against her 6). Touching her is no hit: it clings and drains, at
+  most 8 lesser ones at once (besides the murklings' 3), each dimming her bell a little. Her light, pops, the Firefly
+  Squid's surge and a dash's burst work on it as on a murkling, so one default shot or a dash frees a chromis.
+- **Swarms:** chromis turned from one school stay one swarm. They flock round their shared middle, about 0.45 m apart,
+  and the swarm chases her once she is within 14 m of its middle; otherwise it hangs together where it is. With every
+  place on her taken, the rest of the swarm mills round her about 1.4 m out, waiting for one. What is left of the
+  healthy school swims on, fleeing them.
+- **Freed:** emptied, its ink cracks off in flakes with a little burst of its own colour and a chime, and it is its fish
+  again, where it was: a chromis rejoins its school, a clownfish its anemone, a tang its home ground. A freed fish
+  cannot be turned again that level. Freed fish drop nothing.
 
 ## Corruption meters (`CorruptionMeter`)
 

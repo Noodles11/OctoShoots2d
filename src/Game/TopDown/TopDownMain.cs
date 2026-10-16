@@ -47,6 +47,7 @@ public partial class TopDownMain : Node3D
     CurseDenView _curseDen = null!;
     ClamRoomView _clamRooms = null!;
     SurgeView _surgeView = null!;
+    GeyserView _geysers = null!;
     CurseDarkness _dark = null!;
     bool _inCurse;
     /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
@@ -59,7 +60,7 @@ public partial class TopDownMain : Node3D
     BannerView _banner = null!;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
-    bool _autoFire, _autoActive, _dbgSurge, _startPaused, _dbgBossLevel;
+    bool _autoFire, _autoActive, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
     /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
     string? _dbgBoss;
     float? _startHp;
@@ -76,6 +77,7 @@ public partial class TopDownMain : Node3D
 
     LevelView _level = null!;
     BellView _bell = null!;
+    PearlOrbitView _orbit = null!;
     CameraRig _camera = null!;
     DebugMapOverlay _debugMap = null!;
     MinimapView _minimap = null!;
@@ -186,6 +188,8 @@ public partial class TopDownMain : Node3D
         BuildEnvironment();
         _level = new LevelView();
         AddChild(_level);
+        _orbit = new PearlOrbitView();
+        AddChild(_orbit);
         _bell = new BellView();
         AddChild(_bell);
         _combat = new CombatView();
@@ -206,6 +210,8 @@ public partial class TopDownMain : Node3D
         AddChild(_clamRooms);
         _surgeView = new SurgeView();
         AddChild(_surgeView);
+        _geysers = new GeyserView();
+        AddChild(_geysers);
         _corruption = new CorruptionView();
         AddChild(_corruption);
         _blight = new BlightView();
@@ -262,6 +268,10 @@ public partial class TopDownMain : Node3D
             else if (arg == "--fire") _autoFire = true;
             else if (arg == "--use-active") _autoActive = true;
             else if (arg == "--dbg-surge") _dbgSurge = true;
+            else if (arg == "--dbg-geyser") _dbgGeyser = true;
+            else if (arg == "--dbg-shells") _dbgShells = true;
+            else if (arg == "--dbg-murkfish") _dbgMurkFish = true;
+            else if (arg == "--dbg-throw") _dbgThrow = true;
             else if (arg.StartsWith("--boss=")) _dbgBoss = Value("--boss=");
             else if (arg == "--boss-level") _dbgBossLevel = true;
             else if (arg.StartsWith("--dbg-goto=") && int.TryParse(Value("--dbg-goto="), out int gotoLevel)) _dbgGoTo = gotoLevel;
@@ -632,6 +642,38 @@ public partial class TopDownMain : Node3D
         // A verification start applies to the first level only (later levels begin at their start).
         PlaceAt(_startAt);
         _startAt = null;
+        if (_dbgShells)
+        {
+            // Verification: a few shells round her, 2–3 m out, so the pickup's flight to the counter shows.
+            var her = _world.Player.Position;
+            for (int i = 0; i < 4; i++)
+            {
+                float a = i * 1.7f;
+                _world.Shells.Add(new PlaneShell { Position = her + new System.Numerics.Vector2(MathF.Cos(a), MathF.Sin(a)) * (2f + 0.3f * i) });
+            }
+            _dbgShells = false;
+        }
+        if (_dbgMurkFish && _world.Schools.Count > 0)
+        {
+            // Verification: half the first school starts turning (a swarm of lesser murklings in a moment).
+            int k = 0;
+            foreach (var f in _world.ReefFish.Where(f => f.Kind == ReefFishKind.Chromis && f.Host == 0))
+                if (k++ % 2 == 0) f.Turning = MurkFishTuning.TurnSeconds;
+            _dbgMurkFish = false;
+        }
+        if (_dbgThrow)
+        {
+            // Verification: a murkling 5 m off her (up the screen first), its throw due at once (the slingshot telegraph from the start).
+            var her = _world.Player.Position;
+            for (int i = 0; i < 16; i++)
+            {
+                var at = her + new System.Numerics.Vector2(Mathf.Cos(i * 0.4f - 1.9f), Mathf.Sin(i * 0.4f - 1.9f)) * 5f;
+                if (!_world.Clear(at, 0.6f) || !_world.LineOfSight(at, her)) continue;
+                _world.Murklings.Add(new Murkling { Position = at, Bud = 0f, ThrowTimer = 0f });
+                break;
+            }
+            _dbgThrow = false;
+        }
         _camera.Track(Focus(1f), 0f, snap: true);
         Route();
     }
@@ -685,6 +727,9 @@ public partial class TopDownMain : Node3D
             _world.Ambushes.Clear();
         }
         if (_dbgSurge) InjectSurge();
+        // Verification: the level's first geyser sprays a second from now (8 s).
+        if (_dbgGeyser && _world.Director.Geysers.Count > 0)
+            _world.Director.Inject(new ReefEvent { Kind = ReefEventKind.GeyserSpray, Start = _world.Time + 1f, Duration = GeyserTuning.Warn + 8f, Geyser = 0 });
         if (_dbgCurse is { } forced && _world.Curse is { } den && den.Reward != forced)
         {
             _world.Pearls.RemoveAll(q => q.Position == den.End);
@@ -705,7 +750,12 @@ public partial class TopDownMain : Node3D
         _puffers.Show(_world);
         _reefFish.Show(_world);
         _curseDen.Show(_world);
+        // Verification: `--clam-pearl=<id>` lays that pearl in the level's clam rooms.
+        if (OS.GetCmdlineUserArgs().FirstOrDefault(x => x.StartsWith("--clam-pearl=")) is { } clamPearl)
+            foreach (var pearl in _world.Pearls)
+                if (_map.Pois.Exists(q => q.Kind == PoiKind.TreasureCave && q.Position == pearl.Position)) pearl.ItemId = clamPearl["--clam-pearl=".Length..];
         _clamRooms.Show(_world);
+        _geysers.Show(_world);
         _crackOpen = _world.ExitOpen ? 1f : 0f;
         _level.SetCrackOpen(_crackOpen);
         _dark.Clear();
@@ -865,6 +915,8 @@ public partial class TopDownMain : Node3D
             "shop" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 1.5f)).FirstOrDefault(),
             // Beside the level's light spring, if it has one.
             "spring" => _world.Springs.Select(sp => (System.Numerics.Vector2?)(sp.Position + new System.Numerics.Vector2(0f, SpringTuning.Radius + 1.5f))).FirstOrDefault(),
+            // Beside the level's first bubble geyser.
+            "geyser" => _world.Director.Geysers.Count > 0 ? _world.Director.Geysers[0] + new System.Numerics.Vector2(0f, 3f) : null,
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1116,7 +1168,11 @@ public partial class TopDownMain : Node3D
                     _hud.ShowPearl(pearl);
                     AnnounceSynergies();
                 }
-                else if (e.Type == PlaneEventType.ShellCollected) _hud.PulseShells();
+                else if (e.Type == PlaneEventType.ShellCollected)
+                {
+                    // It flies from where she took it to the counter.
+                    _hud.CollectShell(_camera.Camera.UnprojectPosition(new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y)));
+                }
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
                 else if (e.Type == PlaneEventType.AmbushSprung) Say("Ambush!");
                 else if (e.Type == PlaneEventType.PlayerDrained)
@@ -1220,9 +1276,11 @@ public partial class TopDownMain : Node3D
         _minimap.SetHealth(_world.Run.MaxHp > 0f ? _world.Player.Hp / _world.Run.MaxHp : 0f);
         // Each view on its own: one that fails is reported (once) and the rest carry on.
         Guard("bell", () => _bell.Sync(_world, alpha, dt));
+        Guard("orbit", () => _orbit.Sync(_world.Run.Items, _catalog, _bell.GlobalPosition, dt, _bell.Visible));
         _combat.HerAt = _bell.GlobalPosition;
         Guard("combat", () => _combat.Sync(_world, dt));
         Guard("surge", () => _surgeView.Sync(_world, dt));
+        Guard("geysers", () => _geysers.Sync(_world, dt, _camera.Camera));
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
         Guard("currents", () => _currents.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
@@ -1232,7 +1290,7 @@ public partial class TopDownMain : Node3D
         _damage.Tick(dt);
         Guard("boss", () => _boss.Sync(_world, dt));
         Guard("clam rooms", () => _clamRooms.Sync(_world, dt));
-        _camera.SetClamGlows(_clamRooms.Glows);
+        _camera.SetClamGlows(_clamRooms.Glows, _clamRooms.GlowColors);
         if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) Guard("banner", () => _banner.Sync(_world.Boss));
         if (_world.Boss is { } b)
         {
@@ -1241,7 +1299,8 @@ public partial class TopDownMain : Node3D
         }
         _camera.Track(Focus(alpha), dt);
         _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
-        _bell.Dim = 1f - 0.65f * _dark.Amount;
+        // In the curse den's dark her own light is dimmed too, to about half.
+        _bell.Dim = 1f - 0.475f * _dark.Amount;
         _minimap.Blackout = _dark.Amount;
         _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
         _level.UpdateCanopy(_world.Player.Position, dt);
@@ -1405,7 +1464,7 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>The views of a level's life: its creatures, pickups and shots, Queen Clam, damage numbers, currents.</summary>
-    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _clamRooms, _boss, _damage, _currents, _vases };
+    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _clamRooms, _geysers, _boss, _damage, _currents, _vases };
 
     /// <summary>
     /// Fades the old level's life during the dive: each piece fades out over a few metres as the iris's dissolving edge
@@ -1707,9 +1766,18 @@ public partial class TopDownMain : Node3D
                 _sfx.PlayPitched("merge", 0.45f, -8f);
                 if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 8f) _camera.Shake(0.15f);
                 break;
+            case PlaneEventType.GeyserSpray:
+                // A geyser bursts: a deep bubbling pop, and a jolt when she is close.
+                _sfx.PlayPitched("pop", 0.45f, -8f);
+                if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 10f) _camera.Shake(0.12f);
+                break;
             case PlaneEventType.MurkShotBurst:
                 // A wet little pop, higher than a bomb's splash.
                 _sfx.PlayPitched("merge", 1.6f, -12f);
+                break;
+            case PlaneEventType.FishFreed:
+                // A fish again: a bright little chime.
+                _sfx.PlayPitched("bell_ring", 1.8f, -14f);
                 break;
             case PlaneEventType.MurkShotLanded:
                 _sfx.PlayPitched("merge", 0.7f, -16f);

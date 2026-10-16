@@ -68,13 +68,19 @@ public static class BlightTuning
     public const float CapPerMenace = 1.5f;
     public const float ContactDamage = 6f, ClingDrain = 2.5f;
     public const int MaxClingers = 3;
-    public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 10f, ThrowDamage = 7f, ThrowRadius = 0.2f, ThrowLife = 3f;
+    public const float ThrowEvery = 2.4f, ThrowRange = 9f, ThrowSpeed = 10f, ThrowDamage = 7f, ThrowRadius = 0.1f, ThrowLife = 3f;
     /// <summary>
     /// A throw that flies ThrowFallAt metres without hitting anything falls: it sinks to the sand over ThrowFallSeconds
     /// (harmless now, under her plane) and stains it, corrupting ThrowStainRadius toward ThrowStainInk. One her light
     /// strikes in the air bursts in a splatter instead, staining nothing and cleansing nothing.
     /// </summary>
     public const float ThrowFallAt = 9f, ThrowFallSeconds = 0.45f, ThrowStainRadius = 0.9f, ThrowStainInk = 0.7f;
+    /// <summary>
+    /// The throw's telegraph, a slingshot: it bends back away from its aim for WindupSeconds less SnapSeconds (its aim
+    /// following the target), then snaps forward over SnapSeconds with its aim locked, and the piece of it flies at the
+    /// end. It crawls at WindupSlow of its pace meanwhile. Deeper, the bend is shorter (÷ 1 + WindupPerMenace × Menace).
+    /// </summary>
+    public const float WindupSeconds = 0.55f, SnapSeconds = 0.12f, WindupPerMenace = 0.3f, WindupSlow = 0.25f;
     /// <summary>Deeper, its throws come faster and more often (per point of Menace).</summary>
     public const float ThrowSpeedPerMenace = 1.5f, ThrowRatePerMenace = 0.25f;
     /// <summary>A bubble that bursts a murkling or meets its throw keeps this much of its light.</summary>
@@ -183,6 +189,26 @@ public sealed class Valve
 public sealed class Murkling
 {
     public Vector2 Position, Velocity;
+    /// <summary>
+    /// A lesser murkling: the reef fish it was, turned by a murkling's throw (null for a murkling budded from the ink).
+    /// It never throws, chases her a little faster and clings; freed, it is that fish again.
+    /// </summary>
+    public PlaneReefFish? Fish;
+    public bool Lesser => Fish is not null;
+    /// <summary>A lesser murkling's swarm (the school it was turned from), -1 for none: a swarm keeps together.</summary>
+    public int Swarm = -1;
+    /// <summary>Its body's radius (a lesser one's follows the fish it was), and what it drains a second while clinging.</summary>
+    public float Radius = BlightTuning.MurkRadius, ClingDrain = BlightTuning.ClingDrain;
+    /// <summary>A murkling hunting the reef's fish while she is away: the one it is after, and when it looks again.</summary>
+    public PlaneReefFish? Prey;
+    public float PreyTimer;
+    /// <summary>
+    /// Winding up a throw (seconds left, out of WindupTotal; 0 when not), which way it aims, and the fish it throws at
+    /// (null: at her). ThrowAge counts the seconds since its last throw left it (the view's recoil).
+    /// </summary>
+    public float Windup, WindupTotal, ThrowAge = 10f;
+    public Vector2 Aim;
+    public PlaneReefFish? WindupPrey;
     /// <summary>Budding out of the ground (counting down; above zero it is not yet out).</summary>
     public float Bud = BlightTuning.BudSeconds;
     public int Area = -1;
@@ -204,6 +230,8 @@ public sealed class Murkling
 public sealed class MurkShot
 {
     public Vector2 Position, Velocity;
+    /// <summary>Where it left the murkling's body (the view draws it pinching off from there).</summary>
+    public Vector2 From;
     public float Life = BlightTuning.ThrowLife;
     /// <summary>How far it has flown.</summary>
     public float Traveled;
@@ -239,8 +267,9 @@ public sealed partial class PlaneWorld
     public float Cleansed => Corruption?.Cleansed ?? 1f;
     /// <summary>The share of the arena cleansed, 0..1.</summary>
     public float ArenaCleansed => ArenaArea?.Cleansed ?? 1f;
-    /// <summary>Murklings clinging to her (each dims her glow).</summary>
-    public int Clingers => Murklings.Count(m => m.Alive && m.Clinging);
+    /// <summary>Murklings clinging to her (each dims her glow); lesser ones are counted apart.</summary>
+    public int Clingers => Murklings.Count(m => m.Alive && m.Clinging && !m.Lesser);
+    public int LesserClingers => Murklings.Count(m => m.Alive && m.Clinging && m.Lesser);
 
     Rng _blightRng = null!;
     readonly List<(Vector2 At, int Bubbles, float Dim)> _pops = new();
@@ -440,7 +469,7 @@ public sealed partial class PlaneWorld
         if (cleanse) field.Cleanse(at, reach, 0.9f);
         foreach (var m in Murklings)
         {
-            if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, at) > reach + BlightTuning.MurkRadius) continue;
+            if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, at) > reach + m.Radius) continue;
             bool emptied = m.Corruption.Hit(light);
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, light));
             if (emptied) BurstMurkling(m, ember: true);
@@ -793,14 +822,20 @@ public sealed partial class PlaneWorld
             if (m.Clinging)
             {
                 m.Position = p.Position + m.ClingOffset;
-                Drain(BlightTuning.ClingDrain * Dt, DamageSource.Murkling);
+                Drain(m.ClingDrain * Dt, DamageSource.Murkling);
                 continue;
             }
             if (m.Shaken > 0f)
             {
                 m.Shaken -= Dt;
+                m.Windup = 0f;
                 m.Velocity = MoveToward(m.Velocity, Vector2.Zero, BlightTuning.ShakeSpeed * 1.2f * Dt);
-                Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false, barrier: ArenaBarrier.Outside);
+                Move(ref m.Position, ref m.Velocity, m.Radius, report: false, barrier: ArenaBarrier.Outside);
+                continue;
+            }
+            if (m.Lesser)
+            {
+                StepLesser(m);
                 continue;
             }
             // Toward the brightest light: her, or a bubble of hers hanging at the end of its range (bait).
@@ -824,10 +859,20 @@ public sealed partial class PlaneWorld
             var to = target - m.Position;
             float dist = to.Length();
             Vector2 wish = dist < BlightTuning.Sense ? SafeNormalize(to) : Vector2.Zero;
+            // She is away: it hunts the reef's fish instead, keeping a throw's distance from the one it is after.
+            var prey = her && dist >= BlightTuning.Sense ? Prey(m) : null;
+            float preyDist = 0f;
+            if (prey is not null)
+            {
+                var toPrey = prey.Position - m.Position;
+                preyDist = toPrey.Length();
+                wish = SafeNormalize(toPrey) * (preyDist > MurkFishTuning.Keep + 1f ? 1f : preyDist < MurkFishTuning.Keep - 1f ? -0.6f : 0f);
+            }
             // A wobble off the line, as if the dark were reluctant.
             wish += new Vector2(MathF.Sin(Time * 1.7f + m.Seed), MathF.Cos(Time * 1.3f + m.Seed * 2f)) * 0.35f;
-            m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace), 4f * Dt);
-            Move(ref m.Position, ref m.Velocity, BlightTuning.MurkRadius, report: false, barrier: ArenaBarrier.Outside);
+            float pace = (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace) * (m.Windup > 0f ? BlightTuning.WindupSlow : 1f);
+            m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * pace, 4f * Dt);
+            Move(ref m.Position, ref m.Velocity, m.Radius, report: false, barrier: ArenaBarrier.Outside);
 
             // It clings on touch.
             if (Vector2.Distance(m.Position, p.Position) < BlightTuning.MurkRadius + Radius)
@@ -835,19 +880,20 @@ public sealed partial class PlaneWorld
                 if (HurtPlayer(BlightTuning.ContactDamage, SafeNormalize(p.Position - m.Position), DamageSource.Murkling) && Clingers < BlightTuning.MaxClingers)
                 {
                     m.Clinging = true;
+                    m.Windup = 0f;
                     m.ClingOffset = SafeNormalize(m.Position - p.Position) * (Radius * 0.8f);
                     Events.Add(new PlaneEvent(PlaneEventType.MurklingCling, m.Position, Vector2.Zero));
                 }
                 continue;
             }
-            // It throws at her when she is near and in sight.
-            m.ThrowTimer -= Dt;
-            if (her && dist < BlightTuning.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, p.Position))
+            // It throws at her when she is near and in sight (or at the fish it hunts), winding up first.
+            m.ThrowAge += Dt;
+            if (m.Windup > 0f) StepWindup(m);
+            else
             {
-                m.ThrowTimer = BlightTuning.ThrowEvery / (1f + BlightTuning.ThrowRatePerMenace * Menace) * _blightRng.Range(0.8f, 1.2f);
-                var dir = SafeNormalize(p.Position - m.Position);
-                MurkShots.Add(new MurkShot { Position = m.Position + dir * BlightTuning.MurkRadius, Velocity = dir * (BlightTuning.ThrowSpeed + BlightTuning.ThrowSpeedPerMenace * Menace) });
-                Events.Add(new PlaneEvent(PlaneEventType.MurklingThrow, m.Position, dir));
+                m.ThrowTimer -= Dt;
+                if (her && dist < BlightTuning.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, p.Position)) BeginThrow(m, null);
+                else if (prey is not null && preyDist < BlightTuning.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, prey.Position)) BeginThrow(m, prey);
             }
         }
 
@@ -878,6 +924,7 @@ public sealed partial class PlaneWorld
                 s.Life = 0f;
                 HurtPlayer(BlightTuning.ThrowDamage, SafeNormalize(s.Velocity), DamageSource.MurkShot);
             }
+            else if (StrikeFish(s)) s.Life = 0f;
         }
 
         // Her shots of light: each takes its damage off a murkling's (or a bud's) corruption and bursts on it (a piercing
@@ -889,7 +936,7 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var m in Murklings)
             {
-                if (!m.Alive || m.Clinging || shot.Struck == m || Vector2.Distance(m.Position, shot.Position) > BlightTuning.MurkRadius + shot.Radius) continue;
+                if (!m.Alive || m.Clinging || shot.Struck == m || Vector2.Distance(m.Position, shot.Position) > m.Radius + shot.Radius) continue;
                 float light = HitDamage(shot);
                 bool emptied = m.Corruption.Hit(light);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, SafeNormalize(shot.Velocity), light));
@@ -921,6 +968,46 @@ public sealed partial class PlaneWorld
         Events.Add(new PlaneEvent(PlaneEventType.MurkShotBurst, s.Position, SafeNormalize(s.Velocity)));
     }
 
+    /// <summary>A throw begins: it bends back away from its target (at her, or at a fish), the telegraph.</summary>
+    void BeginThrow(Murkling m, PlaneReefFish? prey)
+    {
+        m.ThrowTimer = BlightTuning.ThrowEvery / (1f + BlightTuning.ThrowRatePerMenace * Menace) * _blightRng.Range(0.8f, 1.2f);
+        m.WindupTotal = m.Windup = BlightTuning.WindupSeconds / (1f + BlightTuning.WindupPerMenace * Menace);
+        m.WindupPrey = prey;
+        m.Aim = AimOf(m);
+        Events.Add(new PlaneEvent(PlaneEventType.MurklingWindup, m.Position, m.Aim, m.WindupTotal));
+    }
+
+    /// <summary>Its aim follows the target while it bends back; the snap forward is locked; at its end the piece flies.</summary>
+    void StepWindup(Murkling m)
+    {
+        if (m.WindupPrey is { Huntable: false })
+        {
+            // The fish it meant is gone (turning, freed, hidden): it lets the bend go.
+            m.Windup = 0f;
+            m.WindupPrey = null;
+            return;
+        }
+        m.Windup -= Dt;
+        if (m.Windup > BlightTuning.SnapSeconds) m.Aim = AimOf(m);
+        if (m.Windup > 0f) return;
+        m.Windup = 0f;
+        m.WindupPrey = null;
+        m.ThrowAge = 0f;
+        float speed = BlightTuning.ThrowSpeed + BlightTuning.ThrowSpeedPerMenace * Menace;
+        var at = m.Position + m.Aim * m.Radius;
+        MurkShots.Add(new MurkShot { Position = at, From = at, Velocity = m.Aim * speed });
+        Events.Add(new PlaneEvent(PlaneEventType.MurklingThrow, m.Position, m.Aim));
+    }
+
+    /// <summary>Which way a winding-up murkling aims: at her, or at its fish, led a little to where it is swimming.</summary>
+    Vector2 AimOf(Murkling m)
+    {
+        if (m.WindupPrey is not { } prey) return SafeNormalize(Player.Position - m.Position);
+        float speed = BlightTuning.ThrowSpeed + BlightTuning.ThrowSpeedPerMenace * Menace;
+        return SafeNormalize(prey.Position + prey.Velocity * (Vector2.Distance(prey.Position, m.Position) / speed) - m.Position);
+    }
+
     Murkling Bud(Vector2 at, int area)
     {
         var m = new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) };
@@ -939,6 +1026,14 @@ public sealed partial class PlaneWorld
     {
         m.Alive = false;
         Stats.MobsDefeated++;
+        if (m.Lesser)
+        {
+            // A lesser one is a fish again.
+            Events.Add(new PlaneEvent(PlaneEventType.MurklingBurst, m.Position, Vector2.Zero, 0f));
+            FreeFish(m);
+            if (damage > 0f) Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, m.Position, Vector2.Zero, damage));
+            return;
+        }
         bool blooms = ember && Corruption is { } field && field.At(m.Position) < CorruptionTuning.Clean;
         if (blooms) Corruption!.Cleanse(m.Position, CorruptionTuning.EmberRadius, 1f);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingBurst, m.Position, Vector2.Zero, blooms ? CorruptionTuning.EmberRadius : 0f));

@@ -409,7 +409,7 @@ public sealed partial class PlaneWorld
     {
         float Inside(Vector2 at, float radius) => Vector2.Distance(at, ArenaCenter) - (ArenaRadius + radius);
         foreach (var m in Murklings)
-            if (m.Alive && Inside(m.Position, BlightTuning.MurkRadius) < 0f)
+            if (m.Alive && Inside(m.Position, m.Radius) < 0f)
             {
                 m.Clinging = false;
                 m.Position = OutsideArena(m.Position);

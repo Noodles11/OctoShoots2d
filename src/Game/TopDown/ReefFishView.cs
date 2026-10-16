@@ -73,7 +73,7 @@ public partial class ReefFishView : Node3D
 
     MultiMesh Add(Mesh mesh, Material material, int count, bool shadow)
     {
-        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseCustomData = true, Mesh = mesh, InstanceCount = count };
+        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseCustomData = true, UseColors = true, Mesh = mesh, InstanceCount = count };
         var node = new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = material, CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(node);
         _nodes.Add(node);
@@ -133,6 +133,14 @@ public partial class ReefFishView : Node3D
             var f = world.ReefFish[i];
             var p = _poses[i];
             var st = Styles[(int)f.Kind];
+            if (f.Corrupted)
+            {
+                // A lesser murkling now (BlightView draws it): out of the reef until it is freed.
+                _groups[p.Group].Mesh.SetInstanceTransform(p.Slot, new Transform3D(Basis.Identity.Scaled(Vector3.Zero), Vector3.Zero));
+                continue;
+            }
+            // Turning: ink creeps over it as it shrinks toward the bead it will be.
+            float ink = f.Turning > 0f ? 1f - f.Turning / MurkFishTuning.TurnSeconds : 0f;
             p.Time += dt;
             float speed = f.Velocity.Length();
             p.Swim = Mathf.Lerp(p.Swim, Mathf.Clamp(speed / st.Cruise, 0f, 1.5f), 1f - Mathf.Exp(-5f * dt));
@@ -156,11 +164,12 @@ public partial class ReefFishView : Node3D
             float bob = 0.05f * Mathf.Sin(p.Time * 1.1f + f.Id * 1.9f) * st.Spec.Length / 0.45f;
 
             float turn = Mathf.Clamp(f.TurnRate / 2.5f, -1f, 1f);
-            var basis = new Basis(Vector3.Up, p.Yaw) * new Basis(Vector3.Right, p.Roll) * new Basis(Vector3.Back, p.Pitch);
+            var basis = (new Basis(Vector3.Up, p.Yaw) * new Basis(Vector3.Right, p.Roll) * new Basis(Vector3.Back, p.Pitch)).Scaled(Vector3.One * (1f - 0.35f * ink));
             var group = _groups[p.Group];
             var at = new Vector3(f.Position.X, p.Height + bob, f.Position.Y);
             group.Mesh.SetInstanceTransform(p.Slot, new Transform3D(basis, at));
             group.Mesh.SetInstanceCustomData(p.Slot, new Color(p.Tail, p.Fin, p.Swim, turn));
+            group.Mesh.SetInstanceColor(p.Slot, new Color(ink, 0f, 0f, 1f));
             group.Min = group.Min.Min(at);
             group.Max = group.Max.Max(at);
         }

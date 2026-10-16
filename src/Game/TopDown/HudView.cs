@@ -7,7 +7,9 @@ using OctoShoots.Core.Plane;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The plane HUD, bottom left: the pearls she carries, one dot each in its own colours, and her shells. A pearl's name
+/// The plane HUD, bottom left: her shells (the pearls she carries circle her bell: PearlOrbitView). Each shell she
+/// picks up flies from where she took it to the counter as a wisp of light on a slight arc, and counts in there with a
+/// pulse, so a pickup is never missed. A pearl's name
 /// and tagline show for a moment when she takes it. Over the shaft, a prompt: Shift to dive, or why she cannot yet.
 /// Her health and her active pearl's charge are not here: they are on her bell (BellView, DESIGN-TOPDOWN §2.5).
 /// </summary>
@@ -19,8 +21,18 @@ public partial class HudView : Control
     ItemCatalog? _catalog;
     string _caption = "";
     int _shells;
-    /// <summary>1 when a shell has just been collected, easing back to 0: the counter brightens and swells.</summary>
+    /// <summary>1 when a shell has just reached the counter, easing back to 0: the counter brightens and swells.</summary>
     float _pulse;
+    /// <summary>1 as a shell lands, easing to 0: a ring of light spreading from the counter.</summary>
+    float _ring;
+    /// <summary>
+    /// Shells on their way to the counter: where each set off (on screen), which way its arc bows, and how far along it is
+    /// (0 → 1). The counter shows them only once they land.
+    /// </summary>
+    readonly List<(Vector2 From, float Side, float T)> _flights = new();
+    /// <summary>A flight's length (s): brief, so it does not get in the way, quick enough to read as a flick.</summary>
+    const float FlightTime = 0.55f;
+    int _side = 1;
     float _captionTimer;
 
     public override void _Ready()
@@ -71,6 +83,20 @@ public partial class HudView : Control
         _captionTimer -= dt;
         _shells = world.Run.Shells;
         _pulse = Mathf.MoveToward(_pulse, 0f, dt * 2.5f);
+        _ring = Mathf.MoveToward(_ring, 0f, dt * 3f);
+        for (int i = _flights.Count - 1; i >= 0; i--)
+        {
+            var f = _flights[i];
+            f.T += dt / FlightTime;
+            if (f.T >= 1f)
+            {
+                // Landed: it counts in, with a pulse.
+                _flights.RemoveAt(i);
+                _pulse = 1f;
+                _ring = 1f;
+            }
+            else _flights[i] = f;
+        }
         // Over the shaft: how to dive, or why not yet.
         bool over = world.OverShaft && !world.Defeated && !Diving;
         if (over)
@@ -85,8 +111,30 @@ public partial class HudView : Control
     /// <summary>She is diving: no prompt.</summary>
     public bool Diving { get; set; }
 
-    /// <summary>A shell was just collected: the counter flashes and pulses.</summary>
-    public void PulseShells() => _pulse = 1f;
+    /// <summary>A shell was just collected at that point of the screen: it flies to the counter.</summary>
+    public void CollectShell(Vector2 from)
+    {
+        // Alternate the arcs' bow, so a handful taken at once fans out instead of stacking up.
+        _flights.Add((from, _side * (0.7f + 0.3f * GD.Randf()), 0f));
+        _side = -_side;
+    }
+
+    /// <summary>The middle of the counter's shell icon.</summary>
+    Vector2 ShellIcon => new(Margin + 12f, Size.Y - Margin - 22f);
+
+    /// <summary>Where a flight is at progress e (0 → 1): a quadratic arc from its start to the counter, bowed to one side.</summary>
+    Vector2 FlightAt(Vector2 from, float side, float e)
+    {
+        var to = ShellIcon;
+        var d = to - from;
+        var bow = new Vector2(-d.Y, d.X) * 0.22f * side;
+        var mid = (from + to) * 0.5f + bow;
+        float u = 1f - e;
+        return u * u * from + 2f * u * e * mid + e * e * to;
+    }
+
+    /// <summary>A flight's progress along its arc: it leaps off, then speeds in to the counter.</summary>
+    static float FlightEase(float t) => t * t * (3f - 2f * t) * 0.6f + t * t * 0.4f;
 
     /// <summary>A shell icon: a scallop fan with ribs, hinge down.</summary>
     void DrawShell(Vector2 c, float size, Color fill, Color ink)
@@ -184,32 +232,45 @@ public partial class HudView : Control
             DrawRect(new Rect2(b + new Vector2(bw * 0.5f - 1f, -2f), new Vector2(2f, bh + 4f)), new Color(0f, 0f, 0f, 0.7f * a));
         }
 
-        // Her pearls, bottom left.
-        if (_run is not null && _catalog is not null)
-        {
-            var dot = at + new Vector2(10f, -18f);
-            foreach (string id in _run.Items)
-            {
-                if (!_catalog.TryGet(id, out var item) || item.Pearl is null) continue;
-                Color a = new(item.Pearl.Colors[0]), b = new(item.Pearl.Colors[^1]);
-                DrawCircle(dot, 9.5f, new Color(0f, 0f, 0f, 0.6f));
-                DrawCircle(dot, 8f, b);
-                DrawCircle(dot - new Vector2(1.5f, 1.5f), 5.5f, a);
-                DrawCircle(dot - new Vector2(3f, 3f), 2f, new Color(1f, 1f, 1f, 0.8f));
-                dot.X += 24f;
-            }
-        }
-
-        // Shells, above the pearls: brightens and swells with each one collected.
+        // Shells, bottom left (her pearls circle her bell instead: PearlOrbitView): brightens and swells with each one
+        // collected.
         {
             float k2 = _pulse * _pulse;
-            var c = at + new Vector2(12f, -46f);
+            var c = ShellIcon;
             float size = 14f * (1f + 0.35f * k2);
             if (k2 > 0.01f) DrawCircle(c, size * 1.5f, new Color(1f, 0.8f, 0.55f, 0.4f * k2));
             DrawShell(c, size, new Color(1f, 0.85f, 0.75f).Lerp(new Color(1f, 1f, 0.9f), k2), new Color(0.35f, 0.18f, 0.15f));
             int fontSize = (int)(22f * (1f + 0.3f * k2));
             var col = new Color(1f, 0.9f, 0.8f).Lerp(new Color(1f, 1f, 0.75f), k2);
-            DrawString(font, c + new Vector2(22f, 8f + 3f * k2), _shells.ToString(), HorizontalAlignment.Left, -1, fontSize, col);
+            if (_ring > 0.01f) DrawArc(c, size * (1.3f + 2.2f * (1f - _ring)), 0f, Mathf.Tau, 40, new Color(1f, 0.92f, 0.7f, 0.8f * _ring * _ring), 2.5f * _ring + 0.5f, true);
+            // Shells still in flight are not counted yet.
+            int shown = Mathf.Max(_shells - _flights.Count, 0);
+            DrawString(font, c + new Vector2(22f, 8f + 3f * k2), shown.ToString(), HorizontalAlignment.Left, -1, fontSize, col);
+        }
+
+        // Shells in flight: a wisp of warm light with a short tail, the shell at its head, shrinking a little as it nears
+        // the counter.
+        foreach (var (from, side, t) in _flights)
+        {
+            float e = FlightEase(t);
+            const int tail = 16;
+            for (int j = tail; j >= 1; j--)
+            {
+                float back = FlightEase(Mathf.Max(t - j * 0.02f, 0f));
+                float fade = 1f - j / (float)(tail + 1);
+                var pt = FlightAt(from, side, back);
+                // A soft shade under the gold, so the wisp reads on bright sand as well as in the dark.
+                DrawCircle(pt, 3f + 7f * fade, new Color(0.25f, 0.12f, 0f, 0.12f * fade));
+                DrawCircle(pt, 2f + 5.5f * fade, new Color(1f, 0.72f, 0.25f, 0.65f * fade * fade));
+            }
+            var head = FlightAt(from, side, e);
+            // A pop as it leaves her: swelling in over the first tenth.
+            float pop = Mathf.Clamp(t / 0.1f, 0f, 1f);
+            float s2 = Mathf.Lerp(18f, 11f, e) * (0.5f + 0.5f * pop);
+            DrawCircle(head, s2 * 1.9f, new Color(0.25f, 0.12f, 0f, 0.14f));
+            DrawCircle(head, s2 * 1.6f, new Color(1f, 0.72f, 0.25f, 0.5f));
+            DrawCircle(head, s2 * 1.1f, new Color(1f, 0.95f, 0.75f, 0.8f));
+            DrawShell(head, s2, new Color(1f, 0.93f, 0.85f), new Color(0.35f, 0.18f, 0.15f));
         }
 
         // The dive prompt, low in the middle: a key cap and a word.

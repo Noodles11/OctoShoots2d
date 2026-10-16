@@ -148,16 +148,30 @@ public static class BossGenerator
 
         var tierRoll = root.Stream("tier").NextFloat();
         var tier = tierRoll < 0.05f ? BossTier.Legendary : tierRoll < 0.30f ? BossTier.Rare : BossTier.Common;
-        var plan = Weighted(root.Stream("plan"), new[]
+        // Never the same body twice running, and rarely the same kind of fight: the boss before this one (the last
+        // depth's, or the previous loop's last) is ruled out as a body and steers the concept away from its own.
+        var before = Previous(runSeed, cycle, depth);
+        // A body is only worth choosing if it can carry a fight unlike the last one (another weak-spot rule or signature).
+        bool Fresh(BodyPlan p) => before is null || Concepts.Any(c => c.Tier <= tier && c.Forms.Any(f => PlanOf(f) == p)
+            && !(c.Exposure == before.Exposure && c.Signature == before.Signature));
+        var weights = new[]
         {
             (BodyPlan.Bivalve, new[] { 30f, 15f, 5f }[band]),
             (BodyPlan.Echinoderm, new[] { 30f, 20f, 10f }[band]),
             (BodyPlan.Cnidarian, new[] { 20f, 25f, 25f }[band]),
             (BodyPlan.Gastropod, new[] { 20f, 25f, 20f }[band]),
-        });
+        };
+        var allowed = weights.Where(p => before is null || p.Item1 != before.Plan).ToArray();
+        var fresh = allowed.Where(p => Fresh(p.Item1)).ToArray();
+        var plan = Weighted(root.Stream("plan"), fresh.Length > 0 ? fresh : allowed);
         // The concepts this body carries at this tier or below (a Legendary may still roll a Common concept).
         var concepts = Concepts.Where(c => c.Forms.Any(f => PlanOf(f) == plan) && c.Tier <= tier).ToList();
-        var concept = Weighted(root.Stream("concept"), concepts.Select(c => (c, c.Tier == tier ? 2f : 1f)).ToArray());
+        // The very same fight as the last boss's (its weak-spot rule and its signature) only if the body has no other.
+        if (before is not null && concepts.Any(c => c.Exposure != before.Exposure || c.Signature != before.Signature))
+            concepts.RemoveAll(c => c.Exposure == before.Exposure && c.Signature == before.Signature);
+        float Likeness(ConceptDef c) => before is null ? 1f
+            : (c.Exposure == before.Exposure ? 0.15f : 1f) * (c.Signature == before.Signature ? 0.3f : 1f);
+        var concept = Weighted(root.Stream("concept"), concepts.Select(c => (c, (c.Tier == tier ? 2f : 1f) * Likeness(c))).ToArray());
         var form = concept.Forms.Where(f => PlanOf(f) == plan).ToArray() is { Length: > 0 } forms
             ? forms[root.Stream("form").Int(forms.Length)] : concept.Forms[0];
 
@@ -188,6 +202,13 @@ public static class BossGenerator
         }
         return Roll(root.Stream("plain"), runSeed, cycle, depth, menace, concept.Tier, form, concept, plain: true);
     }
+
+    /// <summary>The boss met just before this one: the last depth's, or (at Depth 1) the previous loop's last; none for the first.</summary>
+    public static BossSpec? Previous(ulong runSeed, int cycle, int depth) =>
+        depth > 1 ? For(runSeed, cycle, depth - 1) : cycle > 1 ? For(runSeed, cycle - 1, LastDepth) : null;
+
+    /// <summary>The deepest depth with a generated boss (as the player numbers them).</summary>
+    public const int LastDepth = 6;
 
     /// <summary>
     /// Queen Clam: The Lid with her own hand-tuned numbers (PlaneBossTuning), the roll every generated boss is held to.

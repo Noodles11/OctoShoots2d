@@ -3,64 +3,33 @@ using Godot;
 namespace OctoShoots.Game.Fx;
 
 /// <summary>
-/// The clam room's pieces (DESIGN-TOPDOWN §4.2), built once per room: the giant clam's lower valve (a deep ribbed bowl
-/// with a scalloped rim, its foot on the cave floor), the pink velvet tongue the pearl lies on (a soft cushion with a
-/// frilled edge), and the shell wall lining the chamber (ribbed, scalloped at the top, leaning in, open at the mouth).
-/// UV.x runs round (0 → 1), UV.y from the rim or floor (0) to the bottom or top (1); clam_nacre.gdshader draws the
+/// The clam room's pieces (DESIGN-TOPDOWN §4.2), built once per room: the chamber's nacre floor (a disc laid over the
+/// rock) and the shell wall lining the chamber (ribbed, scalloped at the top, leaning in, open at the mouth).
+/// UV.x runs round (0 → 1), UV.y from the middle or the floor (0) to the edge or the top (1); clam_nacre.gdshader draws the
 /// ribs from UV.x. The shells' normals point to their inside (the nacre), so the shader knows which side it sees.
 /// </summary>
 public static class ClamRoomMeshes
 {
     const int Ribs = 18;
 
-    /// <summary>A deep bowl, rim at y = 0 with a scalloped lip, falling to y = −depth; radius at the rim.</summary>
-    public static ArrayMesh LowerValve(float radius, float depth)
+    /// <summary>
+    /// The chamber's floor: a disc round (0, 0), or a ring from inner to outer radius, each point at height(xz offset) so it lies
+    /// over the rock; UV.x runs round (the ribs fan out from the clam), UV.y from the inside out.
+    /// </summary>
+    public static ArrayMesh Floor(float inner, float outer, System.Func<Vector2, float> height)
     {
-        const int rings = 14, segments = 72;
+        const int rings = 16, segments = 96;
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
         for (int i = 0; i <= rings; i++)
         for (int j = 0; j <= segments; j++)
         {
             float v = i / (float)rings, a = j / (float)segments * Mathf.Tau;
-            // Steep sides, a rounded foot.
-            float r = radius * Mathf.Cos(v * Mathf.Pi * 0.5f * 0.92f);
-            float y = -depth * Mathf.Sin(v * Mathf.Pi * 0.5f);
-            // The scallop: the lip rises and falls with the ribs; the ribs flute the sides a little.
-            float rib = Mathf.Sin(a * Ribs);
-            y += (1f - v) * (1f - v) * 0.09f * rib;
-            r *= 1f + 0.035f * rib * (1f - v * 0.6f);
-            var p = new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r);
-            // Toward the inside of the bowl (up and in): the nacre side.
-            var n = new Vector3(-Mathf.Cos(a) * Mathf.Cos(v * 1.4f), Mathf.Sin(v * 1.4f) * 0.8f + 0.2f, -Mathf.Sin(a) * Mathf.Cos(v * 1.4f)).Normalized();
-            st.SetNormal(n);
+            float r = Mathf.Lerp(inner, outer, v);
+            var xz = new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+            st.SetNormal(Vector3.Up);
             st.SetUV(new Vector2(j / (float)segments, v));
-            st.AddVertex(p);
-        }
-        Grid(st, rings, segments);
-        return st.Commit();
-    }
-
-    /// <summary>The tongue: a soft flattened cushion, centred at y = 0, its edge frilled and gently waved.</summary>
-    public static ArrayMesh Tongue(float radius, float height)
-    {
-        const int rings = 12, segments = 64;
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        for (int i = 0; i <= rings; i++)
-        for (int j = 0; j <= segments; j++)
-        {
-            float v = i / (float)rings, a = j / (float)segments * Mathf.Tau;
-            // From the top (v 0) round the swollen edge to the underside (v 1).
-            float t = v * Mathf.Pi;
-            float frill = 1f + 0.07f * Mathf.Sin(a * 9f) * Mathf.Sin(t);
-            float r = radius * Mathf.Sin(t) * frill;
-            float y = height * 0.5f * Mathf.Cos(t) + 0.05f * Mathf.Sin(a * 5f + 1f) * Mathf.Sin(t);
-            var p = new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r);
-            var n = new Vector3(Mathf.Cos(a) * Mathf.Sin(t) / radius, Mathf.Cos(t) / (height * 0.5f), Mathf.Sin(a) * Mathf.Sin(t) / radius).Normalized();
-            st.SetNormal(n);
-            st.SetUV(new Vector2(j / (float)segments, v));
-            st.AddVertex(p);
+            st.AddVertex(new Vector3(xz.X, height(xz), xz.Y));
         }
         Grid(st, rings, segments);
         return st.Commit();

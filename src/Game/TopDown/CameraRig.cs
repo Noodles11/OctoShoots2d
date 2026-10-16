@@ -66,11 +66,20 @@ public partial class CameraRig : Node3D
 
     /// <summary>Light bubbles: the halos her bubbles and their pop blooms cast on the swim layer (x, z, radius, strength).</summary>
     /// <summary>The clam rooms' gold glows on the water (xz, radius, strength), at most six.</summary>
-    public void SetClamGlows(IReadOnlyList<Vector4> glows)
+    public void SetClamGlows(IReadOnlyList<Vector4> glows, IReadOnlyList<Color> colors)
     {
         int n = Mathf.Min(glows.Count, 6);
-        // Sent flattened, as the bubble lights are.
+        // Sent flattened, as the bubble lights are; each glow in its pearl's colour.
         var flat = new float[24];
+        var tint = new float[18];
+        for (int i = 0; i < n && i < colors.Count; i++)
+        {
+            var l = colors[i].SrgbToLinear();
+            tint[i * 3] = l.R;
+            tint[i * 3 + 1] = l.G;
+            tint[i * 3 + 2] = l.B;
+        }
+        _post.SetShaderParameter("clam_colors", tint);
         for (int i = 0; i < n; i++)
         {
             flat[i * 4] = glows[i].X;
