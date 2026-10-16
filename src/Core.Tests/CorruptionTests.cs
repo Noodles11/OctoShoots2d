@@ -16,7 +16,7 @@ public class CorruptionTests
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
         ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
 
-    static readonly PlaneOptions War = new() { Corruption = true, Pufferlings = false };
+    static readonly PlaneOptions War = new() { Corruption = true, Pufferlings = false, Boss = OctoShoots.Core.Bosses.BossGenerator.QueenClam(1UL, 1, 1) };
 
     static PlaneWorld World(LevelMap map) => new(map, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), War);
 

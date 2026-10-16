@@ -1035,8 +1035,12 @@ at mist distance (inherited fade rule).
   goods float on their own (pearls as in a clam room, the top-up as a red heart), each with a small price tag on a
   string (the price and a shell), shown only while she is inside the shop; she buys by touching one. The HUD counter (a shell icon and the number) sits above the pearls and brightens and
   swells with every shell collected. Shells carry down with her pearls and HP.
-- **Queen Clam (the Depth 1 boss, `PlaneBoss.cs`, adapted from DEPTH1-BESTIARY §5):** she guards the Crack on every
-  depth's boss level for now (the other depths' bosses are not built). The arena is the exit's flat 15 m disc.
+- **Bosses are generated** (docs/BOSS-GENERATOR.md, `src/Core/Bosses`, the fight in `PlaneBoss.cs`, the bodies in
+  `src/Game/TopDown/Bosses`): every real depth's boss level meets a boss grown from the run seed, the loop and the depth
+  — a body plan, a designed fight concept, its mutation, its pearl and its attacks — run through the same arena and
+  cycle machine. **Queen Clam** (adapted from DEPTH1-BESTIARY §5) is the clam's reference roll, often met in the early
+  depths; what follows describes her fight, the one every generated boss is held to. The arena is the exit's flat 15 m
+  disc.
   - **Entering.** The first time Clementine is wholly inside the disc, the arena seals: an invisible wall on the rim
     stops her (her bubbles pop on it). Mobs cannot come in, and shots cannot cross it either way. A mud cloud of
     churning sand-brown haze rises outside the rim over 1.5 s and hides what lies beyond; on the minimap it is a brown

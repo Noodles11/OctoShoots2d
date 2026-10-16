@@ -592,8 +592,7 @@ public sealed partial class PlaneWorld
         foreach (var mob in Mobs)
             if (mob.Alive && Vector2.Distance(mob.Position, at) < reach + mob.Radius)
                 DamageMob(mob, damage, mob.Position - at);
-        if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.Position, at) < reach + PlaneBossTuning.BodyRadius)
-            DamageBoss(boss, damage, boss.Position - at);
+        BlastBoss(at, reach, damage);
         BlastVases(at, reach);
     }
 
@@ -1156,8 +1155,7 @@ public sealed partial class PlaneWorld
         foreach (var mob in Mobs)
             if (mob.Alive && Vector2.Distance(mob.Position, at) < reach + mob.Radius)
                 DamageMob(mob, damage, mob.Position - at);
-        if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.Position, at) < reach + PlaneBossTuning.BodyRadius)
-            DamageBoss(boss, damage, boss.Position - at);
+        BlastBoss(at, reach, damage);
         BlastVases(at, reach);
     }
 

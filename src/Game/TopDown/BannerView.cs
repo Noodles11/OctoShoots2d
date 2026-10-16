@@ -11,7 +11,7 @@ public partial class BannerView : Control
 {
     ShaderMaterial _dissolve = null!;
     float _in, _progress;
-    string _boss = PlaneBossTuning.Name.ToUpperInvariant();
+    string _boss = "";
 
     public override void _Ready()
     {
@@ -28,6 +28,7 @@ public partial class BannerView : Control
         Visible = show;
         if (!show) return;
         float t = boss!.StageTime;
+        _boss = boss.Spec.Name.ToUpperInvariant();
         _in = Mathf.Clamp(t / 0.25f, 0f, 1f);
         _progress = Mathf.Clamp((t - PlaneBossTuning.BannerSeconds) / PlaneBossTuning.DissolveSeconds, 0f, 1f);
         _dissolve.SetShaderParameter("progress", _progress);

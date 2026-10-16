@@ -75,7 +75,7 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow,
     MurklingCling, VineCoiled, VineCut, ValveSeen, ValveCleared, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
-    ArenaSealed, BossLanded, BossVolley, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
+    ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Valve, Blightroot, Blotter, Curse }

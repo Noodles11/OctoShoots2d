@@ -23,7 +23,10 @@ public class PlaneBossTests
         return TopDownGenerator.Generate(new RunStreams(seed), new LevelId(1, 2, LevelPlan.BossLevel(seed, 1, 2)));
     });
 
-    static PlaneWorld World() => new(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
+    /// <summary>Queen Clam (the reference roll), so these tests pin her fight.</summary>
+    static readonly PlaneOptions Queen = new() { Corruption = false, Pufferlings = true, Vases = true, Boss = OctoShoots.Core.Bosses.BossGenerator.QueenClam(1UL, 1, 1) };
+
+    static PlaneWorld World() => new(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Queen);
 
     /// <summary>Puts her inside the arena, 7 m south of the Crack's middle.</summary>
     static void Enter(PlaneWorld w)
@@ -164,8 +167,8 @@ public class PlaneBossTests
         // The next opening brings the royal pearl and the helix.
         Assert.True(StepUntil(w, PlaneEventType.BossVolley) > 0);
         Assert.Contains(w.Shots, s => s.Royal);
-        for (int i = 0; i < 60 * 2 && boss.Act != ClamAct.Helix; i++) w.Step(default);
-        Assert.Equal(ClamAct.Helix, boss.Act);
+        for (int i = 0; i < 60 * 2 && boss.Act != BossAct.Helix; i++) w.Step(default);
+        Assert.Equal(BossAct.Helix, boss.Act);
     }
 
     [Fact]

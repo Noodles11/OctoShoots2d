@@ -7,6 +7,8 @@ render_mode cull_disabled;
 
 instance uniform float drained = 1.0;
 instance uniform float flash = 0.0;
+// The shared boss skin's ink surge (boss_body.gdshader); a clam's shell does not show it.
+instance uniform float surge = 0.0;
 uniform vec3 color_a : source_color = vec3(0.86, 0.81, 0.72);
 uniform vec3 color_b : source_color = vec3(0.55, 0.49, 0.43);
 uniform vec3 ink : source_color = vec3(0.025, 0.02, 0.03);

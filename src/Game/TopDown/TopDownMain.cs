@@ -59,7 +59,9 @@ public partial class TopDownMain : Node3D
     BannerView _banner = null!;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
-    bool _autoFire, _autoActive, _dbgSurge, _startPaused;
+    bool _autoFire, _autoActive, _dbgSurge, _startPaused, _dbgBossLevel;
+    /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
+    string? _dbgBoss;
     float? _startHp;
     string[] _startPearls = Array.Empty<string>();
     HudView _hud = null!;
@@ -171,6 +173,7 @@ public partial class TopDownMain : Node3D
         OctoShoots.Game.Fx.HerColor.Load();
         ParseArgs();
         TakeLaunch();
+        if (_dbgBossLevel) _id = _id with { Level = LevelPlan.BossLevel(_seed, _id.Cycle, _id.Depth) };
         InputSetup.Register();
         AddChild(new PadMenus());
         _tuning = SettingsStore.LoadTuning();
@@ -259,6 +262,8 @@ public partial class TopDownMain : Node3D
             else if (arg == "--fire") _autoFire = true;
             else if (arg == "--use-active") _autoActive = true;
             else if (arg == "--dbg-surge") _dbgSurge = true;
+            else if (arg.StartsWith("--boss=")) _dbgBoss = Value("--boss=");
+            else if (arg == "--boss-level") _dbgBossLevel = true;
             else if (arg.StartsWith("--dbg-goto=") && int.TryParse(Value("--dbg-goto="), out int gotoLevel)) _dbgGoTo = gotoLevel;
             else if (arg.StartsWith("--curse=") && Enum.TryParse<CurseReward>(Value("--curse="), true, out var reward)) _dbgCurse = reward;
             else if (arg.StartsWith("--award=")) _debugAward = Value("--award=");
@@ -311,6 +316,21 @@ public partial class TopDownMain : Node3D
     /// </summary>
     LevelId RunStart() =>
         _recorder.Profile.TutorialPassed && !(_view ?? SettingsStore.LoadView()).ReplayTutorial ? LevelId.FirstRun : LevelId.First;
+
+    /// <summary>Verification: the options with the boss `--boss=` names (null: the game's own).</summary>
+    PlaneOptions? DebugBoss()
+    {
+        if (_dbgBoss is null || !_map.HasBoss) return null;
+        int depth = Math.Max(1, _map.Depth - LevelPlan.Tutorial);
+        var spec = _dbgBoss == "queen" ? OctoShoots.Core.Bosses.BossGenerator.QueenClam(_map.Seed, _map.Cycle, depth)
+            : Enum.TryParse<OctoShoots.Core.Bosses.BossConcept>(_dbgBoss, true, out var concept)
+                ? OctoShoots.Core.Bosses.BossGenerator.ForConcept(_map.Seed, _map.Cycle, depth, concept)
+                : null;
+        if (spec is null) return null;
+        var d = PlaneOptions.Default;
+        GD.Print($"Debug boss: {spec.Name} ({spec.Tier} {spec.Form}, {spec.Concept}, {spec.Theme}, {spec.Exposure}, {spec.Signature})");
+        return new PlaneOptions { Corruption = d.Corruption, Pufferlings = d.Pufferlings, Vases = d.Vases, Boss = spec };
+    }
 
     /// <summary>Saves the run as it stands at the start of this level (continuing puts her back here).</summary>
     void SaveRun()
@@ -655,7 +675,7 @@ public partial class TopDownMain : Node3D
             _recorder.StartRun(_seed.ToString(), _customSeed, _run.Items, continuing || _id.IsTutorial);
         }
         _run.Level = _id;
-        _world = new PlaneWorld(_map, _tuning, _run);
+        _world = new PlaneWorld(_map, _tuning, _run, DebugBoss());
         // Synergies she came in with (a resumed run, debug pearls) are not news.
         foreach (string id in _run.Loadout.Synergies) _announced.Add(id);
         if (arriveAt is { } at) _world.Player.Position = _world.Player.PrevPosition = at;
@@ -840,6 +860,8 @@ public partial class TopDownMain : Node3D
                 .FirstOrDefault(q => q is { } v && _world.Clear(v, 0.8f) && _world.LineOfSight(v, _map.Exit.Position)),
             // Inside Queen Clam's arena: the fight starts at once.
             "arena" => _map.HasBoss ? _world.ArenaCenter + new System.Numerics.Vector2(0f, _world.ArenaRadius * 0.55f) : null,
+            // Close in front of the boss (captures of its body).
+            "boss-near" => _map.HasBoss ? _world.ArenaCenter + new System.Numerics.Vector2(0f, 6.5f) : null,
             "shop" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 1.5f)).FirstOrDefault(),
             // Beside the level's light spring, if it has one.
             "spring" => _world.Springs.Select(sp => (System.Numerics.Vector2?)(sp.Position + new System.Numerics.Vector2(0f, SpringTuning.Radius + 1.5f))).FirstOrDefault(),
@@ -881,6 +903,7 @@ public partial class TopDownMain : Node3D
             System.Numerics.Vector2? at = _follow switch
             {
                 "fish" => _world.Fish.OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
+                "boss" => _world.Boss is { } b ? b.Position : null,
                 "mob" => _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault(),
                 _ => _world.ReefFish.Where(f => f.Kind.ToString().Equals(_follow, StringComparison.OrdinalIgnoreCase))
                     .OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
@@ -1164,7 +1187,7 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.BossFreed)
                 {
                     _camera.Shake(0.4f);
-                    Say($"{PlaneBossTuning.Name} is freed!");
+                    Say($"{_world.Boss?.Spec.Name ?? PlaneBossTuning.Name} is freed!");
                 }
             }
         }

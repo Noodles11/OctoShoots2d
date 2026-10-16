@@ -36,6 +36,7 @@ public partial class HudView : Control
     public string LevelTitle = "";
 
     float _bossHp, _bossTrail, _bossShown, _bossFlash, _bossHold;
+    string _bossName = "";
     int _bossCrust;
     bool _bossFight;
     string _prompt = "";
@@ -46,6 +47,7 @@ public partial class HudView : Control
     {
         // Queen Clam's bar: shown while the fight runs, fading out once she is freed.
         var boss = world.Boss;
+        if (boss is not null) _bossName = boss.Spec.Name.ToUpperInvariant();
         _bossFight = boss is { Stage: BossStage.Fight };
         _bossShown = Mathf.MoveToward(_bossShown, _bossFight ? 1f : 0f, dt * 2f);
         if (boss is not null)
@@ -150,13 +152,13 @@ public partial class HudView : Control
             DrawString(font, lat + new Vector2(0f, lsize.Y - 4f), LevelTitle, HorizontalAlignment.Left, -1, 16, new Color(1f, 0.93f, 0.82f, 0.9f));
         }
 
-        // Queen Clam's health, under the clock.
+        // The boss's health, under the clock.
         if (_bossShown > 0.01f)
         {
             const float bw = 460f, bh = 14f;
             var b = new Vector2((Size.X - bw) * 0.5f, Margin + 52f);
             float a = _bossShown;
-            string name = PlaneBossTuning.Name.ToUpperInvariant();
+            string name = _bossName;
             var ns = font.GetStringSize(name, HorizontalAlignment.Left, -1, 15);
             DrawStringOutline(font, new Vector2((Size.X - ns.X) * 0.5f, b.Y - 6f), name, HorizontalAlignment.Left, -1, 15, 4, new Color(0f, 0f, 0f, 0.7f * a));
             DrawString(font, new Vector2((Size.X - ns.X) * 0.5f, b.Y - 6f), name, HorizontalAlignment.Left, -1, 15, new Color(1f, 0.93f, 0.85f, a));

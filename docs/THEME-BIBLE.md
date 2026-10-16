@@ -161,23 +161,34 @@ Master rule: warmth belongs to Clementine and to healthy life; artificiality is 
 Clementine, always: body tangerine #FF8C42, glow warm gold #FFC46B, hurt flash magenta #FF3D7F. She is the only hue that never changes with depth.
 Landmark light language (fixed): treasure gold, shop green, curse red, secret violet — no beacon (found, not advertised), the Crack orange, start white, item cache teal (matching the treasure-pool family), ambushes coral #FF7F6B — warm but not gold, so they never read as treasure.
 
-### 6.4 The corruption language (fixed from the bestiary proposal; adopt it)
+### 6.4 The corruption language (fixed)
 
-Corruption is readable at 30 m through mist via three stacked tells:
+Corruption shows as **mutation**: the Leak rewrites bodies from the inside. Nothing is worn and nothing man-made
+appears on a creature. It reads at 30 m through mist via three stacked tells:
 
-1. Tank colours — the real GloFish/dyed-fish palette: electric green #7CFC4D, starfire red #FF4D5E, cosmic blue #4D6BFF, galactic purple #B04DFF, sunburst orange #FF9436, moonrise pink #FF6BCB — in patterns that don’t belong to the species (stripes on a spotted fish, spots on a striped one).
-2. Plastic sheen + warm shimmer — a glossy, manufactured finish and a faint slow warm glow (the Leak) showing through fog, so a threat reads from afar.
-3. A piece of the tank — one aquarium object per species: the ninja’s headband now flutters a price tag; the Spanish Dancer wears blue gravel along its back; the Pufferling has a fish-shop tag clipped to its tail; the Barracuda trails a plastic plant from its jaw; corrupted moon jellies cycle LED colours (healthy jellies are pale and steady); the Sea Urchin has a plastic castle shard in its spines; Crabby wears a bottle cap, decorator-crab style; the Moray’s hole is framed by plastic leaves.
+1. Wrong anatomy — parts that do not belong: extra limbs crowding in, two bodies' worth of parts fused into one, glossy
+   ink sacs swelling along the body (they swell before the attacks that come from them), a shell that keeps growing
+   past the animal, spines grown inward. Never a face: no second mouth, no split head, nothing that glares or grins.
+2. The ink look — glossy, light-drinking black spreading from the mutation sites like a stain under the skin, a cold
+   violet rim, the rest of the body drained toward ash.
+3. The drip — ink droplets welling up from the mutated places and lifting off upward, so the creature carries its own
+   weather; denser where the mutation is thickest.
 
-Healthy twins wear natural colours, carry nothing, are never targets (bubbles pass through, aim assist ignores them, they stay off the minimap). Ratio healthy:corrupted ≈ 2:1 at Depth 1 → 1:1 at Depth 3 → 1:3 at Depth 6.
+How far it has gone follows Menace (§6.6): a touch at Depth 1, most of the body deep down.
+
+Healthy twins wear natural colours, carry no mutation, are never targets (bubbles pass through, aim assist ignores
+them, they stay off the minimap). Ratio healthy:corrupted ≈ 2:1 at Depth 1 → 1:1 at Depth 3 → 1:3 at Depth 6.
 
 ### 6.5 The freeing moment (adopt the proposal)
 
-- Shudder (0.3 s) as tank colours wash out.
-- Poof — a burst of bright bubbles with a soft popping chime; the piece of the tank drops and sinks (gravel scatters, the tag spins away, the bottle cap rolls).
-- True colours flood back; loot drops.
-- It carries on healthy — the fish swims off, jellies drift up, urchin spines lie down, the crab scuttles away, the moray slides home — slowly, and once it is out of the visible screen it is gone. Freed creatures never help Clementine and are never targets. Bosses free the same way at bigger scale, colours flooding back over the whole arena.
-This replaces every death burst. It must read as relief, not victory.
+- Shudder (0.3 s); the corrupted pearl (every boss holds one) bursts into white light and stays where it sat.
+- The mutations melt back into the body with the ink; the drip turns gold, drop by drop.
+- Poof — a burst of bright bubbles with a soft popping chime. True colours flood back; loot drops.
+- It carries on healthy, its true body smaller and whole — the fish swims off, jellies drift up, urchin spines lie
+  down, the crab scuttles away, the moray slides home — slowly, and once it is out of the visible screen it is gone.
+  Freed creatures never help Clementine and are never targets. Bosses free the same way at bigger scale, colours
+  flooding back over the whole arena.
+This replaces every death burst. It must read as relief, not victory. Mutations melt; they never shatter.
 
 ### 6.6 Visual menace ramp (fixed)
 
@@ -201,6 +212,9 @@ The comic onomatopoeia is retired; comic-cover boss title cards survive (“CLEM
 Marine snow between camera and level · faint refraction wobble · vignette deepening with depth · chromatic aberration on hurt only · cool grade · depth-focus blur. God rays rake across the view, never into the lens. Caustics on upward faces, fading with depth.
 
 ## 7. The seven depths as themed acts
+
+Bosses are grown by the boss generator (docs/BOSS-GENERATOR.md) — each run meets its own — except The Hand, the
+Tank's, which is authored. The bosses named below set each depth's tone; they are not fixed rosters.
 
 Each depth is three reefs of one biome (the Tank single), each reef a 150×150 m seeded square ringed by impassable reef wall, each a little meaner (+0.04 menace). HUD reads DEPTH x · REEF y/3.
 
@@ -300,7 +314,7 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
 ## 12. Theme tests — run every new idea through these
 
 - The Warmth Test: is Clementine still the warmest light in the scene?
-- The Read-at-Range Test: does a corrupted creature read as corrupted at 30 m through mist — colour, sheen, and the piece of the tank?
+- The Read-at-Range Test: does a corrupted creature read as corrupted at 30 m through mist — wrong anatomy, the ink look, and the drip?
 - The Bell Test: does this item/system show on her body? If it can’t, why not?
 - The Freeing Test: could this moment be mistaken for a kill? Fix it.
 - The Sadness Test: does this feature respect the Menace ramp — quieter, darker, lonelier downward?

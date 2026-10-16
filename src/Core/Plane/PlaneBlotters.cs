@@ -54,6 +54,8 @@ public static class BlotterTuning
 public sealed class CorruptionBomb
 {
     public Vector2 From, To;
+    /// <summary>A boss's arc bomb (gone when it is freed).</summary>
+    public bool FromBoss;
     public float Age;
     /// <summary>How far along its flight it is, 0..1.</summary>
     public float T => MathF.Min(Age / BlotterTuning.BombSeconds, 1f);

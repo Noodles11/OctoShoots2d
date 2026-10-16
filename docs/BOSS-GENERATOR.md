@@ -67,7 +67,7 @@ bell is about 0.8 m; the arena is 30 m across); bosses span 3.5–6 m mutated.
 |---|---|---|---|---|---|
 | **Bivalve** | giant clam | two ribbed valves on a hinge, mantle, lid edge; sockets: *mantle centre*, *lid lip*, *hinge*, *valve flanks* | hold, turn in place | sand shell, blue-teal mantle | 30 / 15 / 5 |
 | **Echinoderm** | sea star or urchin (sub-rolled) | star: a central disc with 5 arms (tube-foot undersides); urchin: a test with a spine coat; sockets: *disc centre*, *arm tips*, *between spines*, *underside* | hold, turn in place, creep | coral orange or plum purple | 30 / 20 / 10 |
-| **Cnidarian** | moon jelly or siphonophore (sub-rolled) | bell (or a chain of bells) with oral arms and trailing tentacles; sockets: *heart of the bell*, *bell rim*, *oral arms*, *tentacle roots* | drift, pulse-dash, circle slowly | milky translucent, faint pink gonads | 20 / 25 / 25 |
+| **Cnidarian** | moon jelly or siphonophore (sub-rolled) | a bell with oral arms and a fringe of tentacles, or a colony of small bells coiled in a ring (its pearl travels round the ring) trailing a curtain of tentacles; sockets: *heart of the bell*, *bell rim*, *tentacle roots* | drift, pulse-dash, circle slowly | milky translucent, faint pink gonads | 20 / 25 / 25 |
 | **Gastropod** | sea hare or snail (sub-rolled) | a soft foot and mantle, parapodia flaps or a coiled shell, rhinophores (never eyes); sockets: *mantle flaps*, *under the shell lip*, *foot*, *shell apex* | creep, turn | sea hare brown-olive with pale rings, or snail cream shell over grey | 20 / 25 / 20 |
 
 ### 3.2 Later passes
@@ -123,7 +123,8 @@ Three tells, always all three (the Read-at-Range test, THEME-BIBLE §12):
    - Echinoderm: *extra arms* (two to four too many, crowding), *inverted spines* (spines grown inward through the
      test), *ink sacs* on the disc.
    - Cnidarian: *fused bells* (two bells grown into one), *extra tentacle cluster*, *ink sacs* in the bell.
-   - Gastropod: *overgrown shell* (it swallows the foot), *extra flaps*, *ink sacs* along the mantle.
+   - Gastropod: a snail's *overgrown shell* (a second crooked whorl swallowing the foot), a sea hare's *extra flaps*,
+     *extra tentacles* growing off the back, *ink sacs* along the mantle.
    No mutation is a face: no second mouth, no split head, nothing that grins (the No-Villain test).
 2. **Ink look** — the shared corruption shading: glossy, light-drinking black spreading from the mutation sites like
    a stain under the skin, a cold violet rim, the rest of the body drained toward ash. The pearl is the blackest
@@ -141,6 +142,8 @@ the body darkens and the rim brightens — the same roll at Depth 1 and Depth 6 
 
 - **Mount**: a socket of the rig, named by the concept (mantle centre, heart of the bell, disc centre, between the
   spines, under the shell lip, inside the largest sac). It sits on her plane: her light must be able to reach it.
+- A Coax-out body is soft: her light passes over it to the sacs and, once they are burst, to the pearl. A body whose
+  pearl is shut away (a closed lid, a stagger boss between windows) stops her shots and Firefly Squid's surge.
 - **Exposure rule**:
   - *Open moments* — reachable only while the body opens (lid, bell, mantle) on its own cycle.
   - *Stagger* — exposed for 1.2–2 s after its big attack.
@@ -168,7 +171,6 @@ easing by the level cleansed, the freeing) is the one Queen Clam has today, shar
 | Arc bombs | foot, disc, tentacle roots | the body rears, sacs swell | the Blotter's mortar and landing ring; stains the floor |
 | Ink pulse ring | disc, bell rim | the body clenches | Blightroot's ring: stains, snuffs her shots, one hit per ring |
 | Sac burst | ink sacs (only if rolled) | the sac swells and darkens | short radial burst; a burst sac is gone |
-| Bud murklings | the stained floor near it | the ink bubbles | capped (2 + Menace) alive at once |
 
 Shots are ink (`BossPearl` class): her light cannot clear them; they stop at the sealed rim.
 
@@ -185,8 +187,9 @@ no line of sight needed) or *vibration* (aims where she was when she last dashed
 
 Count: Depths 1–2: 1–2 · Depth 3: 2 · Depths 4–6: 2–3 (Legendary: 3). Triggered by the pearl's meter (50 %, or
 33 % and 66 %), never by time. Each change is one of: a new attack joins, the tempo quickens, the window shortens,
-the mutation advances (a sac splits open, an extra arm unfolds — visible on the body). A phase change always comes
-with a short stagger (a free window), as Queen Clam's does.
+the mutation advances (a sac splits open, an extra arm unfolds — visible on the body; a Coax-out boss's sacs grow
+back, one fewer each time). A phase change always comes with a short stagger (1.5 s without attacks), as Queen Clam's
+does.
 
 ### 7.4 Budgets (what keeps it fair and fun)
 
@@ -196,7 +199,7 @@ with a short stagger (a free window), as Queen Clam's does.
 | Telegraph | ≥ 0.8 s | ≥ 0.35 s |
 | Window per cycle | ≥ 1.2 s and ≥ 30 % of the cycle | ≥ 1.0 s and ≥ 20 % |
 | Hit damage | 12 | 18 |
-| Pearls in flight | ≤ 30 | ≤ 60 |
+| Pearls in flight | ≤ 45 | ≤ 75 |
 | Fight length, played well | 60–90 s | 90–150 s |
 
 The generator scales each concept's numbers into these and the validator checks them.
@@ -245,8 +248,9 @@ did, never the Leak itself, and never imply intent.
 | Rare | 25 % | Rare concepts open, 2 fillers, asymmetry, a minor mutation theme |
 | Legendary | 5 % | Legendary concepts open (Boil Heart), an advancing mutation, 3 phases |
 
-Wildcards (twin bloom, molting, the stolen light, regret, twice-taken) and arena modifiers (ink walls, Blightroot ring,
-budding, shifting safe disc, dimming) join in a later pass, Legendary and Depth 3+ only.
+Wildcards (twin bloom, molting, the stolen light, regret, twice-taken), arena modifiers (ink walls, Blightroot ring,
+budding, shifting safe disc, dimming) and the murkling-budding attack join in a later pass, Legendary and Depth 3+
+only (budding waits on the sealed arena letting murklings in).
 
 ## 12. The freeing
 
@@ -261,7 +265,11 @@ a clam shuffles aside and lies open — and is gone once off screen. The Crack o
   exposes its sockets, and animates from the sim's state (open, telegraph, pulse, creep, stagger, freeing).
 - One **boss shader** for all rigs: true colour ↔ ash by `drained`, the ink stain mask from the mutation sites and the
   pearl (glossy black, violet rim), shell/skin/jelly variants by plan.
-- Shared arena pieces (shadow, landing wave, mud cloud, snap rim, banner) stay in `BossView`.
+- Shared pieces stay in `BossView`: the pearl (where the sim has it), the crust (lumps gathered on the mutation sites
+  and over the pearl, two a layer; the stain deepens with the crust too), the drip, the pulse rings, the sacs bursting,
+  the freeing, and the arena (shadow, landing wave, mud cloud, snap rim). A hit only brightens the body a little.
+- Verification: `--boss=<Concept>` (or `queen`) names the boss, `--boss-level` starts on the depth's boss level,
+  `--at=boss-near` and `--dbg-follow=boss` frame it.
 
 ## 14. Tests
 

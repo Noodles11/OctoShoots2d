@@ -344,9 +344,13 @@ public sealed partial class PlaneWorld
     /// <summary>What one ray has touched so far (each once per ray).</summary>
     readonly HashSet<object> _surgeTouched = new();
 
-    /// <summary>Queen Clam's shell, while it is shut: the surge stops on it.</summary>
+    /// <summary>
+    /// A boss's body while its pearl is shut away: the surge stops on it (a Coax-out body lets it reach its sacs; an open
+    /// body lets it over to the pearl).
+    /// </summary>
     bool ClamShellAt(Vector2 at) =>
-        Boss is { Stage: BossStage.Fight, Open: false } boss && Vector2.Distance(at, boss.PearlAt) < PlaneBossTuning.BodyRadius;
+        Boss is { Stage: BossStage.Fight, Open: false } boss && boss.Spec.Exposure != OctoShoots.Core.Bosses.Exposure.CoaxOut
+        && Vector2.Distance(at, boss.Position) < boss.Radius;
 
     /// <summary>Every creature a circle at p (radius r) touches: pufferlings, murklings, Blotters, Blightroot sacs, Queen Clam's open core.</summary>
     IEnumerable<object> SurgeTouches(Vector2 p, float r)
@@ -359,7 +363,12 @@ public sealed partial class PlaneWorld
             if (b.Alive && b.Rise <= 0f && b.Touches(p, r)) yield return b;
         foreach (var root in Blightroots)
             if (root.Alive && Vector2.Distance(root.Position, p) < BlightTuning.SacRadius + r) yield return root;
-        if (Boss is { Stage: BossStage.Fight, Open: true } boss && Vector2.Distance(boss.PearlAt, p) < PlaneBossTuning.CoreRadius + r) yield return boss;
+        if (Boss is { Stage: BossStage.Fight } boss)
+        {
+            foreach (var sac in boss.Sacs)
+                if (sac.Alive && Vector2.Distance(boss.SacAt(sac), p) < PlaneBossTuning.SacRadius * (0.6f + sac.Site.Size) + r) yield return sac;
+            if (boss.Open && Vector2.Distance(boss.PearlAt, p) < boss.Spec.PearlRadius + r) yield return boss;
+        }
     }
 
     /// <summary>Anglerfish Lure: the one creature nearest a point, ahead of it and within reach.</summary>
@@ -393,6 +402,7 @@ public sealed partial class PlaneWorld
         Blotter b when b.Alive && b.Rise <= 0f => b.Position,
         Blightroot r when r.Alive => r.Position,
         PlaneBoss { Stage: BossStage.Fight, Open: true } boss => boss.PearlAt,
+        BossSac sac when sac.Alive && Boss is { } owner => owner.SacAt(sac),
         _ => null,
     };
 
@@ -449,6 +459,12 @@ public sealed partial class PlaneWorld
                     float hurt = light * (1f - 0.17f * boss.Crust);
                     _surgeTally[target] = told + hurt;
                     DamageBoss(boss, hurt, Vector2.Zero, quiet: true);
+                    break;
+                case BossSac sac:
+                    if (!sac.Alive || Boss is not { } owner) break;
+                    _surgeTally[target] = told + light;
+                    DamageSac(owner, sac, light, Vector2.Zero, quiet: true);
+                    if (!sac.Alive) _surgeTally.Remove(target);
                     break;
                 case PlaneVase vase:
                     if (vase.Broken) break;
@@ -507,6 +523,9 @@ public sealed partial class PlaneWorld
                     break;
                 case PlaneBoss boss when boss.Stage == BossStage.Fight:
                     Events.Add(new PlaneEvent(PlaneEventType.BossHit, boss.Position, Vector2.Zero, light));
+                    break;
+                case BossSac sac when sac.Alive && Boss is { } owner:
+                    Events.Add(new PlaneEvent(PlaneEventType.BossHit, owner.SacAt(sac), Vector2.Zero, light));
                     break;
                 case PlaneVase vase when !vase.Broken:
                     Events.Add(new PlaneEvent(PlaneEventType.VaseHit, vase.Position, Vector2.Zero));
