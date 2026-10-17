@@ -21,12 +21,12 @@ public static class PearlMaterials
         Color c1 = Color.FromHtml(look.Colors[Math.Min(1, look.Colors.Count - 1)]);
         Color c2 = Color.FromHtml(look.Colors[^1]);
         var material = new ShaderMaterial { Shader = _shader };
-        material.SetShaderParameter("c0", c0);
-        material.SetShaderParameter("c1", c1);
-        material.SetShaderParameter("c2", c2);
-        material.SetShaderParameter("pattern", (int)look.Pattern);
-        material.SetShaderParameter("seed", (float)(StringComparer.Ordinal.GetHashCode(item.Id) % 97));
-        material.SetShaderParameter("glow", 1.2f);
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), c0);
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), c1);
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), c2);
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)look.Pattern);
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), (float)(StringComparer.Ordinal.GetHashCode(item.Id) % 97));
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow"), 1.2f);
         Cache[item.Id] = material;
         return material;
     }

@@ -134,7 +134,7 @@ public partial class MinimapView : Control
         _place.Modulate = new Color(1f, 1f, 1f, _placeAlpha);
     }
 
-    public void SetMap(LevelMap map) => _map.SetMap(map);
+    public void SetMap(LevelMap map, IEnumerable<int>? sealedCaves = null) => _map.SetMap(map, sealedCaves);
 
     /// <summary>Her arrow on the map (her colour).</summary>
     public Color ArrowColor
@@ -181,7 +181,7 @@ public partial class MinimapView : Control
 
     public void SetBlight(PlaneWorld world) => FillBlight(_map, world);
 
-    /// <summary>Copies the world's Blightroots, valves and light springs onto a map.</summary>
+    /// <summary>Copies the world's Blightroots, Blotters and light springs onto a map.</summary>
     public static void FillBlight(TopoMap map, PlaneWorld world)
     {
         map.Blights.Clear();
@@ -192,8 +192,6 @@ public partial class MinimapView : Control
         // A spent spring is gone from the maps too.
         foreach (var sp in world.Springs)
             if (!sp.Spent) map.Springs.Add((sp.Position, sp.Bathing));
-        map.Valves.Clear();
-        foreach (var v in world.Valves) map.Valves.Add((v.Center - v.Across * v.HalfWidth, v.Center + v.Across * v.HalfWidth, v.Seen, v.Cleared));
     }
 
     public void SetVisited(IReadOnlySet<int> visited) => _map.Visited = visited;

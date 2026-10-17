@@ -48,7 +48,7 @@ public partial class SurgeView : Node3D
         for (int i = 0; i < MaxGlows; i++)
         {
             var g = new MeshInstance3D { Mesh = quad, MaterialOverride = _glow, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
-            g.SetInstanceShaderParameter("seed", i * 0.37f);
+            g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), i * 0.37f);
             AddChild(g);
             _glows.Add(g);
         }
@@ -133,8 +133,8 @@ public partial class SurgeView : Node3D
             float flicker = 0.85f + 0.15f * Mathf.Sin(_time * 40f + i * 2.1f);
             g.Position = new Vector3(at.X, LevelMap.SwimBand, at.Y);
             g.Scale = Vector3.One * size * (0.8f + 0.2f * surge.Power) * flicker;
-            g.SetInstanceShaderParameter("lantern", Mathf.Min(1f, 0.55f * bright));
-            g.SetInstanceShaderParameter("warmth", 0.6f);
+            g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), Mathf.Min(1f, 0.55f * bright));
+            g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), 0.6f);
         }
         var tip = (middle ?? surge.Rays[0]).Tip;
         bool grounded = middle is { Blocked: false };

@@ -10,7 +10,7 @@ using Xunit;
 
 namespace OctoShoots.Core.Tests;
 
-/// <summary>The corruption war (docs/CORRUPTION.md): the field, Blightroots, murklings, valves and the arena.</summary>
+/// <summary>The corruption war (docs/CORRUPTION.md): the field, Blightroots, murklings and the arena.</summary>
 public class CorruptionTests
 {
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
@@ -441,21 +441,6 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void PassingAValveCostsHpAndClearsItForGood()
-    {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && (p.Caches > 0 || p.Secrets > 0 || p.Curses > 0));
-        Quiet(w);
-        Assert.NotEmpty(w.Valves);
-        var v = w.Valves[0];
-        float hp = w.Player.Hp;
-        // Swim straight through it.
-        w.Player.Position = w.Player.PrevPosition = v.Center - v.Normal * 2.5f;
-        for (int i = 0; i < 120 && !v.Cleared; i++) w.Step(new PlaneInput { Move = v.Normal });
-        Assert.True(v.Cleared);
-        Assert.True(w.Player.Hp < hp);
-    }
-
-    [Fact]
     public void TheArenaIsCondensedAndItsCleansingStripsTheCrust()
     {
         var code = TestLevels.Seed;
@@ -633,6 +618,83 @@ public class CorruptionTests
         var shot = Assert.Single(w.MurkShots);
         Assert.True(Vector2.Dot(Vector2.Normalize(shot.Velocity), Vector2.Normalize(her - m.Position)) > 0.95f);
         Assert.True(m.ThrowAge < 0.05f);
+    }
+
+    static Murkling BudAt(PlaneWorld w, Vector2 at, bool prime) =>
+        (Murkling)typeof(PlaneWorld).GetMethod("Bud", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(w, new object[] { at, -1, prime })!;
+
+    /// <summary>The densest open cell of the level at least this far from her.</summary>
+    static Vector2 DenseSpot(PlaneWorld w, float away)
+    {
+        var field = w.Corruption!;
+        int best = -1;
+        for (int i = 0; i < field.Density.Length; i++)
+        {
+            var c = CellAt(i);
+            if (field.Density[i] < 0.95f || Vector2.Distance(c, w.Player.Position) < away || !w.Clear(c, 2f)) continue;
+            best = i;
+            break;
+        }
+        Assert.True(best >= 0);
+        return CellAt(best);
+    }
+
+    [Fact]
+    public void ABudSucksUpTheInkUnderIt()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var at = DenseSpot(w, 20f);
+        float before = w.Corruption!.Total;
+        var m = BudAt(w, at, prime: false);
+        var bud = w.Events.Single(e => e.Type == PlaneEventType.MurklingBud);
+        Assert.Equal(BlightTuning.SuckRadius, bud.Direction.X);
+        Assert.True(bud.Direction.Y > 0.5f, "the ink it will gather");
+        for (int i = 0; i < (int)(BlightTuning.BudSeconds * 60f) + 2; i++) w.Step(default);
+        Assert.False(m.Budding);
+        Assert.True(w.Corruption.At(at) < 0.05f, "the ground under it is drunk clean");
+        Assert.True(w.Corruption.Total < before - 2f);
+    }
+
+    [Fact]
+    public void AMurklingPrimeIsFiveTimesTheSizeScaledUpAndAlwaysLeavesShells()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var at = DenseSpot(w, 12f);
+        var m = BudAt(w, at, prime: true);
+        Assert.True(m.Prime);
+        Assert.Equal(BlightTuning.MurkRadius * 5f, m.Radius, 3);
+        Assert.True(m.Body < m.Radius, "it squeezes through the passes");
+        Assert.Equal(BlightTuning.MurkCorruption * 5f, m.Corruption.Max, 2);
+        Assert.Equal(BlightTuning.Sense * 1.5f, m.Sense, 3);
+        Assert.Equal(BlightTuning.PrimeSuck, w.Events.Single(e => e.Type == PlaneEventType.MurklingBud).Direction.X);
+        for (int i = 0; i < (int)(BlightTuning.PrimeBud * 60f) + 2; i++) w.Step(default);
+        Assert.False(m.Budding);
+
+        // Its throw: a bigger drop, hitting harder, after a longer bend.
+        var her = w.Player.Position;
+        m.Position = her + new Vector2(0f, -11f);
+        Assert.True(w.LineOfSight(m.Position, her));
+        m.ThrowTimer = 0f;
+        MurkShot? shot = null;
+        for (int i = 0; i < 120 && shot is null; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = her;
+            w.Player.Hp = 100f;
+            w.Step(default);
+            shot = w.MurkShots.FirstOrDefault();
+        }
+        Assert.NotNull(shot);
+        Assert.Equal(BlightTuning.ThrowDamage * 2.5f, shot!.Damage, 2);
+        Assert.Equal(BlightTuning.ThrowRadius * 2.5f, shot.Radius, 3);
+
+        // Freed: it always leaves shells.
+        int shells = w.Shells.Count;
+        w.Shots.Add(Light(m.Position, m.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.False(m.Alive);
+        Assert.InRange(w.Shells.Count - shells, BlightTuning.PrimeShellsMin, BlightTuning.PrimeShellsMax + 3);
     }
 
     static void Quiet(PlaneWorld w)

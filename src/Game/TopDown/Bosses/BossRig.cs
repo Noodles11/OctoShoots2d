@@ -70,8 +70,8 @@ public abstract partial class BossRig : Node3D
     protected virtual ShaderMaterial MakeSkin()
     {
         var m = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/boss_body.gdshader") };
-        m.SetShaderParameter("body_color", ToColor(Spec.TrueColor));
-        m.SetShaderParameter("accent_color", ToColor(Spec.Accent));
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("body_color"), ToColor(Spec.TrueColor));
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("accent_color"), ToColor(Spec.Accent));
         return m;
     }
 
@@ -85,9 +85,9 @@ public abstract partial class BossRig : Node3D
         foreach (var g in Skinned)
         {
             if (!IsInstanceValid(g)) continue;
-            g.SetInstanceShaderParameter("drained", drained);
-            g.SetInstanceShaderParameter("flash", flash);
-            g.SetInstanceShaderParameter("surge", surge);
+            g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("drained"), drained);
+            g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("flash"), flash);
+            g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("surge"), surge);
             // Leaving, it fades out (any material: the instance's own transparency).
             g.Transparency = 1f - fade;
         }
@@ -159,9 +159,9 @@ public abstract partial class BossRig : Node3D
         var at = Surface(site.Angle, site.Out);
         float size = (0.22f + site.Size * 0.5f) * (0.8f + 0.5f * Spec.Mutation);
         var sac = new MeshInstance3D { Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 18, Rings = 9 }, MaterialOverride = _orb };
-        sac.SetInstanceShaderParameter("ember", 0.12f);
-        sac.SetInstanceShaderParameter("wobble", 0.35f);
-        sac.SetInstanceShaderParameter("seed", site.Angle * 3.1f);
+        sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.12f);
+        sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.35f);
+        sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), site.Angle * 3.1f);
         var holder = new Node3D { Position = at + Vector3.Up * size * 0.45f, Scale = Vector3.One * size };
         holder.AddChild(sac);
         return holder;

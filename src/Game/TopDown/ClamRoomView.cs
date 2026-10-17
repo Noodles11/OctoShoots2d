@@ -61,12 +61,12 @@ public partial class ClamRoomView : Node3D
                 room.Inner.LightColor = room.Tint;
                 var look = item.Pearl ?? new OctoShoots.Core.Items.PearlLook { Colors = { "#ffffff" } };
                 var m = room.Nacre;
-                m.SetShaderParameter("glow_pos", new Vector3(poi.Position.X, RestHeight, poi.Position.Y));
-                m.SetShaderParameter("glow_c0", Color.FromHtml(look.Colors[0]));
-                m.SetShaderParameter("glow_c1", Color.FromHtml(look.Colors[System.Math.Min(1, look.Colors.Count - 1)]));
-                m.SetShaderParameter("glow_c2", Color.FromHtml(look.Colors[^1]));
-                m.SetShaderParameter("glow_pattern", (int)look.Pattern);
-                m.SetShaderParameter("glow_seed", (float)(System.StringComparer.Ordinal.GetHashCode(item.Id) % 97));
+                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_pos"), new Vector3(poi.Position.X, RestHeight, poi.Position.Y));
+                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_c0"), Color.FromHtml(look.Colors[0]));
+                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_c1"), Color.FromHtml(look.Colors[System.Math.Min(1, look.Colors.Count - 1)]));
+                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_c2"), Color.FromHtml(look.Colors[^1]));
+                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_pattern"), (int)look.Pattern);
+                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_seed"), (float)(System.StringComparer.Ordinal.GetHashCode(item.Id) % 97));
                 room.Spill.LightColor = room.Tint;
             }
             _rooms.Add(room);
@@ -113,7 +113,8 @@ public partial class ClamRoomView : Node3D
 
         // The light: filling the room, and spilling out of its mouth into the canyon.
         // The pearl's light: just over it, filling the room in its colour.
-        var inner = new OmniLight3D { LightColor = Gold, LightEnergy = 1.2f * bright, OmniRange = 10f, OmniAttenuation = 0.7f, ShadowEnabled = false, Position = new Vector3(at.X, RestHeight + 1.4f, at.Y) };
+        // Shadowed: the room's flora and motes throw shadows over the nacre.
+        var inner = new OmniLight3D { LightColor = Gold, LightEnergy = 1.2f * bright, OmniRange = 10f, OmniAttenuation = 0.7f, ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, OmniShadowMode = OmniLight3D.ShadowMode.DualParaboloid, ShadowBias = 0.08f, ShadowBlur = 1.5f, Position = new Vector3(at.X, RestHeight + 1.4f, at.Y) };
         root.AddChild(inner);
         var mouth = cave.Mouth + cave.Facing * 3f;
         var spill = new OmniLight3D { LightColor = Gold, LightEnergy = 2f * bright, OmniRange = 11f, OmniAttenuation = 1.4f, ShadowEnabled = false, Position = new Vector3(mouth.X, LevelMap.SwimBand + 3f, mouth.Y) };
@@ -162,11 +163,11 @@ public partial class ClamRoomView : Node3D
             // Its pearl still waiting? Once taken (or being absorbed), the motes dissolve and its light fades out.
             bool waiting = world.Pearls.Any(p => p.Position == room.At && !p.Taken && !p.Absorbing);
             room.Gone = Mathf.MoveToward(room.Gone, waiting ? 0f : 1f, dt / 1.2f);
-            room.Sparks.SetShaderParameter("gone", room.Gone);
+            room.Sparks.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("gone"), room.Gone);
             float k = 1f - room.Gone;
             room.Inner.LightEnergy = 1.2f * room.Bright * k;
             // The pearl's patterned light over the room, fading out once it is taken.
-            room.Nacre.SetShaderParameter("glow_strength", 1.3f * room.Bright * k);
+            room.Nacre.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_strength"), 1.3f * room.Bright * k);
             room.Spill.LightEnergy = 2f * room.Bright * k;
             room.Inner.Visible = room.Spill.Visible = k > 0.001f;
             room.Drift.Emitting = room.Gone < 0.5f;

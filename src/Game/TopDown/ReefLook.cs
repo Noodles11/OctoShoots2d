@@ -38,6 +38,11 @@ public sealed record ReefLook
     public required float Vignette { get; init; }
     /// <summary>How thick the veil over the deeps is (0 crystal, 1 murk).</summary>
     public required float Fog { get; init; }
+    /// <summary>
+    /// Her lantern against the depth (DESIGN-TOPDOWN §5.1 player glow): how strong and far her light carries, 1 in the
+    /// sunlit Shallows (supplemental), growing as the sun fails until she is the lantern of the Trench and the Abyss.
+    /// </summary>
+    public float Lantern { get; init; } = 1f;
     /// <summary>Contrast after tone mapping (1 neutral): the Shallows want punchy light and shade.</summary>
     public float Contrast { get; init; } = 1f;
     /// <summary>The flora's palette: low and high ends for each of two variants per species group.</summary>
@@ -62,7 +67,7 @@ public sealed record ReefLook
             Algae = L(a.Algae, b.Algae), Sponge = L(a.Sponge, b.Sponge), Butter = L(a.Butter, b.Butter),
             Sun = L(a.Sun, b.Sun), SunEnergy = F(a.SunEnergy, b.SunEnergy), Ambient = L(a.Ambient, b.Ambient), AmbientEnergy = F(a.AmbientEnergy, b.AmbientEnergy),
             Caustics = F(a.Caustics, b.Caustics), Rays = F(a.Rays, b.Rays), Menace = F(a.Menace, b.Menace), Saturation = F(a.Saturation, b.Saturation),
-            Vignette = F(a.Vignette, b.Vignette), Fog = F(a.Fog, b.Fog), Contrast = F(a.Contrast, b.Contrast),
+            Vignette = F(a.Vignette, b.Vignette), Fog = F(a.Fog, b.Fog), Contrast = F(a.Contrast, b.Contrast), Lantern = F(a.Lantern, b.Lantern),
             FanA = L(a.FanA, b.FanA), FanB = L(a.FanB, b.FanB), SoftCoral = L(a.SoftCoral, b.SoftCoral), HardCoral = L(a.HardCoral, b.HardCoral), Grass = L(a.Grass, b.Grass),
         };
     }
@@ -97,7 +102,7 @@ public sealed record ReefLook
         WaterShallow = C("#8FBF6F"), WaterDeep = C("#2E7D5B"), Murk = C("#173F31"),
         Sand = C("#B9B07E"), Rock = C("#5C6E46"), Coral = C("#C88AA0"), Coral2 = C("#8C8FBF"), Algae = C("#7FA84A"),
         Sun = C("#E8D878"), SunEnergy = 0.95f, Ambient = C("#7FB88A"), AmbientEnergy = 0.7f,
-        Caustics = 0.6f, Rays = 0.75f, Menace = 0.15f, Saturation = 1f, Vignette = 0.4f, Fog = 0.45f,
+        Caustics = 0.6f, Rays = 0.75f, Menace = 0.15f, Saturation = 1f, Vignette = 0.4f, Fog = 0.45f, Lantern = 1.1f,
     };
 
     public static readonly ReefLook Galleon = Shallows with
@@ -106,7 +111,7 @@ public sealed record ReefLook
         WaterShallow = C("#6B7A84"), WaterDeep = C("#4A5A66"), Murk = C("#1F272E"),
         Sand = C("#9C8C6A"), Rock = C("#7A5230"), Coral = C("#B07A6A"), Coral2 = C("#8A4B2E"), Algae = C("#6E7A4A"),
         Butter = C("#D9A441"), Sun = C("#F2C14E"), SunEnergy = 0.7f, Ambient = C("#6A7680"), AmbientEnergy = 0.5f,
-        Caustics = 0.3f, Rays = 0.5f, Menace = 0.35f, Saturation = 0.9f, Vignette = 0.5f, Fog = 0.55f,
+        Caustics = 0.3f, Rays = 0.5f, Menace = 0.35f, Saturation = 0.9f, Vignette = 0.5f, Fog = 0.55f, Lantern = 1.35f,
     };
 
     public static readonly ReefLook Carnival = Shallows with
@@ -115,7 +120,7 @@ public sealed record ReefLook
         WaterShallow = C("#5A3E8A"), WaterDeep = C("#3A2A5E"), Murk = C("#1A1230"),
         Sand = C("#6E5A8A"), Rock = C("#4A3A6A"), Coral = C("#B44FD0"), Coral2 = C("#FF4FA3"), Sponge = C("#2FF3E0"), Butter = C("#9B5CFF"),
         Sun = C("#C9A8FF"), SunEnergy = 0.35f, Ambient = C("#5A4A8A"), AmbientEnergy = 0.45f,
-        Caustics = 0f, Rays = 0f, Menace = 0.5f, Saturation = 1.15f, Vignette = 0.6f, Fog = 0.6f,
+        Caustics = 0f, Rays = 0f, Menace = 0.5f, Saturation = 1.15f, Vignette = 0.6f, Fog = 0.6f, Lantern = 1.5f,
     };
 
     /// <summary>
@@ -128,7 +133,7 @@ public sealed record ReefLook
         WaterShallow = C("#304878"), WaterDeep = C("#1F3460"), Murk = C("#0D1830"),
         Sand = C("#4E5A74"), Rock = C("#3A4866"), Coral = C("#4F7099"), Coral2 = C("#3E5C86"), Algae = C("#3A6070"), Sponge = C("#7FE7FF"),
         Sun = C("#7FA8D8"), SunEnergy = 0.32f, Ambient = C("#3A5080"), AmbientEnergy = 0.44f,
-        Caustics = 0f, Rays = 0f, Menace = 0.55f, Saturation = 0.85f, Vignette = 0.62f, Fog = 0.62f,
+        Caustics = 0f, Rays = 0f, Menace = 0.55f, Saturation = 0.85f, Vignette = 0.62f, Fog = 0.62f, Lantern = 1.85f,
     };
 
     public static readonly ReefLook Abyss = Trench with
@@ -137,7 +142,7 @@ public sealed record ReefLook
         WaterShallow = C("#34407A"), WaterDeep = C("#222A55"), Murk = C("#10132C"),
         Rock = C("#30364F"), Sand = C("#44486A"), Coral = C("#FF3FA4"), Sponge = C("#2FF3E0"), Butter = C("#FFD25E"),
         Sun = C("#8C90D8"), SunEnergy = 0.26f, Ambient = C("#343C70"), AmbientEnergy = 0.4f,
-        Menace = 0.6f, Saturation = 0.8f, Vignette = 0.66f, Fog = 0.66f,
+        Menace = 0.6f, Saturation = 0.8f, Vignette = 0.66f, Fog = 0.66f, Lantern = 2f,
     };
 
     public static readonly ReefLook Tank = Shallows with
@@ -146,7 +151,7 @@ public sealed record ReefLook
         WaterShallow = C("#F4F8FF"), WaterDeep = C("#DCE6F5"), Murk = C("#9AA8C0"),
         Sand = C("#3A7BFF"), Rock = C("#C8D0E0"), Coral = C("#FF6BCB"), Coral2 = C("#7CFC4D"), Algae = C("#7CFC4D"), Butter = C("#FF4D5E"),
         Sun = C("#F4F8FF"), SunEnergy = 1.4f, Ambient = C("#F4F8FF"), AmbientEnergy = 1.2f,
-        Caustics = 0f, Rays = 0f, Menace = 1f, Saturation = 1.2f, Vignette = 0.1f, Fog = 0.05f,
+        Caustics = 0f, Rays = 0f, Menace = 1f, Saturation = 1.2f, Vignette = 0.1f, Fog = 0.05f, Lantern = 0.6f,
     };
 
     /// <summary>Sets the reef globals the shaders read (colours converted to linear).</summary>
@@ -168,14 +173,14 @@ public sealed record ReefLook
         V("reef_sponge", Sponge);
         V("reef_butter", Butter);
         V("reef_sun", Sun);
-        RenderingServer.GlobalShaderParameterSet("reef_caustics", Caustics);
-        RenderingServer.GlobalShaderParameterSet("reef_rays", Rays);
-        RenderingServer.GlobalShaderParameterSet("reef_menace", Menace);
-        RenderingServer.GlobalShaderParameterSet("reef_saturation", Saturation);
-        RenderingServer.GlobalShaderParameterSet("reef_vignette", Vignette);
-        RenderingServer.GlobalShaderParameterSet("reef_fog", Fog);
-        RenderingServer.GlobalShaderParameterSet("reef_extent", new Vector2(LevelMap.Size, LevelMap.Size));
-        RenderingServer.GlobalShaderParameterSet("sun_has_shadow", 0f);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_caustics"), Caustics);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_rays"), Rays);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_menace"), Menace);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_saturation"), Saturation);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_vignette"), Vignette);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_fog"), Fog);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_lantern"), Lantern);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_extent"), new Vector2(LevelMap.Size, LevelMap.Size));
         SetDrop(0f);
     }
 
@@ -186,7 +191,7 @@ public sealed record ReefLook
     public void SetDrop(float drop)
     {
         // The sea surface a little above the highest reef tops (they reach about 14 m), for the caustics and the rays.
-        RenderingServer.GlobalShaderParameterSet("sea_surface_y", 18f - drop);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("sea_surface_y"), 18f - drop);
     }
 
     /// <summary>The water around her: ambient light, background, and glow, for this depth.</summary>

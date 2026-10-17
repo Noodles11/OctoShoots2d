@@ -59,6 +59,13 @@ public partial class SettingsCard : PanelContainer
         };
         box.AddChild(Row("Sunlight", "God rays, caustics and dappled light under the water (0 turns them off).", sun));
 
+        var shadows = Toggle(_view.LightShadows, on =>
+        {
+            _view.LightShadows = on;
+            Save();
+        });
+        box.AddChild(Row("Light shadows", "Clementine's light and the reef's lights cast shadows. Off is lighter on the GPU.", shadows));
+
         var zoom = ZoomSlider(_view.CameraZoom, v =>
         {
             _view.CameraZoom = v;

@@ -46,8 +46,8 @@ public partial class MarineSnow : Node3D
 
         // Faint in the shade, glittering where a sunbeam catches them (marine_snow.gdshader).
         var material = _material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/marine_snow.gdshader") };
-        material.SetShaderParameter("speck", FxParticles.SoftCircle());
-        material.SetShaderParameter("fade_far", Mathf.Max(Half.X, Mathf.Max(Half.Y, Half.Z)) * 6f);
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("speck"), FxParticles.SoftCircle());
+        material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fade_far"), Mathf.Max(Half.X, Mathf.Max(Half.Y, Half.Z)) * 6f);
         _multimesh = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
@@ -83,7 +83,7 @@ public partial class MarineSnow : Node3D
     ShaderMaterial _material = null!;
 
     /// <summary>The absolute position of the world's origin (the beams the specks glitter in are drawn from it).</summary>
-    public void SetWorldOrigin(Vector2 origin) => _material.SetShaderParameter("world_origin", origin);
+    public void SetWorldOrigin(Vector2 origin) => _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("world_origin"), origin);
 
     /// <summary>Moves every speck with the world (the dive moves the new level back to the origin).</summary>
     public void Shift(Vector3 by)

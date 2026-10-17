@@ -40,6 +40,16 @@ public partial class BellView : Node3D
     OmniLight3D _light = null!;
     /// <summary>How much of her light gets through (1 all; the curse den's dark fades it).</summary>
     public float Dim = 1f;
+    /// <summary>The depth's lantern (ReefLook.Lantern): her light's strength and reach against the dark.</summary>
+    public float Lantern = 1f;
+    float _dbgEnergy = 1f;
+    bool _dbgFalloff;
+    /// <summary>Her light: where it is (world), how far it reaches and how strong it is now.</summary>
+    public Vector3 LightPosition => _light.GlobalPosition;
+    public float LightRange => _light.OmniRange;
+    public float LightEnergy => _light.Visible ? _light.LightEnergy : 0f;
+    /// <summary>Her light's heart, over the bell's origin (inside the dome).</summary>
+    public const float LightHeight = 1.2f;
     StandardMaterial3D _inkMaterial = null!;
     readonly List<MeshInstance3D> _ink = new();
     readonly List<Strand> _strands = new();
@@ -142,12 +152,31 @@ public partial class BellView : Node3D
             });
         }
 
-        // Her glow is the lantern of the scene: a warm pool in the dark water around her.
-        _light = new OmniLight3D { LightColor = Glow, LightEnergy = 2.6f, OmniRange = 11f, OmniAttenuation = 1.4f, ShadowEnabled = false, Position = new Vector3(0f, 1.2f, 0f) };
+        // Her glow is the lantern of the scene: a warm pool in the dark water around her. It casts shadows (soft, from a
+        // light the size of her bell's heart), so the reef's walls, rocks, kelp and creatures stand out against it and
+        // what lies behind them stays dark; her own bell and strands cast none.
+        _light = new OmniLight3D
+        {
+            LightColor = Glow, LightEnergy = 2.6f, OmniRange = 11f, OmniAttenuation = 1.4f, Position = new Vector3(0f, LightHeight, 0f),
+            ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, OmniShadowMode = OmniLight3D.ShadowMode.Cube, ShadowBias = 0.06f, ShadowNormalBias = 1.2f,
+            LightSize = 0.3f, ShadowBlur = 1f, LightSpecular = 0.8f,
+        };
+        foreach (string arg in OS.GetCmdlineUserArgs())
+            if (arg.StartsWith("--dbg-lantern="))
+            {
+                // Verification: her light's strength factor and falloff ("6,0.8").
+                var parts = arg["--dbg-lantern=".Length..].Split(',');
+                _dbgEnergy = float.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+                if (parts.Length > 1)
+                {
+                    _light.OmniAttenuation = float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+                    _dbgFalloff = true;
+                }
+            }
         AddChild(_light);
         var sphere = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 32, Rings = 16 };
         var shieldMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/plane_bubble.gdshader"), RenderPriority = 3 };
-        shieldMaterial.SetShaderParameter("tint", new Color(0.75f, 0.92f, 1f));
+        shieldMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(0.75f, 0.92f, 1f));
         _shield = new MeshInstance3D { Mesh = sphere, MaterialOverride = shieldMaterial, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(_shield);
         // Pearl Diver's charge: the light she gathers to throw, the same lantern as her bubbles (one substance).
@@ -201,7 +230,7 @@ public partial class BellView : Node3D
     public void Shift(Vector3 by)
     {
         Position += by;
-        RenderingServer.GlobalShaderParameterSet("her_glow", new Vector4(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z, _glowRadius));
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_glow"), new Vector4(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z, _glowRadius));
         foreach (var s in _strands)
         {
             for (int i = 0; i < s.Pos.Length; i++)
@@ -274,22 +303,27 @@ public partial class BellView : Node3D
         // Diving, she turns head-first (apex down), leaning south so the camera sees her turn.
         if (DiveTurn > 0f) _body.Basis = new Basis(Vector3.Right, -DiveTurn * Mathf.Pi * 0.85f) * _body.Basis;
 
-        _bellMaterial.SetShaderParameter("pulse", _pulse);
-        _bellMaterial.SetShaderParameter("wave", _phase < 0.55f ? _phase / 0.55f : 1.3f);
-        _bellMaterial.SetShaderParameter("hurt", _hurt);
-        _bellMaterial.SetShaderParameter("ink", _inkGhost);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pulse"), _pulse);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("wave"), _phase < 0.55f ? _phase / 0.55f : 1.3f);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("hurt"), _hurt);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ink"), _inkGhost);
         _reserve = Mathf.Min(1f, _reserve + Rekindle * h);
         // Clinging murklings drink her glow (each a little), and a coiling gloomvine makes it flicker; never dark.
         float drunk = 1f - 0.1f * world.Clingers - 0.03f * world.LesserClingers - (world.Player.RootTimer > 0f ? 0.08f * (0.5f + 0.5f * Mathf.Sin(_time * 30f)) : 0f);
         _breath = Mathf.Lerp(_breath, (0.85f + 0.15f * _reserve) * Mathf.Max(drunk, 0.65f), 1f - Mathf.Exp(-8f * h));
-        _bellMaterial.SetShaderParameter("breath", _breath);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("breath"), _breath);
         SyncVitals(world, h);
-        _strandMaterial.SetShaderParameter("hurt", _hurt);
-        _strandMaterial.SetShaderParameter("ink", _inkGhost);
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("hurt"), _hurt);
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ink"), _inkGhost);
         // Lantern Pearl: her glow reaches farther and shines brighter.
         float glow = world.Run.Loadout.Stats[OctoShoots.Core.Items.Stat.Glow];
-        _light.OmniRange = 11f * glow;
-        _light.LightEnergy = 2.6f * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
+        // Farther and brighter in the dark depths (the lantern), and with Lantern Pearl: in the Shallows a supplement to
+        // the sun, in the Trench and the Abyss about three times as strong and falling off more gently, so it reaches the
+        // floor of the canyons she swims over.
+        float deep = Mathf.Clamp((Lantern - 1f) / 0.85f, 0f, 1f);
+        _light.OmniRange = 11f * glow * Mathf.Sqrt(Lantern);
+        if (!_dbgFalloff) _light.OmniAttenuation = Mathf.Lerp(1.2f, 0.7f, deep);
+        _light.LightEnergy = 2.6f * _dbgEnergy * Mathf.Pow(Lantern, 1.8f) * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
         _light.LightColor = Glow.Lerp(new Color(1f, 0.3f, 0.55f), _hurt * 0.5f);
 
         if (speed > 0.3f) _across = new Vector3(-vel.Y, 0f, vel.X) / speed;
@@ -313,8 +347,8 @@ public partial class BellView : Node3D
         float glow = world.Run.Loadout.Stats[OctoShoots.Core.Items.Stat.Glow];
         var at = GlobalPosition;
         _glowRadius = 3f * Mathf.Sqrt(Mathf.Max(glow, 0.1f));
-        RenderingServer.GlobalShaderParameterSet("her_glow", new Vector4(at.X, at.Y, at.Z, _glowRadius));
-        RenderingServer.GlobalShaderParameterSet("her_glow_strength", (1f - DiveTurn) * (0.9f + 0.1f * _pulse));
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_glow"), new Vector4(at.X, at.Y, at.Z, _glowRadius));
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_glow_strength"), (1f - DiveTurn) * (0.9f + 0.1f * _pulse));
     }
 
     float _glowRadius = 3f;
@@ -356,7 +390,7 @@ public partial class BellView : Node3D
                     _bellMaterial.SetShaderParameter(name, c);
                     if (i < 2) _strandMaterial.SetShaderParameter(name, c);
                 }
-                _bellMaterial.SetShaderParameter("mimic_pattern", (int)look.Pattern);
+                _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_pattern"), (int)look.Pattern);
             }
             float k = Mathf.Clamp(ritual.Ritual / PearlRitual.Mimic, 0f, 1f);
             _mimic = k * k * (3f - 2f * k);
@@ -378,16 +412,16 @@ public partial class BellView : Node3D
         }
         _pull = Mathf.MoveToward(_pull, pull, h * (pull > _pull ? 3f : 6f));
         _burst = Mathf.MoveToward(_burst, 0f, h / 0.45f);
-        _bellMaterial.SetShaderParameter("mimic", _mimic);
-        _bellMaterial.SetShaderParameter("burst", _burst);
-        _strandMaterial.SetShaderParameter("mimic", _mimic);
-        _strandMaterial.SetShaderParameter("burst", _burst);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic"), _mimic);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("burst"), _burst);
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic"), _mimic);
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("burst"), _burst);
         // The pulse of light: her glow flares far out and falls back.
         _light.LightEnergy *= (1f + 4f * _burst + 0.4f * _mimic) * Dim;
         _light.OmniRange *= (1f + 0.8f * _burst) * (0.4f + 0.6f * Dim);
     }
 
-    public override void _ExitTree() => RenderingServer.GlobalShaderParameterSet("her_glow_strength", 0f);
+    public override void _ExitTree() => RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_glow_strength"), 0f);
 
     /// <summary>
     /// Health into the gonad rings (draining at most 0.8 of her max a second, healing back faster) and the active pearl's
@@ -402,10 +436,10 @@ public partial class BellView : Node3D
         if (holds && _lastCharge >= 1f && charge < 1f) _snuff = 1f;
         _lastCharge = holds ? charge : 1f;
         _snuff = Mathf.MoveToward(_snuff, 0f, h / SnuffSeconds);
-        _bellMaterial.SetShaderParameter("health", _health);
-        _bellMaterial.SetShaderParameter("charge", holds ? charge : -1f);
-        _bellMaterial.SetShaderParameter("snuff", _snuff);
-        _bellMaterial.SetShaderParameter("spin", _spin);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("health"), _health);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("charge"), holds ? charge : -1f);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("snuff"), _snuff);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("spin"), _spin);
     }
 
     /// <summary>Bubble Shield: it swells round her, shimmers, wobbles when it turns a hit, and flickers before it goes.</summary>
@@ -419,8 +453,8 @@ public partial class BellView : Node3D
         float wobble = 0.1f * _ripple * Mathf.Sin(_time * 30f);
         float r = 1.05f * (0.55f + 0.45f * _shieldShown);
         _shield.Scale = new Vector3(r * (1f + wobble), r * (1f - wobble), r * (1f + wobble)) * (1f + 0.025f * Mathf.Sin(_time * 4f));
-        _shield.SetInstanceShaderParameter("fade", _shieldShown * flicker);
-        _shield.SetInstanceShaderParameter("rainbow", 0.35f + 0.4f * _ripple);
+        _shield.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), _shieldShown * flicker);
+        _shield.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("rainbow"), 0.35f + 0.4f * _ripple);
     }
 
     /// <summary>Pearl Diver: the pearl grows in front of her as she charges it, and shimmers once it is full.</summary>
@@ -435,9 +469,9 @@ public partial class BellView : Node3D
         _chargeOrb.Position = aim * (BellRadius + 0.25f + size) + Vector3.Down * 0.1f;
         // The mote's glow reaches well past its core: a quad several times the throw's size.
         _chargeOrb.Scale = Vector3.One * size * 4f;
-        _chargeOrb.SetInstanceShaderParameter("lantern", 0.3f + 0.6f * k * k + (full ? 0.15f * Mathf.Sin(_time * 14f) : 0f));
-        _chargeOrb.SetInstanceShaderParameter("warmth", full ? 0.6f : 0.3f * k);
-        _chargeOrb.SetInstanceShaderParameter("seed", 1.7f);
+        _chargeOrb.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), 0.3f + 0.6f * k * k + (full ? 0.15f * Mathf.Sin(_time * 14f) : 0f));
+        _chargeOrb.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), full ? 0.6f : 0.3f * k);
+        _chargeOrb.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), 1.7f);
     }
 
     /// <summary>The contraction over one beat: a quick squeeze, then a slow relax that overshoots into a slight flare.</summary>

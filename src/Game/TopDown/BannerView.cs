@@ -31,7 +31,7 @@ public partial class BannerView : Control
         _boss = boss.Spec.Name.ToUpperInvariant();
         _in = Mathf.Clamp(t / 0.25f, 0f, 1f);
         _progress = Mathf.Clamp((t - PlaneBossTuning.BannerSeconds) / PlaneBossTuning.DissolveSeconds, 0f, 1f);
-        _dissolve.SetShaderParameter("progress", _progress);
+        _dissolve.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("progress"), _progress);
         QueueRedraw();
     }
 

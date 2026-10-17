@@ -45,7 +45,7 @@ public sealed partial class PlaneWorld
         if (m.Prey is { } held && m.PreyTimer > 0f && held.Huntable) return held;
         m.PreyTimer = MurkFishTuning.Look;
         m.Prey = null;
-        float best = BlightTuning.Sense;
+        float best = m.Sense;
         PlaneReefFish? pick = null;
         foreach (var f in ReefFish)
         {
@@ -70,7 +70,7 @@ public sealed partial class PlaneWorld
         {
             if (!f.Huntable) continue;
             float r = f.Kind switch { ReefFishKind.Chromis => ReefFishTuning.ChromisRadius, ReefFishKind.Clownfish => ReefFishTuning.ClownRadius, _ => ReefFishTuning.TangRadius };
-            if (Vector2.Distance(f.Position, s.Position) < r + BlightTuning.ThrowRadius)
+            if (Vector2.Distance(f.Position, s.Position) < r + s.Radius)
             {
                 struck = f;
                 break;
@@ -81,7 +81,7 @@ public sealed partial class PlaneWorld
         float chance = MurkFishTuning.ChanceAt(Menace);
         foreach (var f in ReefFish)
         {
-            if (!f.Huntable || (f != struck && Vector2.Distance(f.Position, s.Position) > MurkFishTuning.Splash)) continue;
+            if (!f.Huntable || (f != struck && Vector2.Distance(f.Position, s.Position) > s.Splash)) continue;
             if (_blightRng.NextFloat() < chance) f.Turning = MurkFishTuning.TurnSeconds;
             else
             {
@@ -113,7 +113,7 @@ public sealed partial class PlaneWorld
         var (radius, meter, drain) = MurkFishTuning.Of(f.Kind);
         var m = new Murkling
         {
-            Position = f.Position, Velocity = f.Velocity, Bud = 0f, Fish = f, Radius = radius, ClingDrain = drain,
+            Position = f.Position, Velocity = f.Velocity, Bud = 0f, Fish = f, Radius = radius, Body = radius, ClingDrain = drain,
             Swarm = f.Kind == ReefFishKind.Chromis ? f.Host : -1, Seed = _blightRng.Range(0f, 100f),
         };
         m.Corruption.Regen *= 1f + 0.5f * Menace;

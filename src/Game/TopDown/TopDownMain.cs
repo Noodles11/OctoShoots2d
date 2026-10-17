@@ -46,6 +46,7 @@ public partial class TopDownMain : Node3D
     ReefFishView _reefFish = null!;
     CurseDenView _curseDen = null!;
     ClamRoomView _clamRooms = null!;
+    SealView _seals = null!;
     SurgeView _surgeView = null!;
     GeyserView _geysers = null!;
     CurseDarkness _dark = null!;
@@ -77,6 +78,8 @@ public partial class TopDownMain : Node3D
 
     LevelView _level = null!;
     BellView _bell = null!;
+    /// <summary>Where her light reaches over the reef (light_field.gdshaderinc reads it): redone as she moves.</summary>
+    readonly OctoShoots.Game.Fx.HorizonMap _lantern = new();
     PearlOrbitView _orbit = null!;
     CameraRig _camera = null!;
     DebugMapOverlay _debugMap = null!;
@@ -160,6 +163,10 @@ public partial class TopDownMain : Node3D
 
     // Verification mode.
     string? _startAt;
+    /// <summary>Verification: bud a murkling ("murk") or a prime ("prime") on the densest ink near her at the start.</summary>
+    string? _dbgBud;
+    /// <summary>Verification: the first seal starts with this many hits less one, and takes the last a second in (0: off).</summary>
+    int _dbgSeal;
     bool _autopilot, _autoDive, _calm;
     List<System.Numerics.Vector2> _route = new();
     int _routeProgress;
@@ -183,8 +190,10 @@ public partial class TopDownMain : Node3D
         _achievementData = LoadAchievements(_catalog);
         // Keep the GPU cool: the frame-rate cap from the view options (60 by default; captures run uncapped).
         var view = _view = SettingsStore.LoadView();
-        Engine.MaxFps = _captureDir is null ? view.MaxFps : 0;
-        if (_captureDir is not null) RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
+        ViewOptions.Shadows = view.LightShadows && System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--dbg-noshadow") < 0;
+        _perf = OS.GetCmdlineUserArgs().Contains("--dbg-perf");
+        Engine.MaxFps = _captureDir is null && !_perf ? view.MaxFps : 0;
+        if (_captureDir is not null || _perf) RenderingServer.ViewportSetMeasureRenderTime(GetViewport().GetViewportRid(), true);
         BuildEnvironment();
         _level = new LevelView();
         AddChild(_level);
@@ -192,6 +201,7 @@ public partial class TopDownMain : Node3D
         AddChild(_orbit);
         _bell = new BellView();
         AddChild(_bell);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_horizon"), _lantern.Texture);
         _combat = new CombatView();
         AddChild(_combat);
         _currents = new CurrentView();
@@ -208,6 +218,8 @@ public partial class TopDownMain : Node3D
         AddChild(_curseDen);
         _clamRooms = new ClamRoomView();
         AddChild(_clamRooms);
+        _seals = new SealView();
+        AddChild(_seals);
         _surgeView = new SurgeView();
         AddChild(_surgeView);
         _geysers = new GeyserView();
@@ -272,6 +284,8 @@ public partial class TopDownMain : Node3D
             else if (arg == "--dbg-shells") _dbgShells = true;
             else if (arg == "--dbg-murkfish") _dbgMurkFish = true;
             else if (arg == "--dbg-throw") _dbgThrow = true;
+            else if (arg.StartsWith("--dbg-seal=") && int.TryParse(Value("--dbg-seal="), out int sealHits)) _dbgSeal = sealHits;
+            else if (arg.StartsWith("--dbg-bud=")) _dbgBud = Value("--dbg-bud=");
             else if (arg.StartsWith("--boss=")) _dbgBoss = Value("--boss=");
             else if (arg == "--boss-level") _dbgBossLevel = true;
             else if (arg.StartsWith("--dbg-goto=") && int.TryParse(Value("--dbg-goto="), out int gotoLevel)) _dbgGoTo = gotoLevel;
@@ -413,6 +427,7 @@ public partial class TopDownMain : Node3D
         look.Apply();
         look.ApplyTo(_environment.Environment);
         _sunLight.Configure(look.Sun, look.SunEnergy);
+        _bell.Lantern = look.Lantern;
     }
 
     /// <summary>The water: shared with the title screen's backdrop.</summary>
@@ -661,6 +676,24 @@ public partial class TopDownMain : Node3D
                 if (k++ % 2 == 0) f.Turning = MurkFishTuning.TurnSeconds;
             _dbgMurkFish = false;
         }
+        if (_dbgBud is not null && _world.Corruption is { } ink)
+        {
+            // A spot of dense ink with room round it, and her 7 m off it in sight, so its gathering shows.
+            bool prime = _dbgBud == "prime";
+            for (int c = 0; c < ink.Density.Length; c += 7)
+            {
+                var at = CorruptionField.CellCentre(c % CorruptionField.N, c / CorruptionField.N);
+                if (ink.Density[c] < 0.95f || !_world.Clear(at, prime ? 2.5f : 1f) || ink.At(at + new System.Numerics.Vector2(1.5f, 0f)) < 0.9f) continue;
+                var her = at + new System.Numerics.Vector2(0f, 7f);
+                if (!_world.Clear(her, 0.8f) || !_world.LineOfSight(at, her)) continue;
+                _world.Player.Position = _world.Player.PrevPosition = her;
+                _camera.Track(Focus(1f), 0f, snap: true);
+                _world.DebugBud(at, prime);
+                break;
+            }
+            _dbgBud = null;
+        }
+        if (_dbgSeal > 0 && _world.Seals.Count > 0) _world.Seals[0].Hits = Math.Max(0, _dbgSeal - 1);
         if (_dbgThrow)
         {
             // Verification: a murkling 5 m off her (up the screen first), its throw due at once (the slingshot telegraph from the start).
@@ -687,6 +720,8 @@ public partial class TopDownMain : Node3D
         _map = map;
         _levelTime = 0f;
         ApplyLook();
+        // Where the sun reaches into this level's water (its god rays and caustics end at the rock that shades them).
+        OctoShoots.Game.Fx.SunMap.Build(map, OctoShoots.Game.Fx.SunLight.Direction);
         if (!keepRun || _run is null)
         {
             ResetRunTotals();
@@ -755,6 +790,7 @@ public partial class TopDownMain : Node3D
             foreach (var pearl in _world.Pearls)
                 if (_map.Pois.Exists(q => q.Kind == PoiKind.TreasureCave && q.Position == pearl.Position)) pearl.ItemId = clamPearl["--clam-pearl=".Length..];
         _clamRooms.Show(_world);
+        _seals.Show(_world);
         _geysers.Show(_world);
         _crackOpen = _world.ExitOpen ? 1f : 0f;
         _level.SetCrackOpen(_crackOpen);
@@ -764,12 +800,13 @@ public partial class TopDownMain : Node3D
         _damage.Clear();
         _springHealed = 0f;
         _camera.SetBubbleLights(_combat.Lights, 0);
+        _camera.SetLenses(_combat.Lenses, 0);
         SetupCorruption(map);
         _boss.Show(_world);
         if (_bossHp is { } bossHp && _world.Boss is { } queen) queen.Hp = bossHp;
         _debugMap.SetMap(_map);
-        _minimap.SetMap(_map);
-        _fullMap.SetMap(_map);
+        _minimap.SetMap(_map, _world.SealedCaves);
+        _fullMap.SetMap(_map, _world.SealedCaves);
         // Places are unknown ("?") until visited; she starts at the start.
         _visited.Clear();
         _visited.Add(_map.Pois.IndexOf(_map.Start));
@@ -917,6 +954,8 @@ public partial class TopDownMain : Node3D
             "spring" => _world.Springs.Select(sp => (System.Numerics.Vector2?)(sp.Position + new System.Numerics.Vector2(0f, SpringTuning.Radius + 1.5f))).FirstOrDefault(),
             // Beside the level's first bubble geyser.
             "geyser" => _world.Director.Geysers.Count > 0 ? _world.Director.Geysers[0] + new System.Numerics.Vector2(0f, 3f) : null,
+            // Out in front of a secret room's sealed way in.
+            "secret" => _map.WeakRocks.Select(r => (System.Numerics.Vector2?)(r.Center + _map.Caves[r.Cave].Facing * 5f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -987,7 +1026,86 @@ public partial class TopDownMain : Node3D
         vp.FsrSharpness = 0.4f;
     }
 
+    /// <summary>
+    /// Her light in the water (light_field.gdshaderinc): the horizon map round her light (the level sits at the origin
+    /// while she plays it), where the light is, and how strongly the water scatters it — more in the murkier, darker
+    /// depths, none as she turns head-down into a dive.
+    /// </summary>
+    void SyncLantern()
+    {
+        var at = _bell.LightPosition;
+        float range = _bell.LightRange;
+        _lantern.Update(_map, at, range);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_light_at"), new Vector4(at.X, at.Y, at.Z, range));
+        float murk = 0.5f + ReefLook.For(_id.Depth).Fog;
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_scatter"), OS.GetCmdlineUserArgs().Contains("--dbg-noscatter") ? 0f : 0.016f * _bell.LightEnergy / Mathf.Pow(_bell.Lantern, 1.3f) * murk * (1f - _bell.DiveTurn));
+    }
+
+    /// <summary>Verification (--dbg-perf): uncapped, and once a second the frame's cost printed (CPU and GPU, ms).</summary>
+    bool _perf;
+    double _perfClock, _perfProcess, _perfWorst;
+    int _perfFrames, _perfHitches;
+
+    readonly Dictionary<string, (double Total, double Worst, long Bytes)> _perfCosts = new();
+    int _gc0, _gc1, _gc2;
+    long _allocated;
+    TimeSpan _paused;
+
+    void PerfAdd(string what, long start, long bytes)
+    {
+        double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - bytes;
+        var (total, worst, sum) = _perfCosts.TryGetValue(what, out var c) ? c : (0.0, 0.0, 0L);
+        _perfCosts[what] = (total + ms, Math.Max(worst, ms), sum + allocated);
+    }
+
+    bool PerfReport(double delta, bool skip)
+    {
+        if (skip) return false;
+        _perfClock += delta;
+        _perfFrames++;
+        _perfWorst = Math.Max(_perfWorst, delta);
+        if (delta > 1.0 / 30.0) _perfHitches++;
+        _perfProcess += Performance.GetMonitor(Performance.Monitor.TimeProcess);
+        if (_perfClock < 3.0) return false;
+        var vp = GetViewport().GetViewportRid();
+        int gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), gc2 = GC.CollectionCount(2);
+        long allocated = GC.GetTotalAllocatedBytes();
+        var paused = GC.GetTotalPauseDuration();
+        GD.Print($"PERF gc {gc0 - _gc0}/{gc1 - _gc1}/{gc2 - _gc2} paused {(paused - _paused).TotalMilliseconds:0.0} ms alloc {(allocated - _allocated) / 1024} KB/s");
+        (_gc0, _gc1, _gc2, _allocated, _paused) = (gc0, gc1, gc2, allocated, paused);
+        GD.Print($"PERF fps {_perfFrames / _perfClock:0} | worst {1000.0 * _perfWorst:0.0} ms, {_perfHitches} over 33 ms | render cpu {RenderingServer.ViewportGetMeasuredRenderTimeCpu(vp):0.00} ms gpu {RenderingServer.ViewportGetMeasuredRenderTimeGpu(vp):0.00} ms"
+            + $" | draws {Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame)} prims {Performance.GetMonitor(Performance.Monitor.RenderTotalPrimitivesInFrame) / 1000:0}k objs {Performance.GetMonitor(Performance.Monitor.RenderTotalObjectsInFrame)}");
+        // The costliest parts of a frame: average per frame, and the worst single one.
+        GD.Print("  " + string.Join("  ", _perfCosts.OrderByDescending(kv => kv.Value.Total).Take(8).Select(kv => $"{kv.Key} {kv.Value.Total / _perfFrames:0.00}/{kv.Value.Worst:0.0}")));
+        GD.Print("  alloc KB/s: " + string.Join("  ", _perfCosts.OrderByDescending(kv => kv.Value.Bytes).Take(10).Select(kv => $"{kv.Key} {kv.Value.Bytes / 1024}")));
+        _perfCosts.Clear();
+        _perfClock = _perfProcess = _perfWorst = 0;
+        _perfFrames = _perfHitches = 0;
+        return true;
+    }
+
     public override void _Process(double delta)
+    {
+        if (!_perf)
+        {
+            ProcessFrame(delta);
+            return;
+        }
+        // Verification: a frame that took long, with what the game's own code spent of it.
+        // (The frame after a report carries the report's own printing, tens of milliseconds on Windows: not counted.)
+        bool afterReport = _reported;
+        if (delta > 1.0 / 30.0 && !afterReport) GD.Print($"HITCH {1000.0 * delta:0.0} ms; the frame before spent {_lastFrameMs:0.0} ms in the game's code");
+        _reported = PerfReport(afterReport ? 0.0 : delta, afterReport);
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        ProcessFrame(delta);
+        _lastFrameMs = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+    }
+
+    double _lastFrameMs;
+    bool _reported;
+
+    void ProcessFrame(double delta)
     {
         CapRenderScale();
         // F1, any time in a run: the debug menu.
@@ -1082,7 +1200,10 @@ public partial class TopDownMain : Node3D
         while (_accumulator >= PlaneWorld.Dt && steps < 8 && !dived)
         {
             float hpBefore = _world.Player.Hp;
+            long simStart = _perf ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            long simBytes = _perf ? GC.GetAllocatedBytesForCurrentThread() : 0;
             _world.Step(ReadInput());
+            if (_perf) PerfAdd("sim", simStart, simBytes);
             _recorder.Observe(_world);
             Earned(_achievements.Observe(_world));
             // Into the curse den's dark: a low drone as it closes round her.
@@ -1113,6 +1234,7 @@ public partial class TopDownMain : Node3D
             foreach (var e in _world.Events)
             {
                 _blight.OnEvent(e);
+                _seals.OnEvent(_world, e);
                 // Her light struck something: a power surge arcs back to her (hits by a shot carry its direction).
                 if ((e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
                     || e.Type == PlaneEventType.VineCut)
@@ -1276,12 +1398,15 @@ public partial class TopDownMain : Node3D
         _minimap.SetHealth(_world.Run.MaxHp > 0f ? _world.Player.Hp / _world.Run.MaxHp : 0f);
         // Each view on its own: one that fails is reported (once) and the rest carry on.
         Guard("bell", () => _bell.Sync(_world, alpha, dt));
+        Guard("lantern", SyncLantern);
+        OctoShoots.Game.Fx.SunMap.Poll(_map);
         Guard("orbit", () => _orbit.Sync(_world.Run.Items, _catalog, _bell.GlobalPosition, dt, _bell.Visible));
         _combat.HerAt = _bell.GlobalPosition;
         Guard("combat", () => _combat.Sync(_world, dt));
         Guard("surge", () => _surgeView.Sync(_world, dt));
         Guard("geysers", () => _geysers.Sync(_world, dt, _camera.Camera));
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
+        _camera.SetLenses(_combat.Lenses, System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--dbg-nolens") >= 0 ? 0 : _combat.LensCount);
         Guard("currents", () => _currents.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
         Guard("pufferlings", () => _puffers.Sync(_world, dt));
@@ -1290,6 +1415,18 @@ public partial class TopDownMain : Node3D
         _damage.Tick(dt);
         Guard("boss", () => _boss.Sync(_world, dt));
         Guard("clam rooms", () => _clamRooms.Sync(_world, dt));
+        Guard("seals", () => _seals.Sync(_world, dt));
+        if (_dbgSeal > 0 && _world.Time >= 1f)
+        {
+            int from = _world.Events.Count;
+            _world.DebugStrikeSeal();
+            for (int i = from; i < _world.Events.Count; i++)
+            {
+                _seals.OnEvent(_world, _world.Events[i]);
+                CorruptionEvent(_world.Events[i]);
+            }
+            _dbgSeal = 0;
+        }
         _camera.SetClamGlows(_clamRooms.Glows, _clamRooms.GlowColors);
         if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) Guard("banner", () => _banner.Sync(_world.Boss));
         if (_world.Boss is { } b)
@@ -1354,6 +1491,8 @@ public partial class TopDownMain : Node3D
         Earned(_achievements.LevelCleared(_world));
         AddToRun();
         _diving = true;
+        // The sea surface sinks with her: the sun's shade is this level's, so it is off until the next one is entered.
+        OctoShoots.Game.Fx.SunMap.Enable(false);
         _diveTime = 0f;
         _diveFrom = _world.Player.Position;
         var next = LevelPlan.NextOf(_seed, _id);
@@ -1389,6 +1528,7 @@ public partial class TopDownMain : Node3D
         _bell.DiveDepth = drop - gather;
         _bell.DiveTurn = Ease((t - 0.2f) / 0.3f) * (1f - Ease((t - 1.1f) / 0.4f));
         _bell.Sync(_world, 1f, dt);
+        SyncLantern();
 
         var focus = new Vector3(_diveFrom.X, LevelMap.SwimBand - drop, _diveFrom.Y);
         // In and back out, easing to rest at both ends (sin²): the view is still when the world is moved back.
@@ -1742,13 +1882,17 @@ public partial class TopDownMain : Node3D
                 Say("A Blightroot starves and bursts");
                 break;
             case PlaneEventType.MurklingBurst:
-                _sfx.PlayPitched("pop", 0.6f, -6f);
+                if (e.Direction.X > 0.5f)
+                {
+                    // A prime freed: a deep burst, felt.
+                    _sfx.PlayPitched("bell_ring", 0.6f, -4f);
+                    _camera.Shake(0.35f);
+                    _haptics.Pulse(0.6f, 0.4f, 0.3f);
+                }
+                else _sfx.PlayPitched("pop", 0.6f, -6f);
                 break;
             case PlaneEventType.VineCoiled:
                 _camera.Shake(0.22f);
-                break;
-            case PlaneEventType.ValveCleared:
-                _sfx.PlayPitched("merge", 0.8f, -6f);
                 break;
             case PlaneEventType.CrustBroken:
                 _camera.Shake(0.3f);
@@ -1778,6 +1922,20 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.FishFreed:
                 // A fish again: a bright little chime.
                 _sfx.PlayPitched("bell_ring", 1.8f, -14f);
+                break;
+            case PlaneEventType.SealLit:
+                // The emblem takes her light: a chime rising as it fills.
+                _sfx.PlayPitched("bell_ring", 1.3f + 0.7f * e.Size, -12f);
+                break;
+            case PlaneEventType.SealOpened:
+                // The wall comes down; the charts show the way in.
+                _level.Crumble(e.Position);
+                _camera.Shake(0.4f);
+                _haptics.Pulse(0.7f, 0.5f, 0.45f);
+                _sfx.PlayPitched("pop", 0.35f, -2f);
+                _sfx.PlayPitched("bell_ring", 0.9f, -6f);
+                _minimap.SetMap(_map, _world.SealedCaves);
+                _fullMap.SetMap(_map, _world.SealedCaves);
                 break;
             case PlaneEventType.MurkShotLanded:
                 _sfx.PlayPitched("merge", 0.7f, -16f);
@@ -1992,9 +2150,12 @@ public partial class TopDownMain : Node3D
     /// <summary>Runs one view's update; if it throws, the error is reported once and the frame carries on without it.</summary>
     void Guard(string view, Action sync)
     {
+        long start = _perf ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        long bytes = _perf ? GC.GetAllocatedBytesForCurrentThread() : 0;
         try
         {
             sync();
+            if (_perf) PerfAdd(view, start, bytes);
         }
         catch (Exception ex)
         {

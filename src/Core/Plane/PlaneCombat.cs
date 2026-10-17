@@ -202,6 +202,8 @@ public sealed class PlaneShot
     public int Pulse;
     /// <summary>A piercing shot's last corrupted creature struck (it is struck once as the shot passes through).</summary>
     public object? Struck;
+    /// <summary>It has struck a secret's seal (a bubble that bounces off counts once).</summary>
+    public bool SealStruck;
     /// <summary>A pufferling's needle: fast, and it pops any bubble it meets (flying on).</summary>
     public bool Needle;
     public int PearlHp;
@@ -1051,6 +1053,12 @@ public sealed partial class PlaneWorld
         bool rim = CrossesRim(shot.Line, next);
         if (rim || !Map.IsOpen(next) || _rocks.Any(r => Vector2.Distance(next, r.Center) < r.Radius))
         {
+            // Her light striking a secret's seal lights its emblem (once a bubble, whatever it carries).
+            if (!rim && !shot.SealStruck && _rocks.Any(r => Vector2.Distance(next, r.Center) < r.Radius))
+            {
+                shot.SealStruck = true;
+                StrikeSeal(next);
+            }
             if (rim)
             {
                 Pop(shot, dir);

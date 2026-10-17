@@ -53,12 +53,12 @@ public partial class CurseDarkness : Control
         var at = camera.UnprojectPosition(her);
         // Her metres in pixels, along the screen's width (the camera looks almost straight down).
         float metre = (camera.UnprojectPosition(her + camera.GlobalBasis.X) - at).Length();
-        _material.SetShaderParameter("darkness", Amount);
-        _material.SetShaderParameter("size", Size);
-        _material.SetShaderParameter("centre", at);
-        _material.SetShaderParameter("inner", Inner * metre);
-        _material.SetShaderParameter("outer", Outer * metre);
-        _material.SetShaderParameter("veil", Veil);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("darkness"), Amount);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("size"), Size);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("centre"), at);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("inner"), Inner * metre);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("outer"), Outer * metre);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("veil"), Veil);
         QueueRedraw();
     }
 }

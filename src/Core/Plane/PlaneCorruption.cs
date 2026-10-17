@@ -9,7 +9,7 @@ namespace OctoShoots.Core.Plane;
 /// <summary>What a world runs with. The game uses <see cref="Default"/>; tests may run the older rules.</summary>
 public sealed class PlaneOptions
 {
-    /// <summary>The corruption war (docs/CORRUPTION.md): the field, Blightroots, murklings, gloomvines, valves, the arena.</summary>
+    /// <summary>The corruption war (docs/CORRUPTION.md): the field, Blightroots, murklings, gloomvines, the arena.</summary>
     public bool Corruption = true;
     /// <summary>The pufferling enemies (retracted for now: none are placed and ambushes bud murklings instead).</summary>
     public bool Pufferlings = false;

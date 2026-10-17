@@ -43,12 +43,12 @@ public partial class FloraViews : Node3D
     {
         if (!_species.TryGetValue(kind, out var s)) return;
         var m = s.Material;
-        m.SetShaderParameter("recolor", 1f);
-        m.SetShaderParameter("low_a", lowA);
-        m.SetShaderParameter("high_a", highA);
-        m.SetShaderParameter("low_b", lowB);
-        m.SetShaderParameter("high_b", highB);
-        if (sway >= 0f) m.SetShaderParameter("sway", sway);
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("recolor"), 1f);
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("low_a"), lowA);
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("high_a"), highA);
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("low_b"), lowB);
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("high_b"), highB);
+        if (sway >= 0f) m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("sway"), sway);
     }
 
     public override void _Ready()
@@ -57,14 +57,14 @@ public partial class FloraViews : Node3D
         foreach (var (kind, look) in Looks)
         {
             var material = new ShaderMaterial { Shader = shader };
-            material.SetShaderParameter("sway", look.Sway);
-            material.SetShaderParameter("sway_speed", look.SwaySpeed);
-            material.SetShaderParameter("lattice", look.Lattice);
-            material.SetShaderParameter("meander", look.Meander);
-            material.SetShaderParameter("polyps", look.Polyps);
-            material.SetShaderParameter("rough", look.Rough);
-            material.SetShaderParameter("glow", look.Glow);
-            material.SetShaderParameter("backlight", look.Backlight);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("sway"), look.Sway);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("sway_speed"), look.SwaySpeed);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lattice"), look.Lattice);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("meander"), look.Meander);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("polyps"), look.Polyps);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("rough"), look.Rough);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow"), look.Glow);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("backlight"), look.Backlight);
             _species[kind] = (FloraMeshes.Build(kind), material);
         }
     }

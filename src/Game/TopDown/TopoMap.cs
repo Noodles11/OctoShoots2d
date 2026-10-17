@@ -44,10 +44,9 @@ public partial class TopoMap : Control
     public FogOfWar? Fog;
     /// <summary>What she has seen (the minimap's own fog).</summary>
     public FogOfWar? Seen;
-    /// <summary>The corruption's texture (null: none), and its Blightroots and valves (shown once seen through the fog).</summary>
+    /// <summary>The corruption's texture (null: none), and its Blightroots (shown once seen through the fog).</summary>
     public Texture2D? Corruption;
     public readonly List<(System.Numerics.Vector2 At, bool Alive)> Blights = new();
-    public readonly List<(System.Numerics.Vector2 A, System.Numerics.Vector2 B, bool Seen, bool Cleared)> Valves = new();
     /// <summary>Light springs (docs/CORRUPTION.md), and whether she is bathing in one.</summary>
     public readonly List<(System.Numerics.Vector2 At, bool Bathing)> Springs = new();
     /// <summary>Blotters (docs/CORRUPTION.md): where each is and which way it creeps.</summary>
@@ -66,16 +65,39 @@ public partial class TopoMap : Control
         AddChild(rect);
     }
 
-    public void SetMap(LevelMap map)
+    /// <summary>
+    /// The level's chart. Secret rooms still sealed (<paramref name="sealedCaves"/>) are drawn as wall, their way in
+    /// with them, so the map gives them away no more than the reef does.
+    /// </summary>
+    public void SetMap(LevelMap map, IEnumerable<int>? sealedCaves = null)
     {
         _map = map;
         var image = Image.CreateEmpty(LevelMap.Samples, LevelMap.Samples, false, Image.Format.Rf);
         for (int y = 0; y < LevelMap.Samples; y++)
         for (int x = 0; x < LevelMap.Samples; x++)
             image.SetPixel(x, y, new Color(float.IsNaN(map.LidAt(x, y)) ? map[x, y] : map.LidAt(x, y), 0f, 0f));
-        _terrain.SetShaderParameter("heights", ImageTexture.CreateFromImage(image));
-        _terrain.SetShaderParameter("samples", (float)LevelMap.Samples);
-        _terrain.SetShaderParameter("shore", LevelMap.BlockHeight);
+        if (sealedCaves is not null)
+            foreach (int c in sealedCaves)
+            {
+                if (c < 0 || c >= map.Caves.Count) continue;
+                var cave = map.Caves[c];
+                var plug = map.WeakRocks.Find(r => r.Cave == c);
+                for (int y = 0; y < LevelMap.Samples; y++)
+                for (int x = 0; x < LevelMap.Samples; x++)
+                {
+                    var p = new System.Numerics.Vector2(x, y);
+                    bool hidden = plug.Radius > 0f && System.Numerics.Vector2.Distance(p, plug.Center) < plug.Radius + 1.5f
+                        || System.Numerics.Vector2.Distance(p, cave.Mouth) < 3.5f;
+                    foreach (var (centre, radius) in cave.Chambers)
+                        hidden |= System.Numerics.Vector2.Distance(p, centre) < radius + 2.5f;
+                    if (cave.Chambers.Count > 0) hidden |= Geo.SegmentDistance(p, cave.Mouth, cave.Chambers[0].Center) < 3.5f;
+                    for (int i = 1; i < cave.Chambers.Count; i++) hidden |= Geo.SegmentDistance(p, cave.Chambers[i - 1].Center, cave.Chambers[i].Center) < 3.5f;
+                    if (hidden) image.SetPixel(x, y, new Color(Mathf.Max(image.GetPixel(x, y).R, LevelMap.BlockHeight + 3f), 0f, 0f));
+                }
+            }
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("heights"), ImageTexture.CreateFromImage(image));
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("samples"), (float)LevelMap.Samples);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("shore"), LevelMap.BlockHeight);
         Extremes(map, _peaks, 8f, 14f, 1f);
         Extremes(map, _soundings, 6f, 18f, -1f);
         QueueRedraw();
@@ -124,15 +146,15 @@ public partial class TopoMap : Control
     {
         if (_map is null || !IsVisibleInTree() || Size.X < 1f) return;
         var o = Origin;
-        _terrain.SetShaderParameter("view_origin", new Vector2(o.X, o.Y));
-        _terrain.SetShaderParameter("view_size", Size / PixelsPerMetre);
-        _terrain.SetShaderParameter("interval", ContourInterval);
-        _terrain.SetShaderParameter("edges_only", EdgesOnly);
-        _terrain.SetShaderParameter("use_fog", Fog is not null);
-        if (Fog is not null) _terrain.SetShaderParameter("fog", Fog.Texture);
-        _terrain.SetShaderParameter("mud", Mud);
-        _terrain.SetShaderParameter("use_corruption", Corruption is not null);
-        if (Corruption is not null) _terrain.SetShaderParameter("corruption_tex", Corruption);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("view_origin"), new Vector2(o.X, o.Y));
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("view_size"), Size / PixelsPerMetre);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("interval"), ContourInterval);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("edges_only"), EdgesOnly);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_fog"), Fog is not null);
+        if (Fog is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fog"), Fog.Texture);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mud"), Mud);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_corruption"), Corruption is not null);
+        if (Corruption is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("corruption_tex"), Corruption);
         QueueRedraw();
     }
 
@@ -219,14 +241,8 @@ public partial class TopoMap : Control
             DrawCircle(p, r, col);
         }
 
-        // The corruption's works, once seen: a valve as a dark bar across its neck; a Blightroot as an ink sac in a violet
-        // ring (a small gold star where one has burst).
-        foreach (var (a, b, seen, cleared) in Valves)
-            if (seen && !cleared)
-            {
-                DrawLine(P(a), P(b), new Color(0f, 0f, 0f, 0.7f), 7f, true);
-                DrawLine(P(a), P(b), new Color(0.3f, 0.12f, 0.45f), 4f, true);
-            }
+        // The corruption's works, once seen: a Blightroot as an ink sac in a violet ring (a small gold star where one has
+        // burst).
         foreach (var (at, alive) in Blights)
         {
             if (Fog is not null && Fog.At(at) < 0.5f) continue;

@@ -34,4 +34,10 @@ void light() {
 	// The sun also brings the caustics; other lights (her glow) light the reef plainly.
 	float extra = LIGHT_IS_DIRECTIONAL ? BACKLIGHT.x : 0.0;
 	DIFFUSE_LIGHT += (ndl + extra) * ATTENUATION * LIGHT_COLOR / PI;
+	// Wet rock and sand catch her light (and other near lights) in soft glints.
+	if (!LIGHT_IS_DIRECTIONAL) {
+		vec3 hv = normalize(LIGHT + VIEW);
+		float spec = pow(clamp(dot(NORMAL, hv), 0.0, 1.0), 28.0) * (1.0 - ROUGHNESS) * ndl;
+		SPECULAR_LIGHT += spec * ATTENUATION * LIGHT_COLOR * 0.9;
+	}
 }

@@ -78,7 +78,11 @@ public partial class SpringView : Node3D
             LightColor = new Color(0.55f, 0.95f, 1f),
             LightEnergy = 1.4f,
             OmniRange = r * 2.6f,
-            ShadowEnabled = false,
+            // Its light is shadowed like hers: the rocks and kelp round the pool stand out against it.
+            ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows,
+            OmniShadowMode = OmniLight3D.ShadowMode.DualParaboloid,
+            ShadowBias = 0.08f,
+            ShadowBlur = 1.5f,
             Position = at + Vector3.Up * (floor + 1.2f),
         };
         AddChild(pool);
@@ -98,10 +102,10 @@ public partial class SpringView : Node3D
             // Fading, it eases out (slow at first, then gone).
             float k = v.Fade * v.Fade;
             v.Bathe = Mathf.MoveToward(v.Bathe, v.Spring.Bathing ? 1f : 0f, dt * 2.5f);
-            v.Pool.SetInstanceShaderParameter("bathing", v.Bathe);
-            v.Column.SetInstanceShaderParameter("bathing", v.Bathe);
-            v.Pool.SetInstanceShaderParameter("fade", k);
-            v.Column.SetInstanceShaderParameter("fade", k);
+            v.Pool.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bathing"), v.Bathe);
+            v.Column.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bathing"), v.Bathe);
+            v.Pool.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), k);
+            v.Column.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), k);
             v.Light.LightEnergy = (1.4f + 1.6f * v.Bathe) * k;
             v.Light.LightColor = new Color(0.55f, 0.95f, 1f).Lerp(new Color(1f, 0.85f, 0.55f), 0.4f * v.Bathe);
             // Sparkles rise from the water: a few always, a stream while she bathes.

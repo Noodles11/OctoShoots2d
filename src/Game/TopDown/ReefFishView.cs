@@ -57,17 +57,17 @@ public partial class ReefFishView : Node3D
         {
             var st = Styles[k];
             var material = new ShaderMaterial { Shader = shader };
-            material.SetShaderParameter("kind", k);
-            material.SetShaderParameter("body_length", st.Spec.Length);
-            material.SetShaderParameter("waves", st.Waves);
-            material.SetShaderParameter("wave_amp", st.WaveAmp);
-            material.SetShaderParameter("tail_amp", st.TailAmp);
-            material.SetShaderParameter("fin_amp", st.FinAmp);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("kind"), k);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("body_length"), st.Spec.Length);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("waves"), st.Waves);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("wave_amp"), st.WaveAmp);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("tail_amp"), st.TailAmp);
+            material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fin_amp"), st.FinAmp);
             _materials[k] = material;
             _bodies[k] = ReefFishMeshes.Build(st.Spec);
         }
         _anemone = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/anemone.gdshader") };
-        _anemone.SetShaderParameter("tip_color", new Color(0.97f, 0.9f, 0.72f));
+        _anemone.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("tip_color"), new Color(0.97f, 0.9f, 0.72f));
         _anemoneMesh = ReefMeshes.Anemone();
     }
 

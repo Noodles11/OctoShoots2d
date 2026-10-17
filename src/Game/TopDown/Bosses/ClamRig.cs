@@ -32,9 +32,9 @@ public partial class ClamRig : BossRig
     {
         _shell = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clam_shell.gdshader") };
         var c = ToColor(Spec.TrueColor);
-        _shell.SetShaderParameter("color_a", c);
-        _shell.SetShaderParameter("color_b", c.Darkened(0.35f));
-        _shell.SetShaderParameter("ribs", 5f + Spec.Count * 0.12f);
+        _shell.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("color_a"), c);
+        _shell.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("color_b"), c.Darkened(0.35f));
+        _shell.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ribs"), 5f + Spec.Count * 0.12f);
         float rx = R * Spec.Stretch, rz = R * 0.88f;
         float depth = 0.6f + 0.3f * Spec.Bulk;
         // The bottom valve: a flattened bowl; the top one hinged at the back (local −X), opening upward.

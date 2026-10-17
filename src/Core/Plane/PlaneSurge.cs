@@ -480,7 +480,7 @@ public sealed partial class PlaneWorld
         }
         // The murklings' throws it crosses in the air burst.
         foreach (var s in MurkShots)
-            if (s.Life > 0f && s.Airborne && OnSurge(surge, s.Position, BlightTuning.ThrowRadius)) SplatterThrow(s);
+            if (s.Life > 0f && s.Airborne && OnSurge(surge, s.Position, s.Radius)) SplatterThrow(s);
         // Its last light clears a little of the ground where it ends and where it strikes.
         if (Corruption is not { } ground) return;
         var cleared = new List<Vector2>();

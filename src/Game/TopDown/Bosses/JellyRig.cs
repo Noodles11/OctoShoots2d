@@ -28,8 +28,8 @@ public partial class JellyRig : BossRig
     protected override ShaderMaterial MakeSkin()
     {
         var m = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/boss_jelly.gdshader") };
-        m.SetShaderParameter("body_color", ToColor(Spec.TrueColor));
-        m.SetShaderParameter("accent_color", ToColor(Spec.Accent));
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("body_color"), ToColor(Spec.TrueColor));
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("accent_color"), ToColor(Spec.Accent));
         return m;
     }
 

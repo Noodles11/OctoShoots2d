@@ -30,6 +30,13 @@ public sealed class ViewOptions
     public bool ReplayTutorial = false;
     /// <summary>Strength of sunlight under water: god rays, caustics and dappled light (0 turns them off).</summary>
     [Tune("Light", 0f, 2f)] public float SunLight = 1f;
+    /// <summary>
+    /// Her lantern and the reef's lights (springs, clam rooms, the Crack) cast shadows. Off is lighter on the GPU: light
+    /// then reaches through rock as it did, though her glow in the water still stops at the reef (that needs no GPU).
+    /// </summary>
+    [Tune("Light")] public bool LightShadows = true;
+    /// <summary>Whether lights made from now on cast shadows (set from the options when a run starts).</summary>
+    public static bool Shadows = true;
 }
 
 /// <summary>Loads and saves tuning and options as JSON in the user directory.</summary>

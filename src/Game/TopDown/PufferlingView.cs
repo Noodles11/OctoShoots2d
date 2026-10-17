@@ -110,7 +110,7 @@ public partial class PufferlingView : Node3D
             pivot.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.005f, BottomRadius = 0.005f, Height = 0.08f, RadialSegments = 4 }, MaterialOverride = _stringMaterial, Position = new Vector3(-0.06f, -0.06f, 0f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
             pivot.AddChild(new MeshInstance3D { Mesh = _tagMesh, MaterialOverride = _tagMaterial, Position = new Vector3(-0.1f, -0.14f, 0f), Name = "Tag" });
         }
-        body.SetInstanceShaderParameter("pattern", (fish.Id * 0.137f) % 1f);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (fish.Id * 0.137f) % 1f);
         return fish;
     }
 
@@ -177,14 +177,14 @@ public partial class PufferlingView : Node3D
         f.Root.Basis = new Basis(Vector3.Up, f.Yaw) * new Basis(Vector3.Right, f.Roll) * new Basis(Vector3.Back, -0.06f * f.Swim * (1f - f.Inflate));
         float turn = Mathf.Clamp(s.TurnRate / 2.1f, -1f, 1f);
         var body = f.Body;
-        body.SetInstanceShaderParameter("inflate", f.Inflate);
-        body.SetInstanceShaderParameter("spines", spines);
-        body.SetInstanceShaderParameter("swim", f.Swim);
-        body.SetInstanceShaderParameter("tail_phase", f.TailPhase);
-        body.SetInstanceShaderParameter("fin_phase", f.FinPhase);
-        body.SetInstanceShaderParameter("turn", turn);
-        body.SetInstanceShaderParameter("corrupt", corrupt);
-        body.SetInstanceShaderParameter("flash", flash);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("inflate"), f.Inflate);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("spines"), spines);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("swim"), f.Swim);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tail_phase"), f.TailPhase);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fin_phase"), f.FinPhase);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("turn"), turn);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("corrupt"), corrupt);
+        body.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("flash"), flash);
         // The tag rides the tail fin as the shader sweeps it (pufferling.gdshader's tail and wiggle), dangling on its string.
         if (f.HasTag)
         {
@@ -242,7 +242,7 @@ public partial class PufferlingView : Node3D
         if (_poofMaterial is null)
         {
             _poofMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/plane_bubble.gdshader") };
-            _poofMaterial.SetShaderParameter("base_light", 0.6f);
+            _poofMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("base_light"), 0.6f);
         }
         return _poofMaterial;
     }

@@ -100,7 +100,7 @@ public partial class SeaPediaCard : PanelContainer
     public override void _Process(double delta)
     {
         _time += (float)delta;
-        foreach (var m in _spinning) m.SetShaderParameter("spin", _time * 0.6f);
+        foreach (var m in _spinning) m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("spin"), _time * 0.6f);
     }
 
     /// <summary>Opens on the Creatures tab.</summary>
@@ -181,11 +181,11 @@ public partial class SeaPediaCard : PanelContainer
         var mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/pearl_icon.gdshader") };
         var look = item?.Pearl;
         var colors = look?.Colors ?? new List<string> { "#ffffff", "#dddddd" };
-        mat.SetShaderParameter("c0", Color.FromHtml(colors[0]));
-        mat.SetShaderParameter("c1", Color.FromHtml(colors[Math.Min(1, colors.Count - 1)]));
-        mat.SetShaderParameter("c2", Color.FromHtml(colors[^1]));
-        mat.SetShaderParameter("pattern", (int)(look?.Pattern ?? PearlPattern.Halo));
-        mat.SetShaderParameter("state", state switch { Known.Absorbed => 0, Known.Seen => 1, _ => 2 });
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), Color.FromHtml(colors[0]));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), Color.FromHtml(colors[Math.Min(1, colors.Count - 1)]));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), Color.FromHtml(colors[^1]));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)(look?.Pattern ?? PearlPattern.Halo));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("state"), state switch { Known.Absorbed => 0, Known.Seen => 1, _ => 2 });
         _spinning.Add(mat);
         return new ColorRect { CustomMinimumSize = new Vector2(size, size), Material = mat, MouseFilter = MouseFilterEnum.Ignore };
     }

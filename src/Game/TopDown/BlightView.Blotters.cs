@@ -46,11 +46,11 @@ public partial class BlightView
             if (!_bombs.TryGetValue(bomb, out var view))
             {
                 var ball = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.32f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-                ball.SetInstanceShaderParameter("ember", 0.08f);
-                ball.SetInstanceShaderParameter("wobble", 1.4f);
-                ball.SetInstanceShaderParameter("seed", bomb.From.X * 0.3f);
+                ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.08f);
+                ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 1.4f);
+                ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), bomb.From.X * 0.3f);
                 var mark = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-                mark.SetInstanceShaderParameter("seed", bomb.To.Y * 0.2f);
+                mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), bomb.To.Y * 0.2f);
                 AddChild(ball);
                 AddChild(mark);
                 _bombs[bomb] = view = (ball, mark);
@@ -64,8 +64,8 @@ public partial class BlightView
             float r = BlotterTuning.SplashRadius * (1.25f - 0.25f * t);
             view.Mark.Position = new Vector3(bomb.To.X, Floor(bomb.To) + 0.07f, bomb.To.Y);
             view.Mark.Scale = new Vector3(r, 1f, r);
-            view.Mark.SetInstanceShaderParameter("tint", new Color(0.05f, 0.02f, 0.08f, 0.35f + 0.5f * t));
-            view.Mark.SetInstanceShaderParameter("width", 0.12f + 0.1f * t);
+            view.Mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(0.05f, 0.02f, 0.08f, 0.35f + 0.5f * t));
+            view.Mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("width"), 0.12f + 0.1f * t);
         }
     }
 
@@ -93,9 +93,9 @@ public partial class BlightView
         for (int i = 0; i < SlugSegments; i++)
         {
             body[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            body[i].SetInstanceShaderParameter("seed", b.Seed + i * 1.9f);
-            body[i].SetInstanceShaderParameter("ember", i == 0 ? 0.15f : 0.05f);
-            body[i].SetInstanceShaderParameter("wobble", 0.5f);
+            body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), b.Seed + i * 1.9f);
+            body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), i == 0 ? 0.15f : 0.05f);
+            body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.5f);
             node.AddChild(body[i]);
         }
         var stalks = new MeshInstance3D[2];
@@ -108,11 +108,11 @@ public partial class BlightView
                 MaterialOverride = _orb,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             };
-            stalks[i].SetInstanceShaderParameter("ember", 0f);
-            stalks[i].SetInstanceShaderParameter("wobble", 0f);
+            stalks[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
+            stalks[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
             eyes[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _sacMat, Scale = Vector3.One * 0.13f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            eyes[i].SetInstanceShaderParameter("ember", 1.2f);
-            eyes[i].SetInstanceShaderParameter("wobble", 0f);
+            eyes[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 1.2f);
+            eyes[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
             node.AddChild(stalks[i]);
             node.AddChild(eyes[i]);
         }

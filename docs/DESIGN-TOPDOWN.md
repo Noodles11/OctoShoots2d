@@ -400,7 +400,7 @@ pockets sealed off by rock, or behind gaps too narrow for her, and the dead floo
 into rock (`Mountains.Fill`). It meets the walls round it at their own height, climbs from her plane at open water's
 edge, and rises toward ridged peaks in its middle (0.9 m per metre in, up to 7 m over the rock round it, ridges up to
 2.2 m), so the reef reads as one mountain range, not walls with flat holes between them. Open floor within 2 m of
-water she can reach stays open (the walls' foot), and secret rooms count as reachable (their weak rock opens).
+water she can reach stays open (the walls' foot), and secret rooms count as reachable (their seal opens).
 Running after the checks, it never changes what she can reach.
 
 **Stage 6 — Mob spawn rules:**
@@ -420,8 +420,16 @@ Running after the checks, it never changes what she can reach.
 
 ### 4.2 Special places (caves, inherited from DESIGN-3D §6.4)
 - Clam room, **Barnaby's shop** (safe water, inherited §24), curse den,
-  **secret cave** (plugged by weak rock — one ink bomb), Mermaid's Grotto
-  portal after bosses.
+  **secret cave** (sealed, see below), Mermaid's Grotto portal after bosses.
+- **Secret rooms are sealed** (`PlaneSeals.cs`, `SealView`, `seal_emblem.gdshader`): the way in is closed by a stretch of
+  ordinary wall: the reef's own ground carried across the gap, as high as the rock either side and running into it,
+  its canyon face rising from the floor as steeply as the walls do, so nothing tells it apart. On its canyon face an **X is carved**, faintly (a shallow shade in the stone, easy to miss). Each of her
+  shots that strikes the seal within 1.8 m of the X fills it a sixth with her light (from the crossing out along both
+  strokes; damage does not matter, a merged or bouncing bubble counts once), with a flash and a chime rising as it
+  fills. Filled after 6, the wall crumbles: it shudders and sinks into the floor, chunks of rock tumble out and settle, silt
+  rolls out of the way in, with a shake and a rumble; the way in is open. Until then the minimap and the Tab map draw
+  the whole secret cave (its chamber, its way in and the seal) as wall, so the charts give it away no more than the
+  reef does.
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
   into the ridge behind its spur, 26–44 m long (about 2.8 m wide, in bending legs of 5–10 m), so finding its end
   in the dark takes a good few seconds. Black fog seeps out of its mouth into the canyon.
@@ -602,8 +610,10 @@ So whatever lies below Clementine carries two marks, from the first minute:
 Both are laid on in the water pass (`topdown_post.gdshader`, from the
 `her_glow` globals that BellView sets each frame) after the floor's haze and
 blur, so neither is washed out; only on what lies below her (never rock over
-her head), fading as the gap below her grows and as she turns head-down into
-a dive. She is drawn after that pass, so the shadow never darkens her.
+her head) and only where her light reaches (§5.3), fading as the gap below her
+grows and as she turns head-down into a dive. She is drawn after that pass, so
+the shadow never darkens her. Her light itself is a real, shadowed light and
+glows in the water round her (§5.3).
 
 ### 5.1 Per-depth light budget (drives palette, mood, and difficulty readability)
 
@@ -635,6 +645,43 @@ and 0.45; their look's Menace at most 0.6).
 Low-res 2D velocity field on the plane; drives bubbles, marine snow, kelp/fan
 sway, ink clouds, current streaks. Bosses and dashes inject swirls. Cosmetic
 stream only — never touches gameplay physics. Quality presets inherited.
+
+### 5.3 Light transport (`light_field.gdshaderinc`, `HorizonMap`, `SunMap`)
+
+Every light that matters reaches only where it can: the reef is a heightfield, so visibility is worked out on it
+exactly and cheaply, and the water glows where light passes through it.
+
+- **Her lantern** (BellView): a shadowed point light inside her bell (soft shadows from a light the size of her heart;
+  her own bell and strands cast none). Its strength follows the depth's **Lantern** (`ReefLook.Lantern`, §5.1): 1 in the
+  Shallows, 1.1 Kelp, 1.35 Galleon, 1.5 Carnival, 1.85 Trench, 2 Abyss, 0.6 Tank; the light is 2.6 × Lantern^1.8 strong,
+  reaches 11 m × √Lantern (× Lantern Pearl's glow) and falls off more gently the deeper she is, so in the Trench and the
+  Abyss she lights the canyon floor, walls, kelp and creatures round her and they throw shadows away from her.
+- **Where her light reaches — the horizon map** (`HorizonMap.cs`): round her light, for 256 directions × 32 distances
+  (out to its reach), the running steepest slope of the terrain (its height over the light ÷ the distance). A point is
+  lit exactly when its own slope from the light clears that; one texture lookup (`her_vis`), soft at the edge. Redone
+  when she moves (a quarter of a millisecond).
+- **Her glow in the water**: the water her light passes through scatters it toward the eye, integrated along every
+  pixel's view ray. For a point light that integral has a closed form, (I / h)·(θb − θa) with h the ray's closest
+  approach and θ the angle seen from the light; 10 samples spaced evenly in that angle (equiangular sampling, jittered
+  per pixel) carry equal weight, so the unshadowed glow is exact and only the shadows are sampled: walls, boulders and
+  rises cut dark shafts into her glow. Forward-scattering (Henyey-Greenstein, g 0.25), stronger in murkier water. What
+  she lights keeps its warmth: the water pass's red loss, its veil over the deeps and its cool shadow grade ease off
+  in proportion to how strongly her light falls on a point.
+- **Where the sun reaches — the sun map** (`SunMap.cs`, sunlight.gdshaderinc `sun_lit`): for every point of the sea
+  surface, the height where its ray of sunlight first meets the reef (terrain, a cave's roof, an arch or overhang),
+  cast once per level on a worker thread (a 200 × 200 map). The god rays are summed only where the sun reaches, so
+  light falls in beams past the walls and through the holes in arches; creatures, flora and marine snow lose their
+  caustics in the reef's shade. Off during the dive (the sea surface moves), back when the next level's map is ready.
+- **Refraction**: her bell is a lens, gathering her light into bright caustic filaments that play over the floor below
+  her (wider and softer the farther the floor). Her bubbles are lenses too: the sun's light through each (in the lit
+  depths) and her lantern's (thrown outward from her) fall on the floor as bright rings, larger the farther they fall.
+  The sea surface's own caustics are §5.1's.
+- **Glints**: wet rock and sand catch her light and the reef's other lights in soft specular glints.
+- **The reef's other lights** cast shadows too: a light spring's, a clam room's inner light and the Crack's
+  (dual-paraboloid, cheaper than hers). Her bubbles' small lights do not.
+- **Cost** (RTX 3090, 1600×900): about 0.4 ms of GPU per frame over the old look, and a quarter of a millisecond of CPU
+  for the horizon map. The **Light shadows** option (Settings) turns the light shadows off on weaker GPUs; her glow in
+  the water still stops at the reef, since that comes from the horizon map, not the GPU's shadows.
 
 ---
 
@@ -898,9 +945,9 @@ at mist distance (inherited fade rule).
    §4.2 puts every special room in a cave: shop, clam room, 1–2 secrets and 0–1 curse den (3–5 rooms). Built: each
    special room gets its own cave (clam room multi-chamber, the curse den a tunnel, shop and secrets pockets), so a
    level can have 3 pockets and 5 caves.
-5. **Secret cave vs reachability:** the secret cave is plugged by weak rock, but every POI must be flood-fill
-   reachable. Built: the heightfield reaches it; the plug is a separate `WeakRock` that blocks swimming until it
-   is broken (tested separately).
+5. **Secret cave vs reachability:** the secret cave is sealed, but every POI must be flood-fill reachable. Built:
+   the heightfield reaches it; the seal is a separate `WeakRock` that blocks swimming and shots until her light on its
+   emblem opens it (tested separately).
 6. **Arches on "peaks":** an arch spans 10–20 m and stands on "peak pairs", but peaks are 10–16 m and rise well
    beyond 5–10 m from a corridor's centre line. Built: footings at the first ground ≥ 6 m high (falling back to
    5 m, then 4 m), with steeper ridge walls (k = 0.9, a value the doc leaves open). Most levels get 1–2 arches.
@@ -966,7 +1013,7 @@ at mist distance (inherited fade rule).
   within 1.5 m. **Blue-green chromis** school round a centre that roams the channels, parting round her and closing
   behind. **A school is a guide:** on a level with a secret room she has not found, swimming into a school makes it
   hold still and gather into an arrow (a short chevron head, a long two-lane shaft, sized to the school) pointing at
-  the secret's way in (its weak rock), every fish facing along it, with a soft chime; it loosens back into a school
+  the secret's way in (its seal), every fish facing along it, with a soft chime; it loosens back into a school
   when she leaves, and once the secret is found it no longer points. Schools are few but big, so they visibly split and join: a school spreads over about 0.33 m × √(its fish).
   Her dash startles all of them from 4 m. None within 20 m of the start. Per level by depth: Depth 0 (the Shallows) has
   4–6 anemones, 4–7 tangs and 1–2 schools of 45–90; Depth 1 fewer (2–3, 2–4, one school of 30–60); Depth 2 at most
@@ -1162,7 +1209,7 @@ at mist distance (inherited fade rule).
   - its caustic and god-ray strength, and its saturation, vignette and murk;
   - its Menace (0 in the Shallows and the Kelp Jungle → 1 at the Tank, 0.2 a depth).
   Depth 0 (Sunlit Shallows) is tuned; the other six carry the bible's palettes, ready to be tuned as they are built.
-- **The reef's skin** (one shader for the ground, arches, cave roofs, boulders and weak rock, worked out in world
+- **The reef's skin** (one shader for the ground, arches, cave roofs, boulders and secret rooms' seals, worked out in world
   space, so separate pieces meet seamlessly):
   - **Seabed:** rippled sand in patchy fields with flat sand between, sinuous crests, shell grit, soft algae drifts,
     and a shaded apron at the feet of walls.

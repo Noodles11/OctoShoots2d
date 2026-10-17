@@ -2,7 +2,7 @@
 
 How Ink Deep's corruption, its enemies and the boss arena are built. The design brief is "Corruption & Combat:
 Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruption.cs` (the field, its tuning and
-`PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, gloomvines, valves, murklings, the arena). The
+`PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, gloomvines, murklings, the arena). The
 presentation is in `src/Game/TopDown/CorruptionView.cs`, `BlightView.cs` and `CleanseMeter.cs`, and in the shaders
 named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed, and ambush
 clearings bud murklings instead. The healthy fish still swim the reef, and the murklings hunt them (see Lesser
@@ -86,7 +86,10 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 ## Murklings (`Murkling`)
 
 - **Budding:** each living Blightroot's area buds one from dense ground (≥ 0.6), at least 5 m from her, every
-  15 s / (1 + 0.6 × Menace). The bud takes 0.8 s and is shown as a dark bead swelling out of the floor with a ripple.
+  15 s / (1 + 0.6 × Menace). The bud takes 0.8 s. **It is made of the ink under it:** over the bud it sucks up the
+  corruption within 1.2 m, leaving that floor clean (it counts as cleansed). The dots of corruption over the disc draw
+  in to its middle in a slow swirl under a dark ring closing in, then rise together to her plane and close into the
+  sphere that is the murkling, swelling up as they arrive. Ambush and guard buds gather the same way.
 - **Cap:** 2 + 1.5 × Menace per area. An area cleansed past 80% stops budding for good.
 - **The arena** buds every 6 s, but only while its boss fights.
 - **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
@@ -116,6 +119,23 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   with Menace) after 0.8 s without a hit, and one strong (merged) shot empties it at once. Each shot bursts on it, and
   a piercing one flies on. Passing through a throw halves a shot's light. A murkling burst over cleansed ground drops
   its ember, which blooms a 2.6 m patch of colour.
+
+## Murkling primes (`Murkling.Prime`)
+
+- **Rare:** an area's bud is a prime with a chance of 6% + 4% × Menace, where at least 60% of the 3.5 m disc round it
+  is dense ink (≥ 0.6), it has room and she is over 6.5 m off. At most one is alive per area and two bud a level;
+  ambushes and guards never bud one.
+- **Its bud** takes 2 s and sucks up the whole 3.5 m disc, a great swirl of dots drawing in and rising into it.
+- **Size:** five times a murkling's: a 2.25 m radius (4.5 m across, against her 0.84 m) to see and to hit; it moves as
+  a 1.4 m body, so it squeezes through the passes.
+- **Every stat scaled:** its corruption meter is five times a murkling's (180 × (1 + 0.2 × Menace)); its sense and
+  throw range 1.5 times (21 m and 13.5 m); its throws 2.5 times as big and as hard (17.5 damage, radius 0.25 m,
+  splashing 2 m on fish, staining 2.25 m where they fall), after a 1 s slingshot wind-up (shorter with Menace). It
+  moves at 0.7 times a murkling's pace. It hunts fish as a murkling does.
+- **It rams instead of clinging:** touching her deals 15 and shoves her off at 9 m/s.
+- **Freed:** a great burst of ink and gold, felt (a deep chime, a shake); its ember blooms a 6 m patch of colour
+  wherever it bursts, and it always leaves 4–6 shells, and a light orb
+  30% of the time.
 
 ## Lesser murklings (`PlaneMurkFish.cs`)
 
@@ -171,17 +191,6 @@ drains away. It is shown only while partly emptied: it fades out when full again
   back 2 m.
 - **Cutting:** a popping bubble cuts the vine where it meets it, and everything past the cut is gone. Vines regrow at
   0.4 m/s while the ground at their root is still corrupted.
-
-## Valves (`Valve`)
-
-- Placed 2.5 m out on the spur of each shell cache, secret and curse den. From level 2 onward there is also one at
-  the narrowest neck of the main way.
-- **Crossing:** she always can (light passes through dark). It costs up to ~11 HP at full integrity, scaled by
-  integrity and distance swum inside. **Dashing through costs nothing.**
-- **Cleansing its edges:** her light within 2.2 m of it wears it down in about 3 s, and each pop near it takes 0.06
-  per bubble.
-- **Cleared for good** once she has passed through, or once it is worn away. Each valve marks itself on both maps
-  once seen.
 
 ## Queen Clam (the Depth 1 boss)
 
@@ -287,12 +296,11 @@ Cleared corruption never just vanishes. It evaporates.
   ink-black, glossy, a cold violet rim, and murklings carry a dim stolen ember.
 - Other shaders:
   - `ink_ring.gdshader`: pulses, buds, bursts.
-  - `valve_ink.gdshader`: rolling ink smoke whose cracks burn gold as it wears.
   - `gloomvine.gdshader`: glossy tubes with a violet pulse, dissolving in gold.
 - **HUD** (`CleanseMeter`): the level cleansed, with the 50% and 75% tipping points marked. On boss levels it also
   shows the arena, with the Crack's 60% mark and the crust as pips.
-- **Maps:** open water reads ink-violet where corrupted, so the map regains its colour as she plays. Blightroots and
-  seen valves are marked.
+- **Maps:** open water reads ink-violet where corrupted, so the map regains its colour as she plays. Blightroots are
+  marked once seen.
 
 ## Not yet
 

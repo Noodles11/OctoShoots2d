@@ -29,10 +29,10 @@ public partial class BlightView
             {
                 if (c.Revealed) continue;
                 _bumpMat ??= new ShaderMaterial { Shader = _orb.Shader };
-                _bumpMat.SetShaderParameter("ember_color", new Color(1f, 0.75f, 0.35f));
+                _bumpMat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(1f, 0.75f, 0.35f));
                 bump = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _bumpMat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-                bump.SetInstanceShaderParameter("seed", c.Seed);
-                bump.SetInstanceShaderParameter("wobble", 0.25f);
+                bump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), c.Seed);
+                bump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.25f);
                 AddChild(bump);
                 _bumps[c] = bump;
             }
@@ -49,7 +49,7 @@ public partial class BlightView
             bump.Scale = new Vector3(0.8f * breathe, (0.12f + 0.3f * ink) * breathe, 0.8f * breathe);
             // A faint warm glint shows through now and then: something lies beneath.
             float glint = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(_time * 0.9f + c.Seed * 3f)), 12f);
-            bump.SetInstanceShaderParameter("ember", 0.05f + 0.35f * glint);
+            bump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.05f + 0.35f * glint);
         }
     }
 }

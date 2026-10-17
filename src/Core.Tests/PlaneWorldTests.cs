@@ -129,6 +129,41 @@ public class PlaneWorldTests
     }
 
     [Fact]
+    public void HerLightOnTheEmblemFillsItAndTheSealCrumbles()
+    {
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Secrets > 0)), new Tuning());
+        var seal = w.Seals.First();
+        Assert.False(w.Clear(seal.Rock.Center, w.Radius));
+        // A shot flying into the emblem from the canyon side: whatever its damage, it counts once.
+        var seen = new System.Collections.Generic.List<PlaneEventType>();
+        void Shoot(Vector2 aimAt, float damage)
+        {
+            var from = aimAt + seal.Facing * 1.2f;
+            w.Shots.Add(new PlaneShot { Position = from, Line = from, Velocity = -seal.Facing * 12f, Life = 1f, FromPlayer = true, Damage = damage, Radius = 0.2f });
+            for (int i = 0; i < 12; i++)
+            {
+                w.Step(default);
+                seen.AddRange(w.Events.Select(e => e.Type));
+            }
+        }
+        // Striking the seal far from its emblem (its back, inside the cave) does nothing.
+        var back = seal.Rock.Center - seal.Facing * (seal.Rock.Radius - 0.2f);
+        w.Shots.Add(new PlaneShot { Position = back - seal.Facing * 1.2f, Line = back, Velocity = seal.Facing * 12f, Life = 1f, FromPlayer = true, Damage = 10f, Radius = 0.2f });
+        for (int i = 0; i < 12; i++) w.Step(default);
+        Assert.Equal(0, seal.Hits);
+        for (int k = 0; k < SealTuning.Hits - 1; k++) Shoot(seal.Emblem, k == 0 ? 500f : 10f);
+        Assert.Equal(SealTuning.Hits - 1, seal.Hits);
+        Assert.False(seal.Open);
+        Assert.Contains(w.SealedCaves, c => c == seal.Rock.Cave);
+        Shoot(seal.Emblem, 10f);
+        Assert.True(seal.Open);
+        Assert.Contains(PlaneEventType.SealOpened, seen);
+        Assert.Equal(SealTuning.Hits, seen.Count(t => t == PlaneEventType.SealLit));
+        Assert.True(w.Clear(seal.Rock.Center, w.Radius), "the way in is open");
+        Assert.DoesNotContain(w.SealedCaves, c => c == seal.Rock.Cave);
+    }
+
+    [Fact]
     public void MovementIsDeterministic()
     {
         ulong Run()

@@ -195,10 +195,10 @@ public partial class SaveCard : PanelContainer
     {
         var mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/pearl_icon.gdshader") };
         var colors = item?.Pearl?.Colors ?? new List<string> { "#ffffff", "#dddddd" };
-        mat.SetShaderParameter("c0", Color.FromHtml(colors[0]));
-        mat.SetShaderParameter("c1", Color.FromHtml(colors[Math.Min(1, colors.Count - 1)]));
-        mat.SetShaderParameter("c2", Color.FromHtml(colors[^1]));
-        mat.SetShaderParameter("pattern", (int)(item?.Pearl?.Pattern ?? PearlPattern.Halo));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), Color.FromHtml(colors[0]));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), Color.FromHtml(colors[Math.Min(1, colors.Count - 1)]));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), Color.FromHtml(colors[^1]));
+        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)(item?.Pearl?.Pattern ?? PearlPattern.Halo));
         return new ColorRect { CustomMinimumSize = new Vector2(26f, 26f), Material = mat, TooltipText = item?.Name ?? "" };
     }
 

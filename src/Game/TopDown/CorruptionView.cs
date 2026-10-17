@@ -110,7 +110,7 @@ public partial class CorruptionView : Node3D
         ApplyFade();
     }
 
-    void ApplyFade() => _material.SetShaderParameter("fade", _fade * Mathf.SmoothStep(0f, 1f, _appear));
+    void ApplyFade() => _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), _fade * Mathf.SmoothStep(0f, 1f, _appear));
 
     public override void _Process(double delta)
     {
@@ -136,7 +136,7 @@ public partial class CorruptionView : Node3D
         _appear = 0f;
         ApplyFade();
         if (layout is null || texture is null) return;
-        _material.SetShaderParameter("corruption_map", texture);
+        _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("corruption_map"), texture);
         // A quad: the shader turns it to the camera and shapes the drop on it.
         var shard = _spore ??= new QuadMesh { Size = Vector2.One };
         for (int c = 0; c < layout.Buffers.Length; c++)

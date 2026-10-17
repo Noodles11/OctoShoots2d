@@ -3,20 +3,25 @@
 //   Below it the world blurs and sinks into the depth's water colour, turquoise in the Shallows, murk further down.
 //   Above it rock blurs into soft foreground silhouettes, tinted by the water rather than blackened.
 //   God rays rake across the view: shafts of sunlight marched along each view ray through the water column, parallel
-//   to the sun, ending in the caustics they make below. Never into the lens: the camera looks down.
-//   A faint refraction wobble, her warm halo, a grade (saturation, cool shadows, sunlit highlights) and a vignette
-//   tinted by the water, all deepening with Menace.
+//   to the sun, ending in the caustics they make below, cut off where the reef shades the water (SunMap). Never into
+//   the lens: the camera looks down.
+//   Her light glows in the water along every view ray, shadowed by the reef (light_field, DESIGN-TOPDOWN §5.3); her bell
+//   and her bubbles throw caustics on the floor.
+//   A faint refraction wobble, a grade (saturation, cool shadows, sunlit highlights) and a vignette tinted by the
+//   water, all deepening with Menace.
 // A full-screen quad in the transparent pass, drawn first, so Clementine and the other glowing things land on top sharp.
 shader_type spatial;
 render_mode unshaded, depth_test_disabled, depth_draw_never, cull_disabled, fog_disabled, shadows_disabled;
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
+#include "res://assets/shaders/light_field.gdshaderinc"
 
 global uniform vec3 reef_water_shallow;
 global uniform vec3 reef_water_deep;
 global uniform vec3 reef_murk;
 global uniform vec3 reef_sun;
 global uniform float reef_rays;
+global uniform float reef_caustics;
 global uniform float reef_menace;
 global uniform float reef_saturation;
 global uniform float reef_vignette;
@@ -25,6 +30,8 @@ global uniform vec4 reef_crack;
 /// Clementine's bell in world space and her glow pool's radius; how strong her glow on the floor is (BellView).
 global uniform vec4 her_glow;
 global uniform float her_glow_strength;
+/// The depth's lantern (ReefLook.Lantern): how much her light carries against the dark.
+global uniform float her_lantern;
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
@@ -42,10 +49,9 @@ uniform float peak_from = 4.0;
 uniform float peak_span = 6.0;
 uniform float peak_blur = 2.2;
 uniform float peak_blue = 0.6;
-/// Clementine's glow scattering in the water around her: a warm halo on the swim layer, the scene's lantern.
+/// Where the camera follows her (the swim layer the bubbles' halos lie on).
 uniform vec3 player_pos = vec3(0.0);
-uniform vec3 halo_color : source_color = vec3(1.0, 0.77, 0.42);
-uniform float halo_radius = 8.0;
+/// The bubbles' halos' strength (her own glow in the water is light_field's in-scatter).
 uniform float halo_strength = 0.16;
 /// Light bubbles (docs/LIGHT-BUBBLES.md): up to 16 small halos on the swim layer, from her bubbles and the blooms they
 /// leave where they pop: x, z (world), radius (metres), strength (a share of her halo's, ≤ 0.4).
@@ -57,6 +63,9 @@ uniform int clam_count = 0;
 // Each glow in the colour of the pearl lying in its room.
 uniform vec3 clam_colors[6];
 uniform int bubble_count = 0;
+/// Her bubbles in flight as lenses (CombatView.Lenses): x, height, z (world) and radius.
+uniform vec4 lenses[12];
+uniform int lens_count = 0;
 // Her light and the warm tint of her glow (HerColor.cs, data/clementine_color.cfg).
 global uniform vec3 her_light;
 global uniform vec3 her_warm;
@@ -67,6 +76,8 @@ uniform float edge_flash = 0.0;
 /// The absolute position (xz) of the world's origin: the god rays never jump after a dive.
 uniform vec2 world_origin = vec2(0.0);
 uniform float wobble = 1.0;
+/// Verification (--dbg-lightview): 1 shows where the sun reaches (yellow) and her light reaches (orange) on what is drawn.
+uniform int debug_view = 0;
 
 void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
@@ -138,7 +149,9 @@ void fragment() {
 	// Everything is seen through water: reds fade and a turquoise in-scatter rises with the water between the sea
 	// surface and what this pixel shows (rock tops near the surface keep more of their colour).
 	float column_in = clamp((sea_surface_y - (open_deep ? -40.0 : world.y)) / 20.0, 0.0, 1.5);
-	col *= mix(vec3(1.0), vec3(0.64, 0.9, 1.05), column_in);
+	// What her own light falls on keeps its warmth: her light travels a few metres, not down from the surface.
+	float lit = open_deep ? 0.0 : her_reach(world);
+	col *= mix(vec3(1.0), vec3(0.64, 0.9, 1.05), column_in * (1.0 - 0.85 * lit));
 	col = mix(col, reef_water_deep * 0.7, 0.13 * column_in);
 
 	// The deeps sink into the water: turquoise just under the layer, the depth's murk far below. Clear water in the
@@ -146,7 +159,8 @@ void fragment() {
 	vec3 water = mix(reef_water_deep, reef_murk, smoothstep(2.0, 16.0, below));
 	float veil = mix(0.18, 0.5, reef_fog);
 	float fog = smoothstep(0.0, 1.8, below) * (veil + (0.85 - veil) * (1.0 - exp(-below * deep_fog * (0.6 + reef_fog))));
-	col = mix(col, water, fog);
+	// The water she lights is not a veil of murk over what she shows.
+	col = mix(col, water, fog * (1.0 - 0.7 * lit));
 	// Tall tops take on the water's blue (the shallow turquoise toward the depth's own deep water).
 	vec3 haze = mix(reef_water_shallow, reef_water_deep, 0.45) * 1.05;
 	col = mix(col, haze, peak * peak_blue);
@@ -161,11 +175,48 @@ void fragment() {
 		float gap = her_glow.y - world.y;
 		float d = distance(world.xz, her_glow.xz);
 		float k = her_glow_strength * smoothstep(0.1, 0.5, gap) * (1.0 - smoothstep(5.0, 10.0, gap));
-		float pool = exp(-pow(d / (her_glow.w * 0.55), 2.0)) * k;
+		// Only where her light reaches: the reef's walls and rises keep it from what lies behind them.
+		float pool = exp(-pow(d / (her_glow.w * 0.55), 2.0)) * k * her_vis(world);
 		vec3 warm = her_warm;
 		col = mix(col, col * warm * 1.15 + warm * 0.06, pool * 0.65);
+		// Her bell is a lens: the light leaving it is gathered into bright filaments that play over what lies below her,
+		// wider and softer the farther the floor, quickening as she swims.
+		vec2 rel = (world.xz - her_glow.xz) / (0.7 + gap * 0.3);
+		float web = sl_caustic_layer(rel * 0.32 + vec2(0.37, 0.11), TIME * 0.55 + her_glow_strength * 0.8);
+		float lens_pool = exp(-pow(d / (her_glow.w * 0.75), 2.0)) * k * her_vis(world);
+		col += her_warm * pow(web, 1.4) * lens_pool * 0.3 * her_lantern;
 		float shadow = (1.0 - smoothstep(0.1, 0.62, d)) * k * (1.0 - smoothstep(2.0, 5.0, gap));
 		col *= 1.0 - 0.6 * shadow;
+	}
+	// Her bubbles are lenses too: the light through each (the sun's from above in the lit depths, hers from her lantern)
+	// is bent into a bright ring on what lies below it, round a darker heart, larger the farther it falls.
+	if (lens_count > 0 && !open_deep) {
+		vec3 sl = normalize(sun_dir);
+		float sun_k = reef_caustics * light_strength * sun_lit(world);
+		for (int i = 0; i < lens_count; i++) {
+			vec4 b = lenses[i];
+			float fall_h = b.y - world.y;
+			if (fall_h < 0.3) continue;
+			// The sun's rays through it, parallel: where this point's ray crossed the bubble's height.
+			vec3 q = world - sl * (fall_h / -sl.y);
+			float ring_r = b.w * (1.0 + fall_h * 0.18);
+			float ds = distance(q.xz, b.xz);
+			float sun_ring = exp(-pow((ds - ring_r) / (0.035 + 0.02 * fall_h), 2.0)) - 0.2 * exp(-pow(ds / ring_r, 2.0));
+			// Her light's rays through it, from her lantern: the ring widens with the throw.
+			vec3 lh = her_light_at.xyz;
+			vec3 lp = world - lh;
+			float t = (b.y - lh.y) / min(lp.y, -1e-3);
+			float ring = 0.0;
+			if (t > 0.0 && t < 1.0) {
+				vec3 c = lh + lp * t;
+				float dh = distance(c.xz, b.xz);
+				float throw_k = 1.0 / max(t, 0.2);
+				float rr = b.w * throw_k * 0.8;
+				ring = exp(-pow((dh * throw_k - rr) / (0.04 * throw_k + 0.03), 2.0)) * her_reach(world) * her_lantern;
+			}
+			col += reef_sun * sun_ring * sun_k * 0.28 * smoothstep(0.3, 1.2, fall_h);
+			col += her_warm * ring * 0.35 * smoothstep(0.3, 1.2, fall_h);
+		}
 	}
 
 	vec3 cam = CAMERA_POSITION_WORLD;
@@ -181,7 +232,8 @@ void fragment() {
 	}
 
 	// God rays: march the view ray through the water column, from the sea surface down to what it hits, summing the
-	// shaft density (parallel to the sun, drifting with the swell). Longer water paths gather more light.
+	// shaft density (parallel to the sun, drifting with the swell) where the sun reaches. Longer water paths gather more
+	// light; rock that shades the water leaves it dark, so the light falls in beams past the walls and through arches.
 	vec3 hit = open_deep ? cam + ray * 90.0 : world;
 	float t0 = ray.y < -1e-3 ? max((sea_surface_y - cam.y) / ray.y, 0.0) : 0.0;
 	float t1 = max(dot(hit - cam, ray), t0);
@@ -191,19 +243,19 @@ void fragment() {
 		float jitter = hash12(FRAGCOORD.xy + fract(TIME) * 61.0);
 		for (int i = 0; i < 10; i++) {
 			vec3 q = cam + ray * (t0 + span * (float(i) + jitter) / 10.0);
-			shafts += sun_shafts(q + vec3(world_origin.x, 0.0, world_origin.y), TIME);
+			// Only where the sun reaches: rock, arches and cave roofs cut the shafts off (SunMap).
+			shafts += sun_shafts(q + vec3(world_origin.x, 0.0, world_origin.y), TIME) * sun_lit(q);
 		}
 		shafts /= 10.0;
 	}
 	float column = smoothstep(0.0, 26.0, span);
-	col += reef_sun * shafts * column * reef_rays * light_strength * 0.14 * (1.0 - 0.5 * smoothstep(0.0, 8.0, above));
+	col += reef_sun * shafts * column * reef_rays * light_strength * 0.22 * (1.0 - 0.5 * smoothstep(0.0, 8.0, above));
 
-	// Her glow scatters in the water between her layer and the floor (not on high rock, which stands in front of it).
-	// Measured where this pixel's view ray crosses her layer, so the halo surrounds her on screen.
+	// Her glow scatters in the water her light passes through, along this pixel's whole view ray (light_field): a
+	// glow round her that the reef's walls and rises cut into shafts of light and shadow.
 	vec3 on_layer = cam + ray * ((player_pos.y - cam.y) / min(ray.y, -1e-3));
-	vec2 off = on_layer.xz - player_pos.xz;
-	float halo = exp(-dot(off, off) / (halo_radius * halo_radius)) * (0.35 + 0.65 * fog) * (1.0 - smoothstep(0.0, 4.0, above));
-	col += halo_color * halo * halo_strength * (0.6 + 0.8 * reef_menace);
+	float ign = fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
+	col += her_warm * her_inscatter(cam, ray, t0, open_deep ? t0 + 120.0 : t1, ign);
 	// Her bubbles carry light: each a small halo of its own on the same layer, the same depth-darkness scaling as hers
 	// (subtle in the bright Shallows, glorious in the deep).
 	float bubbles = 0.0;
@@ -232,7 +284,8 @@ void fragment() {
 	col = mix(vec3(luma), col, reef_saturation);
 	// Shadows take the water's hue at their own brightness (cool, not lifted).
 	float wl = max(dot(reef_water_deep, vec3(0.299, 0.587, 0.114)), 0.01);
-	col = mix(col, reef_water_deep / wl * luma, (1.0 - smoothstep(0.0, 0.3, luma)) * 0.45);
+	// (Not what her own light falls on: her warmth reaches the eye.)
+	col = mix(col, reef_water_deep / wl * luma, (1.0 - smoothstep(0.0, 0.3, luma)) * 0.45 * (1.0 - lit));
 	col = mix(col, col * (reef_sun * 0.2 + 0.82), smoothstep(0.5, 1.0, luma) * 0.3);
 
 	// Vignette, oval to the screen, tinted by the deep water; heavier as the depths darken.
@@ -242,5 +295,9 @@ void fragment() {
 	// A big-merge kill lifts the screen's edges toward white for an instant (never its middle).
 	col = mix(col, vec3(1.0, 0.97, 0.9), edge_flash * 0.55 * smoothstep(0.45, 1.15, length(d) * 1.3));
 
+	if (debug_view == 1 && !open_deep) {
+		float g = dot(textureLod(screen_tex, uv, 0.0).rgb, vec3(0.3, 0.6, 0.1));
+		col = vec3(g * 0.35) + vec3(0.9, 0.8, 0.1) * sun_lit(world) * 0.35 + vec3(1.0, 0.35, 0.0) * her_vis(world) * smoothstep(her_light_at.w, her_light_at.w * 0.8, distance(world, her_light_at.xyz)) * 0.6;
+	}
 	ALBEDO = max(col, vec3(0.0));
 }

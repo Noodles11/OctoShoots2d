@@ -42,7 +42,7 @@ public partial class BossView : Node3D
         // The pearl: corruption, glossy and drinking the light, a cold glint deep in it when it can be struck. Her light
         // must strike it. Freed, it is white.
         _blackPearl = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader") };
-        _blackPearl.SetShaderParameter("ember_color", new Color(0.55f, 0.3f, 0.85f));
+        _blackPearl.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.55f, 0.3f, 0.85f));
         _whitePearl = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.97f, 0.96f, 0.93f), Roughness = 0.08f, Metallic = 0.25f, RimEnabled = true, Rim = 1f,
@@ -55,8 +55,8 @@ public partial class BossView : Node3D
             Scale = Vector3.One * PlaneBossTuning.CoreRadius * 0.55f,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
-        _pearl.SetInstanceShaderParameter("wobble", 0.05f);
-        _pearl.SetInstanceShaderParameter("ember", 0.1f);
+        _pearl.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.05f);
+        _pearl.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.1f);
         AddChild(_pearl);
         _burstLight = new OmniLight3D { LightColor = new Color(1f, 0.93f, 0.78f), LightEnergy = 0f, OmniRange = 30f, ShadowEnabled = false };
         AddChild(_burstLight);
@@ -103,7 +103,7 @@ public partial class BossView : Node3D
         for (int i = 0; i < _mud.Length; i++)
         {
             _mud[i] = new ShaderMaterial { Shader = shader };
-            _mud[i].SetShaderParameter("layer", (float)i);
+            _mud[i].SetShaderParameter(OctoShoots.Game.Fx.SN.Of("layer"), (float)i);
             _mudRoot.AddChild(new MeshInstance3D
             {
                 // Far wider than the level (and its skirt), so no layer's edge is ever on screen.
@@ -155,9 +155,9 @@ public partial class BossView : Node3D
                 Scale = new Vector3(size / Mathf.Max(undo.X, 0.01f), size * 0.55f / Mathf.Max(undo.Y, 0.01f), size / Mathf.Max(undo.Z, 0.01f)),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             };
-            mesh.SetInstanceShaderParameter("ember", 0.06f);
-            mesh.SetInstanceShaderParameter("wobble", 0.15f);
-            mesh.SetInstanceShaderParameter("seed", i * 1.3f);
+            mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.06f);
+            mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.15f);
+            mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), i * 1.3f);
             parent.AddChild(mesh);
             _crust.Add((mesh, i % 5));
         }
@@ -191,7 +191,7 @@ public partial class BossView : Node3D
             v += Vector3.Down * 6f * dt;
             mesh.Position += v * dt;
             mesh.Rotation += new Vector3(3f, 2f, 1f) * dt;
-            mesh.SetInstanceShaderParameter("fade", 1f - age / 0.9f);
+            mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f - age / 0.9f);
             if (age >= 0.9f)
             {
                 mesh.QueueFree();
@@ -226,9 +226,9 @@ public partial class BossView : Node3D
         _mudRoot.Position = new Vector3(c.X, 0f, c.Y);
         foreach (var m in _mud)
         {
-            m.SetShaderParameter("center", new Vector2(c.X, c.Y));
-            m.SetShaderParameter("rim", world.ArenaRadius);
-            m.SetShaderParameter("amount", 0f);
+            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("center"), new Vector2(c.X, c.Y));
+            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("rim"), world.ArenaRadius);
+            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("amount"), 0f);
         }
         _drained = 1f;
         _scale = 1f;
@@ -320,8 +320,8 @@ public partial class BossView : Node3D
         if (!_burst)
         {
             float glint = boss.Stage == BossStage.Fight && boss.Open ? 0.4f + 0.15f * Mathf.Sin(_time * 5f) : boss.Act == BossAct.Telegraph ? 0.25f : 0.06f;
-            _pearl.SetInstanceShaderParameter("ember", glint);
-            _pearl.SetInstanceShaderParameter("fade", 1f);
+            _pearl.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), glint);
+            _pearl.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f);
             // A Coax-out pearl is buried until its sacs are burst; then it surfaces.
             float buried = boss.Spec.Exposure == OctoShoots.Core.Bosses.Exposure.CoaxOut && !boss.Open ? 0.35f : 1f;
             _pearl.Scale = Vector3.One * boss.Spec.PearlRadius * 0.55f * buried;
@@ -421,7 +421,7 @@ public partial class BossView : Node3D
             _snapMat.AlbedoColor = new Color(1f, 0.2f, 0.2f, 0.35f + 0.35f * Mathf.Sin(_time * 30f));
         }
 
-        foreach (var m in _mud) m.SetShaderParameter("amount", boss.Cloud);
+        foreach (var m in _mud) m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("amount"), boss.Cloud);
         _mudRoot.Visible = boss.Cloud > 0.001f;
     }
 }

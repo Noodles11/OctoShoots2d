@@ -9,8 +9,7 @@ namespace OctoShoots.Game.TopDown;
 /// <summary>
 /// The corruption's creatures and works on screen (docs/CORRUPTION.md), presentation only: Blightroots (a blackened
 /// stump crowned with a pulsing ink sac; its ring of ink; its burst into golden motes and a wave of cleansing),
-/// gloomvines (glossy ink tubes rising from the floor to her plane, coiling round her), valves (walls of rolling ink
-/// smoke), murklings (wobbling dark orbs with a stolen ember, budding from the floor) and their throws. Everything
+/// gloomvines (glossy ink tubes rising from the floor to her plane, coiling round her), murklings (wobbling dark orbs with a stolen ember, budding from the floor) and their throws. Everything
 /// corrupted shares one look: ink-black, light-drinking, slightly glossy, with a cold violet rim.
 /// </summary>
 public partial class BlightView : Node3D
@@ -27,14 +26,6 @@ public partial class BlightView : Node3D
         public float Since;
     }
 
-    sealed class Wall
-    {
-        public Node3D Node = null!;
-        public MeshInstance3D[] Sheets = null!;
-        public bool Gone;
-        public float Since;
-    }
-
     sealed class Ripple
     {
         public MeshInstance3D Mesh = null!;
@@ -43,10 +34,9 @@ public partial class BlightView : Node3D
     }
 
     readonly List<Root> _roots = new();
-    readonly List<Wall> _walls = new();
     readonly List<MeshInstance3D> _murks = new(), _throws = new();
     readonly List<Ripple> _ripples = new();
-    ShaderMaterial _orb = null!, _sacMat = null!, _ring = null!, _valve = null!, _vine = null!;
+    ShaderMaterial _orb = null!, _sacMat = null!, _ring = null!, _vine = null!;
     readonly SphereMesh _sphere = new() { Radius = 1f, Height = 2f, RadialSegments = 24, Rings = 12 };
     readonly QuadMesh _quad = new() { Size = new Vector2(2f, 2f), Orientation = PlaneMesh.OrientationEnum.Y };
     MeshInstance3D _vines = null!;
@@ -59,9 +49,8 @@ public partial class BlightView : Node3D
     {
         _orb = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader") };
         _sacMat = new ShaderMaterial { Shader = _orb.Shader };
-        _sacMat.SetShaderParameter("ember_color", new Color(0.9f, 0.25f, 0.55f));
+        _sacMat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.9f, 0.25f, 0.55f));
         _ring = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_ring.gdshader"), RenderPriority = 1 };
-        _valve = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/valve_ink.gdshader"), RenderPriority = 1 };
         _vine = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/gloomvine.gdshader") };
         _vineMesh = new ImmediateMesh();
         _vines = new MeshInstance3D { Mesh = _vineMesh, MaterialOverride = _vine, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
@@ -74,15 +63,13 @@ public partial class BlightView : Node3D
 
     float Floor(System.Numerics.Vector2 p) => _map is null ? -1f : Mathf.Min(_map.HeightAt(p), LevelMap.BlockHeight);
 
-    /// <summary>A new level: its Blightroots and valves.</summary>
+    /// <summary>A new level: its Blightroots.</summary>
     public void Show(PlaneWorld world)
     {
         _map = world.Map;
         foreach (var r in _roots) r.Node.QueueFree();
-        foreach (var w in _walls) w.Node.QueueFree();
         foreach (var r in _ripples) r.Mesh.QueueFree();
         _roots.Clear();
-        _walls.Clear();
         foreach (var meter in _meters.Values) meter.Ring.QueueFree();
         _meters.Clear();
         _ripples.Clear();
@@ -92,7 +79,6 @@ public partial class BlightView : Node3D
         _motes.Clear();
         _droplets.Clear();
         foreach (var root in world.Blightroots) _roots.Add(MakeRoot(root));
-        foreach (var valve in world.Valves) _walls.Add(MakeWall(valve));
     }
 
     Root MakeRoot(Blightroot root)
@@ -109,8 +95,8 @@ public partial class BlightView : Node3D
             Position = new Vector3(0f, floor + height * 0.5f, 0f),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
-        stump.SetInstanceShaderParameter("ember", 0f);
-        stump.SetInstanceShaderParameter("wobble", 0f);
+        stump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
+        stump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
         node.AddChild(stump);
         for (int i = 0; i < 5; i++)
         {
@@ -123,52 +109,24 @@ public partial class BlightView : Node3D
                 Rotation = new Vector3(0f, -a, 1.2f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             };
-            spur.SetInstanceShaderParameter("ember", 0f);
-            spur.SetInstanceShaderParameter("wobble", 0f);
+            spur.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
+            spur.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
             stump.AddChild(spur);
             spur.Position -= stump.Position;
         }
         // The sac: a glossy membrane of ink round a stolen light.
         var sac = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _sacMat, Position = new Vector3(0f, SacHeight, 0f), Scale = Vector3.One * 0.75f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-        sac.SetInstanceShaderParameter("seed", root.Position.X * 0.37f);
+        sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), root.Position.X * 0.37f);
         node.AddChild(sac);
         var ring = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, Visible = false, Position = new Vector3(0f, LevelMap.SwimBand - 0.35f, 0f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         node.AddChild(ring);
         return new Root { Node = node, Stump = stump, Sac = sac, Ring = ring };
     }
 
-    Wall MakeWall(Valve valve)
-    {
-        float floor = Floor(valve.Center);
-        float top = LevelMap.SwimBand + 1.8f, height = top - floor;
-        var node = new Node3D
-        {
-            Position = new Vector3(valve.Center.X, floor + height * 0.5f, valve.Center.Y),
-            // The sheets face along the corridor (their plane runs across it).
-            Basis = new Basis(Vector3.Up, Mathf.Atan2(valve.Normal.X, valve.Normal.Y)),
-        };
-        AddChild(node);
-        var sheets = new MeshInstance3D[3];
-        for (int i = 0; i < sheets.Length; i++)
-        {
-            sheets[i] = new MeshInstance3D
-            {
-                Mesh = new QuadMesh { Size = new Vector2(valve.HalfWidth * 2f, height) },
-                MaterialOverride = _valve,
-                Position = new Vector3(0f, 0f, (i - 1) * valve.HalfThickness * 0.8f),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            };
-            sheets[i].SetInstanceShaderParameter("seed", i * 3.7f + valve.Center.X * 0.1f);
-            node.AddChild(sheets[i]);
-        }
-        return new Wall { Node = node, Sheets = sheets };
-    }
-
     public void Sync(PlaneWorld world, float dt, Camera3D? camera)
     {
         _time += dt;
         SyncRoots(world, dt);
-        SyncWalls(world, dt);
         SyncMurklings(world);
         SyncSlugs(world, dt);
         SyncBumps(world);
@@ -176,6 +134,7 @@ public partial class BlightView : Node3D
         SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
+        StepGathers(dt);
         if (camera is not null)
         {
             _motes.Tick(dt, camera.GlobalBasis);
@@ -200,8 +159,8 @@ public partial class BlightView : Node3D
                 // The stump shrivels into the floor, its sac gone in specks.
                 view.Since += dt;
                 float k = Mathf.Clamp(view.Since / 1.4f, 0f, 1f);
-                view.Sac.SetInstanceShaderParameter("fade", 1f - Mathf.Clamp(view.Since / 0.35f, 0f, 1f));
-                view.Stump.SetInstanceShaderParameter("fade", 1f - k);
+                view.Sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f - Mathf.Clamp(view.Since / 0.35f, 0f, 1f));
+                view.Stump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f - k);
                 view.Stump.Scale = new Vector3(1f - 0.5f * k, 1f - 0.6f * k, 1f - 0.5f * k);
                 view.Ring.Visible = false;
                 if (k >= 1f) view.Node.Visible = false;
@@ -213,9 +172,9 @@ public partial class BlightView : Node3D
             float breathe = 1f + 0.06f * Mathf.Sin(_time * 2.1f + i);
             float size = 0.75f * breathe * (0.6f + 0.4f * starve) * (1f + 0.45f * root.Inflate);
             view.Sac.Scale = Vector3.One * size;
-            view.Sac.SetInstanceShaderParameter("swell", root.Inflate);
-            view.Sac.SetInstanceShaderParameter("ember", 0.25f + 0.9f * root.Inflate);
-            view.Sac.SetInstanceShaderParameter("wobble", 0.6f + 0.8f * root.Inflate);
+            view.Sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("swell"), root.Inflate);
+            view.Sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.25f + 0.9f * root.Inflate);
+            view.Sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.6f + 0.8f * root.Inflate);
             // Its ring of ink running out over its reach.
             view.Ring.Visible = root.PulseRadius >= 0f;
             if (view.Ring.Visible)
@@ -223,9 +182,9 @@ public partial class BlightView : Node3D
                 float r = Mathf.Max(root.PulseRadius, 0.1f);
                 view.Ring.Scale = Vector3.One * (r / 0.8f);
                 float fadeOut = 1f - Mathf.Clamp(r / BlightTuning.Reach, 0f, 1f);
-                view.Ring.SetInstanceShaderParameter("tint", new Color(Ink.R, Ink.G, Ink.B, 0.85f * (0.35f + 0.65f * fadeOut)));
-                view.Ring.SetInstanceShaderParameter("width", 0.09f + 0.4f / r);
-                view.Ring.SetInstanceShaderParameter("seed", i * 1.7f);
+                view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(Ink.R, Ink.G, Ink.B, 0.85f * (0.35f + 0.65f * fadeOut)));
+                view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("width"), 0.09f + 0.4f / r);
+                view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), i * 1.7f);
             }
         }
     }
@@ -242,34 +201,6 @@ public partial class BlightView : Node3D
         }
         _droplets.Burst(p, Vector3.Up, 26, 3.5f, 1f, 0.7f, 0.22f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.9f), new Color(0.05f, 0.02f, 0.08f, 0f), drag: 2.5f);
         AddRipple(at, Floor(at) + 0.08f, 0.3f, BlightTuning.Reach, BlightTuning.BurstSeconds + 0.3f, new Color(Gold.R * 1.3f, Gold.G * 1.3f, Gold.B, 0.9f));
-    }
-
-    void SyncWalls(PlaneWorld world, float dt)
-    {
-        for (int i = 0; i < _walls.Count && i < world.Valves.Count; i++)
-        {
-            var view = _walls[i];
-            var valve = world.Valves[i];
-            if (valve.Cleared && !view.Gone)
-            {
-                view.Gone = true;
-                view.Since = 0f;
-                var at = new Vector3(valve.Center.X, LevelMap.SwimBand, valve.Center.Y);
-                var across = new Vector3(valve.Across.X, 0f, valve.Across.Y);
-                for (int k = 0; k < 50; k++)
-                {
-                    var from = at + across * _motes.RandRange(-valve.HalfWidth, valve.HalfWidth) + Vector3.Up * _motes.RandRange(-0.6f, 1.2f);
-                    _motes.Emit(from, new Vector3(0f, _motes.RandRange(0.6f, 2f), 0f) + _motes.RandDir() * 0.6f, _motes.RandRange(0.8f, 1.6f), _motes.RandRange(0.1f, 0.22f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.2f, buoyancy: 0.6f);
-                }
-            }
-            float fade = view.Gone ? 1f - Mathf.Clamp((view.Since += dt) / 0.8f, 0f, 1f) : 1f;
-            view.Node.Visible = fade > 0f;
-            foreach (var sheet in view.Sheets)
-            {
-                sheet.SetInstanceShaderParameter("integrity", Mathf.Max(valve.Integrity, 0f));
-                sheet.SetInstanceShaderParameter("fade", fade);
-            }
-        }
     }
 
     void SyncMurklings(PlaneWorld world)
@@ -289,16 +220,18 @@ public partial class BlightView : Node3D
             float y = LevelMap.SwimBand + 0.08f * Mathf.Sin(_time * 2.3f + m.Seed);
             float scale = m.Radius;
             // A lesser one carries a dim ember in its fish's old colour, so it shows what it was.
-            float ember = m.Lesser ? 0.7f : 0.45f;
-            view.SetInstanceShaderParameter("ember_tint", m.Fish is { } fish ? FishEmber(fish.Kind) : new Color(0f, 0f, 0f, 0f));
+            float ember = m.Lesser ? 0.7f : m.Prime ? 0.75f : 0.45f;
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), m.Fish is { } fish ? FishEmber(fish.Kind) : new Color(0f, 0f, 0f, 0f));
             if (m.Budding)
             {
-                // Budding: a dark bead swelling up out of the floor.
-                float k = 1f - m.Bud / BlightTuning.BudSeconds;
-                float e = k * k * (3f - 2f * k);
+                // Budding: nothing yet while the ink draws in (StartGather's dots); then the sphere forms out of the dots
+                // as they rise, swelling up from the floor to her plane.
+                float k = 1f - m.Bud / m.BudTotal;
+                float rise = Mathf.Clamp((k - GatherIn) / (1f - GatherIn), 0f, 1f);
+                float e = rise * rise * (3f - 2f * rise);
                 y = Mathf.Lerp(Floor(m.Position) + 0.1f, y, e);
-                scale *= 0.25f + 0.75f * e;
-                ember = 0.1f + 0.35f * e;
+                scale *= 0.05f + 0.95f * e;
+                ember = 0.05f + 0.4f * e;
             }
             else if (m.Clinging)
             {
@@ -334,26 +267,26 @@ public partial class BlightView : Node3D
                     bud = 0.6f * (1f - Mathf.SmoothStep(0f, 0.08f, t));
                 }
             }
-            view.SetInstanceShaderParameter("aim", new Vector3(m.Aim.X, 0f, m.Aim.Y));
-            view.SetInstanceShaderParameter("pull", pull);
-            view.SetInstanceShaderParameter("bud", bud);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("aim"), new Vector3(m.Aim.X, 0f, m.Aim.Y));
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("pull"), pull);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bud"), bud);
             view.Position = new Vector3(m.Position.X, y, m.Position.Y);
             // Drawing the bend is an effort: the whole body trembles across its aim.
             if (pull < 0f) view.Position += new Vector3(-m.Aim.Y, 0f, m.Aim.X) * Mathf.Sin(_time * 55f + m.Seed) * 0.035f * -pull;
             view.Scale = Vector3.One * scale;
-            view.SetInstanceShaderParameter("seed", m.Seed);
-            view.SetInstanceShaderParameter("ember", ember);
-            view.SetInstanceShaderParameter("wobble", 1.2f);
-            view.SetInstanceShaderParameter("fade", 1f);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), m.Seed);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), ember);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 1.2f);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f);
         }
 
         while (_throws.Count < world.MurkShots.Count)
         {
             var t = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            t.SetInstanceShaderParameter("ember", 0f);
-            t.SetInstanceShaderParameter("wobble", 0.5f);
+            t.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
+            t.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.5f);
             // It flies along its local −Z (Basis.LookingAt): its neck trails behind.
-            t.SetInstanceShaderParameter("aim", new Vector3(0f, 0f, -1f));
+            t.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("aim"), new Vector3(0f, 0f, -1f));
             AddChild(t);
             _throws.Add(t);
         }
@@ -365,7 +298,7 @@ public partial class BlightView : Node3D
             var s = world.MurkShots[i];
             // Flown its range, it drops to the sand, falling faster as it goes.
             float drop = s.Airborne ? 0f : Mathf.Clamp(s.Fall / BlightTuning.ThrowFallSeconds, 0f, 1f);
-            float y = Mathf.Lerp(LevelMap.SwimBand, Floor(s.Position) + BlightTuning.ThrowRadius * 0.5f, drop * drop);
+            float y = Mathf.Lerp(LevelMap.SwimBand, Floor(s.Position) + s.Radius * 0.5f, drop * drop);
             view.Position = new Vector3(s.Position.X, y, s.Position.Y);
             var along = new Vector3(s.Velocity.X, -drop * 6f, s.Velocity.Y);
             // Stretched along its flight, a smear of dark.
@@ -373,9 +306,9 @@ public partial class BlightView : Node3D
             // Just thrown, it pinches off from the murkling's body on a neck that thins and snaps, then wobbles into its
             // flying drop.
             float age = BlightTuning.ThrowLife - s.Life;
-            view.SetInstanceShaderParameter("drip", 1f - Mathf.SmoothStep(0f, 0.12f, age));
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("drip"), 1f - Mathf.SmoothStep(0f, 0.12f, age));
             float jiggle = 1f + 0.3f * Mathf.Exp(-9f * age) * Mathf.Sin(30f * age);
-            view.Scale = new Vector3(BlightTuning.ThrowRadius * 1.2f / Mathf.Sqrt(jiggle), BlightTuning.ThrowRadius * 1.2f / Mathf.Sqrt(jiggle), BlightTuning.ThrowRadius * 2.2f * jiggle);
+            view.Scale = new Vector3(s.Radius * 1.2f / Mathf.Sqrt(jiggle), s.Radius * 1.2f / Mathf.Sqrt(jiggle), s.Radius * 2.2f * jiggle);
             if (((int)(_time * 60f) + i) % 3 == 0)
                 _droplets.Emit(view.Position, Vector3.Up * 0.2f, 0.35f, 0.16f, 0.04f, new Color(0.03f, 0.01f, 0.06f, 0.7f), new Color(0.05f, 0.02f, 0.1f, 0f), drag: 1f);
         }
@@ -493,7 +426,7 @@ public partial class BlightView : Node3D
         foreach (var meter in _meters.Values) meter.Seen = false;
         foreach (var m in world.Murklings)
             if (m.Alive && !m.Budding)
-                ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), Mathf.Max(1.7f * m.Radius / BlightTuning.MurkRadius, 0.8f), dt);
+                ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), Mathf.Max(m.Prime ? m.Radius * 2.6f : 1.7f * m.Radius / BlightTuning.MurkRadius, 0.8f), dt);
         foreach (var b in world.Blotters)
             if (b.Alive && b.Rise <= 0f) ShowMeter(b, b.Corruption, new Vector3(b.Position.X, LevelMap.SwimBand + 1.6f, b.Position.Y), 3.4f, dt);
         foreach (var root in world.Blightroots)
@@ -527,9 +460,9 @@ public partial class BlightView : Node3D
         // A small pop on each hit.
         float pop = 1f + 0.12f * Mathf.Clamp((meter.Ghost - fill) * 4f, 0f, 1f);
         meter.Ring.Scale = Vector3.One * size * pop;
-        meter.Ring.SetInstanceShaderParameter("fill", fill);
-        meter.Ring.SetInstanceShaderParameter("ghost", meter.Ghost);
-        meter.Ring.SetInstanceShaderParameter("alpha", meter.Alpha);
+        meter.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fill"), fill);
+        meter.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ghost"), meter.Ghost);
+        meter.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("alpha"), meter.Alpha);
     }
 
     // ───────────────────────── events ─────────────────────────
@@ -610,10 +543,18 @@ public partial class BlightView : Node3D
                 break;
             }
             case PlaneEventType.MurklingBud:
-                AddRipple(e.Position, Floor(e.Position) + 0.06f, 0.2f, 1.6f, BlightTuning.BudSeconds, new Color(Ink.R, Ink.G, Ink.B, 0.9f));
+                // The ink under it gathers into it (the disc it sucks up, and how inked it is).
+                StartGather(e.Position, e.Direction.X, e.Direction.Y, e.Size, e.Direction.X > BlightTuning.SuckRadius + 0.1f);
                 break;
             case PlaneEventType.MurklingBurst:
                 _droplets.Burst(at, Vector3.Up, 18, 3f, 1f, 0.55f, 0.16f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
+                if (e.Direction.X > 0.5f)
+                {
+                    // A prime bursts: a great spray of ink and a wide ring of gold.
+                    _droplets.Burst(at, Vector3.Up, 90, 6f, 1f, 0.9f, 0.3f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 2.5f);
+                    for (int i = 0; i < 80; i++)
+                        _motes.Emit(at + _motes.RandDir() * 1.5f, _motes.RandDir() * _motes.RandRange(1f, 5f) + Vector3.Up * 1.2f, _motes.RandRange(0.8f, 1.6f), _motes.RandRange(0.1f, 0.24f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.5f);
+                }
                 if (e.Size > 0f)
                 {
                     // Its stolen ember falls and blooms a patch of colour.
@@ -656,8 +597,8 @@ public partial class BlightView : Node3D
             float e = 1f - (1f - k) * (1f - k);
             float radius = Mathf.Lerp(r.From, r.To, e);
             r.Mesh.Scale = Vector3.One * (radius / 0.8f);
-            r.Mesh.SetInstanceShaderParameter("tint", new Color(r.Tint.R, r.Tint.G, r.Tint.B, r.Tint.A * (1f - k)));
-            r.Mesh.SetInstanceShaderParameter("width", 0.1f + 0.25f / Mathf.Max(radius, 0.2f));
+            r.Mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(r.Tint.R, r.Tint.G, r.Tint.B, r.Tint.A * (1f - k)));
+            r.Mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("width"), 0.1f + 0.25f / Mathf.Max(radius, 0.2f));
         }
     }
 }

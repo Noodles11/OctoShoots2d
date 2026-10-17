@@ -4,8 +4,8 @@ namespace OctoShoots.Game.Fx;
 
 /// <summary>
 /// The sun as seen from under the water: one direction for the light and its shadows, shared with the shaders'
-/// caustics and god rays (sunlight.gdshaderinc, via the sun_dir global). The level has no shadow map of its own
-/// (sun_has_shadow stays 0), so caustics fall everywhere.
+/// caustics and god rays (sunlight.gdshaderinc, via the sun_dir global). Where its light reaches into the water is
+/// SunMap's (sun_shadow), cast once per level.
 /// </summary>
 public partial class SunLight : Node3D
 {
@@ -43,8 +43,8 @@ public partial class SunLight : Node3D
         };
         light.Transform = new Transform3D(Basis.LookingAt(Direction, Vector3.Forward), Vector3.Zero);
         AddChild(light);
-        RenderingServer.GlobalShaderParameterSet("sun_dir", Direction);
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("sun_dir"), Direction);
     }
 
-    public void SetStrength(float strength) => RenderingServer.GlobalShaderParameterSet("light_strength", strength);
+    public void SetStrength(float strength) => RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("light_strength"), strength);
 }

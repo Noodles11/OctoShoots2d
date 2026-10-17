@@ -70,9 +70,9 @@ public static class HerColor
 
     static void Publish()
     {
-        RenderingServer.GlobalShaderParameterSet("her_body", AsVector(Body));
-        RenderingServer.GlobalShaderParameterSet("her_light", AsVector(Light));
-        RenderingServer.GlobalShaderParameterSet("her_warm", AsVector(Warm));
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_body"), AsVector(Body));
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_light"), AsVector(Light));
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_warm"), AsVector(Warm));
         Changed?.Invoke();
     }
 

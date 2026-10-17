@@ -59,6 +59,10 @@ public partial class CombatView : Node3D
     /// <summary>The swim-layer lights this frame, brightest first, for the post pass.</summary>
     public Vector4[] Lights { get; } = new Vector4[MaxLights];
     public int LightCount { get; private set; }
+    /// <summary>Her bubbles in flight as lenses (x, height, z, radius): the light through them falls on the floor in rings.</summary>
+    public const int MaxLenses = 12;
+    public Vector4[] Lenses { get; } = new Vector4[MaxLenses];
+    public int LensCount { get; private set; }
 
     sealed class Bloom
     {
@@ -89,9 +93,9 @@ public partial class CombatView : Node3D
         _theirShot = Glow(new Color(1f, 0.25f, 0.3f));
         var orb = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader");
         _clamPearl = new ShaderMaterial { Shader = orb };
-        _clamPearl.SetShaderParameter("ember_color", new Color(0.4f, 0.2f, 0.6f));
+        _clamPearl.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.4f, 0.2f, 0.6f));
         _royalPearl = new ShaderMaterial { Shader = orb };
-        _royalPearl.SetShaderParameter("ember_color", new Color(0.7f, 0.35f, 1f));
+        _royalPearl.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.7f, 0.35f, 1f));
 
     }
 
@@ -113,17 +117,17 @@ public partial class CombatView : Node3D
     {
         var node = new Node3D();
         var shell = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = _bubble, Scale = Vector3.One * 0.34f * size, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-        shell.SetInstanceShaderParameter("lantern", 0.85f);
-        shell.SetInstanceShaderParameter("warmth", 0.35f);
-        shell.SetInstanceShaderParameter("rainbow", 0.4f);
-        shell.SetInstanceShaderParameter("wobble", 0.35f);
-        shell.SetInstanceShaderParameter("seed", (float)GD.RandRange(0.0, 10.0));
-        shell.SetInstanceShaderParameter("hole", new Vector4(0f, 1f, 0f, 0f));
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), 0.85f);
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), 0.35f);
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("rainbow"), 0.4f);
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.35f);
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), (float)GD.RandRange(0.0, 10.0));
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("hole"), new Vector4(0f, 1f, 0f, 0f));
         node.AddChild(shell);
         var halo = new MeshInstance3D { Mesh = _haloQuad, MaterialOverride = _halo, Scale = Vector3.One * 0.8f * size, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-        halo.SetInstanceShaderParameter("strength", 0.35f);
+        halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("strength"), 0.35f);
         var her = HerColor.Light;
-        halo.SetInstanceShaderParameter("color", new Vector3(her.R, her.G, her.B));
+        halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("color"), new Vector3(her.R, her.G, her.B));
         node.AddChild(halo);
         node.AddChild(new OmniLight3D { LightColor = her, LightEnergy = 0.9f * size, OmniRange = 2.8f * size, ShadowEnabled = false });
         return node;
@@ -647,10 +651,10 @@ void fragment() {
         var impact = new Vector3(toward.X, 0.35f, toward.Y);
         impact = impact.LengthSquared() > 1e-6f ? impact.Normalized() : Vector3.Up;
         var shell = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = _bubble, Scale = Vector3.One * radius, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-        shell.SetInstanceShaderParameter("hole", new Vector4(impact.X, impact.Y, impact.Z, 0f));
-        shell.SetInstanceShaderParameter("wobble", 0.6f);
-        shell.SetInstanceShaderParameter("seed", (float)GD.RandRange(0.0, 10.0));
-        shell.SetInstanceShaderParameter("warmth", Warmth(Mathf.Max(bubbles, 1)));
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("hole"), new Vector4(impact.X, impact.Y, impact.Z, 0f));
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.6f);
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), (float)GD.RandRange(0.0, 10.0));
+        shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), Warmth(Mathf.Max(bubbles, 1)));
         node.AddChild(shell);
         var drops = new MeshInstance3D[Droplets];
         var place = new Vector3[Droplets];
@@ -671,7 +675,7 @@ void fragment() {
             vel[i] = (sweep * 1.1f + p * 0.7f) * radius * (6f + 3f * (float)GD.Randf());
             place[i] = p;
             drops[i] = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = DropletMaterial(), Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            drops[i].SetInstanceShaderParameter("lantern", bubbles > 0 ? 1f : 0f);
+            drops[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), bubbles > 0 ? 1f : 0f);
             node.AddChild(drops[i]);
         }
         _pops.Add(new PopFx { Node = node, Shell = shell, Drops = drops, DropAt = place, DropVel = vel, DropBorn = born, Impact = impact, Radius = radius, Light = bubbles > 0 ? CoreLight(bubbles) : 0f });
@@ -786,6 +790,7 @@ void fragment() {
             _halos.Add(halo);
         }
         _candidates.Clear();
+        LensCount = 0;
         _seenNext.Clear();
         for (int i = 0; i < _shots.Count; i++)
         {
@@ -802,7 +807,7 @@ void fragment() {
                 var d = new Vector3(shot.Velocity.X, 0f, shot.Velocity.Y);
                 _shots[i].Basis = d.LengthSquared() > 1e-6f ? new Basis(new Quaternion(Vector3.Up, d.Normalized())) : Basis.Identity;
                 _shots[i].MaterialOverride = _needle;
-                _shots[i].SetInstanceShaderParameter("fade", 1f);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f);
                 continue;
             }
             _shots[i].Basis = Basis.Identity;
@@ -841,11 +846,11 @@ void fragment() {
                 float ember = shot.Rest > 0f ? 0.78f + 0.22f * Mathf.Sin(_time * 2.4f + seed * 9f) : 1f;
                 float light = (charged ? Mathf.Max(CoreLight(shot.Bubbles), 0.75f) : CoreLight(shot.Bubbles)) * ember * (1f + 0.5f * pulse) * shot.Dim;
                 float warmth = charged ? Mathf.Max(Warmth(shot.Bubbles), 0.5f) : Warmth(shot.Bubbles);
-                _shots[i].SetInstanceShaderParameter("seed", seed);
-                _shots[i].SetInstanceShaderParameter("ink", 0f);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), seed);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ink"), 0f);
                 // A full one burns white: a small star.
-                _shots[i].SetInstanceShaderParameter("lantern", Mathf.Max(light, 0.35f * shot.Dim) * (shot.Bubbles >= PlaneCombatTuning.BubbleCap ? 1.25f : 1f));
-                _shots[i].SetInstanceShaderParameter("warmth", warmth);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), Mathf.Max(light, 0.35f * shot.Dim) * (shot.Bubbles >= PlaneCombatTuning.BubbleCap ? 1.25f : 1f));
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), warmth);
                 _trails.Feed(shot, _shots[i].Position, warmth, Mathf.Clamp(light * 1.4f, 0.35f, 1.2f) * (shot.Explosive ? 1.25f : 1f));
 
                 // Its glow in the water: a fixed-size disc, stronger (never wider) as it merges.
@@ -853,9 +858,14 @@ void fragment() {
                 var halo = _halos[i];
                 halo.Visible = true;
                 halo.Position = _shots[i].Position;
-                halo.SetInstanceShaderParameter("strength", Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 1.3f : 1f));
-                halo.SetInstanceShaderParameter("color", HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth));
+                halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("strength"), Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 1.3f : 1f));
+                halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("color"), HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth));
                 _candidates.Add((shot.Position, GroundStrength * Mathf.Min(k, 1f) * (shot.Explosive ? 1.3f : 1f), GroundRadius));
+                if (LensCount < MaxLenses)
+                {
+                    var at = _shots[i].GlobalPosition;
+                    Lenses[LensCount++] = new Vector4(at.X, at.Y, at.Z, shot.Radius * 1.2f);
+                }
             }
             else if (shot.BossPearl)
             {
@@ -907,9 +917,9 @@ void fragment() {
             // The rim speeds up as it goes (the film's tension pulls it).
             open = open * open * (1.6f - 0.6f * open);
             pop.Shell.Visible = open < 1f;
-            pop.Shell.SetInstanceShaderParameter("hole", new Vector4(pop.Impact.X, pop.Impact.Y, pop.Impact.Z, Mathf.Max(open, 0.001f)));
+            pop.Shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("hole"), new Vector4(pop.Impact.X, pop.Impact.Y, pop.Impact.Z, Mathf.Max(open, 0.001f)));
             // The lantern flares as the film gives way, then dies.
-            pop.Shell.SetInstanceShaderParameter("lantern", pop.Light * FlareGain * Mathf.Max(0f, 1f - pop.Age / FlareSeconds));
+            pop.Shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), pop.Light * FlareGain * Mathf.Max(0f, 1f - pop.Age / FlareSeconds));
             for (int d = 0; d < pop.Drops.Length; d++)
             {
                 float t = pop.Age - pop.DropBorn[d];
@@ -918,8 +928,8 @@ void fragment() {
                 float k = t / DropSeconds;
                 pop.Drops[d].Position = pop.DropAt[d] * pop.Radius + pop.DropVel[d] * t * (1f - 0.45f * k);
                 pop.Drops[d].Scale = Vector3.One * pop.Radius * 0.11f * (1f - 0.6f * k);
-                pop.Drops[d].SetInstanceShaderParameter("fade", 1f - k * k);
-                if (pop.Light > 0f) pop.Drops[d].SetInstanceShaderParameter("lantern", Mathf.Max(0f, 1f - pop.Age / (FlareSeconds * 2f)));
+                pop.Drops[d].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f - k * k);
+                if (pop.Light > 0f) pop.Drops[d].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), Mathf.Max(0f, 1f - pop.Age / (FlareSeconds * 2f)));
             }
         }
 
@@ -999,7 +1009,7 @@ void fragment() {
                 // Held, the empty vessel trembles before it breaks.
                 float tremble = pearl.Ritual > PearlRitual.Mimic ? 0.04f * Mathf.Sin(_time * 70f) : 0f;
                 _pearls[i].Scale = Vector3.One * (0.85f + tremble);
-                look?.SetShaderParameter("pale", pale);
+                look?.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pale"), pale);
                 light.LightEnergy = 1.8f * (1f - 0.85f * pale);
                 continue;
             }

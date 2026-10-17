@@ -44,10 +44,10 @@ public partial class CameraRig : Node3D
     }
 
     /// <summary>The swim level the depth focus is sharp at (the dive slides it down to the level below).</summary>
-    public void SetSwimLevel(float y) => _post.SetShaderParameter("swim_level", y);
+    public void SetSwimLevel(float y) => _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("swim_level"), y);
 
     /// <summary>The absolute position of the world's origin (the god rays follow it).</summary>
-    public void SetWorldOrigin(Vector2 origin) => _post.SetShaderParameter("world_origin", origin);
+    public void SetWorldOrigin(Vector2 origin) => _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("world_origin"), origin);
 
     /// <summary>Moves the camera with the world, keeping the view exactly as it was (her halo in the water too).</summary>
     public void Shift(Vector3 by)
@@ -55,14 +55,14 @@ public partial class CameraRig : Node3D
         _focus += by;
         Camera.GlobalPosition += by;
         _player += by;
-        _post.SetShaderParameter("player_pos", _player);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("player_pos"), _player);
     }
 
     /// <summary>The point her halo in the water is centred on (the last followed point).</summary>
     Vector3 _player;
 
     /// <summary>The reduced-motion setting: no refraction wobble in the water.</summary>
-    public void SetReducedMotion(bool reduced) => _post.SetShaderParameter("wobble", reduced ? 0f : 1f);
+    public void SetReducedMotion(bool reduced) => _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), reduced ? 0f : 1f);
 
     /// <summary>Light bubbles: the halos her bubbles and their pop blooms cast on the swim layer (x, z, radius, strength).</summary>
     /// <summary>The clam rooms' gold glows on the water (xz, radius, strength), at most six.</summary>
@@ -79,7 +79,7 @@ public partial class CameraRig : Node3D
             tint[i * 3 + 1] = l.G;
             tint[i * 3 + 2] = l.B;
         }
-        _post.SetShaderParameter("clam_colors", tint);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("clam_colors"), tint);
         for (int i = 0; i < n; i++)
         {
             flat[i * 4] = glows[i].X;
@@ -87,8 +87,8 @@ public partial class CameraRig : Node3D
             flat[i * 4 + 2] = glows[i].Z;
             flat[i * 4 + 3] = glows[i].W;
         }
-        _post.SetShaderParameter("clam_glows", flat);
-        _post.SetShaderParameter("clam_count", n);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("clam_glows"), flat);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("clam_count"), n);
     }
 
     public void SetBubbleLights(Vector4[] lights, int count)
@@ -101,11 +101,27 @@ public partial class CameraRig : Node3D
             _lights[i * 4 + 2] = lights[i].Z;
             _lights[i * 4 + 3] = lights[i].W;
         }
-        _post.SetShaderParameter("bubble_lights", _lights);
-        _post.SetShaderParameter("bubble_count", Mathf.Min(count, lights.Length));
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("bubble_lights"), _lights);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("bubble_count"), Mathf.Min(count, lights.Length));
     }
 
     readonly float[] _lights = new float[CombatView.MaxLights * 4];
+
+    /// <summary>Her bubbles as lenses (x, height, z, radius): the rings of light they throw on the floor.</summary>
+    public void SetLenses(Vector4[] lenses, int count)
+    {
+        for (int i = 0; i < count && i < lenses.Length; i++)
+        {
+            _lenses[i * 4] = lenses[i].X;
+            _lenses[i * 4 + 1] = lenses[i].Y;
+            _lenses[i * 4 + 2] = lenses[i].Z;
+            _lenses[i * 4 + 3] = lenses[i].W;
+        }
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lenses"), _lenses);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lens_count"), Mathf.Min(count, lenses.Length));
+    }
+
+    readonly float[] _lenses = new float[CombatView.MaxLenses * 4];
 
     /// <summary>A big-merge kill: the screen's edges lift toward white for 60 ms.</summary>
     public void EdgeFlash() => _edgeFlash = 1f;
@@ -121,6 +137,7 @@ public partial class CameraRig : Node3D
         AddChild(Camera);
         // The depth focus: the swim level sharp, the deeps blurred into fog, high rock blurred into silhouette (Below's look).
         _post = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/topdown_post.gdshader"), RenderPriority = -100 };
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--dbg-lightview") >= 0) _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("debug_view"), 1);
         Camera.AddChild(new MeshInstance3D
         {
             Mesh = new QuadMesh { Size = new Vector2(2f, 2f) },
@@ -152,8 +169,8 @@ public partial class CameraRig : Node3D
         Vector3 jolt = _shake > 0f ? new Vector3(Mathf.Sin(_shakeTime * 53f), Mathf.Sin(_shakeTime * 61f + 1f), Mathf.Sin(_shakeTime * 47f + 2f)) * _shake * _shake : Vector3.Zero;
         Camera.GlobalTransform = new Transform3D(Basis.FromEuler(new Vector3(-tilt, 0f, 0f)), _focus + offset + jolt);
         _player = focus;
-        _post.SetShaderParameter("player_pos", focus);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("player_pos"), focus);
         _edgeFlash = Mathf.MoveToward(_edgeFlash, 0f, dt / EdgeFlashSeconds);
-        _post.SetShaderParameter("edge_flash", _edgeFlash);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("edge_flash"), _edgeFlash);
     }
 }

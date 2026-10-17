@@ -7,7 +7,7 @@ using OctoShoots.Core.Items;
 
 namespace OctoShoots.Core.Plane;
 
-/// <summary>Blightroots, gloomvines, valves and murklings (docs/CORRUPTION.md). Provisional numbers.</summary>
+/// <summary>Blightroots, gloomvines and murklings (docs/CORRUPTION.md). Provisional numbers.</summary>
 public static class BlightTuning
 {
     // Blightroot: the source of corruption in its reach.
@@ -48,12 +48,6 @@ public static class BlightTuning
     public const float CoilReach = 0.7f, CoilSeconds = 1.2f, CoilDrain = 5f, Retract = 2f;
     public const float DissolveSeconds = 0.9f;
 
-    // Valves: walls of dense darkness across a neck or a stash's approach.
-    public const float ValveThickness = 1.6f, ValveCost = 7f;
-    /// <summary>Cleansing its edges (her light within EdgeReach) wears it down in about 3 s; a pop takes PopWear per bubble.</summary>
-    public const float EdgeReach = 2.2f, EdgeWear = 0.32f, PopWear = 0.06f;
-    public const float SeenRange = 14f;
-
     // Murklings: orbs of darkness budding from the corruption.
     public const float MurkRadius = 0.45f, MurkSpeed = 2.6f, MurkSpeedPerMenace = 0.4f, Sense = 14f;
     /// <summary>
@@ -62,6 +56,25 @@ public static class BlightTuning
     /// </summary>
     public const float MurkCorruption = 36f, MurkRegen = 14f, MurkDelay = 0.8f;
     public const float BudSeconds = 0.8f, BudInterval = 15f, BudDensity = 0.6f, BudClearance = 5f;
+    /// <summary>A budding murkling sucks up the ink in this radius under it (it is made of it), emptying it by the time it is out.</summary>
+    public const float SuckRadius = 1.2f;
+    /// <summary>
+    /// A murkling prime: a rare bud (PrimeChance + PrimeChancePerMenace × Menace) where PrimeDense of its PrimeSuck
+    /// disc is dense ink, at most one alive per area and PrimePerLevel a level, never from ambushes or guards. It
+    /// sucks in that whole disc over PrimeBud seconds into a body PrimeScale times a murkling's (colliding as PrimeBody).
+    /// </summary>
+    public const float PrimeChance = 0.06f, PrimeChancePerMenace = 0.04f, PrimeDense = 0.6f, PrimeSuck = 3.5f, PrimeBud = 2f;
+    public const float PrimeScale = 5f, PrimeBody = 1.4f;
+    public const int PrimePerLevel = 2;
+    /// <summary>
+    /// A prime's stats against a murkling's: meter ×PrimeMeter; contact and throws ×PrimeHit (its drop PrimeHit times as
+    /// big, splashing PrimeSplash on fish); sense and throw range ×PrimeReach; pace ×PrimeSpeed; its wind-up
+    /// PrimeWindup. It rams instead of clinging, shoving her off at PrimeShove.
+    /// </summary>
+    public const float PrimeMeter = 5f, PrimeHit = 2.5f, PrimeSplash = 2f, PrimeReach = 1.5f, PrimeSpeed = 0.7f, PrimeWindup = 1f, PrimeShove = 9f;
+    /// <summary>Freed, a prime's ember blooms PrimeBloom metres; it always leaves PrimeShellsMin–Max shells, and a light orb PrimeOrb of the time.</summary>
+    public const float PrimeBloom = 6f, PrimeOrb = 0.3f;
+    public const int PrimeShellsMin = 4, PrimeShellsMax = 6;
     /// <summary>An area stops budding for good once it is cleansed this far (below a fifth of its corruption left).</summary>
     public const float AreaSpent = 0.8f;
     public const int CapBase = 2;
@@ -172,19 +185,6 @@ public sealed class Gloomvine
     public float Length => Points.Count < 2 ? 0f : (Points.Count - 1) * BlightTuning.Segment;
 }
 
-/// <summary>A valve: a wall of dense darkness. Light passes through dark (crossing costs HP unless dashing).</summary>
-public sealed class Valve
-{
-    public Vector2 Center;
-    /// <summary>Through the wall (along the corridor) and along it (across the corridor).</summary>
-    public Vector2 Normal, Across;
-    public float HalfWidth, HalfThickness = BlightTuning.ValveThickness * 0.5f;
-    public float Integrity = 1f;
-    public bool Cleared, Seen;
-    /// <summary>The side she entered from (−1, +1; 0 when she is not inside).</summary>
-    public int Entered;
-}
-
 /// <summary>A murkling: a wobbling orb of darkness with a dim stolen ember inside.</summary>
 public sealed class Murkling
 {
@@ -199,6 +199,14 @@ public sealed class Murkling
     public int Swarm = -1;
     /// <summary>Its body's radius (a lesser one's follows the fish it was), and what it drains a second while clinging.</summary>
     public float Radius = BlightTuning.MurkRadius, ClingDrain = BlightTuning.ClingDrain;
+    /// <summary>The body it moves as (a prime collides smaller than it looks, so it can squeeze through the passes).</summary>
+    public float Body = BlightTuning.MurkRadius;
+    /// <summary>A murkling prime (rare, five times the size, every stat scaled up); its bud's length and the ink disc it sucks up.</summary>
+    public bool Prime;
+    public float BudTotal = BlightTuning.BudSeconds, Suck = BlightTuning.SuckRadius;
+    /// <summary>How far it senses her (and fish), and how far it throws.</summary>
+    public float Sense => Prime ? BlightTuning.Sense * BlightTuning.PrimeReach : BlightTuning.Sense;
+    public float ThrowRange => Prime ? BlightTuning.ThrowRange * BlightTuning.PrimeReach : BlightTuning.ThrowRange;
     /// <summary>A murkling hunting the reef's fish while she is away: the one it is after, and when it looks again.</summary>
     public PlaneReefFish? Prey;
     public float PreyTimer;
@@ -232,6 +240,8 @@ public sealed class MurkShot
     public Vector2 Position, Velocity;
     /// <summary>Where it left the murkling's body (the view draws it pinching off from there).</summary>
     public Vector2 From;
+    /// <summary>Its size, what it does to her, its splash on fish and its stain where it lands (a prime's are bigger).</summary>
+    public float Radius = BlightTuning.ThrowRadius, Damage = BlightTuning.ThrowDamage, Splash = MurkFishTuning.Splash, Stain = BlightTuning.ThrowStainRadius;
     public float Life = BlightTuning.ThrowLife;
     /// <summary>How far it has flown.</summary>
     public float Traveled;
@@ -257,7 +267,6 @@ public sealed partial class PlaneWorld
     public CorruptionField? Corruption { get; private set; }
     public List<Blightroot> Blightroots { get; } = new();
     public List<Gloomvine> Vines { get; } = new();
-    public List<Valve> Valves { get; } = new();
     public List<Murkling> Murklings { get; } = new();
     public List<MurkShot> MurkShots { get; } = new();
     public List<CorruptArea> Areas { get; } = new();
@@ -272,6 +281,8 @@ public sealed partial class PlaneWorld
     public int LesserClingers => Murklings.Count(m => m.Alive && m.Clinging && m.Lesser);
 
     Rng _blightRng = null!;
+    /// <summary>Murkling primes budded this level (at most PrimePerLevel).</summary>
+    int _primesBorn;
     readonly List<(Vector2 At, int Bubbles, float Dim)> _pops = new();
     float _linger, _drained, _drainedBefore, _drainClock, _drainIdle;
     DamageSource _drainSource;
@@ -291,7 +302,6 @@ public sealed partial class PlaneWorld
         PlaceBlightroots();
         PlaceBlotters(field);
         PlaceCaches(field);
-        PlaceValves();
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
         {
@@ -343,52 +353,6 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>Stash approaches (a shell cache's, a secret's, a curse den's spur), and on deeper levels a neck of the main way.</summary>
-    void PlaceValves()
-    {
-        for (int i = 0; i < Map.Pois.Count; i++)
-        {
-            var poi = Map.Pois[i];
-            if (poi.Kind is not (PoiKind.ShellCache or PoiKind.Secret or PoiKind.CurseDen)) continue;
-            var spur = Map.Corridors.FirstOrDefault(c => c.Poi == i && c.Points.Count >= 2);
-            if (spur is null) continue;
-            // From the end at the place, walk back along the spur to just outside it.
-            var pts = Vector2.Distance(spur.Points[^1], poi.Position) < Vector2.Distance(spur.Points[0], poi.Position) ? Enumerable.Reverse(spur.Points).ToList() : spur.Points;
-            float want = poi.Radius + 2.5f, walked = 0f;
-            for (int k = 1; k < pts.Count; k++)
-            {
-                float seg = Vector2.Distance(pts[k - 1], pts[k]);
-                if (walked + seg < want)
-                {
-                    walked += seg;
-                    continue;
-                }
-                var dir = SafeNormalize(pts[k] - pts[k - 1]);
-                var at = pts[k - 1] + dir * (want - walked);
-                if (Map.IsOpen(at)) AddValve(at, dir, spur.HalfWidth);
-                break;
-            }
-        }
-        if (Map.Level >= 2)
-        {
-            var neck = Map.Corridors.Where(c => c.Kind == CorridorKind.Main && c.Points.Count >= 4).OrderBy(c => c.Width).FirstOrDefault();
-            if (neck is not null)
-            {
-                int mid = neck.Points.Count / 2;
-                var at = neck.Points[mid];
-                bool clear = Vector2.Distance(at, Map.Start.Position) > 25f && Vector2.Distance(at, Map.Exit.Position) > Map.Exit.Radius + 12f
-                             && Valves.All(v => Vector2.Distance(v.Center, at) > 15f) && Map.IsOpen(at);
-                if (clear) AddValve(at, SafeNormalize(neck.Points[mid + 1] - neck.Points[mid - 1]), neck.HalfWidth);
-            }
-        }
-    }
-
-    void AddValve(Vector2 at, Vector2 dir, float halfWidth)
-    {
-        if (dir == Vector2.Zero) return;
-        Valves.Add(new Valve { Center = at, Normal = dir, Across = new Vector2(-dir.Y, dir.X), HalfWidth = halfWidth + 0.8f });
-    }
-
     float BudInterval()
     {
         float interval = BlightTuning.BudInterval / (1f + 0.6f * Menace);
@@ -397,7 +361,7 @@ public sealed partial class PlaneWorld
 
     int BudCap => BlightTuning.CapBase + (int)(Menace * BlightTuning.CapPerMenace);
 
-    /// <summary>The war's turn, after combat: her light, pops, Blightroots, vines, valves, murklings, the arena.</summary>
+    /// <summary>The war's turn, after combat: her light, pops, Blightroots, vines, murklings, the arena.</summary>
     void StepCorruption()
     {
         var field = Corruption;
@@ -413,7 +377,6 @@ public sealed partial class PlaneWorld
 
         StepBlightroots(field);
         StepVines(field);
-        StepValves();
         StepBlotters(field);
         StepCaches(field);
         StepMurklings(field);
@@ -427,7 +390,7 @@ public sealed partial class PlaneWorld
             }
         StepCondensation();
 
-        // Drains (clinging, coiling, a valve) show as one hit a second, summed over it. The second starts with the
+        // Drains (clinging, coiling) show as one hit a second, summed over it. The second starts with the
         // first drop drunk; whatever is left shows once the feeding has stopped a moment, or she is lost.
         if (_drained > 0f) _drainClock += Dt;
         _drainIdle = _drained != _drainedBefore ? 0f : _drainIdle + Dt;
@@ -491,7 +454,7 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>One of her bubbles popped: its light cleanses (and cuts vines, wears valves) after combat.</summary>
+    /// <summary>One of her bubbles popped: its light cleanses (and cuts vines) after combat.</summary>
     void LightReleased(PlaneShot shot)
     {
         if (Corruption is null || !shot.FromPlayer) return;
@@ -732,59 +695,6 @@ public sealed partial class PlaneWorld
         }
     }
 
-    // ───────────────────────── valves ─────────────────────────
-
-    void StepValves()
-    {
-        var p = Player;
-        foreach (var v in Valves)
-        {
-            if (v.Cleared) continue;
-            var rel = p.Position - v.Center;
-            float along = Vector2.Dot(rel, v.Normal), side = Vector2.Dot(rel, v.Across);
-            if (!v.Seen && rel.Length() < BlightTuning.SeenRange && LineOfSight(p.Position, v.Center))
-            {
-                v.Seen = true;
-                Events.Add(new PlaneEvent(PlaneEventType.ValveSeen, v.Center, v.Normal));
-            }
-            bool inside = MathF.Abs(along) <= v.HalfThickness && MathF.Abs(side) <= v.HalfWidth;
-            if (inside)
-            {
-                if (v.Entered == 0)
-                {
-                    float before = Vector2.Dot(p.PrevPosition - v.Center, v.Normal);
-                    v.Entered = before < 0f ? -1 : 1;
-                }
-                // Light passes through dark, at a price (nothing while dashing).
-                if (p.DashTimer <= 0f)
-                    Drain(BlightTuning.ValveCost * v.Integrity * Vector2.Distance(p.Position, p.PrevPosition) / (v.HalfThickness * 2f) * 1.6f, DamageSource.Valve);
-            }
-            else
-            {
-                if (v.Entered != 0 && MathF.Abs(side) <= v.HalfWidth + 0.5f && MathF.Sign(along) == -v.Entered)
-                {
-                    Clear(v);
-                    continue;
-                }
-                v.Entered = 0;
-                // Her light at its edges wears it down.
-                if (MathF.Abs(side) <= v.HalfWidth + 1.5f && MathF.Abs(along) <= v.HalfThickness + BlightTuning.EdgeReach)
-                    v.Integrity -= BlightTuning.EdgeWear * Dt;
-            }
-            foreach (var (at, bubbles, _) in _pops)
-                if (Vector2.Distance(at, v.Center) < v.HalfWidth + 1f) v.Integrity -= BlightTuning.PopWear * bubbles;
-            if (v.Integrity <= 0f) Clear(v);
-        }
-    }
-
-    void Clear(Valve v)
-    {
-        v.Cleared = true;
-        v.Integrity = 0f;
-        v.Entered = 0;
-        Events.Add(new PlaneEvent(PlaneEventType.ValveCleared, v.Center, v.Normal));
-    }
-
     // ───────────────────────── murklings ─────────────────────────
 
     void StepMurklings(CorruptionField field)
@@ -805,7 +715,12 @@ public sealed partial class PlaneWorld
                 int cell = area.Cells[_blightRng.Int(area.Cells.Count)];
                 var at = CorruptionField.CellCentre(cell % CorruptionField.N, cell / CorruptionField.N);
                 if (field.Density[cell] < BlightTuning.BudDensity || Vector2.Distance(at, p.Position) < BlightTuning.BudClearance || !Clear(at, BlightTuning.MurkRadius)) continue;
-                Bud(at, index);
+                // Now and then, on deep enough ink, a prime.
+                bool prime = _primesBorn < BlightTuning.PrimePerLevel && !Murklings.Any(x => x.Alive && x.Prime && x.Area == index)
+                    && _blightRng.NextFloat() < BlightTuning.PrimeChance + BlightTuning.PrimeChancePerMenace * Menace
+                    && Vector2.Distance(at, p.Position) > BlightTuning.PrimeSuck + 3f && Clear(at, BlightTuning.PrimeBody)
+                    && DenseShare(field, at, BlightTuning.PrimeSuck) >= BlightTuning.PrimeDense;
+                Bud(at, index, prime);
                 break;
             }
         }
@@ -815,6 +730,8 @@ public sealed partial class PlaneWorld
             if (!m.Alive) continue;
             if (m.Budding)
             {
+                // It sucks the ink under it up into itself.
+                field.Cleanse(m.Position, m.Suck, 3f * Dt / m.BudTotal);
                 m.Bud -= Dt;
                 if (!m.Budding) Events.Add(new PlaneEvent(PlaneEventType.MurklingEmerged, m.Position, Vector2.Zero));
                 continue;
@@ -830,7 +747,7 @@ public sealed partial class PlaneWorld
                 m.Shaken -= Dt;
                 m.Windup = 0f;
                 m.Velocity = MoveToward(m.Velocity, Vector2.Zero, BlightTuning.ShakeSpeed * 1.2f * Dt);
-                Move(ref m.Position, ref m.Velocity, m.Radius, report: false, barrier: ArenaBarrier.Outside);
+                Move(ref m.Position, ref m.Velocity, m.Body, report: false, barrier: ArenaBarrier.Outside);
                 continue;
             }
             if (m.Lesser)
@@ -848,7 +765,7 @@ public sealed partial class PlaneWorld
                 float d = Vector2.Distance(m.Position, shot.Position);
                 float bright = MathF.Min(0.4f + 0.06f * shot.Bubbles, 1.3f) * shot.Dim;
                 float score = bright / (1f + 0.15f * d);
-                if (d < BlightTuning.Sense && score > best)
+                if (d < m.Sense && score > best)
                 {
                     best = score;
                     target = shot.Position;
@@ -858,9 +775,9 @@ public sealed partial class PlaneWorld
             m.Target = target;
             var to = target - m.Position;
             float dist = to.Length();
-            Vector2 wish = dist < BlightTuning.Sense ? SafeNormalize(to) : Vector2.Zero;
+            Vector2 wish = dist < m.Sense ? SafeNormalize(to) : Vector2.Zero;
             // She is away: it hunts the reef's fish instead, keeping a throw's distance from the one it is after.
-            var prey = her && dist >= BlightTuning.Sense ? Prey(m) : null;
+            var prey = her && dist >= m.Sense ? Prey(m) : null;
             float preyDist = 0f;
             if (prey is not null)
             {
@@ -870,12 +787,18 @@ public sealed partial class PlaneWorld
             }
             // A wobble off the line, as if the dark were reluctant.
             wish += new Vector2(MathF.Sin(Time * 1.7f + m.Seed), MathF.Cos(Time * 1.3f + m.Seed * 2f)) * 0.35f;
-            float pace = (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace) * (m.Windup > 0f ? BlightTuning.WindupSlow : 1f);
+            float pace = (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace) * (m.Windup > 0f ? BlightTuning.WindupSlow : 1f) * (m.Prime ? BlightTuning.PrimeSpeed : 1f);
             m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * pace, 4f * Dt);
-            Move(ref m.Position, ref m.Velocity, m.Radius, report: false, barrier: ArenaBarrier.Outside);
+            Move(ref m.Position, ref m.Velocity, m.Body, report: false, barrier: ArenaBarrier.Outside);
 
+            // A prime is too big to cling: it rams her, shoving her off.
+            if (m.Prime && Vector2.Distance(m.Position, p.Position) < m.Radius * 0.8f + Radius)
+            {
+                var shove = SafeNormalize(p.Position - m.Position);
+                if (HurtPlayer(BlightTuning.ContactDamage * BlightTuning.PrimeHit, shove, DamageSource.Murkling)) p.Velocity += shove * BlightTuning.PrimeShove;
+            }
             // It clings on touch.
-            if (Vector2.Distance(m.Position, p.Position) < BlightTuning.MurkRadius + Radius)
+            else if (Vector2.Distance(m.Position, p.Position) < BlightTuning.MurkRadius + Radius)
             {
                 if (HurtPlayer(BlightTuning.ContactDamage, SafeNormalize(p.Position - m.Position), DamageSource.Murkling) && Clingers < BlightTuning.MaxClingers)
                 {
@@ -892,8 +815,8 @@ public sealed partial class PlaneWorld
             else
             {
                 m.ThrowTimer -= Dt;
-                if (her && dist < BlightTuning.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, p.Position)) BeginThrow(m, null);
-                else if (prey is not null && preyDist < BlightTuning.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, prey.Position)) BeginThrow(m, prey);
+                if (her && dist < m.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, p.Position)) BeginThrow(m, null);
+                else if (prey is not null && preyDist < m.ThrowRange && m.ThrowTimer <= 0f && LineOfSight(m.Position, prey.Position)) BeginThrow(m, prey);
             }
         }
 
@@ -910,8 +833,8 @@ public sealed partial class PlaneWorld
                 if (s.Fall >= BlightTuning.ThrowFallSeconds)
                 {
                     s.Life = 0f;
-                    Corruption?.Spread(s.Position, BlightTuning.ThrowStainRadius, BlightTuning.ThrowStainInk, 1f);
-                    Events.Add(new PlaneEvent(PlaneEventType.MurkShotLanded, s.Position, Vector2.Zero, BlightTuning.ThrowStainRadius));
+                    Corruption?.Spread(s.Position, s.Stain, BlightTuning.ThrowStainInk, 1f);
+                    Events.Add(new PlaneEvent(PlaneEventType.MurkShotLanded, s.Position, Vector2.Zero, s.Stain));
                 }
                 continue;
             }
@@ -919,10 +842,10 @@ public sealed partial class PlaneWorld
             s.Traveled += s.Velocity.Length() * Dt;
             if (s.Traveled >= BlightTuning.ThrowFallAt) s.Fall = Dt;
             if (!Map.IsOpen(s.Position) || CrossesRim(was, s.Position)) s.Life = 0f;
-            else if (Vector2.Distance(s.Position, p.Position) < Radius + BlightTuning.ThrowRadius)
+            else if (Vector2.Distance(s.Position, p.Position) < Radius + s.Radius)
             {
                 s.Life = 0f;
-                HurtPlayer(BlightTuning.ThrowDamage, SafeNormalize(s.Velocity), DamageSource.MurkShot);
+                HurtPlayer(s.Damage, SafeNormalize(s.Velocity), DamageSource.MurkShot);
             }
             else if (StrikeFish(s)) s.Life = 0f;
         }
@@ -951,7 +874,7 @@ public sealed partial class PlaneWorld
             if (shot.Life <= 0f) continue;
             foreach (var s in MurkShots)
             {
-                if (s.Life <= 0f || !s.Airborne || Vector2.Distance(s.Position, shot.Position) > BlightTuning.ThrowRadius + shot.Radius) continue;
+                if (s.Life <= 0f || !s.Airborne || Vector2.Distance(s.Position, shot.Position) > s.Radius + shot.Radius) continue;
                 SplatterThrow(s);
                 DimBubble(shot, BlightTuning.BubbleDim);
                 if (shot.Life <= 0f) break;
@@ -972,7 +895,7 @@ public sealed partial class PlaneWorld
     void BeginThrow(Murkling m, PlaneReefFish? prey)
     {
         m.ThrowTimer = BlightTuning.ThrowEvery / (1f + BlightTuning.ThrowRatePerMenace * Menace) * _blightRng.Range(0.8f, 1.2f);
-        m.WindupTotal = m.Windup = BlightTuning.WindupSeconds / (1f + BlightTuning.WindupPerMenace * Menace);
+        m.WindupTotal = m.Windup = (m.Prime ? BlightTuning.PrimeWindup : BlightTuning.WindupSeconds) / (1f + BlightTuning.WindupPerMenace * Menace);
         m.WindupPrey = prey;
         m.Aim = AimOf(m);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingWindup, m.Position, m.Aim, m.WindupTotal));
@@ -996,7 +919,15 @@ public sealed partial class PlaneWorld
         m.ThrowAge = 0f;
         float speed = BlightTuning.ThrowSpeed + BlightTuning.ThrowSpeedPerMenace * Menace;
         var at = m.Position + m.Aim * m.Radius;
-        MurkShots.Add(new MurkShot { Position = at, From = at, Velocity = m.Aim * speed });
+        var shot = new MurkShot { Position = at, From = at, Velocity = m.Aim * speed };
+        if (m.Prime)
+        {
+            shot.Radius *= BlightTuning.PrimeHit;
+            shot.Damage *= BlightTuning.PrimeHit;
+            shot.Splash = BlightTuning.PrimeSplash;
+            shot.Stain *= BlightTuning.PrimeHit;
+        }
+        MurkShots.Add(shot);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingThrow, m.Position, m.Aim));
     }
 
@@ -1008,14 +939,44 @@ public sealed partial class PlaneWorld
         return SafeNormalize(prey.Position + prey.Velocity * (Vector2.Distance(prey.Position, m.Position) / speed) - m.Position);
     }
 
-    Murkling Bud(Vector2 at, int area)
+    Murkling Bud(Vector2 at, int area, bool prime = false)
     {
         var m = new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) };
         m.Corruption.Regen *= 1f + 0.5f * Menace;
-        m.Corruption.Max = m.Corruption.Value = BlightTuning.MurkCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
+        m.Corruption.Max = m.Corruption.Value = BlightTuning.MurkCorruption * (1f + BlightTuning.MeterPerMenace * Menace) * (prime ? BlightTuning.PrimeMeter : 1f);
+        if (prime)
+        {
+            m.Prime = true;
+            m.Radius = BlightTuning.MurkRadius * BlightTuning.PrimeScale;
+            m.Body = BlightTuning.PrimeBody;
+            m.Bud = m.BudTotal = BlightTuning.PrimeBud;
+            m.Suck = BlightTuning.PrimeSuck;
+            _primesBorn++;
+        }
         Murklings.Add(m);
-        Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, Vector2.Zero, BlightTuning.BudSeconds));
+        // The bud: its time, and the disc it sucks up and how much ink lies in it (the view gathers that many dots).
+        float ink = Corruption is { } field ? DenseShare(field, at, m.Suck, 0.15f) : 0f;
+        Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, new Vector2(m.Suck, ink), m.BudTotal));
         return m;
+    }
+
+    /// <summary>Verification: a murkling (or a prime) budding here now.</summary>
+    public Murkling DebugBud(Vector2 at, bool prime) => Bud(at, -1, prime);
+
+    /// <summary>The share of a disc's open floor whose ink is at least so dense (sampled on a grid).</summary>
+    float DenseShare(CorruptionField field, Vector2 at, float radius, float dense = BlightTuning.BudDensity)
+    {
+        int open = 0, inked = 0;
+        for (float y = -radius; y <= radius; y += 0.5f)
+        for (float x = -radius; x <= radius; x += 0.5f)
+        {
+            if (x * x + y * y > radius * radius) continue;
+            var q = at + new Vector2(x, y);
+            if (!Map.IsOpen(q)) continue;
+            open++;
+            if (field.At(q) >= dense) inked++;
+        }
+        return open == 0 ? 0f : inked / (float)open;
     }
 
     /// <summary>
@@ -1031,6 +992,17 @@ public sealed partial class PlaneWorld
             // A lesser one is a fish again.
             Events.Add(new PlaneEvent(PlaneEventType.MurklingBurst, m.Position, Vector2.Zero, 0f));
             FreeFish(m);
+            if (damage > 0f) Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, m.Position, Vector2.Zero, damage));
+            return;
+        }
+        if (m.Prime)
+        {
+            // A prime: its great ember blooms wide wherever it bursts, and it always leaves shells (and maybe a light orb).
+            Corruption?.Cleanse(m.Position, BlightTuning.PrimeBloom, 1f);
+            Events.Add(new PlaneEvent(PlaneEventType.MurklingBurst, m.Position, Vector2.UnitX, BlightTuning.PrimeBloom));
+            int shells = BlightTuning.PrimeShellsMin + _drops.Int(BlightTuning.PrimeShellsMax - BlightTuning.PrimeShellsMin + 1);
+            for (int i = 0; i < shells; i++) Shells.Add(new PlaneShell { Position = m.Position, Velocity = Fling(2f, 5f) });
+            if (_drops.NextFloat() < BlightTuning.PrimeOrb) Hearts.Add(new PlaneHeart { Position = m.Position, Velocity = Fling(1.5f, 3f) });
             if (damage > 0f) Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, m.Position, Vector2.Zero, damage));
             return;
         }

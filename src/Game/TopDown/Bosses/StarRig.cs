@@ -129,7 +129,7 @@ public partial class StarRig : BossRig
                 for (int i = 0; i < n; i++)
                 {
                     var spike = Part(BossMeshes.Cone(5), cluster);
-                    spike.SetInstanceShaderParameter("surge", 0f);
+                    spike.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("surge"), 0f);
                     float tilt = rng.RandfRange(0.4f, 1.1f), turn = rng.RandfRange(0f, Mathf.Tau);
                     spike.Rotation = new Vector3(tilt * Mathf.Cos(turn), 0f, tilt * Mathf.Sin(turn));
                     spike.Scale = new Vector3(0.07f, (0.35f + site.Size) * (0.7f + 0.6f * Spec.Mutation), 0.07f);

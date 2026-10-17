@@ -154,3 +154,19 @@ her_glow_strength={
 "type": "float",
 "value": 0.0
 }
+her_lantern={
+"type": "float",
+"value": 1.0
+}
+her_light_at={
+"type": "vec4",
+"value": Vector4(0, -1000, 0, 11)
+}
+her_horizon={
+"type": "sampler2D",
+"value": ""
+}
+her_scatter={
+"type": "float",
+"value": 0.0
+}
