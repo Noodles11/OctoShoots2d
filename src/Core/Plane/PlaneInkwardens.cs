@@ -155,6 +155,8 @@ public sealed partial class PlaneWorld
             if (t.Alive) kin.Add(t.Position);
         foreach (var r in Blightroots)
             if (r.Alive) kin.Add(r.Position);
+        foreach (var l in Lashjaws)
+            if (l.Alive) kin.Add(l.Position);
         Vector2? best = null;
         int most = 0;
         foreach (var k in kin)

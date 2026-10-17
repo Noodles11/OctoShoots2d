@@ -958,6 +958,8 @@ public partial class TopDownMain : Node3D
             "secret" => _map.WeakRocks.Select(r => (System.Numerics.Vector2?)(r.Center + _map.Caves[r.Cave].Facing * 5f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres off the level's first Thumpsquirt.
             // A few metres off the level's first Inkwarden.
+            // In front of the level's first Lashjaw, in its reach.
+            "lashjaw" => _world.Lashjaws.Select(l => (System.Numerics.Vector2?)(l.Position + l.Facing * 6f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "warden" => _world.Inkwardens.Select(w => (System.Numerics.Vector2?)(w.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "thump" => _world.Thumpsquirts.Select(t => (System.Numerics.Vector2?)(t.Position + new System.Numerics.Vector2(0f, 8f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
@@ -1933,6 +1935,29 @@ public partial class TopDownMain : Node3D
                 _sfx.PlayPitched("pop", 0.4f, -6f);
                 if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 10f) _camera.Shake(0.22f);
                 break;
+            case PlaneEventType.LashOut:
+                _sfx.PlayPitched("merge", 1.9f, -10f);
+                break;
+            case PlaneEventType.LashCatch:
+                // Caught (her, not a fish): a jolt.
+                if (e.Size == 0f)
+                {
+                    _camera.Shake(0.2f);
+                    _haptics.Pulse(0.5f, 0.3f, 0.2f);
+                }
+                _sfx.PlayPitched("pop", 1.3f, -8f);
+                break;
+            case PlaneEventType.LashBite:
+                _camera.Shake(0.45f);
+                _haptics.Pulse(0.9f, 0.7f, 0.3f);
+                _sfx.PlayPitched("pop", 0.35f, -2f);
+                break;
+            case PlaneEventType.LashStun:
+                _sfx.PlayPitched("bell_ring", 0.8f, -8f);
+                break;
+            case PlaneEventType.LashFreed:
+                _sfx.PlayPitched("bell_ring", 1.2f, -5f);
+                break;
             case PlaneEventType.Warded:
                 // Her light turned aside: a dull, muffled knock (not more than a few a second).
                 if (_levelTime - _lastWardSound > 0.15f)
@@ -2277,6 +2302,7 @@ public partial class TopDownMain : Node3D
               ?? _world.Murklings.Where(m => m.Alive && !m.Budding).Select(m => m.Position)
                   .Concat(_world.Blightroots.Where(r => r.Alive).Select(r => r.Position))
                   .Concat(_world.Thumpsquirts.Where(t => t.Alive).Select(t => t.Position))
+                  .Concat(_world.Lashjaws.Where(l => l.Alive).Select(l => l.Position))
                   .Where(q => System.Numerics.Vector2.Distance(q, from) < 14f)
                   .OrderBy(q => System.Numerics.Vector2.Distance(q, from)).Select(q => (System.Numerics.Vector2?)q).FirstOrDefault()
               // With no creature to shoot, the nearest standing pot.

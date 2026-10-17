@@ -114,6 +114,33 @@ with ten slowly writhing tentacles tipped violet, a faint ring of ink on the flo
   without a hit. Freed, its tethers snap in a burst of gold, it cleanses 3 m and leaves 1–2 shells, and a healthy
   pale-pink anemone is left on the floor.
 
+## Lashjaws (`Lashjaw`, `PlaneLashjaws.cs`)
+
+A corrupted moray lodged in a hole in the reef wall, its tongue a lash of ink: a glossy ink head with one ember eye
+poking out of the rock at her height; it never moves.
+
+- **Where:** from Depth 3 (the Coral Carnival) on: 1–2 a level there, 2–3 deeper, at most 3. On a true wall (rock
+  rising over her plane behind it) facing the camera or sideways (never a north face the camera cannot see past), never
+  under an arch or overhang, with open water before it; 25 m from her start, 20 m apart, 10 m clear of places, never by
+  the arena.
+- **What it watches:** a 140° fan before it, 10 m deep, wherever it has line of sight.
+- **The lash:** its jaws gape and its eye flares for 0.6 s (the telegraph), then the tongue flies straight at where she
+  (or a fish) was, at 25 m/s as far as 10 m: it can be dodged, and a dash slips it. A miss draws back in 0.5 s, and it
+  waits 2 s before the next.
+- **Caught:** it reels her toward its jaws at 3.5 m/s. Swimming against the pull slows it (by 0.45 per m/s of her pace
+  against it, never below 1 m/s) and a dash against it holds it a moment, but nothing she does breaks the hold; she
+  swims freely across it and may shoot. Only one Lashjaw holds her at a time.
+- **The bite:** reeled all the way in (within a metre of its jaws), she is bitten for 25 and thrown clear; it chews for
+  4 s and cannot lash.
+- **Breaking free:** only her light on its head counts (the tongue cannot be harmed). Its meter is 50 × (1 + 0.2 ×
+  Menace) (about 5 default shots), regrowing 15/s after 1.5 s without a hit. Emptied the first time, it lets go of her
+  (or its fish) and is stunned for 3 s (jaw slack, eye dim), its meter full again; emptied the second time, it is
+  freed. Until then it hunts on. An Inkwarden can ward it like any kin.
+- **Fish:** with her out of its fan (or held by another), it lashes the nearest reef fish in it, reels it in and
+  swallows it, chewing 4 s: her chance to strike.
+- **Freed:** a burst of gold (cleansing 3 m) and 3–4 shells; every fish it swallowed swims back out alive, and the
+  healthy moray draws back into its hole.
+
 ## Buried caches (`BuriedCache`) and light orbs
 
 With the corruption on there are no pots (`PlaneOptions.Vases` is off). Loot lies **buried under the ink** instead

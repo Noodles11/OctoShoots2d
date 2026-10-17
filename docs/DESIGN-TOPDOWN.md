@@ -674,7 +674,7 @@ exactly and cheaply, and the water glows where light passes through it.
   caustics in the reef's shade. Off during the dive (the sea surface moves), back when the next level's map is ready.
 - **Refraction**: her bell is a lens, gathering her light into bright caustic filaments that play over the floor below
   her (wider and softer the farther the floor). Her bubbles are lenses too: the sun's light through each (in the lit
-  depths) and her lantern's (thrown outward from her) fall on the floor as bright rings, larger the farther they fall.
+  depths) and her lantern's (thrown outward from her) fall on the floor as soft bright spots, wider the farther they fall.
   The sea surface's own caustics are §5.1's.
 - **Glints**: wet rock and sand catch her light and the reef's other lights in soft specular glints.
 - **The reef's other lights** cast shadows too: a light spring's, a clam room's inner light and the Crack's

@@ -303,6 +303,7 @@ public sealed partial class PlaneWorld
         PlaceBlotters(field);
         PlaceThumpsquirts();
         PlaceInkwardens();
+        PlaceLashjaws();
         PlaceCaches(field);
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
@@ -382,6 +383,7 @@ public sealed partial class PlaneWorld
         StepBlotters(field);
         StepThumpsquirts(field);
         StepInkwardens();
+        StepLashjaws();
         StepCaches(field);
         StepMurklings(field);
         _pops.Clear();
@@ -450,6 +452,14 @@ public sealed partial class PlaneWorld
             bool emptied = dealt > 0f && b.Corruption.Hit(dealt);
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, Vector2.Zero, dealt));
             if (emptied) BurstBlotter(b, field);
+        }
+        foreach (var l in Lashjaws)
+        {
+            if (!l.Alive || Vector2.Distance(l.Position, at) > reach + LashTuning.Head) continue;
+            float dealt = Ward(l, l.Position, light);
+            bool emptied = dealt > 0f && l.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(emptied && l.Phase == 2 ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, l.Position, Vector2.Zero, dealt));
+            if (emptied) BreakLashjaw(l);
         }
         foreach (var w in Inkwardens)
         {

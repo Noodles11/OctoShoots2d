@@ -365,6 +365,8 @@ public sealed partial class PlaneWorld
             if (t.Alive && !t.Airborne && Vector2.Distance(t.Position, p) < ThumpTuning.Radius + r) yield return t;
         foreach (var w in Inkwardens)
             if (w.Alive && Vector2.Distance(w.Position, p) < WardenTuning.Radius + r) yield return w;
+        foreach (var l in Lashjaws)
+            if (l.Alive && Vector2.Distance(l.Position, p) < LashTuning.Head + r) yield return l;
         foreach (var root in Blightroots)
             if (root.Alive && Vector2.Distance(root.Position, p) < BlightTuning.SacRadius + r) yield return root;
         if (Boss is { Stage: BossStage.Fight } boss)
@@ -395,6 +397,7 @@ public sealed partial class PlaneWorld
         foreach (var b in Blotters) Consider(b);
         foreach (var t in Thumpsquirts) Consider(t);
         foreach (var w in Inkwardens) Consider(w);
+        foreach (var l in Lashjaws) Consider(l);
         foreach (var root in Blightroots) Consider(root);
         if (Boss is { } boss) Consider(boss);
         return best;
@@ -408,6 +411,7 @@ public sealed partial class PlaneWorld
         Blotter b when b.Alive && b.Rise <= 0f => b.Position,
         Thumpsquirt t when t.Alive && !t.Airborne => t.Position,
         Inkwarden w when w.Alive => w.Position,
+        Lashjaw l when l.Alive => l.Position,
         Blightroot r when r.Alive => r.Position,
         PlaneBoss { Stage: BossStage.Fight, Open: true } boss => boss.PearlAt,
         BossSac sac when sac.Alive && Boss is { } owner => owner.SacAt(sac),
@@ -456,6 +460,17 @@ public sealed partial class PlaneWorld
                         _surgeTally.Remove(target);
                         Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, b.Position, Vector2.Zero, told + light));
                         BurstBlotter(b, field);
+                    }
+                    break;
+                case Lashjaw l:
+                    if (!l.Alive) break;
+                    light = Ward(l, l.Position, light);
+                    _surgeTally[target] = told + light;
+                    if (light > 0f && l.Corruption.Hit(light))
+                    {
+                        _surgeTally.Remove(target);
+                        if (l.Phase == 2) Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, l.Position, Vector2.Zero, told + light));
+                        BreakLashjaw(l);
                     }
                     break;
                 case Inkwarden w:
@@ -555,6 +570,9 @@ public sealed partial class PlaneWorld
                     break;
                 case Inkwarden w when w.Alive:
                     Events.Add(new PlaneEvent(PlaneEventType.MobHit, w.Position, Vector2.Zero, light));
+                    break;
+                case Lashjaw l when l.Alive:
+                    Events.Add(new PlaneEvent(PlaneEventType.MobHit, l.Position, Vector2.Zero, light));
                     break;
                 case Blightroot root when root.Alive:
                     Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, Vector2.Zero, light));

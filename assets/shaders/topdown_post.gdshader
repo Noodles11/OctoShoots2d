@@ -189,7 +189,7 @@ void fragment() {
 		col *= 1.0 - 0.6 * shadow;
 	}
 	// Her bubbles are lenses too: the light through each (the sun's from above in the lit depths, hers from her lantern)
-	// is bent into a bright ring on what lies below it, round a darker heart, larger the farther it falls.
+	// is gathered into a soft bright spot on what lies below it, a little wider and softer the farther it falls.
 	if (lens_count > 0 && !open_deep) {
 		vec3 sl = normalize(sun_dir);
 		float sun_k = reef_caustics * light_strength * sun_lit(world);
@@ -197,25 +197,21 @@ void fragment() {
 			vec4 b = lenses[i];
 			float fall_h = b.y - world.y;
 			if (fall_h < 0.3) continue;
+			float reach = smoothstep(0.3, 1.2, fall_h);
 			// The sun's rays through it, parallel: where this point's ray crossed the bubble's height.
 			vec3 q = world - sl * (fall_h / -sl.y);
-			float ring_r = b.w * (1.0 + fall_h * 0.18);
+			float spot_r = b.w * (0.7 + fall_h * 0.12);
 			float ds = distance(q.xz, b.xz);
-			float sun_ring = exp(-pow((ds - ring_r) / (0.035 + 0.02 * fall_h), 2.0)) - 0.2 * exp(-pow(ds / ring_r, 2.0));
-			// Her light's rays through it, from her lantern: the ring widens with the throw.
+			col += reef_sun * exp(-pow(ds / spot_r, 2.0)) * sun_k * 0.3 * reach;
+			// Her light's rays through it, from her lantern: the spot lands farther out and spreads with the throw.
 			vec3 lh = her_light_at.xyz;
 			vec3 lp = world - lh;
 			float t = (b.y - lh.y) / min(lp.y, -1e-3);
-			float ring = 0.0;
 			if (t > 0.0 && t < 1.0) {
-				vec3 c = lh + lp * t;
-				float dh = distance(c.xz, b.xz);
-				float throw_k = 1.0 / max(t, 0.2);
-				float rr = b.w * throw_k * 0.8;
-				ring = exp(-pow((dh * throw_k - rr) / (0.04 * throw_k + 0.03), 2.0)) * her_reach(world) * her_lantern;
+				float dh = distance((lh + lp * t).xz, b.xz) / max(t, 0.2);
+				float r = b.w / max(t, 0.2) * 0.8;
+				col += her_warm * exp(-pow(dh / r, 2.0)) * her_reach(world) * her_lantern * 0.3 * reach;
 			}
-			col += reef_sun * sun_ring * sun_k * 0.28 * smoothstep(0.3, 1.2, fall_h);
-			col += her_warm * ring * 0.35 * smoothstep(0.3, 1.2, fall_h);
 		}
 	}
 

@@ -79,6 +79,7 @@ public partial class BlightView : Node3D
         ClearBombs();
         ClearThumps();
         ClearWardens();
+        ClearLashjaws();
         _motes.Clear();
         _droplets.Clear();
         foreach (var root in world.Blightroots) _roots.Add(MakeRoot(root));
@@ -137,6 +138,7 @@ public partial class BlightView : Node3D
         SyncThumps(world, dt);
         _lastWorld = world;
         SyncWardens(world, dt, camera);
+        SyncLashjaws(world, dt, camera);
         SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
@@ -435,6 +437,8 @@ public partial class BlightView : Node3D
                 ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), Mathf.Max(m.Prime ? m.Radius * 2.6f : 1.7f * m.Radius / BlightTuning.MurkRadius, 0.8f), dt);
         foreach (var b in world.Blotters)
             if (b.Alive && b.Rise <= 0f) ShowMeter(b, b.Corruption, new Vector3(b.Position.X, LevelMap.SwimBand + 1.6f, b.Position.Y), 3.4f, dt);
+        foreach (var l in world.Lashjaws)
+            if (l.Alive) ShowMeter(l, l.Corruption, new Vector3(l.Position.X, JawHeight(l.Position) + 0.1f, l.Position.Y), 1.8f, dt);
         foreach (var w in world.Inkwardens)
             if (w.Alive) ShowMeter(w, w.Corruption, new Vector3(w.Position.X, LevelMap.SwimBand + 0.4f, w.Position.Y), 2.4f, dt);
         foreach (var t in world.Thumpsquirts)
@@ -552,6 +556,28 @@ public partial class BlightView : Node3D
                     _motes.Emit(at, _motes.RandDir() * _motes.RandRange(0.5f, 1.8f) + Vector3.Up * 0.6f, _motes.RandRange(0.4f, 0.8f), _motes.RandRange(0.05f, 0.11f), 0.02f, new Color(tint.R, tint.G, tint.B, 1f), new Color(tint.R, tint.G, tint.B, 0f), drag: 2f, buoyancy: 0.5f);
                 break;
             }
+            case PlaneEventType.LashCatch:
+                // The tongue strikes home: a splash of ink where it caught.
+                _droplets.Burst(new Vector3(e.Position.X, LevelMap.SwimBand + 0.2f, e.Position.Y), Vector3.Up, 12, 2.5f, 1f, 0.4f, 0.1f, 0.02f, new Color(0.05f, 0.02f, 0.09f, 0.95f), new Color(0.3f, 0.1f, 0.5f, 0f), drag: 3f);
+                break;
+            case PlaneEventType.LashBite:
+            {
+                // The jaws snap shut on her: ink and her light flung out.
+                var mouth = new Vector3(e.Position.X, LevelMap.SwimBand + 0.2f, e.Position.Y);
+                _droplets.Burst(mouth, new Vector3(e.Direction.X, 0.4f, e.Direction.Y).Normalized(), 26, 4f, 0.8f, 0.5f, 0.14f, 0.03f, new Color(0.03f, 0.01f, 0.06f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 3f);
+                break;
+            }
+            case PlaneEventType.LashStun:
+                // Its meter broken the first time: it reels, sparks of her light in its head.
+                for (int i = 0; i < 24; i++)
+                    _motes.Emit(at + Vector3.Up * 0.3f + _motes.RandDir() * 0.3f, _motes.RandDir() * _motes.RandRange(0.6f, 2f) + Vector3.Up * 0.6f, _motes.RandRange(0.5f, 1f), _motes.RandRange(0.06f, 0.14f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 2f, buoyancy: 0.4f);
+                break;
+            case PlaneEventType.LashFreed:
+                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.3f, e.Size, 0.8f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
+                _droplets.Burst(at, Vector3.Up, 26, 3f, 1f, 0.55f, 0.16f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
+                for (int i = 0; i < 36; i++)
+                    _motes.Emit(at + _motes.RandDir() * 0.4f, _motes.RandDir() * _motes.RandRange(1f, 3f) + Vector3.Up, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                break;
             case PlaneEventType.Warded:
                 if (_lastWorld is not null) OnWarded(_lastWorld, e);
                 break;

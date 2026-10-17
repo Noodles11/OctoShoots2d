@@ -1032,6 +1032,8 @@ public sealed partial class PlaneWorld
                     Consider(t);
                 foreach (var w in Inkwardens)
                     Consider(w);
+                foreach (var l in Lashjaws)
+                    Consider(l);
 
                 void Consider(object o)
                 {
@@ -1201,6 +1203,9 @@ public sealed partial class PlaneWorld
                 break;
             case Inkwarden w when w.Alive && shot.Struck != w:
                 at = w.Position;
+                break;
+            case Lashjaw l when l.Alive && shot.Struck != l:
+                at = l.Position;
                 break;
             default:
                 return null;

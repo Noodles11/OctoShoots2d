@@ -822,6 +822,131 @@ public class CorruptionTests
         Assert.False(m.Alive);
     }
 
+    [Fact]
+    public void LashjawsWaitInTheWallsFromDepthThree()
+    {
+        Assert.Empty(Level(p => p.Id.Depth == LashTuning.FirstDepth - 1 && !p.HasBoss).Lashjaws);
+        var plan = TestLevels.All(p => p.Id.Depth >= LashTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
+        if (plan == default) return;
+        var w = World(TestLevels.Get(plan));
+        Assert.NotEmpty(w.Lashjaws);
+        foreach (var l in w.Lashjaws)
+        {
+            Assert.False(w.Map.IsOpen(l.Position - l.Facing * 1.1f), "rock behind it");
+            Assert.True(w.Map.IsOpen(l.Position + l.Facing * 4f), "open water before it");
+        }
+    }
+
+    /// <summary>A Lashjaw on a wall with her in front of it (out on ground that is not a safe place).</summary>
+    static (PlaneWorld W, Lashjaw L, Vector2 Her) Lashing()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        for (int c = 0; c < w.Corruption!.Density.Length; c += 13)
+        {
+            var at = CellAt(c);
+            if (!w.Clear(at, 0.5f) || Vector2.Distance(at, w.Map.Start.Position) < 20f) continue;
+            for (int k = 0; k < 16; k++)
+            {
+                var d = new Vector2(MathF.Cos(k * MathF.Tau / 16f), MathF.Sin(k * MathF.Tau / 16f));
+                if (w.Map.IsOpen(at - d * 1.1f)) continue;
+                bool open = true;
+                for (float r = 1f; r <= 8f && open; r += 0.5f) open = w.Clear(at + d * r, 0.6f);
+                if (!open) continue;
+                var l = new Lashjaw { Position = at, Facing = d, Seed = 1f, Timer = LashTuning.Pause };
+                l.Tip = l.Mouth;
+                w.Lashjaws.Add(l);
+                var her = at + d * 7f;
+                w.Player.Position = w.Player.PrevPosition = her;
+                return (w, l, her);
+            }
+        }
+        throw new InvalidOperationException("no wall to lodge it in");
+    }
+
+    [Fact]
+    public void ALashjawCatchesHerAndReelsHerInAgainstHerSwimmingThenBitesAndLetsGo()
+    {
+        var (w, l, her) = Lashing();
+        bool caught = false;
+        for (int i = 0; i < 120 && !caught; i++)
+        {
+            w.Player.Hp = 100f;
+            w.Step(default);
+            caught = l.State == LashState.Hold;
+        }
+        Assert.True(caught);
+        // Swimming straight away from it only slows the pull: she is still drawn in.
+        float before = Vector2.Distance(w.Player.Position, l.Mouth);
+        for (int i = 0; i < 30; i++)
+        {
+            w.Player.Hp = 100f;
+            w.Step(new PlaneInput { Move = l.Facing });
+        }
+        float after = Vector2.Distance(w.Player.Position, l.Mouth);
+        Assert.True(after < before - 0.3f, "she cannot swim free");
+        Assert.True(before - after < LashTuning.Pull * 0.5f, "but swimming against it slows it");
+        // Reeled all the way in: bitten and let go; it chews.
+        bool bitten = false;
+        for (int i = 0; i < 60 * 8 && !bitten; i++)
+        {
+            w.Player.Hp = 100f;
+            w.Step(default);
+            bitten = w.Events.Any(e => e.Type == PlaneEventType.LashBite);
+        }
+        Assert.True(bitten);
+        Assert.Equal(LashState.Chew, l.State);
+        Assert.Null(w.HeldBy);
+    }
+
+    [Fact]
+    public void BreakingItsMeterOnceFreesHerAndStunsItTwiceFreesIt()
+    {
+        var (w, l, her) = Lashing();
+        for (int i = 0; i < 120 && l.State != LashState.Hold; i++) w.Step(default);
+        Assert.Equal(LashState.Hold, l.State);
+        w.Shots.Add(Light(l.Position, l.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.True(l.Alive);
+        Assert.Equal(LashState.Stunned, l.State);
+        Assert.Null(w.HeldBy);
+        Assert.Equal(l.Corruption.Max, l.Corruption.Value, 1);
+        w.Shots.Add(Light(l.Position, l.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.False(l.Alive);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.LashFreed);
+    }
+
+    [Fact]
+    public void ALashjawDevoursAFishAndLetsItOutWhenFreed()
+    {
+        var (w, l, her) = Lashing();
+        // She is away; a fish swims before it.
+        w.Player.Position = w.Player.PrevPosition = l.Position + l.Facing * 30f;
+        var fish = w.ReefFish.FirstOrDefault() ?? new PlaneReefFish { Kind = ReefFishKind.BlueTang, Rng = new Rng(1UL) };
+        if (!w.ReefFish.Contains(fish)) w.ReefFish.Add(fish);
+        bool swallowed = false;
+        for (int i = 0; i < 60 * 4 && !swallowed; i++)
+        {
+            if (l.State is LashState.Watch or LashState.Windup or LashState.Lash) fish.Position = l.Position + l.Facing * 5f;
+            fish.Velocity = System.Numerics.Vector2.Zero;
+            w.Player.Hp = 100f;
+            w.Step(default);
+            swallowed = l.Swallowed.Contains(fish);
+        }
+        Assert.True(swallowed);
+        Assert.True(fish.Corrupted, "out of the reef while swallowed");
+        Assert.Equal(LashState.Chew, l.State);
+        for (int k = 0; k < 2; k++)
+        {
+            w.Shots.Add(Light(l.Position, l.Corruption.Max + 1f));
+            w.Step(default);
+        }
+        Assert.False(l.Alive);
+        Assert.False(fish.Corrupted);
+        Assert.True(fish.Freed);
+    }
+
     static void Quiet(PlaneWorld w)
     {
         foreach (var area in w.Areas) area.Spent = true;
