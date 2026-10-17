@@ -1025,9 +1025,13 @@ public sealed partial class PlaneWorld
                 float best = PlaneCombatTuning.HomingReach;
                 foreach (var mob in Mobs)
                     Consider(mob);
-                // Murklings draw homing bubbles too.
+                // Murklings and Thumpsquirts draw homing bubbles too.
                 foreach (var m in Murklings)
                     Consider(m);
+                foreach (var t in Thumpsquirts)
+                    Consider(t);
+                foreach (var w in Inkwardens)
+                    Consider(w);
 
                 void Consider(object o)
                 {
@@ -1191,6 +1195,12 @@ public sealed partial class PlaneWorld
                 break;
             case Murkling m when m.Alive && !m.Budding && !m.Clinging && shot.Struck != m:
                 at = m.Position;
+                break;
+            case Thumpsquirt t when t.Alive && !t.Airborne && shot.Struck != t:
+                at = t.Position;
+                break;
+            case Inkwarden w when w.Alive && shot.Struck != w:
+                at = w.Position;
                 break;
             default:
                 return null;

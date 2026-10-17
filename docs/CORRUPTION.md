@@ -68,6 +68,52 @@ Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
   both maps it is a fat ink slug shape pointing the way it creeps. The corruption shards now hang over all open floor,
   so a Blotter's trail grows them.
 
+## Thumpsquirts (`Thumpsquirt`, `PlaneThumpsquirts.cs`)
+
+A corrupted sea squirt: an upright tube of glossy ink (1.6 m tall, 0.84 m across) with two siphons glowing a dim
+stolen ember. It stands on the floor where the floor comes near her plane and hangs just under it over deep water.
+
+- **Where:** from Depth 2 (the Sunken Galleon) on: one a level there, 1–2 in Depth 3, 2 from Depth 4, never more than 3.
+  Never within 20 m of her start, 18 m apart, never in the arena. It wakes when she is within 16 m and goes back to
+  rest past 26 m.
+- **Its cycle:** three leaps, a rest, a roll, a rest, and leaps again.
+- **A leap:** it contracts into a squat drum, trembling, for 0.6 s (the telegraph), then locks onto where she is (at
+  most 12 m off, onto open floor) and springs up stretched thin, flying 0.9 s in a high arc; a dark ring tightens on the
+  ground where it will land. In the air it cannot be harmed: her light passes it by. It lands squashed and rebounds
+  (0.35 s).
+  - **Landing on her:** 14 and a hard shove (12 m/s).
+  - **Every landing:** a ring of ink runs out to 4 m at 12 m/s: passing over her it corrupts her for 6 + 2 × Menace
+    and shoves her off (8 m/s), a dash slipping through it; it stains cleansed ground it crosses back to 0.35, as a
+    Blightroot's pulse does.
+  - **Landing on uncorrupted ground** stains 2 m of it toward 0.7.
+- **The roll:** it tips onto its rim (0.4 s) and runs on it like a coin after her for 4 s at 4.5 + 0.5 × Menace m/s
+  (she cruises at 6), turning at most 2.2 rad/s, so she can sidestep it; it inks a 1 m trail behind it. Rolling into
+  her: 10 and a shove. Then it rights itself (0.4 s).
+- **The rest:** 2.5 s upright, heaving: the best moment to strike it.
+- **Freeing it:** its corruption meter is 90 × (1 + 0.2 × Menace) (about 9 default shots), regrowing 20/s after 1 s
+  without a hit; anything but the leap can be struck (her shots, pops, surges, bursts; homing bubbles seek it). Freed,
+  it bursts into gold, cleansing 4 m, leaves 2–3 shells, and a pale, translucent sea squirt is left settled on the
+  floor where it was.
+
+## Inkwardens (`Inkwarden`, `PlaneInkwardens.cs`)
+
+A corrupted sea anemone that shelters its kin as an anemone shelters clownfish: a squat column of glossy ink crowned
+with ten slowly writhing tentacles tipped violet, a faint ring of ink on the floor round it marking how far it guards.
+
+- **Where:** from Depth 2 (the Sunken Galleon) one sits beside each Blightroot (3–5 m from it). From Depth 3 on, 1 +
+  Menace more roam the level (far from her start, 12 m apart, never in the arena), at most 6 in all. A roamer drifts
+  at 0.6 m/s toward where most of its kin gather within 25 m (looked for every 2 s) and settles beside them.
+- **The ward:** every corrupted creature within 8 m of an Inkwarden — murklings (lesser ones and primes too), Blotters,
+  Blightroots, Thumpsquirts — takes no harm from anything: her shots, pops, bursts, the Firefly Squid's surge, a dash's
+  burst (a clinging murkling is still thrown off). Each hit turned aside shows an ink tether from every warden guarding
+  the creature, wavering out of its crown, held while the hits come and fading 0.6 s after; the creature shimmers
+  violet, the hit counts 0 and a dull knock sounds. Inkwardens never guard each other and bosses are never guarded, so
+  the wardens are always the way in. The ground round them can still be cleansed.
+- **Passive:** it never attacks and does not hurt to touch.
+- **Freeing it:** its corruption meter is 60 × (1 + 0.2 × Menace) (about 6 default shots), regrowing 10/s after 1 s
+  without a hit. Freed, its tethers snap in a burst of gold, it cleanses 3 m and leaves 1–2 shells, and a healthy
+  pale-pink anemone is left on the floor.
+
 ## Buried caches (`BuriedCache`) and light orbs
 
 With the corruption on there are no pots (`PlaneOptions.Vases` is off). Loot lies **buried under the ink** instead

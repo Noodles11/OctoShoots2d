@@ -272,8 +272,9 @@ public sealed partial class PlaneWorld
                 if (!b.Alive || b.Rise > 0f || shot.Struck == b || !b.Touches(shot.Position, shot.Radius)) continue;
                 float light = HitDamage(shot);
                 b.SinceStruck = 0f;
-                bool emptied = b.Corruption.Hit(light);
-                Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, SafeNormalize(shot.Velocity), light));
+                float dealt = Ward(b, b.Position, light);
+                bool emptied = dealt > 0f && b.Corruption.Hit(dealt);
+                Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, SafeNormalize(shot.Velocity), dealt));
                 if (emptied) BurstBlotter(b, field);
                 if (shot.Pierce) shot.Struck = b;
                 else

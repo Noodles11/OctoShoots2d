@@ -956,6 +956,10 @@ public partial class TopDownMain : Node3D
             "geyser" => _world.Director.Geysers.Count > 0 ? _world.Director.Geysers[0] + new System.Numerics.Vector2(0f, 3f) : null,
             // Out in front of a secret room's sealed way in.
             "secret" => _map.WeakRocks.Select(r => (System.Numerics.Vector2?)(r.Center + _map.Caves[r.Cave].Facing * 5f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // A few metres off the level's first Thumpsquirt.
+            // A few metres off the level's first Inkwarden.
+            "warden" => _world.Inkwardens.Select(w => (System.Numerics.Vector2?)(w.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            "thump" => _world.Thumpsquirts.Select(t => (System.Numerics.Vector2?)(t.Position + new System.Numerics.Vector2(0f, 8f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1103,6 +1107,7 @@ public partial class TopDownMain : Node3D
     }
 
     double _lastFrameMs;
+    float _lastWardSound = -1f;
     bool _reported;
 
     void ProcessFrame(double delta)
@@ -1923,6 +1928,25 @@ public partial class TopDownMain : Node3D
                 // A fish again: a bright little chime.
                 _sfx.PlayPitched("bell_ring", 1.8f, -14f);
                 break;
+            case PlaneEventType.ThumpLand:
+                // A Thumpsquirt comes down: a deep thud, felt when it is near.
+                _sfx.PlayPitched("pop", 0.4f, -6f);
+                if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 10f) _camera.Shake(0.22f);
+                break;
+            case PlaneEventType.Warded:
+                // Her light turned aside: a dull, muffled knock (not more than a few a second).
+                if (_levelTime - _lastWardSound > 0.15f)
+                {
+                    _lastWardSound = _levelTime;
+                    _sfx.PlayPitched("merge", 0.55f, -14f);
+                }
+                break;
+            case PlaneEventType.WardenFreed:
+                _sfx.PlayPitched("bell_ring", 1.3f, -6f);
+                break;
+            case PlaneEventType.ThumpBurst:
+                _sfx.PlayPitched("bell_ring", 1.1f, -6f);
+                break;
             case PlaneEventType.SealLit:
                 // The emblem takes her light: a chime rising as it fills.
                 _sfx.PlayPitched("bell_ring", 1.3f + 0.7f * e.Size, -12f);
@@ -2249,6 +2273,12 @@ public partial class TopDownMain : Node3D
         var from = _world.Player.Position;
         System.Numerics.Vector2? target = _world.Boss is { Stage: BossStage.Fight } queen ? queen.Position
             : _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault()
+              // Else the nearest corrupted creature (not the wardens: what they guard).
+              ?? _world.Murklings.Where(m => m.Alive && !m.Budding).Select(m => m.Position)
+                  .Concat(_world.Blightroots.Where(r => r.Alive).Select(r => r.Position))
+                  .Concat(_world.Thumpsquirts.Where(t => t.Alive).Select(t => t.Position))
+                  .Where(q => System.Numerics.Vector2.Distance(q, from) < 14f)
+                  .OrderBy(q => System.Numerics.Vector2.Distance(q, from)).Select(q => (System.Numerics.Vector2?)q).FirstOrDefault()
               // With no creature to shoot, the nearest standing pot.
               ?? _world.Vases.Where(v => !v.Broken).OrderBy(v => System.Numerics.Vector2.Distance(v.Position, from)).Select(v => (System.Numerics.Vector2?)v.Position).FirstOrDefault();
         // Nothing to shoot at: straight ahead, the way she faces.

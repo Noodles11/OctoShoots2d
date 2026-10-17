@@ -43,6 +43,7 @@ public partial class BlightView : Node3D
     ImmediateMesh _vineMesh = null!;
     FxParticles _motes = null!, _droplets = null!;
     LevelMap? _map;
+    PlaneWorld? _lastWorld;
     float _time;
 
     public override void _Ready()
@@ -76,6 +77,8 @@ public partial class BlightView : Node3D
         ClearSlugs();
         ClearBumps();
         ClearBombs();
+        ClearThumps();
+        ClearWardens();
         _motes.Clear();
         _droplets.Clear();
         foreach (var root in world.Blightroots) _roots.Add(MakeRoot(root));
@@ -131,6 +134,9 @@ public partial class BlightView : Node3D
         SyncSlugs(world, dt);
         SyncBumps(world);
         SyncBombs(world);
+        SyncThumps(world, dt);
+        _lastWorld = world;
+        SyncWardens(world, dt, camera);
         SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
@@ -429,6 +435,10 @@ public partial class BlightView : Node3D
                 ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), Mathf.Max(m.Prime ? m.Radius * 2.6f : 1.7f * m.Radius / BlightTuning.MurkRadius, 0.8f), dt);
         foreach (var b in world.Blotters)
             if (b.Alive && b.Rise <= 0f) ShowMeter(b, b.Corruption, new Vector3(b.Position.X, LevelMap.SwimBand + 1.6f, b.Position.Y), 3.4f, dt);
+        foreach (var w in world.Inkwardens)
+            if (w.Alive) ShowMeter(w, w.Corruption, new Vector3(w.Position.X, LevelMap.SwimBand + 0.4f, w.Position.Y), 2.4f, dt);
+        foreach (var t in world.Thumpsquirts)
+            if (t.Alive && !t.Airborne) ShowMeter(t, t.Corruption, new Vector3(t.Position.X, LevelMap.SwimBand + 0.6f, t.Position.Y), 2.2f, dt);
         foreach (var root in world.Blightroots)
             if (root.Alive) ShowMeter(root, root.Corruption, new Vector3(root.Position.X, SacHeight, root.Position.Y), 2.8f, dt);
         var gone = new List<object>();
@@ -540,6 +550,40 @@ public partial class BlightView : Node3D
                 _droplets.Burst(at, Vector3.Up, 8, 2f, 0.7f, 0.35f, 0.06f, 0.015f, new Color(0.03f, 0.01f, 0.05f, 0.9f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 4f);
                 for (int i = 0; i < 12; i++)
                     _motes.Emit(at, _motes.RandDir() * _motes.RandRange(0.5f, 1.8f) + Vector3.Up * 0.6f, _motes.RandRange(0.4f, 0.8f), _motes.RandRange(0.05f, 0.11f), 0.02f, new Color(tint.R, tint.G, tint.B, 1f), new Color(tint.R, tint.G, tint.B, 0f), drag: 2f, buoyancy: 0.5f);
+                break;
+            }
+            case PlaneEventType.Warded:
+                if (_lastWorld is not null) OnWarded(_lastWorld, e);
+                break;
+            case PlaneEventType.WardenFreed:
+                // Freed: its tethers snap in a burst of gold, and a healthy anemone is left.
+                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.3f, e.Size, 0.8f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
+                _droplets.Burst(at, Vector3.Up, 24, 3f, 1f, 0.55f, 0.16f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
+                for (int i = 0; i < 30; i++)
+                    _motes.Emit(at + _motes.RandDir() * 0.4f, _motes.RandDir() * _motes.RandRange(1f, 3f) + Vector3.Up, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                LeaveFreedAnemone(e.Position);
+                break;
+            case PlaneEventType.ThumpLeap:
+                // It springs off: a puff of ink where it stood.
+                _droplets.Burst(new Vector3(e.Position.X, TubeBase(e.Position) + 0.2f, e.Position.Y), Vector3.Up, 14, 2.5f, 0.9f, 0.45f, 0.14f, 0.03f, new Color(0.02f, 0.01f, 0.04f, 0.9f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 3f);
+                break;
+            case PlaneEventType.ThumpLand:
+            {
+                // It lands: ink flung out and a dark ring running out over the floor (the knockback wave).
+                float floor = Floor(e.Position);
+                AddRipple(e.Position, floor + 0.08f, 0.4f, e.Size, e.Size / ThumpTuning.RingSpeed + 0.2f, new Color(Ink.R, Ink.G, Ink.B, 0.95f));
+                AddRipple(e.Position, LevelMap.SwimBand - 0.2f, 0.4f, e.Size, e.Size / ThumpTuning.RingSpeed + 0.1f, new Color(0.3f, 0.1f, 0.5f, 0.6f));
+                _droplets.Burst(new Vector3(e.Position.X, TubeBase(e.Position) + 0.15f, e.Position.Y), Vector3.Up, 30, 4.5f, 0.75f, 0.6f, 0.18f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2.5f);
+                break;
+            }
+            case PlaneEventType.ThumpBurst:
+            {
+                // Freed: a burst of gold, its light washing the floor, and a pale sea squirt left settled there.
+                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.4f, e.Size, 0.9f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
+                _droplets.Burst(at, Vector3.Up, 30, 3.5f, 1f, 0.6f, 0.18f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
+                for (int i = 0; i < 40; i++)
+                    _motes.Emit(at + _motes.RandDir() * 0.5f, _motes.RandDir() * _motes.RandRange(1f, 3.5f) + Vector3.Up * 1.2f, _motes.RandRange(0.7f, 1.4f), _motes.RandRange(0.08f, 0.2f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                LeaveFreedSquirt(e.Position);
                 break;
             }
             case PlaneEventType.MurklingBud:

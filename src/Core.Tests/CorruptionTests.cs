@@ -697,6 +697,131 @@ public class CorruptionTests
         Assert.InRange(w.Shells.Count - shells, BlightTuning.PrimeShellsMin, BlightTuning.PrimeShellsMax + 3);
     }
 
+    [Fact]
+    public void ThumpsquirtsLiveFromDepthTwoOn()
+    {
+        Assert.Empty(Level(p => p.Id.Depth == 2 && !p.HasBoss).Thumpsquirts);
+        var deeper = TestLevels.All(p => p.Id.Depth >= ThumpTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
+        if (deeper == default) return;
+        Assert.InRange(World(TestLevels.Get(deeper)).Thumpsquirts.Count, 1, ThumpTuning.Max);
+    }
+
+    [Fact]
+    public void AThumpsquirtLeapsAtHerUnharmedInTheAirLandsWithARingThenRollsAndRests()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var her = w.Player.Position;
+        var at = her + new Vector2(0f, -7f);
+        Assert.True(w.Clear(at, 1f) && w.Clear(her, 1f));
+        var t = new Thumpsquirt { Position = at, Seed = 1f };
+        w.Thumpsquirts.Add(t);
+        var seen = new System.Collections.Generic.List<PlaneEventType>();
+        bool hitInAir = false, rolled = false, rested = false;
+        for (int i = 0; i < 60 * 14; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = her;
+            w.Player.Hp = 100f;
+            if (t.Airborne && !hitInAir)
+            {
+                // Her light passes it by in the air.
+                float before = t.Corruption.Value;
+                w.Shots.Add(Light(t.Position));
+                w.Step(default);
+                Assert.Equal(before, t.Corruption.Value);
+                hitInAir = true;
+            }
+            else w.Step(default);
+            seen.AddRange(w.Events.Select(e => e.Type));
+            rolled |= t.State == ThumpState.Rolling;
+            rested |= t.State == ThumpState.Rest && rolled;
+        }
+        Assert.True(hitInAir);
+        Assert.Equal(ThumpTuning.Leaps, seen.Count(e => e == PlaneEventType.ThumpLand));
+        Assert.Contains(PlaneEventType.ThumpRoll, seen);
+        Assert.True(rolled && rested, "after its leaps it rests, rolls after her, and rests again");
+        // Landing on her: she was hurt by it.
+        Assert.Contains(PlaneEventType.PlayerHit, seen);
+    }
+
+    [Fact]
+    public void AThumpsquirtLandingOnCleanGroundStainsItAndIsFreedByHerLight()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        // Out on ground that was corrupted (not a safe place), with room to land.
+        var her = DenseSpot(w, 25f);
+        var at = her + new Vector2(0f, -6f);
+        for (int k = 0; k < 16 && !w.Clear(at, 1f); k++) at = her + new Vector2(MathF.Cos(k * 0.4f), MathF.Sin(k * 0.4f)) * 6f;
+        w.Player.Position = w.Player.PrevPosition = her;
+        var t = new Thumpsquirt { Position = at, Seed = 2f };
+        w.Thumpsquirts.Add(t);
+        w.Corruption!.Cleanse(her, 4f, 5f);
+        for (int i = 0; i < 60 * 3 && !w.Events.Any(e => e.Type == PlaneEventType.ThumpLand); i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = her;
+            w.Player.Hp = 100f;
+            w.Step(default);
+        }
+        // (Measured off to the side of where it landed: her own light cleanses under her.)
+        var side = t.Position + new Vector2(1.6f, 0f);
+        Assert.True(w.Corruption.At(t.Position) > 0.3f || w.Corruption.At(side) > 0.2f, "it stains clean ground it lands on");
+        // Resting or rolling, her light frees it: shells and a cleansed patch.
+        int shells = w.Shells.Count + w.Run.Shells;
+        w.Shots.Add(Light(t.Position, t.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.False(t.Alive);
+        // (She is right there: some may be in her purse already.)
+        Assert.True(w.Shells.Count + w.Run.Shells - shells >= ThumpTuning.ShellsMin);
+        Assert.True(w.Corruption.At(t.Position) < 0.05f);
+    }
+
+    [Fact]
+    public void InkwardensGuardTheBlightrootsFromDepthTwo()
+    {
+        Assert.Empty(Level(p => p.Id.Depth == 2 && !p.HasBoss).Inkwardens);
+        var plan = TestLevels.All(p => p.Id.Depth == WardenTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
+        if (plan == default) return;
+        var w = World(TestLevels.Get(plan));
+        Assert.NotEmpty(w.Inkwardens);
+        Assert.All(w.Inkwardens, g => Assert.Contains(w.Blightroots, r => Vector2.Distance(r.Position, g.Position) <= WardenTuning.NearMax + 0.01f));
+    }
+
+    [Fact]
+    public void AnInkwardenTurnsAsideAllHarmToItsKinUntilItIsFreed()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var at = w.Player.Position + new Vector2(0f, -4f);
+        var m = new Murkling { Position = at, Bud = 0f };
+        w.Murklings.Add(m);
+        var warden = new Inkwarden { Position = at + new Vector2(3f, 0f), Seed = 1f };
+        var other = new Inkwarden { Position = at + new Vector2(-3f, 0f), Seed = 2f };
+        w.Inkwardens.Add(warden);
+        w.Inkwardens.Add(other);
+        // A strong shot at the murkling does nothing; both wardens show their tethers.
+        float full = m.Corruption.Value;
+        m.Position = at;
+        w.Shots.Add(Light(at, 500f));
+        w.Step(default);
+        Assert.True(m.Alive);
+        Assert.Equal(full, m.Corruption.Value);
+        Assert.Equal(2, w.Events.Count(e => e.Type == PlaneEventType.Warded));
+        // Wardens do not guard each other: one is struck down plainly.
+        w.Shots.Add(Light(warden.Position, warden.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.False(warden.Alive);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.WardenFreed);
+        w.Shots.Add(Light(other.Position, other.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.False(other.Alive);
+        // Unguarded, the murkling takes her light.
+        m.Position = at;
+        w.Shots.Add(Light(at, 500f));
+        w.Step(default);
+        Assert.False(m.Alive);
+    }
+
     static void Quiet(PlaneWorld w)
     {
         foreach (var area in w.Areas) area.Spent = true;

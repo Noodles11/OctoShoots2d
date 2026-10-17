@@ -415,6 +415,14 @@ public sealed partial class PlaneWorld
                 m.Position = OutsideArena(m.Position);
                 m.Velocity = Vector2.Zero;
             }
+        foreach (var w in Inkwardens)
+            if (w.Alive && Inside(w.Position, WardenTuning.Radius) < 0f) w.Target = w.Position = OutsideArena(w.Position);
+        foreach (var t in Thumpsquirts)
+            if (t.Alive && Inside(t.Position, ThumpTuning.Radius) < 0f)
+            {
+                t.Position = OutsideArena(t.Position);
+                t.To = t.From = t.Position;
+            }
         foreach (var b in Blotters)
             if (b.Alive && Inside(b.Position, BlotterTuning.Radius) < 0f)
             {

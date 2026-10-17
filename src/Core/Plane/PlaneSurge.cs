@@ -361,6 +361,10 @@ public sealed partial class PlaneWorld
             if (m.Alive && !m.Clinging && Vector2.Distance(m.Position, p) < m.Radius + r) yield return m;
         foreach (var b in Blotters)
             if (b.Alive && b.Rise <= 0f && b.Touches(p, r)) yield return b;
+        foreach (var t in Thumpsquirts)
+            if (t.Alive && !t.Airborne && Vector2.Distance(t.Position, p) < ThumpTuning.Radius + r) yield return t;
+        foreach (var w in Inkwardens)
+            if (w.Alive && Vector2.Distance(w.Position, p) < WardenTuning.Radius + r) yield return w;
         foreach (var root in Blightroots)
             if (root.Alive && Vector2.Distance(root.Position, p) < BlightTuning.SacRadius + r) yield return root;
         if (Boss is { Stage: BossStage.Fight } boss)
@@ -389,6 +393,8 @@ public sealed partial class PlaneWorld
         foreach (var m in Mobs) Consider(m);
         foreach (var m in Murklings) Consider(m);
         foreach (var b in Blotters) Consider(b);
+        foreach (var t in Thumpsquirts) Consider(t);
+        foreach (var w in Inkwardens) Consider(w);
         foreach (var root in Blightroots) Consider(root);
         if (Boss is { } boss) Consider(boss);
         return best;
@@ -400,6 +406,8 @@ public sealed partial class PlaneWorld
         PlaneMob m when m.Alive => m.Position,
         Murkling m when m.Alive && !m.Clinging => m.Position,
         Blotter b when b.Alive && b.Rise <= 0f => b.Position,
+        Thumpsquirt t when t.Alive && !t.Airborne => t.Position,
+        Inkwarden w when w.Alive => w.Position,
         Blightroot r when r.Alive => r.Position,
         PlaneBoss { Stage: BossStage.Fight, Open: true } boss => boss.PearlAt,
         BossSac sac when sac.Alive && Boss is { } owner => owner.SacAt(sac),
@@ -429,8 +437,9 @@ public sealed partial class PlaneWorld
                     break;
                 case Murkling m:
                     if (!m.Alive) break;
+                    light = Ward(m, m.Position, light);
                     _surgeTally[target] = told + light;
-                    if (m.Corruption.Hit(light))
+                    if (light > 0f && m.Corruption.Hit(light))
                     {
                         _surgeTally.Remove(target);
                         Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, m.Position, Vector2.Zero, told + light));
@@ -440,19 +449,42 @@ public sealed partial class PlaneWorld
                 case Blotter b:
                     if (!b.Alive || Corruption is not { } field) break;
                     b.SinceStruck = 0f;
+                    light = Ward(b, b.Position, light);
                     _surgeTally[target] = told + light;
-                    if (b.Corruption.Hit(light))
+                    if (light > 0f && b.Corruption.Hit(light))
                     {
                         _surgeTally.Remove(target);
                         Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, b.Position, Vector2.Zero, told + light));
                         BurstBlotter(b, field);
                     }
                     break;
+                case Inkwarden w:
+                    if (!w.Alive) break;
+                    _surgeTally[target] = told + light;
+                    if (w.Corruption.Hit(light))
+                    {
+                        _surgeTally.Remove(target);
+                        Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, w.Position, Vector2.Zero, told + light));
+                        FreeWarden(w);
+                    }
+                    break;
+                case Thumpsquirt t:
+                    if (!t.Alive || t.Airborne) break;
+                    light = Ward(t, t.Position, light);
+                    _surgeTally[target] = told + light;
+                    if (light > 0f && t.Corruption.Hit(light))
+                    {
+                        _surgeTally.Remove(target);
+                        Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, t.Position, Vector2.Zero, told + light));
+                        BurstThump(t);
+                    }
+                    break;
                 case Blightroot root:
                     if (!root.Alive) break;
                     // Emptied, it bursts on its own next step.
+                    light = Ward(root, root.Position, light);
                     _surgeTally[target] = told + light;
-                    root.Corruption.Hit(light);
+                    if (light > 0f) root.Corruption.Hit(light);
                     break;
                 case PlaneBoss boss:
                     // The crust absorbs most of it while it holds (each layer a sixth), as it does a shot's.
@@ -517,6 +549,12 @@ public sealed partial class PlaneWorld
                     break;
                 case Blotter b when b.Alive:
                     Events.Add(new PlaneEvent(PlaneEventType.MobHit, b.Position, Vector2.Zero, light));
+                    break;
+                case Thumpsquirt t when t.Alive:
+                    Events.Add(new PlaneEvent(PlaneEventType.MobHit, t.Position, Vector2.Zero, light));
+                    break;
+                case Inkwarden w when w.Alive:
+                    Events.Add(new PlaneEvent(PlaneEventType.MobHit, w.Position, Vector2.Zero, light));
                     break;
                 case Blightroot root when root.Alive:
                     Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, Vector2.Zero, light));

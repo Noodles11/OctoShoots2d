@@ -301,6 +301,8 @@ public sealed partial class PlaneWorld
         }
         PlaceBlightroots();
         PlaceBlotters(field);
+        PlaceThumpsquirts();
+        PlaceInkwardens();
         PlaceCaches(field);
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
@@ -378,6 +380,8 @@ public sealed partial class PlaneWorld
         StepBlightroots(field);
         StepVines(field);
         StepBlotters(field);
+        StepThumpsquirts(field);
+        StepInkwardens();
         StepCaches(field);
         StepMurklings(field);
         _pops.Clear();
@@ -433,24 +437,42 @@ public sealed partial class PlaneWorld
         foreach (var m in Murklings)
         {
             if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, at) > reach + m.Radius) continue;
-            bool emptied = m.Corruption.Hit(light);
-            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, light));
+            float dealt = Ward(m, m.Position, light);
+            bool emptied = dealt > 0f && m.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, dealt));
             if (emptied) BurstMurkling(m, ember: true);
         }
         foreach (var b in Blotters)
         {
             if (!b.Alive || b.Rise > 0f || !b.Touches(at, reach)) continue;
             b.SinceStruck = 0f;
-            bool emptied = b.Corruption.Hit(light);
-            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, Vector2.Zero, light));
+            float dealt = Ward(b, b.Position, light);
+            bool emptied = dealt > 0f && b.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, Vector2.Zero, dealt));
             if (emptied) BurstBlotter(b, field);
+        }
+        foreach (var w in Inkwardens)
+        {
+            if (!w.Alive || Vector2.Distance(w.Position, at) > reach + WardenTuning.Radius) continue;
+            bool emptied = w.Corruption.Hit(light);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, Vector2.Zero, light));
+            if (emptied) FreeWarden(w);
+        }
+        foreach (var t in Thumpsquirts)
+        {
+            if (!t.Alive || t.Airborne || Vector2.Distance(t.Position, at) > reach + ThumpTuning.Radius) continue;
+            float dealt = Ward(t, t.Position, light);
+            bool emptied = dealt > 0f && t.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, t.Position, Vector2.Zero, dealt));
+            if (emptied) BurstThump(t);
         }
         foreach (var root in Blightroots)
         {
             if (!root.Alive || Vector2.Distance(root.Position, at) > reach + BlightTuning.SacRadius) continue;
             // Emptied, it bursts on its own next step.
-            root.Corruption.Hit(light);
-            Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, Vector2.Zero, light));
+            float dealt = Ward(root, root.Position, light);
+            if (dealt > 0f) root.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, Vector2.Zero, dealt));
         }
     }
 
@@ -477,8 +499,9 @@ public sealed partial class PlaneWorld
             if (away == Vector2.Zero) away = -SafeNormalize(p.Velocity);
             m.Velocity = away * BlightTuning.ShakeSpeed;
             m.Shaken = BlightTuning.ShakeSeconds;
-            bool emptied = m.Corruption.Hit(BlightTuning.ShakeLight);
-            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, BlightTuning.ShakeLight));
+            float dealt = Ward(m, m.Position, BlightTuning.ShakeLight);
+            bool emptied = dealt > 0f && m.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, dealt));
             if (emptied) BurstMurkling(m, ember: true);
         }
         foreach (var vine in Vines)
@@ -521,8 +544,9 @@ public sealed partial class PlaneWorld
                 if (!shot.FromPlayer || shot.Life <= 0f) continue;
                 if (Vector2.Distance(shot.Position, root.Position) > BlightTuning.SacRadius + shot.Radius) continue;
                 float light = HitDamage(shot);
-                bool emptied = root.Corruption.Hit(light);
-                Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, SafeNormalize(shot.Velocity), light));
+                float dealt = Ward(root, root.Position, light);
+                bool emptied = dealt > 0f && root.Corruption.Hit(dealt);
+                Events.Add(new PlaneEvent(PlaneEventType.MobHit, root.Position, SafeNormalize(shot.Velocity), dealt));
                 Pop(shot, root.Position - shot.Position);
                 if (emptied) break;
             }
@@ -861,8 +885,9 @@ public sealed partial class PlaneWorld
             {
                 if (!m.Alive || m.Clinging || shot.Struck == m || Vector2.Distance(m.Position, shot.Position) > m.Radius + shot.Radius) continue;
                 float light = HitDamage(shot);
-                bool emptied = m.Corruption.Hit(light);
-                Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, SafeNormalize(shot.Velocity), light));
+                float dealt = Ward(m, m.Position, light);
+                bool emptied = dealt > 0f && m.Corruption.Hit(dealt);
+                Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, SafeNormalize(shot.Velocity), dealt));
                 if (emptied) BurstMurkling(m, ember: true);
                 if (shot.Pierce) shot.Struck = m;
                 else
