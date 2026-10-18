@@ -49,8 +49,11 @@ way down, every planned place placed, about 45 ms a level in Node.
   darkening to murk, with a dashed rim.
 - The wall line is fineliner: marching squares on the softened water mask, smoothed twice (Chaikin), drawn in ink with
   its weight wavering along it, plus a finer second pass a hair off.
-- Hatching: bundles of 2–4 short parallel strokes at random angles in the rock along the walls, densest at the wall and
-  thinning out over 6.5 m.
+- Hatching, as on a hand-inked cave map: a dense band hugging the wall on the rock side (about 17 px deep on the
+  minimap, 11 px on the full chart, its outer edge ragged), laid along the outline as bundles of 3–5 parallel strokes
+  at random angles, 7–12 px long and about 2.7 px apart. It is laid out in screen pixels, like a pen's fixed nib, so it
+  keeps its texture at any zoom. A soft grey shadow sits just outside the wall line, cast down and to the right, and
+  small inked pebbles are scattered along the walls on both sides.
 - Place emblems are the game's (`TopoMap.DrawEmblem`), unchanged.
 
 ## Bringing it into the game
