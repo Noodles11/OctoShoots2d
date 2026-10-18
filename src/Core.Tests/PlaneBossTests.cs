@@ -62,7 +62,7 @@ public class PlaneBossTests
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.ArenaSealed);
         Assert.True(w.ArenaSealed);
         int ticks = StepUntil(w, PlaneEventType.BossLanded);
-        float intro = PlaneBossTuning.BannerSeconds + PlaneBossTuning.DissolveSeconds + PlaneBossTuning.DropDelay + PlaneBossTuning.ShadowSeconds;
+        float intro = PlaneBossTuning.DropDelay + PlaneBossTuning.ShadowSeconds;
         Assert.InRange(ticks * PlaneWorld.Dt, intro - 0.05f, intro + 0.05f);
         Assert.Equal(BossStage.Fight, w.Boss!.Stage);
     }

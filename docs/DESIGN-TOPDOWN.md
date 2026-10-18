@@ -224,6 +224,45 @@ The only overlap is the magenta hurt flash, which washes the whole bell for a
 moment — on purpose: being hurt is an interrupt and should override everything
 for a fraction of a second.
 
+### 2.6 Experience & skill points
+
+Clementine grows through the run by what she sets right, not by what she frees
+of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
+- **Experience** comes from three things only:
+  - **Cleansing the ground**, in steps, never continuously: 10 every time the
+    level's cleansed share reaches a new tenth (10%, 20%, …). It counts the
+    highest mark reached, so ground that regrows and is cleansed again pays
+    nothing twice.
+  - **Freeing a fish** (a lesser murkling turned back): 6.
+  - **Freeing a boss**: 120.
+- **Levels:** from level 1 to 2 takes 60, and every level after it 30 more
+  (90, 120, …). Each level is one **skill point**.
+- **Skill points** go to one modifier of her choice, each point adding a fixed
+  step (before any pearl's multiplier, so pearls scale it too): max HP +10
+  (and the new HP comes filled), damage +6%, fire rate +5%, shot speed +6%,
+  range +5%, shot size +6%, swim speed +4%, dash cooldown −5%, glow +8% (her
+  light's reach). Experience, level, points and the spent points are saved
+  with the run.
+- **The level-up** waits until she is out of the fight: no battle on, no
+  corrupted creature within 12 m, no vine coiling her, no hit taken, for
+  1.5 s, and not while she absorbs a pearl. Reaching a level mid-fight says
+  so ("Level 3! Your skill point waits until the fight is over"). Then:
+  1. The game stops and the clock with it. She still moves in place: only the
+     sea is held.
+  2. The camera closes in on her (to a third of its distance) and looks past
+     her, so she sits at the screen's left, 30% across.
+  3. A drawer slides in from the right (`LevelUpDrawer`) with "Level n!", the
+     points to spend, and every modifier: her value now (as the pause menu's
+     stat sheet shows it), what a point adds, and dots for the points it
+     holds. She clicks one (or picks it with a controller). With more points
+     left the list refreshes; once they are spent it slides away.
+  4. The camera eases back to its usual framing.
+  5. "Press any key to play on" breathes at the bottom. Any key, click or
+     button resumes the game and the clock (that press does nothing else).
+- **On the minimap** (§9): a thin gold ring outside the bezel fills with her
+  experience; when it is full (a point waits) it pulses slowly and glows
+  outward.
+
 ---
 
 ## 3. Camera & Presentation
@@ -362,6 +401,16 @@ between the places, before any rock exists:
   ground they climb over 3.5 m with the reef prototype's cosine brush to a
   top 4–14 m high, taken from the prototype's terrain (`reef_generator.html`,
   reproduced exactly for the seed text), so plateaus roll rather than lie flat.
+- **Most walls slope** (`SoftenSlopes`): once the reef is raised, the rock
+  above the swim level is held under a slope rising from the water's edge,
+  between 37° and 51° and varying slowly over the level. A face leans back
+  and a narrow ridge rounds over lower, and two light smoothing passes round
+  off the facets. About a sixth of the walls stay sheer cliffs, for variety.
+  Only rock above the swim level is lowered, never below it, so the water she
+  swims stays the same (its edge moves by a fraction of a metre). The rock
+  under and beside a roof (arches, caves, overhangs) keeps its height, since
+  it carries the roof. The stamps lean their own faces back the same way
+  (about 45° from the wall's foot), so both levels that share one still match.
 - **The stamps are pinned in:** exactly within 14 m of the start and the exit,
   blending into the level's own rock by 20 m (the blend never raises the
   level's open water; the rim stays impassable through it). Pinned again after
@@ -737,7 +786,38 @@ where hiding among identical fish is visual, not camera-based.
   stand-in for the inherited current walls; see Queen Clam in §12.2).
 - Patterns translate from "rings, spheres, sweeping planes" to 2D: rings, fans,
   sweeping lines, rotating beams, spawning adds. Every boss keeps 2–3 phases,
-  comic-cover title cards (inherited), and **freed-not-killed** poofs.
+  its anime cut-in (below), and **freed-not-killed** poofs.
+- **The boss intro** (`BossIntro`, `BossIntroArt`): as the arena seals, a
+  drawn anime cut-in covers the whole screen for about 5.4 s while the game
+  holds (the boss's drop waits for it). Any key, click or button skips to
+  its end. Five beats:
+  1. Speed lines wipe in, in the depth's tint (0–0.6 s).
+  2. Clementine's panel slides in from the left. She bobs in, spots
+     something, does a double-take with a sweat-drop, and gulps.
+  3. The boss's panel slams in from the right (1.8 s) in a white impact frame
+     with a burst of rays and a shake. The boss does its body form's gag:
+     - the giant clam snaps its shell and blows a bubble raspberry under a
+       pearl crown;
+     - the sea star spins in and poses with a wink;
+     - the urchin puffs its spines in angry huffs;
+     - the moon jelly wobbles in sparkles;
+     - the siphonophore's bells hop in a conga line;
+     - the sea hare chews a strand of weed, its ears twitching;
+     - the snail slides in, its eyestalks boinging.
+  4. A glowing **VS** punches in on the seam (3.2 s). Clementine sets her
+     face and the boss taunts.
+  5. The panels burst into bubbles that pop away into the game (4.6–5.4 s).
+
+  The cast is drawn as chibi characters: thick soft outlines, flat cel colour
+  with one highlight, big glossy eyes. Each boss wears its own generated
+  colours, with ink-sac mutations as dark bumps and its Count giving more
+  arms, spines, bells, flaps or whorls. The depth ramp (THEME-BIBLE §6.6):
+  at Depth 1 round eyes, a smile and warm colour; deeper, slit pupils, more
+  teeth, colour drained and a cold rim, and the VS thinner and icier.
+  "CLEMENTINE" rides on a ribbon at the lower left, the boss's name at the
+  lower right. Reactions are drawn shapes (a sweat-drop, sparkles), never
+  text. Each beat sounds (a whoosh, a snap, a bell, a pop). Reduced motion
+  keeps the beats without the shake, the flash or the overshoot.
 - Roster inherited: Gus, Queen Clam, Kelpie, Sir Urchin, Rusty Admiral, Treasure
   Mimic, Ringmaster Octo, Jester Jellies, Mama Otter, Captain Sawtooth, Punchy,
   Mother Angler, Giant Squid, Siphonophore, Frilled Shark, Sea Spider, Hollow Maw.
@@ -873,6 +953,12 @@ The FP staging ("look up through the surface") is replaced:
   and a small pop on the way out. Banners queue (300 ms apart; with three or
   more waiting each holds 3 s), run on game time (they wait while paused and
   under the death splash) and, with reduced motion, simply cross-fade.
+- **Experience ring** (§2.6, `MinimapView.XpRing`): a thin ring just outside
+  the minimap's bezel fills clockwise from 12 o'clock in gold over a dark track
+  as she earns experience. Full (a skill point waiting), it pulses slowly and
+  glows outward in soft gold rings. Small numbers sit under it: to the lower
+  left her level and experience ("Lv 3 · 42%"), to the lower right her health
+  ("HP 87%").
 - **Pause menu**: resume, restart, save & quit, camera zoom; two tabs — the
   pearls she has absorbed, and the **achievements** (earned ones with their line
   and the pearl they unlocked; unearned ones as a dark pearl silhouette, the
@@ -1149,8 +1235,7 @@ at mist distance (inherited fade rule).
   - **Entering.** The first time Clementine is wholly inside the disc, the arena seals: an invisible wall on the rim
     stops her (her bubbles pop on it). Mobs cannot come in, and shots cannot cross it either way. A mud cloud of
     churning sand-brown haze rises outside the rim over 1.5 s and hides what lies beyond; on the minimap it is a brown
-    ring about 15 m thick. A comic title card, **CLEMENTINE VS QUEEN CLAM**, punches in, stands for 2.5 s and
-    dissolves over 0.6 s.
+    ring about 15 m thick. The boss intro plays (§6.4): **CLEMENTINE VS QUEEN CLAM**, the game held under it.
   - **The drop.** 0.5 s later her shadow grows on the Crack for 0.8 s and she drops onto it, facing Clementine. The
     thump shakes the camera, puffs sand, and sends a wave out to the rim in 0.5 s: it sweeps every mob in the disc out
     ahead of it and sets them down just outside the wall, unhurt, and nudges Clementine outward.
@@ -1235,7 +1320,8 @@ at mist distance (inherited fade rule).
     and a shaded apron at the feet of walls.
   - **Walls:** limestone with strata and dark crevices, crusted with lilac and pink coralline algae, with turf on
     ledges.
-  - **Tops:** coral gardens of domed heads in colonies (brain, polyp, plate and soft textures).
+  - **Tops:** coral gardens of domed heads in colonies (brain, polyp, plate and soft textures), only where the rock
+    is nearly flat (under about 25°): the walls' leaning faces stay rock.
   - **Depth:** water steals red as the floor deepens; the rim wall darkens toward the edge of the world.
   - **Caustics:** on everything facing up, sharp near the surface, fading with depth. They are sunlight, so they
     fall only where the sun reaches; walls throw real shade across them.

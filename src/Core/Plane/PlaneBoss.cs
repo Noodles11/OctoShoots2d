@@ -24,8 +24,11 @@ public static class PlaneBossTuning
     /// <summary>Freed, her pearl bursts into light and she leaps off the gateway in this long, landing this far aside.</summary>
     public const float LeapSeconds = 0.7f;
 
-    /// <summary>The arena intro: the banner stands, dissolves, a beat, then her shadow grows and she lands.</summary>
-    public const float BannerSeconds = 2.5f, DissolveSeconds = 0.6f, DropDelay = 0.5f, ShadowSeconds = 0.8f;
+    /// <summary>
+    /// The arena intro: the boss's cut-in plays with the game held (the view's BossIntro, before any of this time runs),
+    /// then a beat, then her shadow grows and she lands.
+    /// </summary>
+    public const float DropDelay = 0.5f, ShadowSeconds = 0.8f;
     /// <summary>The landing wave reaches the rim in this long, sweeping mobs out; it nudges her outward.</summary>
     public const float WaveSeconds = 0.5f, WaveNudge = 5f;
     /// <summary>The mud cloud rises over this long when the arena seals, and settles over CloudSettle once she is freed.</summary>
@@ -241,7 +244,7 @@ public sealed partial class PlaneWorld
         var p = Player;
         boss.StageTime += Dt;
         boss.HitFlash -= Dt;
-        const float intro = PlaneBossTuning.BannerSeconds + PlaneBossTuning.DissolveSeconds + PlaneBossTuning.DropDelay;
+        const float intro = PlaneBossTuning.DropDelay;
 
         switch (boss.Stage)
         {

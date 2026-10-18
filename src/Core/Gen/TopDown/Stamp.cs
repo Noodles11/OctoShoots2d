@@ -24,6 +24,8 @@ public sealed class Stamp
     const int Half = (int)Blend + 2;
     const int Samples = 2 * Half + 1;
     const float WallSlope = 3.5f;
+    /// <summary>Its walls' faces rise at most this many metres per metre from their foot (about 45°).</summary>
+    const float FaceSlope = 1f;
 
     readonly float[] _heights = new float[Samples * Samples];
 
@@ -69,6 +71,9 @@ public sealed class Stamp
                 float top = 6f + 7f * (0.5f + 0.5f * TerrainNoise.Fbm((p.X + 900f) / 14f, (p.Y + 900f) / 14f, noise + 7u, 3));
                 float rise = 1f - ReefTerrain.Falloff(MathF.Max(open - 1.5f, 0f) / WallSlope);
                 h = floor + rise * (top - floor);
+                // Its faces lean back like the level's (TopDownGenerator.SoftenSlopes): held under a slope from the
+                // wall's foot, never down to the swim level.
+                h = MathF.Min(h, MathF.Max(FaceSlope * MathF.Max(open - 1.5f, 0f), 0.4f));
             }
             stamp._heights[j * Samples + i] = h;
         }

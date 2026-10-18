@@ -52,6 +52,43 @@ public sealed class PlaneRun
     /// <summary>How charged the active pearl is, 0 → 1 (ready). A new one comes charged.</summary>
     public float ActiveCharge { get; set; } = 1f;
 
+    /// <summary>Experience (DESIGN-TOPDOWN §2.6): toward the next level, the level she is, and the skill points she has not spent yet.</summary>
+    public int Xp { get; set; }
+    public int XpLevel { get; set; } = 1;
+    public int Points { get; set; }
+    /// <summary>Her skill points, spent: how many on each modifier.</summary>
+    public Dictionary<OctoShoots.Core.Items.Stat, int> Skills { get; } = new();
+
+    /// <summary>The experience it takes to reach the next level.</summary>
+    public int XpNeeded => ExperienceTuning.Need(XpLevel);
+
+    /// <summary>Gains experience; every level it reaches is a skill point. Returns how many levels.</summary>
+    public int Gain(int xp)
+    {
+        int levels = 0;
+        Xp += xp;
+        while (Xp >= XpNeeded)
+        {
+            Xp -= XpNeeded;
+            XpLevel++;
+            Points++;
+            levels++;
+        }
+        return levels;
+    }
+
+    /// <summary>Spends a skill point on a modifier (more max HP comes filled).</summary>
+    public bool Spend(OctoShoots.Core.Items.Stat stat)
+    {
+        if (Points <= 0 || !OctoShoots.Core.Plane.Skills.All(Tuning).Any(s => s.Stat == stat)) return false;
+        Points--;
+        Skills[stat] = Skills.GetValueOrDefault(stat) + 1;
+        float max = MaxHp;
+        Rebuild();
+        Hp = System.MathF.Min(Hp + System.MathF.Max(MaxHp - max, 0f), MaxHp);
+        return true;
+    }
+
     public void Add(string itemId)
     {
         Items.Add(itemId);
@@ -68,7 +105,10 @@ public sealed class PlaneRun
         return true;
     }
 
-    void Rebuild() => Loadout = Loadout.Build(Catalog, Items, Tuning);
+    /// <summary>Rebuilds the loadout after her skill points were set from outside (a resumed save).</summary>
+    public void Refresh() => Rebuild();
+
+    void Rebuild() => Loadout = Loadout.Build(Catalog, Items, Tuning, OctoShoots.Core.Plane.Skills.Mods(Skills, Tuning));
 
     /// <summary>
     /// The achievements earned (the profile's, shared: one earned mid-run unlocks its pearl from then on). Locked pearls

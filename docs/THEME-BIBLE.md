@@ -200,9 +200,9 @@ The floor is solid seabed: nothing of the depths below shows through it. The way
 
 ### 6.8 Typography & logo (▸)
 
-The comic onomatopoeia is retired; comic-cover boss title cards survive (“CLEMENTINE VS QUEEN CLAM”). The type system should be one family in two moods:
+The comic onomatopoeia is retired. Bosses are met in an anime cut-in (“CLEMENTINE VS QUEEN CLAM”, DESIGN-TOPDOWN §6.4): chibi characters with thick soft outlines, flat cel colour and big glossy eyes, panels slamming in on speed lines, reactions drawn as shapes (a sweat-drop, sparkles), never as text. The type system should be one family in two moods:
 
-- Display / title cards / logo: a rounded, buoyant display face with hand-drawn warmth (e.g. Baloo 2 or Fredoka weight 700), letterspaced wide, glowing. Title cards punch in, stand, dissolve — never with onomatopoeia text.
+- Display / title cards / logo: a rounded, buoyant display face with hand-drawn warmth (e.g. Baloo 2 or Fredoka weight 700), letterspaced wide, glowing. Names ride on ribbons and the VS punches in on the seam — never with onomatopoeia text.
 - UI / captions / Sea-pedia: a clean humanist sans (e.g. Nunito or Inter), sentence case, generous line height. Captions are quiet; the light does the shouting.
 - Monospace accents: seed codes (KELP7Q2Z), debug, and the run clock in a tabular monospace — the “instrument” voice.
 - Logo direction: “INK DEEP” in the display face, the I replaced by Clementine’s glowing bell silhouette trailing two tentacles; a hairline crack of orange light running under the wordmark, widening downward. On dark, the wordmark is white; the bell is the only colour.
@@ -285,7 +285,7 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
 
 - Ammo is diegetic: bubble orbs orbit beneath the bell — no ammo counter.
 - Vitals are diegetic (DESIGN-TOPDOWN §2.5): the four gonad rings at the centre of the bell are her health, a quarter each — warm gold, fading ever more transparent (never changing colour) as their quarters go, the last one pulsing slowly when critical; the bell's rim is her active pearl's charge — a light sweeping clockwise from the top, breathing gold when ready, snuffing out counter-clockwise on use. The magenta hurt flash washes the whole bell for a beat; absorption is a chromatic ripple.
-- HUD: run clock (top centre, stops while paused) with where the run stands always beside it ("Depth 1 · Level 2"), shells counter that brightens and swells on pickup (absorbed pearls are on her: small pearls circling her bell), circular minimap top-right whose bezel quietly echoes her health in four segments (one per gonad ring). No health bar, no active slot.
+- HUD: run clock (top centre, stops while paused) with where the run stands always beside it ("Depth 1 · Level 2"), shells counter that brightens and swells on pickup (absorbed pearls are on her: small pearls circling her bell), circular minimap top-right whose bezel quietly echoes her health, ringed by a thin gold experience ring (pulsing and glowing outward when a skill point waits), with small percentages under it: her level and experience to the left, her health to the right. No health bar, no active slot.
 - Minimap: north-up, fog of war revealed in a 15 m radius that persists; unvisited places show “?” once approached, visited ones as dots in their landmark colour; shop $ and treasure trophy appear when fog lifts. The map shows your floor only.
 - Tab map: the full chart, crater-accurate, no fog, with legend.
 - Splashes: dark, quiet, typographic. Room-clear splash: time, foes freed, shells collected and spent, pearls found, places visited, damage taken, what she carries. Death splash: how far the run got, and the seed — because a seed is the run’s epitaph and its invitation to a friend.
@@ -296,7 +296,7 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
 
 - Item taglines: one breath, warm, a little salty, never jokey about the dark. “Found only on moonlit tides.” · “The Galleon’s cook swore by it.” · “Angry and proud of it.” · “Clingy but protective.”
 - Sea-pedia voice: a field guide written by someone who loves these animals. Facts first, feeling in the last sentence. The ink-dash entry is the model: “Jellyfish do not ink. This one does. The Leak changed her — and she kept the change.”
-- Boss title cards: CLEMENTINE VS QUEEN CLAM — punch in, stand 2.5 s, dissolve. Bosses are goofy early, menacing late, and their cards follow the same ramp: big and warm at Depth 1, thin and cold at Depth 6.
+- Boss intros: CLEMENTINE VS QUEEN CLAM — a 5.4 s anime cut-in, skippable. Bosses are goofy early, menacing late, and their intros follow the same ramp: round eyes, smiles and a big warm VS at Depth 1; slit pupils, teeth and a thin cold VS at Depth 6.
 - Names: creatures are species-true (Spanish Dancer, Salp Chain, Giant Clam); bosses are storybook (Old Gus, Queen Clam, The Hollow Maw). The Hand is never named by the game — only by the child: “OW! It stings!”
 - What the game never says: “kill”, “enemy”, “reward for violence”. Foes are freed; rooms are visited; the run ends when she perishes or descends.
 

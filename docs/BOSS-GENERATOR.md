@@ -232,7 +232,7 @@ A roll is re-rolled if it fails any of:
 
 ## 10. Names
 
-Title cards stay **CLEMENTINE VS ___**. Storybook names, `[Epithet] [Noun]`, the tone ramping with depth — big and
+The boss intro (DESIGN-TOPDOWN §6.4) names it **CLEMENTINE VS ___**. Storybook names, `[Epithet] [Noun]`, the tone ramping with depth — big and
 warm early, thin and cold deep. The noun follows the body (a star is never "Clam"); the epithet may name what the Leak
 did, never the Leak itself, and never imply intent.
 

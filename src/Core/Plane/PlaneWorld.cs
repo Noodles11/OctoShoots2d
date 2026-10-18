@@ -75,7 +75,9 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     BlightrootDrank, BlightrootInflate, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, ThumpWindup, ThumpLeap, ThumpLand, ThumpRoll, ThumpBurst, Warded, WardenFreed, LashWindup, LashOut, LashCatch, LashSwallow, LashBite, LashStun, LashFreed, SealLit, SealOpened, FishStruck, FishTurned, FishFreed,
     MurklingCling, VineCoiled, VineCut, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, CacheRevealed, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
-    ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed }
+    ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
+    /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
+    XpGained, LevelUp }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse }
@@ -128,6 +130,7 @@ public sealed partial class PlaneWorld
         PlaceSprings();
         PlaceSeals();
         if (Options.Corruption) PlaceCorruption();
+        PlaceExperience();
     }
 
     public LevelMap Map { get; }
@@ -255,6 +258,7 @@ public sealed partial class PlaneWorld
         StepReefFish();
         StepCurse();
         StepEconomy();
+        StepExperience();
     }
 
     readonly List<ReefEvent> _started = new(), _ended = new();

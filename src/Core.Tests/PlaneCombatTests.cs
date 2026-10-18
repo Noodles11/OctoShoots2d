@@ -63,10 +63,23 @@ public class PlaneCombatTests
     static (PlaneWorld W, PlaneMob Mob) Alone(float distance)
     {
         var w = World();
-        var mob = w.Mobs[0];
-        foreach (var m in w.Mobs.Skip(1)) m.Hp = 0f;
-        w.Player.Position = w.Player.PrevPosition = FindOpen(w, mob.Position, distance);
+        // The first pufferling with open water toward her and room behind it to back away; the others freed.
+        var mob = w.Mobs.FirstOrDefault(m => Roomy(w, m.Position, distance) is not null) ?? w.Mobs[0];
+        foreach (var m in w.Mobs.Where(m => m != mob)) m.Hp = 0f;
+        w.Player.Position = w.Player.PrevPosition = Roomy(w, mob.Position, distance) ?? FindOpen(w, mob.Position, distance);
         return (w, mob);
+    }
+
+    /// <summary>Her spot this far from a mob, in its sight, with a 1.6 m-wide channel 4 m behind the mob; null when none.</summary>
+    static Vector2? Roomy(PlaneWorld w, Vector2 from, float distance)
+    {
+        for (int i = 0; i < 64; i++)
+        {
+            var dir = new Vector2(MathF.Cos(i * MathF.Tau / 64f), MathF.Sin(i * MathF.Tau / 64f));
+            var p = from + dir * distance;
+            if (w.Clear(p, w.Radius + 0.3f) && w.LineOfSight(from, p) && Enumerable.Range(1, 4).All(k => w.Clear(from - dir * k, 1.6f))) return p;
+        }
+        return null;
     }
 
     [Fact]

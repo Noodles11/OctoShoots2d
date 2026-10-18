@@ -178,7 +178,8 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 	// The weights come first, and each look is worked out only where it shows (most pixels need just one): the
 	// three noise stacks are the reef's main cost on a big screen.
 	float sandK = smoothstep(0.72, 0.92, up) * (1.0 - smoothstep(-0.4, 0.5 + rs_noise(w * 0.3) * 0.8, h));
-	float gardenK = smoothstep(0.55, 0.85, up) * smoothstep(1.2, 2.6, h);
+	// Gardens only where the rock is nearly flat (under ~25°): the walls' leaning faces stay rock.
+	float gardenK = smoothstep(0.84, 0.95, up) * smoothstep(1.2, 2.6, h);
 	if (gardenK > 0.0 && sandK < 0.999) gardenK *= smoothstep(0.3, 0.5, rs_fbm(w * 0.18 + 7.0));
 	else gardenK = 0.0;
 	vec3 nn = n;

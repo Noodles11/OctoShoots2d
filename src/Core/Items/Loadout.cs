@@ -100,16 +100,17 @@ public sealed class Loadout
     public bool Has(string synergyOrTransformation) =>
         Synergies.Contains(synergyOrTransformation) || Transformations.Contains(synergyOrTransformation);
 
-    public static Loadout Empty(Tuning tuning)
+    public static Loadout Empty(Tuning tuning, IEnumerable<StatMod>? extra = null)
     {
         var stats = StatBlock.Base(tuning);
-        stats.Apply(Array.Empty<StatMod>());
+        stats.Apply(extra ?? Array.Empty<StatMod>());
         return new Loadout { Stats = stats };
     }
 
-    public static Loadout Build(ItemCatalog? catalog, IReadOnlyList<string> itemIds, Tuning tuning)
+    /// <summary>The pearls' loadout, with any further stat changes (her skill points) added among the pearls' own.</summary>
+    public static Loadout Build(ItemCatalog? catalog, IReadOnlyList<string> itemIds, Tuning tuning, IEnumerable<StatMod>? extra = null)
     {
-        if (catalog is null || itemIds.Count == 0) return Empty(tuning);
+        if (catalog is null || itemIds.Count == 0) return Empty(tuning, extra);
 
         var owned = itemIds.Where(catalog.Contains).Select(id => catalog[id]).ToList();
         // Each pearl once; an extra copy of a non-unique one adds its Stack (or the whole pearl again), and an extra
@@ -132,7 +133,7 @@ public sealed class Loadout
         bundles.AddRange(transformations);
 
         var stats = StatBlock.Base(tuning);
-        stats.Apply(bundles.SelectMany(b => b.Stats));
+        stats.Apply(bundles.SelectMany(b => b.Stats).Concat(extra ?? Array.Empty<StatMod>()));
 
         var shot = new ShotSpec();
         foreach (var b in bundles)

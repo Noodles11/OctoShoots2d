@@ -113,6 +113,11 @@ public sealed class SuspendedRun
     public int Shells { get; set; }
     /// <summary>How charged her active pearl was (0–1).</summary>
     public float ActiveCharge { get; set; } = 1f;
+    /// <summary>Her experience: toward the next level, her level, unspent skill points, and the points spent (by stat name).</summary>
+    public int Xp { get; set; }
+    public int XpLevel { get; set; } = 1;
+    public int Points { get; set; }
+    public Dictionary<string, int> Skills { get; set; } = new();
     /// <summary>Play time of the run so far (the HUD clock).</summary>
     public double Elapsed { get; set; }
     /// <summary>The run's totals so far, for the death splash.</summary>

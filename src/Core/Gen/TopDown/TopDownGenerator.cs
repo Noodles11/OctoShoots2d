@@ -137,6 +137,7 @@ public static class TopDownGenerator
         // Caves' mountains may reach into a stamp: the stamp wins.
         PinStamps(map, entry, exit);
         FlattenSeabed(map);
+        SoftenSlopes(map, Stage("slopes"));
         CutShaft(map, Stage("shaft"));
         ClampHeights(map);
         Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed);
@@ -917,6 +918,97 @@ public static class TopDownGenerator
             if (under) raise.Add(i);
         }
         foreach (int i in raise) map.Heights[i] = Seabed;
+    }
+
+    /// <summary>The walls' faces lean back: at most this many metres up per metre in from the water's edge (between SlopeMin and SlopeMax).</summary>
+    const float SlopeMin = 0.75f, SlopeMax = 1.25f;
+    /// <summary>The share of the walls left as sheer cliffs (where a slow noise is lowest).</summary>
+    const float CliffShare = 0.15f;
+
+    /// <summary>
+    /// Most walls slope rather than stand sheer (DESIGN-TOPDOWN §4.1): above the swim level the rock is held under a
+    /// slope rising from the water's edge — between 37° and 51°, varying slowly over the level — so a face leans back
+    /// and a narrow ridge rounds over lower; about a sixth of the walls stay cliffs. Only rock above the swim level
+    /// is lowered, never below it, so the water she swims is the same (the edge moves only by a fraction of a metre).
+    /// The stamps (exact on two levels) lean their own faces back the same way (Stamp.FaceSlope).
+    /// </summary>
+    static void SoftenSlopes(LevelMap map, Rng rng)
+    {
+        const int N = LevelMap.Samples;
+        // Distance (metres) from every grid point to the nearest open water, and to the nearest roof (an arch's deck,
+        // a cave's or an overhang's: the rock under and beside them carries them, so it keeps its height).
+        var d = Chamfer(i => map.Heights[i] <= LevelMap.BlockHeight);
+        var roof = Chamfer(i => !float.IsNaN(map.Lid[i]));
+        uint seed = (uint)(rng.NextU64() >> 32);
+        var eased = new bool[N * N];
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            int i = y * N + x;
+            float h = map.Heights[i];
+            if (h <= LevelMap.BlockHeight || d[i] == float.MaxValue) continue;
+            var p = new Vector2(x, y);
+            // Where the walls stay cliffs, and how steep the rest lean (two slow noises).
+            float cliff = 0.5f + 0.5f * TerrainNoise.Fbm(x / 22f + 31f, y / 22f - 17f, seed, 2);
+            float soft = MathUtil.Smoothstep(MathUtil.Clamp01((cliff - CliffShare + 0.06f) / 0.12f));
+            float steep = 0.5f + 0.5f * TerrainNoise.Fbm(x / 30f - 7f, y / 30f + 11f, seed + 5u, 2);
+            float slope = MathUtil.Lerp(SlopeMin, SlopeMax, MathUtil.Clamp01(steep));
+            // Not in the stamps (exact on both levels that share them: they lean their own faces back), easing in through
+            // their blend; not under or beside a roof.
+            soft *= 1f - Stamp.Weight(Vector2.Distance(p, map.Start.Position));
+            soft *= 1f - Stamp.Weight(Vector2.Distance(p, map.Exit.Position));
+            soft *= MathUtil.Smoothstep(MathUtil.Clamp01((roof[i] - 1f) / 3f));
+            if (soft <= 0f) continue;
+            // Held under the slope, but never down to the swim level (a wall stays a wall).
+            float cap = MathF.Max(slope * d[i], 0.4f);
+            if (cap >= h) continue;
+            map.Heights[i] = MathUtil.Lerp(h, cap, soft);
+            eased[i] = true;
+        }
+        // The distance is measured in eight directions, which leaves faint facets: two light passes round them off
+        // (over the eased rock only, never down to the swim level).
+        for (int pass = 0; pass < 2; pass++)
+        {
+            var was = (float[])map.Heights.Clone();
+            for (int y = 1; y < N - 1; y++)
+            for (int x = 1; x < N - 1; x++)
+            {
+                int i = y * N + x;
+                if (!eased[i]) continue;
+                float sum = 0f;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++) sum += MathF.Max(was[i + dy * N + dx], 0.4f);
+                map.Heights[i] = MathF.Max(MathF.Min(sum / 9f, was[i] + 0.3f), 0.4f);
+            }
+        }
+    }
+
+    /// <summary>Distance (metres, 8-way chamfer) from every grid point to the nearest point that is <paramref name="source"/>.</summary>
+    static float[] Chamfer(Func<int, bool> source)
+    {
+        const int N = LevelMap.Samples;
+        var d = new float[N * N];
+        for (int i = 0; i < d.Length; i++) d[i] = source(i) ? 0f : float.MaxValue;
+        const float D1 = 1f, D2 = 1.41421356f;
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            int i = y * N + x;
+            if (x > 0) d[i] = MathF.Min(d[i], d[i - 1] + D1);
+            if (y > 0) d[i] = MathF.Min(d[i], d[i - N] + D1);
+            if (x > 0 && y > 0) d[i] = MathF.Min(d[i], d[i - N - 1] + D2);
+            if (x < N - 1 && y > 0) d[i] = MathF.Min(d[i], d[i - N + 1] + D2);
+        }
+        for (int y = N - 1; y >= 0; y--)
+        for (int x = N - 1; x >= 0; x--)
+        {
+            int i = y * N + x;
+            if (x < N - 1) d[i] = MathF.Min(d[i], d[i + 1] + D1);
+            if (y < N - 1) d[i] = MathF.Min(d[i], d[i + N] + D1);
+            if (x < N - 1 && y < N - 1) d[i] = MathF.Min(d[i], d[i + N + 1] + D2);
+            if (x > 0 && y < N - 1) d[i] = MathF.Min(d[i], d[i + N - 1] + D2);
+        }
+        return d;
     }
 
     /// <summary>Every height back inside the prototype's bounds (the shaft's bottom…+14), roofs included.</summary>

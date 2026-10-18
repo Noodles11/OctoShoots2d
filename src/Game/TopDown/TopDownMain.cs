@@ -50,6 +50,17 @@ public partial class TopDownMain : Node3D
     SurgeView _surgeView = null!;
     GeyserView _geysers = null!;
     CurseDarkness _dark = null!;
+    /// <summary>
+    /// The level-up (DESIGN-TOPDOWN §2.6): once a skill point waits and she is out of the fight, the game stops (she
+    /// still moves in place) while the camera closes in on her at the screen's left; the drawer slides in; a point
+    /// chosen, it slides away and the camera eases back; any key plays on.
+    /// </summary>
+    enum LevelUpPhase { None, In, Choosing, Out, Waiting }
+    LevelUpPhase _lvl;
+    float _lvlBlend;
+    LevelUpDrawer _levelUp = null!;
+    /// <summary>How close the level-up brings the camera (a share of its usual distance), and where she sits across the screen.</summary>
+    const float LevelUpZoom = 0.33f, LevelUpAt = 0.3f, LevelUpIn = 0.7f, LevelUpOut = 0.6f;
     LowHealthVeil _lowHealth = null!;
     bool _inCurse;
     /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
@@ -59,13 +70,20 @@ public partial class TopDownMain : Node3D
     CurseReward? _dbgCurse;
     /// <summary>Verification: `--dbg-goto=level` takes the debug menu's "Go to level" (this depth) a second into the run.</summary>
     int _dbgGoTo;
-    BannerView _banner = null!;
+    /// <summary>The boss's anime cut-in, played once as its arena seals (the game held meanwhile).</summary>
+    BossIntro _intro = null!;
+    bool _introShown;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
     bool _autoFire, _autoActive, _dbgPop, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
     /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
     string? _dbgBoss;
     float? _startHp;
+    /// <summary>Verification (`--xp=n`): experience she starts the run with.</summary>
+    int _startXp;
+    /// <summary>Verification (`--dbg-levelup`): the drawer's first choice made for her, a moment after it opens.</summary>
+    readonly bool _dbgLevelUp = OS.GetCmdlineUserArgs().Contains("--dbg-levelup");
+    float _choosingFor;
     string[] _startPearls = Array.Empty<string>();
     HudView _hud = null!;
     ItemCatalog? _catalog;
@@ -303,6 +321,7 @@ public partial class TopDownMain : Node3D
             else if (arg.StartsWith("--dbg-slowmo=") && float.TryParse(Value("--dbg-slowmo="), NumberStyles.Float, CultureInfo.InvariantCulture, out float slow))
                 Engine.TimeScale = Math.Clamp(slow, 0.02f, 1f);
             else if (arg == "--paused") _startPaused = true;
+            else if (arg.StartsWith("--xp=") && int.TryParse(Value("--xp="), out int xp)) _startXp = xp;
             else if (arg.StartsWith("--hp=") && float.TryParse(Value("--hp="), NumberStyles.Float, CultureInfo.InvariantCulture, out float hp)) _startHp = hp;
             else if (arg.StartsWith("--pearls=")) _startPearls = Value("--pearls=").Split(',', StringSplitOptions.RemoveEmptyEntries);
             else if (arg.StartsWith("--capture=")) _captureDir = Value("--capture=");
@@ -374,6 +393,10 @@ public partial class TopDownMain : Node3D
             Hp = _run.Hp,
             Shells = _run.Shells,
             ActiveCharge = _run.ActiveCharge,
+            Xp = _run.Xp,
+            XpLevel = _run.XpLevel,
+            Points = _run.Points,
+            Skills = _run.Skills.ToDictionary(k => k.Key.ToString(), k => k.Value),
             Elapsed = _elapsed,
             Foes = _runMobs,
             ShellsCollected = _runShells,
@@ -478,8 +501,6 @@ public partial class TopDownMain : Node3D
         layer.AddChild(_debugMap);
         _hud = new HudView();
         layer.AddChild(_hud);
-        _banner = new BannerView();
-        layer.AddChild(_banner);
         _minimap = new MinimapView();
         layer.AddChild(_minimap);
         _cleanse = new CleanseMeter();
@@ -509,6 +530,26 @@ public partial class TopDownMain : Node3D
         cursorLayer.AddChild(_cursor);
         var bannerLayer = new CanvasLayer { Layer = 3 };
         AddChild(bannerLayer);
+        // The boss intro: over everything but the pointer and the pause menu.
+        _intro = new BossIntro();
+        bannerLayer.AddChild(_intro);
+        _intro.Cue += cue =>
+        {
+            switch (cue)
+            {
+                case "wipe": _sfx.PlayPitched("spout", 1.4f, -8f); break;
+                case "slam":
+                    _sfx.PlayPitched("snap", 0.6f, -2f);
+                    if (_view.CameraShake && !_view.ReducedMotion) _haptics.Pulse(0.7f, 0.5f, 0.25f);
+                    break;
+                case "vs": _sfx.PlayPitched("bell_ring", 0.8f, -4f); break;
+                case "pop": _sfx.PlayPitched("pop", 1.1f, -4f); break;
+            }
+        };
+        // The level-up drawer: over the HUD, under the pointer and the pause menu.
+        _levelUp = new LevelUpDrawer { Visible = false };
+        bannerLayer.AddChild(_levelUp);
+        _levelUp.Chosen += ChooseSkill;
         _achievementBanner = new AchievementBanner { ReducedMotion = _view.ReducedMotion };
         bannerLayer.AddChild(_achievementBanner);
         // Its sounds come from the game's Sfx (made in _Ready, before or after this).
@@ -654,6 +695,9 @@ public partial class TopDownMain : Node3D
     /// </summary>
     void ShowLevel(LevelShape shape, bool keepRun, long ms)
     {
+        ResetLevelUp();
+        _intro.Stop();
+        _introShown = false;
         DropBelow();
         _origin = Vector2.Zero;
         _camera.SetWorldOrigin(_origin);
@@ -744,12 +788,20 @@ public partial class TopDownMain : Node3D
                 if (_catalog?.Contains(id) == true) _run.Add(id);
             if (_startHp is { } hp) _run.Hp = hp;
             _startHp = null;
+            if (_startXp > 0) _run.Gain(_startXp);
+            _startXp = 0;
             bool continuing = _resume is not null;
             if (_resume is { } saved)
             {
                 // Back where the save left her: what she carried onto this level, and the run's totals so far.
                 foreach (string id in saved.Items)
                     if (_catalog?.Contains(id) == true) _run.Add(id);
+                _run.Xp = saved.Xp;
+                _run.XpLevel = Math.Max(saved.XpLevel, 1);
+                _run.Points = saved.Points;
+                foreach (var (name, n) in saved.Skills)
+                    if (Enum.TryParse<OctoShoots.Core.Items.Stat>(name, out var stat) && n > 0) _run.Skills[stat] = n;
+                _run.Refresh();
                 _run.Hp = Mathf.Min(saved.Hp, _run.MaxHp);
                 _run.Shells = saved.Shells;
                 _run.ActiveCharge = saved.ActiveCharge;
@@ -1211,7 +1263,11 @@ public partial class TopDownMain : Node3D
             return;
         }
 
+        // A level-up holds the sea still (and the clock): only the views go on, so she still moves in place.
+        StepLevelUp(dt);
+        bool held = _lvl != LevelUpPhase.None || _intro.Playing;
         _accumulator += delta;
+        if (held) _accumulator = 0;
         int steps = 0;
         bool dived = false;
         while (_accumulator >= PlaneWorld.Dt && steps < 8 && !dived)
@@ -1252,6 +1308,12 @@ public partial class TopDownMain : Node3D
             {
                 _blight.OnEvent(e);
                 _seals.OnEvent(_world, e);
+                // A level reached: the ring fills and pulses; the drawer opens once she is out of the fight.
+                if (e.Type == PlaneEventType.LevelUp)
+                {
+                    Say(_world.Calm ? $"Level {(int)e.Size}!" : $"Level {(int)e.Size}! Your skill point waits until the fight is over.");
+                    _sfx.PlayPitched("synergy", 1.25f, -6f);
+                }
                 // Her light struck something: a power surge arcs back to her (hits by a shot carry its direction).
                 if ((e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
                     || e.Type == PlaneEventType.VineCut)
@@ -1414,6 +1476,7 @@ public partial class TopDownMain : Node3D
         _hud.Track(_world, _catalog, dt);
         float health = _world.Run.MaxHp > 0f ? _world.Player.Hp / _world.Run.MaxHp : 0f;
         _minimap.SetHealth(health);
+        _minimap.SetExperience(_world.Run.Xp / (float)Math.Max(_world.Run.XpNeeded, 1), _world.Run.XpLevel, _world.Run.Points > 0);
         _lowHealth.Sync(health, dt);
         // Each view on its own: one that fails is reported (once) and the rest carry on.
         Guard("bell", () => _bell.Sync(_world, alpha, dt));
@@ -1447,13 +1510,21 @@ public partial class TopDownMain : Node3D
             _dbgSeal = 0;
         }
         _camera.SetClamGlows(_clamRooms.Glows, _clamRooms.GlowColors);
-        if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) Guard("banner", () => _banner.Sync(_world.Boss));
+        // The arena sealed: the boss's cut-in plays (once), the game held under it.
+        if (_world.Boss is { Stage: BossStage.Banner } introBoss && !_introShown)
+        {
+            _introShown = true;
+            if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) _intro.Play(introBoss.Spec, _id.ShownDepth, _view.ReducedMotion);
+        }
         if (_world.Boss is { } b)
         {
             _minimap.SetMud(_world.ArenaCenter, _world.ArenaRadius, b.Cloud);
             _fullMap.Mud = new Vector4(_world.ArenaCenter.X, _world.ArenaCenter.Y, _world.ArenaRadius, b.Cloud);
         }
-        _camera.Track(Focus(alpha), dt);
+        // The level-up's close framing: nearer, and looking past her so she sits at the screen's left.
+        float framing = _lvlBlend * _lvlBlend * (3f - 2f * _lvlBlend);
+        _camera.Zoom = Mathf.Lerp(1f, LevelUpZoom, framing);
+        _camera.Track(Focus(alpha), dt, look: new Vector3(LevelUpShift() * framing, 0f, 0f));
         _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
         // In the curse den's dark her own light is dimmed too, to about half.
         _bell.Dim = 1f - 0.475f * _dark.Amount;
@@ -1521,7 +1592,6 @@ public partial class TopDownMain : Node3D
         _hud.Diving = true;
         if (_captureDir is not null) GD.Print($"Dive begins at frame {_frame}");
         // The level's life stays behind (only she goes down): it fades out with the iris (FadeLevelLife).
-        _banner.Visible = false;
     }
 
     static float Ease(float t) => Mathf.SmoothStep(0f, 1f, Mathf.Clamp(t, 0f, 1f));
@@ -1609,7 +1679,6 @@ public partial class TopDownMain : Node3D
         _bell.Shift(shift);
         _bell.DiveDepth = 0f;
         _bell.DiveTurn = 0f;
-        _banner.Visible = true;
         _hud.Diving = false;
         _diving = false;
         bool leftTutorial = _id.IsTutorial && !LevelPlan.NextOf(_seed, _id).IsTutorial;
@@ -1702,6 +1771,7 @@ public partial class TopDownMain : Node3D
     /// <summary>The death splash: how far the run got, then a new run with a new seed.</summary>
     void BeginDeath()
     {
+        ResetLevelUp();
         _accumulator = 0;
         AddToRun();
         _recorder.RunDied(_world, _runTime);
@@ -2074,8 +2144,83 @@ public partial class TopDownMain : Node3D
         _fireBlocked = true;
     }
 
+    /// <summary>
+    /// The level-up's course: it begins once a skill point waits and she is out of the fight (and not absorbing a pearl);
+    /// the camera closes in, the drawer opens, a point is chosen (ChooseSkill), the camera eases back, and a key plays on.
+    /// </summary>
+    void StepLevelUp(float dt)
+    {
+        if (_lvl == LevelUpPhase.None)
+        {
+            if (_world.Run.Points <= 0 || !_world.Calm || _world.Defeated || _world.Pearls.Exists(q => q.Absorbing)) return;
+            _lvl = LevelUpPhase.In;
+            _sfx.PlayPitched("synergy", 1.1f, -4f);
+        }
+        switch (_lvl)
+        {
+            case LevelUpPhase.Choosing:
+                _choosingFor += dt;
+                if (_dbgLevelUp && _choosingFor > 1.2f) ChooseSkill(OctoShoots.Core.Items.Stat.MaxHp);
+                break;
+            case LevelUpPhase.In:
+                _lvlBlend = Mathf.Min(1f, _lvlBlend + dt / LevelUpIn);
+                if (_lvlBlend >= 1f)
+                {
+                    _lvl = LevelUpPhase.Choosing;
+                    _choosingFor = 0f;
+                    _levelUp.Open(_world.Run, _pad);
+                }
+                break;
+            case LevelUpPhase.Out:
+                _lvlBlend = Mathf.Max(0f, _lvlBlend - dt / LevelUpOut);
+                if (_lvlBlend <= 0f)
+                {
+                    _lvl = LevelUpPhase.Waiting;
+                    _levelUp.Waiting = true;
+                }
+                break;
+        }
+    }
+
+    /// <summary>A modifier chosen in the drawer: the point is spent; with none left the drawer slides away.</summary>
+    void ChooseSkill(OctoShoots.Core.Items.Stat stat)
+    {
+        if (_lvl != LevelUpPhase.Choosing || !_world.SpendSkill(stat)) return;
+        _sfx.PlayPitched("bell_ring", 1.3f, -6f);
+        if (_world.Run.Points > 0)
+        {
+            _levelUp.Fill(_world.Run);
+            if (_pad) _levelUp.FocusFirst();
+            return;
+        }
+        _levelUp.Close();
+        _lvl = LevelUpPhase.Out;
+    }
+
+    /// <summary>A new level, a restart or her end: any level-up under way is let go (unspent points wait).</summary>
+    void ResetLevelUp()
+    {
+        _lvl = LevelUpPhase.None;
+        _lvlBlend = 0f;
+        _levelUp.Close();
+        _levelUp.Waiting = false;
+        _camera.Zoom = 1f;
+    }
+
+    /// <summary>How far east of her the level-up's camera looks so she sits at LevelUpAt across the screen (metres).</summary>
+    float LevelUpShift()
+    {
+        var cam = _camera.Camera;
+        float distance = (cam.GlobalPosition - Focus(1f)).Length();
+        var size = GetViewport().GetVisibleRect().Size;
+        float half = distance * Mathf.Tan(Mathf.DegToRad(cam.Fov) * 0.5f) * size.X / Mathf.Max(size.Y, 1f);
+        return (0.5f - LevelUpAt) * 2f * half;
+    }
+
     void HandleKeys()
     {
+        // During a level-up or the boss intro, they take the keys.
+        if (_lvl != LevelUpPhase.None || _intro.Playing) return;
         // Esc or Start pauses and resumes; B also resumes (and closes the debug menu).
         bool esc = Input.IsActionPressed(InputSetup.Pause);
         bool back = Input.IsActionPressed(InputSetup.MenuBack);
@@ -2186,6 +2331,23 @@ public partial class TopDownMain : Node3D
     /// </summary>
     public override void _Input(InputEvent e)
     {
+        // The boss intro: any key, click or button skips to its end (and does nothing else).
+        if (_intro.Playing && _intro.Elapsed > 0.3f && e.IsPressed() && !e.IsEcho() && e is InputEventKey or InputEventMouseButton or InputEventJoypadButton)
+        {
+            _intro.Skip();
+            _fireBlocked = true;
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        // After a level-up: any key, click or button plays on (and does nothing else).
+        if (_lvl == LevelUpPhase.Waiting && e.IsPressed() && !e.IsEcho() && e is InputEventKey or InputEventMouseButton or InputEventJoypadButton)
+        {
+            _lvl = LevelUpPhase.None;
+            _levelUp.Waiting = false;
+            _fireBlocked = true;
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventJoypadButton or InputEventJoypadMotion) _haptics.Device = e.Device;
         bool pad = e switch
         {
@@ -2273,7 +2435,7 @@ public partial class TopDownMain : Node3D
     /// </summary>
     void SyncCursor(float dt = 0f)
     {
-        bool show = _world is not null && !Paused && !_deathSplash && !_diving && _transition == Transition.None && !_autopilot;
+        bool show = _world is not null && !Paused && !_deathSplash && !_diving && _transition == Transition.None && !_autopilot && _lvl == LevelUpPhase.None && !_intro.Playing;
         _cursor.Visible = show;
         var mode = show || _pad ? Input.MouseModeEnum.Hidden : Input.MouseModeEnum.Visible;
         if (Input.MouseMode != mode) Input.MouseMode = mode;

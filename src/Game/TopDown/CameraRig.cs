@@ -149,17 +149,21 @@ public partial class CameraRig : Node3D
         });
     }
 
-    /// <summary>Follow a point on the swim band; snap jumps straight there (level start, teleports).</summary>
-    public void Track(Vector3 focus, float dt, bool snap = false)
+    /// <summary>
+    /// Follow a point on the swim band; snap jumps straight there (level start, teleports). The camera centres look
+    /// metres past it (the level-up frames her at the screen's left); her halo stays on the point itself.
+    /// </summary>
+    public void Track(Vector3 focus, float dt, bool snap = false, Vector3 look = default)
     {
+        var aim = focus + look;
         if (snap || !_snapped)
         {
-            _focus = focus;
+            _focus = aim;
             _snapped = true;
         }
         else
         {
-            _focus = _focus.Lerp(focus, 1f - Mathf.Exp(-Follow * dt));
+            _focus = _focus.Lerp(aim, 1f - Mathf.Exp(-Follow * dt));
         }
         float tilt = Mathf.DegToRad(Tilt);
         // North is −Z: the camera sits south of the focus, looking north and down.

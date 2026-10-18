@@ -7,7 +7,8 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// The HUD minimap (DESIGN-TOPDOWN §9): circular, top-right, a <see cref="TopoMap"/> window centred on Clementine,
-/// north up like the camera (§3).
+/// north up like the camera (§3). Round it her experience (DESIGN-TOPDOWN §2.6): a thin gold ring outside the corruption bezel, with
+/// small percentages under it, her experience to the left and her health to the right.
 /// </summary>
 public partial class MinimapView : Control
 {
@@ -24,6 +25,7 @@ public partial class MinimapView : Control
     TopoMap _map = null!;
     TextureRect _shown = null!;
     Frame _frame = null!;
+    XpRing _xp = null!;
     /// <summary>The dive (DESIGN-TOPDOWN §4.6): 0 → 1 as the map zooms in and fades out; then the new level's fades in.</summary>
     float _diveOut, _arrive = 1f;
     Shroud _shroud = null!;
@@ -63,6 +65,7 @@ public partial class MinimapView : Control
         });
         AddChild(_shroud = new Shroud { Size = new Vector2(Diameter, Diameter) });
         AddChild(_frame = new Frame { Size = new Vector2(Diameter, Diameter) });
+        AddChild(_xp = new XpRing { Position = -Vector2.One * XpRing.Out, Size = new Vector2(Diameter, Diameter) + Vector2.One * XpRing.Out * 2f });
 
         // The place Clementine is in, named under the map.
         _place = new Label
@@ -220,6 +223,15 @@ public partial class MinimapView : Control
         if (health < _frame.Health - 1e-4f) _frame.Hit = 1f;
         _frame.Health = health;
         _frame.QueueRedraw();
+        _xp.Health = health;
+    }
+
+    /// <summary>Her experience toward the next level (0..1), her level, and whether a level waits to be spent (the ring full, pulsing).</summary>
+    public void SetExperience(float share, int level, bool full)
+    {
+        _xp.Share = full ? 1f : Mathf.Clamp(share, 0f, 1f);
+        _xp.Level = level;
+        _xp.Full = full;
     }
 
     public void Track(System.Numerics.Vector2 player, System.Numerics.Vector2 velocity)
@@ -349,6 +361,72 @@ public partial class MinimapView : Control
                 // A spark of light where the ink lets go.
                 if (k > 0.3f) DrawCircle(w.At, 1.1f, new Color(1f, 0.86f, 0.5f, 0.9f * (1f - k)));
             }
+        }
+    }
+
+    /// <summary>
+    /// Her experience round the minimap: a thin ring just outside the bezel, filling clockwise from 12 o'clock in gold
+    /// over a dark track. Full (a level waiting to be spent), it pulses slowly and glows outward. Small numbers under it:
+    /// her level and experience to the left, her health to the right.
+    /// </summary>
+    partial class XpRing : Control
+    {
+        /// <summary>How far the ring's control reaches past the minimap (room for the ring, its glow and the numbers).</summary>
+        public const float Out = 26f;
+        public float Share, Health = 1f;
+        public int Level = 1;
+        public bool Full;
+        float _shown, _pulse;
+
+        static readonly Color Gold = new(1f, 0.78f, 0.3f);
+        static readonly Color Track = new(0.05f, 0.04f, 0.03f, 0.75f);
+
+        public override void _Ready() => MouseFilter = MouseFilterEnum.Ignore;
+
+        public override void _Process(double delta)
+        {
+            float dt = (float)delta;
+            float before = _shown;
+            // Filling eases up; a new level starts it again from empty.
+            _shown = Share < _shown - 0.5f ? Share : Mathf.MoveToward(_shown, Share, dt * 0.8f);
+            _pulse = Full ? _pulse + dt : 0f;
+            if (_shown != before || Full) QueueRedraw();
+        }
+
+        public override void _Draw()
+        {
+            var c = Size * 0.5f;
+            float r = Size.X * 0.5f - Out + 6f;
+            const float width = 4f;
+            DrawArc(c, r, 0f, Mathf.Tau, 128, Track, width + 2f, true);
+            float wave = Full ? 0.5f + 0.5f * Mathf.Sin(_pulse * Mathf.Tau / 1.8f) : 0f;
+            if (Full)
+                // Glowing outward: soft gold rings, wider and fainter outward, breathing with the pulse.
+                for (int i = 1; i <= 4; i++)
+                    DrawArc(c, r + i * 3f, 0f, Mathf.Tau, 128, Gold with { A = (0.28f - i * 0.06f) * (0.5f + 0.5f * wave) }, 3f + i * 0.5f, true);
+            if (_shown > 0.002f)
+            {
+                float from = -Mathf.Pi * 0.5f, to = from + Mathf.Tau * Mathf.Clamp(_shown, 0f, 1f);
+                int points = Mathf.Max(4, (int)(128 * _shown));
+                var fill = Full ? Gold.Lerp(new Color(1f, 0.95f, 0.75f), 0.5f * wave) : Gold;
+                DrawArc(c, r, from, to, points, fill, width + (Full ? 1.5f * wave : 0f), true);
+            }
+            // The numbers, small, under the ring: experience at about 7 o'clock, health at about 5.
+            var font = ThemeDB.FallbackFont;
+            const int size = 13;
+            string xp = $"Lv {Level} · {Mathf.RoundToInt(Mathf.Clamp(Share, 0f, 1f) * 100f)}%";
+            string hp = $"HP {Mathf.RoundToInt(Mathf.Clamp(Health, 0f, 1f) * 100f)}%";
+            var left = c + new Vector2(Mathf.Cos(Mathf.Pi * 0.72f), Mathf.Sin(Mathf.Pi * 0.72f)) * (r + 10f);
+            var right = c + new Vector2(Mathf.Cos(Mathf.Pi * 0.28f), Mathf.Sin(Mathf.Pi * 0.28f)) * (r + 10f);
+            float xw = font.GetStringSize(xp, HorizontalAlignment.Left, -1, size).X;
+            Text(font, left + new Vector2(-xw, size), xp, size, Full ? Gold.Lerp(Colors.White, 0.4f * wave) : Gold);
+            Text(font, right + new Vector2(0f, size), hp, size, new Color(1f, 0.9f, 0.72f));
+        }
+
+        void Text(Font font, Vector2 at, string text, int size, Color color)
+        {
+            DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, 4, new Color(0f, 0f, 0f, 0.8f));
+            DrawString(font, at, text, HorizontalAlignment.Left, -1, size, color);
         }
     }
 }
