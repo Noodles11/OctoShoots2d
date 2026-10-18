@@ -8,8 +8,8 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// A topographic map of the level, drawn once the level is generated: grayscale contours from the heightfield (the
-/// terrain shader), dashed routes, arches, cave chambers, boulders, peaks with spot heights, and the places in their
-/// landmark colours. Shows any window of the level: <see cref="Center"/> and <see cref="MetresAcross"/>.
+/// terrain shader), dashed routes, arches, cave chambers, bommies, peaks with spot heights, and the places by their
+/// emblems. Shows any window of the level: <see cref="Center"/> and <see cref="MetresAcross"/>.
 /// </summary>
 public partial class TopoMap : Control
 {
@@ -51,6 +51,8 @@ public partial class TopoMap : Control
     public readonly List<(System.Numerics.Vector2 At, bool Bathing)> Springs = new();
     /// <summary>Blotters (docs/CORRUPTION.md): where each is and which way it creeps.</summary>
     public readonly List<(System.Numerics.Vector2 At, System.Numerics.Vector2 Heading)> Blotters = new();
+    /// <summary>The places' emblems' size (the Tab map draws them larger than the minimap).</summary>
+    public float EmblemScale = 1f;
     /// <summary>Clementine's arrow: size and fill.</summary>
     public float ArrowScale = 1f;
     public Color ArrowColor = Colors.White;
@@ -165,11 +167,11 @@ public partial class TopoMap : Control
         float ppm = PixelsPerMetre;
         var font = ThemeDB.FallbackFont;
 
-        // Boulders and bommies as the little squares of a survey map; under fog of war only once seen.
+        // Bommies (the only rocks on the seabed) as the little squares of a survey map; under fog of war only once seen.
         foreach (var d in map.Decor)
-            if (d.Kind is (DecorKind.Boulder or DecorKind.Bommie) && (Fog is null || Fog.At(d.Position) > 0.5f))
+            if (d.Kind == DecorKind.Bommie && (Fog is null || Fog.At(d.Position) > 0.5f))
             {
-                float s = d.Kind == DecorKind.Bommie ? 4f : 2.5f;
+                const float s = 4f;
                 DrawRect(new Rect2(P(d.Position) - Vector2.One * s * 0.5f, Vector2.One * s), Pebble);
             }
 
@@ -216,29 +218,21 @@ public partial class TopoMap : Control
         foreach (var (at, depth) in ShowDetail ? _soundings : Enumerable.Empty<(System.Numerics.Vector2, float)>())
             DrawString(font, P(at) + new Vector2(-6f, 4f), $"{depth:0}", HorizontalAlignment.Left, -1, 10, Pebble);
 
-        // Places: nothing until Clementine has been there (no hints), then a dot in their landmark colour, or the shop
-        // and clam room icons ($, a trophy). With the Brass Compass every place shows from the start, except secret rooms.
+        // Places: nothing until Clementine has been there (no hints), then its emblem — never a bare coloured dot. With
+        // the Brass Compass every place shows from the start, except secret rooms.
         for (int i = 0; i < map.Pois.Count; i++)
         {
             var poi = map.Pois[i];
             bool shown = Visited.Contains(i) || Landmarks && poi.Kind != PoiKind.Secret;
             if (!shown) continue;
-            Color col = LevelView.PoiColor(poi.Kind);
             Vector2 p = P(poi.Position);
-            if (poi.Kind is PoiKind.Shop or PoiKind.TreasureCave)
-            {
-                if (poi.Kind == PoiKind.Shop) DrawShopIcon(p, font);
-                else DrawTrophyIcon(p);
-                continue;
-            }
             if (poi.Kind == PoiKind.Exit && ShowDetail)
             {
+                Color col = LevelView.PoiColor(poi.Kind);
                 DrawCircle(p, poi.Radius * ppm, new Color(col, 0.18f));
                 DrawArc(p, poi.Radius * ppm, 0f, Mathf.Tau, 48, col, 2f, true);
             }
-            float r = poi.Kind is PoiKind.Exit or PoiKind.Start ? 6f : 4.5f;
-            DrawCircle(p, r + 1.2f, Ink);
-            DrawCircle(p, r, col);
+            DrawEmblem(poi.Kind, p, font, EmblemScale);
         }
 
         // The corruption's works, once seen: a Blightroot as an ink sac in a violet ring (a small gold star where one has
@@ -300,26 +294,173 @@ public partial class TopoMap : Control
         if (ShowLegend) DrawLegend(font);
     }
 
-    /// <summary>The shop: a green coin with a dollar sign.</summary>
-    void DrawShopIcon(Vector2 p, Font font)
+    /// <summary>
+    /// A place's emblem: a badge in its landmark colour, ink-rimmed, with its sign — the start a pennant, the way down
+    /// the evacuation sign (a figure running out of a door, on a green plate), the shop a dollar, a clam room a pearl in
+    /// an open clam, a shell cache a shell, a curse den a spider, a secret a question mark, an ambush a warning.
+    /// </summary>
+    void DrawEmblem(PoiKind kind, Vector2 p, Font font, float k)
     {
-        DrawCircle(p, 9.5f, Ink);
-        DrawCircle(p, 8f, LevelView.PoiColor(PoiKind.Shop));
-        DrawArc(p, 6f, 0f, Mathf.Tau, 24, new Color(1f, 1f, 1f, 0.45f), 1f, true);
-        DrawString(font, p + new Vector2(-4.5f, 5.5f), "$", HorizontalAlignment.Left, -1, 15, Ink);
+        if (kind == PoiKind.Exit)
+        {
+            DrawExitSign(p, k);
+            return;
+        }
+        DrawCircle(p, 9.5f * k, Ink);
+        DrawCircle(p, 8f * k, LevelView.PoiColor(kind));
+        switch (kind)
+        {
+            case PoiKind.Start:
+                // A pennant on its pole.
+                DrawLine(p + new Vector2(-3f, 5f) * k, p + new Vector2(-3f, -5f) * k, Ink, 1.5f * k, true);
+                DrawColoredPolygon(new[] { p + new Vector2(-3f, -5f) * k, p + new Vector2(4.5f, -2.5f) * k, p + new Vector2(-3f, 0f) * k }, Ink);
+                break;
+            case PoiKind.Shop:
+                DrawArc(p, 6f * k, 0f, Mathf.Tau, 24, new Color(1f, 1f, 1f, 0.45f), 1f * k, true);
+                Glyph(font, p, "$", 15, k);
+                break;
+            case PoiKind.TreasureCave:
+                DrawClam(p, k);
+                break;
+            case PoiKind.ShellCache:
+                DrawScallop(p + new Vector2(0f, -1f) * k, k);
+                break;
+            case PoiKind.CurseDen:
+                DrawSpider(p, k);
+                break;
+            case PoiKind.Secret:
+                Glyph(font, p, "?", 15, k);
+                break;
+            default:
+                Glyph(font, p, "!", 15, k);
+                break;
+        }
     }
 
-    /// <summary>The clam room: a gold trophy cup on a gold disc.</summary>
-    void DrawTrophyIcon(Vector2 p)
+    /// <summary>A glyph in ink, centred on the badge.</summary>
+    void Glyph(Font font, Vector2 p, string text, int size, float k)
     {
-        DrawCircle(p, 9.5f, Ink);
-        DrawCircle(p, 8f, LevelView.PoiColor(PoiKind.TreasureCave));
-        var cup = new[] { p + new Vector2(-4.2f, -4.5f), p + new Vector2(4.2f, -4.5f), p + new Vector2(2.6f, 0.5f), p + new Vector2(0.9f, 1.4f), p + new Vector2(-0.9f, 1.4f), p + new Vector2(-2.6f, 0.5f) };
-        DrawColoredPolygon(cup, Ink);
-        DrawArc(p + new Vector2(-4.2f, -2.4f), 1.7f, Mathf.Pi * 0.5f, Mathf.Pi * 1.5f, 8, Ink, 1.1f, true);
-        DrawArc(p + new Vector2(4.2f, -2.4f), 1.7f, -Mathf.Pi * 0.5f, Mathf.Pi * 0.5f, 8, Ink, 1.1f, true);
-        DrawRect(new Rect2(p + new Vector2(-0.7f, 1.2f), new Vector2(1.4f, 2.2f)), Ink);
-        DrawRect(new Rect2(p + new Vector2(-2.8f, 3.3f), new Vector2(5.6f, 1.5f)), Ink);
+        int px = Mathf.RoundToInt(size * k);
+        var extent = font.GetStringSize(text, HorizontalAlignment.Left, -1, px);
+        DrawString(font, p + new Vector2(-extent.X * 0.5f, px * 0.36f), text, HorizontalAlignment.Left, -1, px, Ink);
+    }
+
+    /// <summary>The way down: the evacuation sign — a white figure running out through a door, on a green plate.</summary>
+    void DrawExitSign(Vector2 p, float k)
+    {
+        var plate = new Color(0.05f, 0.62f, 0.32f);
+        DrawRect(new Rect2(p - new Vector2(10f, 8.5f) * k, new Vector2(20f, 17f) * k), Ink);
+        DrawRect(new Rect2(p - new Vector2(8.6f, 7.1f) * k, new Vector2(17.2f, 14.2f) * k), plate);
+        var white = new Color(0.97f, 0.97f, 0.95f);
+        Vector2 V(float x, float y) => p + new Vector2(x, y) * k;
+        // The door, on the right: its frame, open.
+        DrawRect(new Rect2(V(3.2f, -5.6f), new Vector2(4.2f, 11.2f) * k), white, false, 1.2f * k);
+        // The figure, running toward it.
+        DrawCircle(V(-1.2f, -4.6f), 1.5f * k, white);
+        DrawLine(V(-1.8f, -2.6f), V(-3f, 1.2f), white, 1.9f * k, true);
+        DrawLine(V(-3f, 1.2f), V(-0.4f, 2.6f), white, 1.5f * k, true);
+        DrawLine(V(-0.4f, 2.6f), V(0.2f, 5.4f), white, 1.5f * k, true);
+        DrawLine(V(-3f, 1.2f), V(-5.2f, 3.4f), white, 1.5f * k, true);
+        DrawLine(V(-5.2f, 3.4f), V(-7f, 3f), white, 1.5f * k, true);
+        DrawLine(V(-2f, -1.8f), V(0.8f, -0.4f), white, 1.4f * k, true);
+        DrawLine(V(-2f, -1.8f), V(-4.6f, -1f), white, 1.4f * k, true);
+    }
+
+    /// <summary>A clam room: a pearl lying in an open clam — the lower valve a bowl, the upper raised clear above it.</summary>
+    void DrawClam(Vector2 p, float k)
+    {
+        Vector2 V(float x, float y) => p + new Vector2(x, y) * k;
+        var gold = LevelView.PoiColor(PoiKind.TreasureCave);
+        // The upper valve, raised: a scalloped, ribbed dome over the gap.
+        var upper = new List<Vector2>();
+        for (int i = 0; i <= 12; i++)
+        {
+            float a = Mathf.Pi * (1f + i / 12f), bump = 1f + 0.07f * Mathf.Cos(i * Mathf.Pi);
+            upper.Add(V(Mathf.Cos(a) * 6f * bump, -2f + Mathf.Sin(a) * 4.6f * bump));
+        }
+        Fan(V(0f, -2f), upper, Ink);
+        // Three crisp ribs (antialiased ones feather over the whole valve at map size).
+        for (int i = 1; i <= 5; i += 2)
+        {
+            float a = Mathf.Pi * (1f + i / 6f);
+            DrawLine(V(Mathf.Cos(a) * 1.6f, -2.4f + Mathf.Sin(a) * 1.2f), V(Mathf.Cos(a) * 4.8f, -2.4f + Mathf.Sin(a) * 3.6f), gold, Mathf.Max(1f, 0.5f * k));
+        }
+        // The lower valve: a shallow bowl.
+        var lower = new List<Vector2>();
+        for (int i = 0; i <= 12; i++)
+        {
+            float a = Mathf.Pi * i / 12f;
+            lower.Add(V(Mathf.Cos(a) * 6.4f, 2f + Mathf.Sin(a) * 3.6f));
+        }
+        Fan(V(0f, 2f), lower, Ink);
+        // The pearl, sitting in it, in the open gap.
+        DrawCircle(V(0f, 0.6f), 2.5f * k, new Color(0.98f, 0.96f, 0.92f));
+        DrawArc(V(0f, 0.6f), 2.5f * k, 0f, Mathf.Tau, 16, Ink, 0.7f * k, true);
+        DrawCircle(V(-0.8f, -0.2f), 0.75f * k, Colors.White);
+    }
+
+    /// <summary>A shell cache: the shell the HUD counts (HudView.DrawShell), cream on its badge.</summary>
+    void DrawScallop(Vector2 p, float k)
+    {
+        float size = 6.4f * k;
+        var hinge = p + new Vector2(0f, size * 0.55f);
+        var rim = new List<Vector2>();
+        for (int i = 0; i <= 12; i++)
+        {
+            float a = Mathf.Pi * (1.15f + 0.7f * i / 12f);
+            float bump = 1f + 0.06f * Mathf.Cos(i * Mathf.Pi);
+            rim.Add(hinge + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * size * 1.05f * bump);
+        }
+        var cream = new Color(1f, 0.95f, 0.85f);
+        Fan(hinge, rim, cream);
+        var poly = new List<Vector2> { hinge };
+        poly.AddRange(rim);
+        // Its ribs only where there is room for them (the legend's small badges keep the plain fan).
+        if (k >= 1.2f)
+            for (int i = 3; i <= 9; i += 3) DrawLine(hinge, hinge + (rim[i] - hinge) * 0.9f, Ink, Mathf.Max(1f, 0.5f * k));
+        poly.Add(hinge);
+        DrawPolyline(poly.ToArray(), Ink, 1f, true);
+        DrawRect(new Rect2(hinge - new Vector2(size * 0.28f, size * 0.12f), new Vector2(size * 0.56f, size * 0.22f)), cream);
+    }
+
+    /// <summary>
+    /// A filled fan: triangles from its centre to each step of its rim, handed straight to the canvas (small scalloped
+    /// outlines defeat the polygon triangulator).
+    /// </summary>
+    void Fan(Vector2 centre, List<Vector2> rim, Color col)
+    {
+        var points = new Vector2[rim.Count + 1];
+        var colors = new Color[rim.Count + 1];
+        points[0] = centre;
+        for (int i = 0; i < rim.Count; i++) points[i + 1] = rim[i];
+        System.Array.Fill(colors, col);
+        var indices = new int[(rim.Count - 1) * 3];
+        for (int i = 0; i < rim.Count - 1; i++)
+        {
+            indices[i * 3] = 0;
+            indices[i * 3 + 1] = i + 1;
+            indices[i * 3 + 2] = i + 2;
+        }
+        RenderingServer.CanvasItemAddTriangleArray(GetCanvasItem(), indices, points, colors);
+    }
+
+    /// <summary>A curse den: a spider — a small body on eight long, jointed legs.</summary>
+    void DrawSpider(Vector2 p, float k)
+    {
+        Vector2 V(float x, float y) => p + new Vector2(x, y) * k;
+        for (int side = -1; side <= 1; side += 2)
+            for (int leg = 0; leg < 4; leg++)
+            {
+                float y = -1.4f + leg * 1f;
+                var knee = V(side * 3.8f, -4.2f + leg * 2.4f);
+                var foot = V(side * 6.4f, -2.2f + leg * 2.6f);
+                DrawLine(V(side * 0.8f, y), knee, Ink, 1.1f * k, true);
+                DrawLine(knee, foot, Ink, 1.1f * k, true);
+            }
+        DrawCircle(V(0f, 1.4f), 2.3f * k, Ink);
+        DrawCircle(V(0f, -1.6f), 1.5f * k, Ink);
+        DrawCircle(V(-0.6f, -2f), 0.45f * k, new Color(1f, 0.85f, 0.85f));
+        DrawCircle(V(0.6f, -2f), 0.45f * k, new Color(1f, 0.85f, 0.85f));
     }
 
     void DrawLegend(Font font)
@@ -329,14 +470,14 @@ public partial class TopoMap : Control
             (PoiKind.Start, "Start"), (PoiKind.Exit, "Way down"), (PoiKind.ShellCache, "Shell cache"), (PoiKind.Shop, "Shop"),
             (PoiKind.TreasureCave, "Clam room"), (PoiKind.CurseDen, "Curse den"), (PoiKind.Secret, "Secret"), (PoiKind.Ambush, "Ambush"),
         };
-        var at = new Vector2(Size.X - 124f, Size.Y - rows.Length * 16f - 14f);
-        DrawRect(new Rect2(at - Vector2.One * 6f, new Vector2(118f, rows.Length * 16f + 8f)), new Color(1f, 1f, 1f, 0.8f));
+        const float row = 22f;
+        var at = new Vector2(Size.X - 132f, Size.Y - rows.Length * row - 14f);
+        DrawRect(new Rect2(at - Vector2.One * 6f, new Vector2(126f, rows.Length * row + 8f)), new Color(1f, 1f, 1f, 0.8f));
         foreach (var (kind, name) in rows)
         {
-            DrawCircle(at + new Vector2(5f, 5f), 5.2f, Ink);
-            DrawCircle(at + new Vector2(5f, 5f), 4f, LevelView.PoiColor(kind));
-            DrawString(font, at + new Vector2(16f, 10f), name, HorizontalAlignment.Left, -1, 12, Ink);
-            at.Y += 16f;
+            DrawEmblem(kind, at + new Vector2(9f, 9f), font, 0.85f);
+            DrawString(font, at + new Vector2(24f, 13f), name, HorizontalAlignment.Left, -1, 12, Ink);
+            at.Y += row;
         }
     }
 

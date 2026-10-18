@@ -187,6 +187,15 @@ different visual channel, so they can never be confused.
   - *Critical:* at a quarter or less, the last ring's light pulses slowly in and
     out — a dying light at the centre of her body, readable in peripheral
     vision without looking away from the fight.
+  - *The low-health veil* (`LowHealthVeil`, `low_health.gdshader`): the screen
+    echoes the rings. Below 85% of her health a dark violet veil, the
+    corruption's colour, creeps in from the corners. It blurs what lies under
+    it radially, streaked toward the middle of the screen. It grows thicker
+    and closes in toward the middle as she drains. At a quarter (critical) it
+    covers 70% of the screen, leaving a clear disc round her, and breathes
+    slowly with her last ring (steady with reduced motion). It closes in fast
+    after a hit and lifts a little slower as she heals. It lies over the reef,
+    under the HUD.
   - The centre of the bell is where the eye rests on a jellyfish, which is why
     health — the thing she must always know — lives there.
 - **The bell rim — active-pearl charge.** The glowing marginal band at the
@@ -228,10 +237,15 @@ for a fraction of a second.
   (parallax speed reference), faint refraction wobble, vignette that deepens
   with depth, subtle chromatic aberration on hurt.
 - **Overhead occlusion rule.** Arch bodies, cave roofs and overhang ledges render
-  on a **canopy layer** above the gameplay plane. The moment Clementine passes
-  underneath — she enters a cave or swims through an arch — the canopy **blurs
-  out and dissolves** around her and stays gone for as long as she remains
-  underneath, restoring when she exits. This is what makes the reef read as
+  on a **canopy layer** above the gameplay plane. Any canopy that stands between
+  Clementine and the camera **dissolves** (a dithered fade) and stays gone while
+  it does, restoring after: not only what is straight over her, since the camera
+  looks down at a slant and rock a few metres to the camera's side of her hides
+  her too. Her line of sight to the camera is followed up through each canopy's
+  height, and a canopy within 2.2 m of it fades, so it clears before her bell
+  reaches the rock; overlapping canopies all fade, and a cave's roof fades whole.
+  It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
+  (`LevelView.UpdateCanopy`). This is what makes the reef read as
   layered and physical rather than painted flat (§4.5, §11).
 - **Camera breaks (only two, ever):** boss-awakening dips (2 s low-angle swell
   toward the boss) and the **Tank transition** — the Crack sucks Clementine down
@@ -358,7 +372,7 @@ between the places, before any rock exists:
   swim level, so the canyon walls themselves stay; a stamp's rock counts but
   never sinks. At least 45% of the interior is water reachable from the start.
 - **Hard rule: nothing above 0 on a path** — the canyon floors lie at level −1
-  to −1.6 (gently rolling, never flat); the boss arena alone is level.
+  to −1.2 (flat: every deeper floor is lifted to −1.2); the rift's arena and the shaft alone lie deeper.
 - **The shaft is the only deep water:** in the exit's floor the floor gives way
   to the next level's seabed, **9 m under the swim level** (the next level's
   swim plane lies 8 m below this one), over a rounded lip. No trenches.
@@ -385,9 +399,11 @@ between the places, before any rock exists:
   than parallel lanes.
 
 **Stage 5 — Reef & decoration from the map:**
-- The seabed (under the swim level): sand channels and grass meadows in the
-  shallows; bommies/boulders on the deeper floor (below 4 m, never reaching
-  the swim level); sea rods, fans and tube sponges on its slopes.
+- **The seabed is flat:** once the reef is raised, every floor deeper than
+  **−1.2** (inside the stamps too, on both levels alike) is lifted to it, so no hollows or rolling
+  floor draw the eye; only the walls' feet slope. The shaft and the rift's
+  arena keep their depth. On it, sparse on purpose so play stays readable:
+  seagrass meadows and lone sponge-like coral heads (bommies), nothing else.
 - The reef wall where it breaks the swim level (0 < h < 6 m): flora zonation
   by height + noise — sea rods, fans broadside to the current, tube sponges.
 - Steep ground (h ≥ 6 m): reef-rock cliffs, encrusting corals, ledge
@@ -935,9 +951,11 @@ at mist distance (inherited fade rule).
    "rotates so forward is up (inherited)". Built north-up, matching the fixed camera. The minimap (90 m across, a thin
    outline) shows only the wall edges (the swim-level coastline) under fog of war: Clementine reveals the water within
    15 m of her (a third of its radius, with a soft 10 m gradient centred on that edge), and it stays revealed for the
-   level. A place shows on the maps (minimap and Tab) only once she has been there: a dot in its landmark colour, or
-   for the shop and clam rooms their icons (a green "$" coin, a gold trophy). There are no hints for places not
-   yet found. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
+   level. A place shows on the maps (minimap and Tab) only once she has been there, always as its emblem (never a
+   bare dot): a badge in its landmark colour with its sign — the start a pennant, the shop a "$", a clam room a
+   pearl in an open clam, the shell cache the HUD's shell, the curse den a spider, a secret a "?", an ambush a "!" —
+   and the way down the evacuation sign (a white figure running out of a door, on a green plate). The Tab map's
+   legend shows the same emblems (the Tab map draws them half again as large). There are no hints for places not yet found. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
    names it under the minimap (all but the start); there are no beacons.
 3. **Ninja respawn:** §6.3 carries the ninja over "intact (… nest respawn)"; the inherited Ink Deep rules
    (DESIGN-2D §1, DEPTH1-BESTIARY §8) free a defeated ninja into its school for good, and the current Core does that.
@@ -1029,9 +1047,11 @@ at mist distance (inherited fade rule).
   motes spiral round the pearl. **The pearl lights the room:** the light leaving it takes its own colours in its own
   pattern (its bands, swirl, spots, marble, rings, stripes, speckle or halo, as on the pearl itself), painted over the
   whole room, the shell wall and the floor (`pearl_glow.gdshaderinc`), reaching right across to the wall; a fill light, the light
-  spilling out of the mouth into the canyon and the water pass's haze over the room and its mouth (ClamRoomView,
-  `clam_glows` and `clam_colors` in topdown_post) are in its colour too, so from a distance the room shows what it
-  holds. A few gold motes drift out of the mouth. The light is brighter the deeper she is (0.6 at Depth 0, +0.3 per
+  spilling out of the mouth into the canyon and the water pass's haze (ClamRoomView, `clam_glows` and `clam_colors`
+  in topdown_post) are in its colour too, so from a distance the room shows what it holds. **The light pours out
+  over the path:** the spill stands 4.5 m out from the mouth and reaches 17 m, and the haze lies in three pools —
+  over the room, a wider one over its mouth, and the widest 6 m out along the canyon — so the room is plain to see
+  from the path. A stream of gold motes drifts out of the mouth and far into the canyon. The light is brighter the deeper she is (0.6 at Depth 0, +0.3 per
   depth, at most 2.2), so in dark depths the room is a beacon. When the pearl is taken, the motes fling out and
   dissolve over 1.2 s and its light fades out with them.
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
@@ -1222,9 +1242,10 @@ at mist distance (inherited fade rule).
 - **Canopy rock.** Arches are stone bridges springing from the ground, and overhangs are lumpy shelves. Canopy pieces
   (arches, overhangs, cave roofs) dissolve with an ordered dither while she is underneath, staying opaque, so the
   depth focus still blurs them.
-- **Life.** The generator's decoration is joined by cosmetic ground cover: seagrass meadows, crowds of small coral
-  and sponges at the feet of walls, lone coral heads and rubble. It is deterministic from the seed and touches no
-  play. Flora is repainted in the depth's palette, and soft things sway.
+- **Life.** Kept sparse, so the stage never pulls focus from the creatures, pickups and places: the generator's
+  grass meadows and bommies, and cosmetic ground cover of seagrass meadows, a few sponge-like coral heads at the
+  feet of walls and lone ones out on the floor; no rubble, boulders or glowing anemones. It is deterministic from
+  the seed and touches no play. Flora is repainted in the depth's palette, and soft things sway.
 - **The Crack** glows orange from inside its fissure, through the murk; warm light spills over the arena floor and
   bubbles rise from it.
 - **Depth focus** (the look, after Below):

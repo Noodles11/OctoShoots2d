@@ -76,7 +76,7 @@ public partial class BlightView
             if (l.TongueOut)
             {
                 view.Tip.Position = new Vector3(l.Tip.X, LevelMap.SwimBand + 0.15f, l.Tip.Y);
-                view.Tip.SetInstanceShaderParameter(SN.Of("ember_tint"), l.Fish is { } f ? FishEmber(f.Kind) : new Color(0.75f, 0.35f, 1f, 1f));
+                view.Tip.SetInstanceShaderParameter(SN.Of("ember_tint"), l.Fish is { } f ? FishEmber(f.Kind) : Kin.Tint(Kin.Lashjaw));
             }
         }
 
@@ -147,7 +147,7 @@ public partial class BlightView
             {
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
                 VertexColorUseAsAlbedo = true,
-                AlbedoColor = new Color(0.34f, 0.11f, 0.48f),
+                AlbedoColor = new Color(0.55f, 0.06f, 0.12f),
                 CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             };
             _tongueMesh = new ImmediateMesh();
@@ -167,19 +167,23 @@ public partial class BlightView
         skull.SetInstanceShaderParameter(SN.Of("ember"), 0.1f);
         skull.SetInstanceShaderParameter(SN.Of("wobble"), 0.3f);
         skull.SetInstanceShaderParameter(SN.Of("seed"), l.Seed);
+        skull.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Lashjaw, 0.7f));
         head.AddChild(skull);
         var jaw = new Node3D { Position = new Vector3(0f, -0.06f, -0.25f) };
         head.AddChild(jaw);
         var jawMesh = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = new Vector3(0.36f, 0.14f, 0.66f), Position = new Vector3(0f, -0.03f, 0.5f) };
         jawMesh.SetInstanceShaderParameter(SN.Of("ember"), 0.05f);
         jawMesh.SetInstanceShaderParameter(SN.Of("seed"), l.Seed + 3f);
+        jawMesh.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Lashjaw, 0.7f));
         jaw.AddChild(jawMesh);
         var eye = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.1f, Position = new Vector3(0.25f, 0.24f, 0.4f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         eye.SetInstanceShaderParameter(SN.Of("wobble"), 0f);
+        eye.SetInstanceShaderParameter(SN.Of("ember_tint"), Kin.Tint(new Color(1f, 0.35f, 0.3f)));
         head.AddChild(eye);
         var tip = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.17f, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         tip.SetInstanceShaderParameter(SN.Of("ember"), 0.9f);
         tip.SetInstanceShaderParameter(SN.Of("wobble"), 1f);
+        tip.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Lashjaw, 0.8f));
         AddChild(tip);
         return new JawView { Node = node, Head = head, Jaw = jaw, Eye = eye, Tip = tip, Hole = hole };
     }

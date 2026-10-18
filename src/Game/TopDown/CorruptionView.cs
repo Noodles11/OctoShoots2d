@@ -9,7 +9,8 @@ namespace OctoShoots.Game.TopDown;
 /// <summary>
 /// The corruption field as a texture (docs/CORRUPTION.md): R its ink density, G the gold of corruption dying, one texel
 /// per half-metre cell. Every view of the corruption reads it: the floor's gold where it dies (reef_surface), the shards, the maps.
-/// The gold is worked out here, from how fast each cell's density falls: cleansing always reads as light spreading.
+/// The gold is worked out here, from how fast each cell's density falls: cleansing always reads as light spreading. Ink a
+/// creature drinks (CorruptionField.Drunk) is not cleansed: it just goes, leaving the ground dark and empty.
 /// It uploads at most 30 times a second, and only while something changes.
 /// </summary>
 public sealed class CorruptionTexture
@@ -21,6 +22,7 @@ public sealed class CorruptionTexture
     readonly byte[] _bytes = new byte[N * N * 2];
     readonly float[] _prev = new float[N * N];
     readonly float[] _burn = new float[N * N];
+    readonly float[] _drunk = new float[N * N];
     int _version = -1;
     float _clock;
     bool _burning;
@@ -33,6 +35,7 @@ public sealed class CorruptionTexture
     public CorruptionTexture(CorruptionField field)
     {
         Array.Copy(field.Density, _prev, _prev.Length);
+        Array.Copy(field.Drunk, _drunk, _drunk.Length);
         Fill(field, 0f);
         _image = Image.CreateFromData(N, N, false, Image.Format.Rg8, _bytes);
         Texture = ImageTexture.CreateFromImage(_image);
@@ -59,7 +62,10 @@ public sealed class CorruptionTexture
         for (int i = 0; i < d.Length; i++)
         {
             float v = d[i];
-            float drop = _prev[i] - v;
+            // What a creature drank is gone without light.
+            float drank = field.Drunk[i] - _drunk[i];
+            _drunk[i] = field.Drunk[i];
+            float drop = _prev[i] - v - drank;
             float b = _burn[i];
             if (drop > 0.02f && dt > 0f) Drops.Add((i, drop));
             b = drop > 0f ? MathF.Min(1f, b + drop * BurnGain) : MathF.Max(0f, b - fade);

@@ -65,7 +65,7 @@ public partial class CameraRig : Node3D
     public void SetReducedMotion(bool reduced) => _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), reduced ? 0f : 1f);
 
     /// <summary>Light bubbles: the halos her bubbles and their pop blooms cast on the swim layer (x, z, radius, strength).</summary>
-    /// <summary>The clam rooms' gold glows on the water (xz, radius, strength), at most six.</summary>
+    /// <summary>The clam rooms' glows on the water (xz, radius, strength), at most six.</summary>
     public void SetClamGlows(IReadOnlyList<Vector4> glows, IReadOnlyList<Color> colors)
     {
         int n = Mathf.Min(glows.Count, 6);

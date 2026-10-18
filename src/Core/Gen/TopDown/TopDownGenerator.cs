@@ -136,6 +136,7 @@ public static class TopDownGenerator
         if (features is not null) return features;
         // Caves' mountains may reach into a stamp: the stamp wins.
         PinStamps(map, entry, exit);
+        FlattenSeabed(map);
         CutShaft(map, Stage("shaft"));
         ClampHeights(map);
         Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed);
@@ -883,6 +884,39 @@ public static class TopDownGenerator
         foreach (var poi in map.Pois)
             if (!Poi.IsCaveHosted(poi.Kind)) d = MathF.Min(d, Vector2.Distance(p, poi.Position) - poi.Radius);
         return MathF.Max(d - FlatMargin, 0f);
+    }
+
+    /// <summary>The seabed's one level: every floor deeper than this is raised to it (DESIGN-TOPDOWN §4.1).</summary>
+    public const float Seabed = -1.2f;
+
+    /// <summary>
+    /// A flat seabed (DESIGN-TOPDOWN §4.1): every floor deeper than <see cref="Seabed"/> is raised to it, so nothing on the
+    /// floor draws the eye from what matters; the walls' feet keep their slope. Only where all its neighbours lie under
+    /// the swim level, so no cell's ground rises into it: the water she can swim is exactly what it was. It runs before
+    /// the shaft is cut, so the shaft keeps its depth; the rift's arena keeps its own, and the stamps' floors are lifted
+    /// with the rest (alike on both levels that share them).
+    /// </summary>
+    static void FlattenSeabed(LevelMap map)
+    {
+        var rift = map.Exit;
+        var raise = new List<int>();
+        for (int y = 0; y < LevelMap.Samples; y++)
+        for (int x = 0; x < LevelMap.Samples; x++)
+        {
+            int i = y * LevelMap.Samples + x;
+            if (map.Heights[i] >= Seabed) continue;
+            if ((map.HasBoss || map.Rift) && Vector2.Distance(new Vector2(x, y), rift.Position) < rift.Radius * 0.7f) continue;
+            bool under = true;
+            for (int dy = -1; dy <= 1 && under; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= LevelMap.Samples || ny >= LevelMap.Samples) continue;
+                if (map.Heights[ny * LevelMap.Samples + nx] > LevelMap.BlockHeight) { under = false; break; }
+            }
+            if (under) raise.Add(i);
+        }
+        foreach (int i in raise) map.Heights[i] = Seabed;
     }
 
     /// <summary>Every height back inside the prototype's bounds (the shaft's bottom…+14), roofs included.</summary>

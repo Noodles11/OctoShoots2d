@@ -25,7 +25,7 @@ public sealed class PlaneOptions
 public static class CorruptionTuning
 {
     /// <summary>The field's cells: half a metre.</summary>
-    public const float Cell = 0.5f;
+    public const float Cell = 0.5f, CellArea = Cell * Cell;
     public const int Cells = (int)(LevelMap.Size / Cell);
 
     /// <summary>Her light cleanses the ground under her: this far, this fast (density per second at her centre).</summary>
@@ -60,7 +60,9 @@ public static class CorruptionTuning
 /// The corruption field (docs/CORRUPTION.md): ink outgrowth over the level's floor, a density 0..1 per half-metre cell.
 /// It never harms Clementine; her light cleanses it (and her bubbles where they pop). Blightroots regrow it inside their
 /// reach. Safe places (start, shops, treasure caves) are clean from the start. The arena is the condensation zone: fully
-/// corrupted. Totals are kept as it changes, so the level's cleanse share is always at hand.
+/// corrupted. The ink is the matter the creatures born during the level are made of: a birth drinks its cost from the
+/// ground (<see cref="Plan"/>, <see cref="Drink"/>) and the creature holds it (<see cref="Held"/>) until she frees it
+/// (<see cref="Release"/>). Totals are kept as it changes, so the level's cleanse share is always at hand.
 /// </summary>
 public sealed class CorruptionField
 {
@@ -73,8 +75,12 @@ public sealed class CorruptionField
     /// <summary>Per cell: 1 where corruption may spread (open floor), easing to 0 at safe places, which it never reaches.</summary>
     public readonly float[] Guard = new float[N * N];
     public float Total { get; private set; }
-    /// <summary>How much of the level's corruption is cleansed, 0..1.</summary>
-    public float Cleansed => InitialTotal <= 0f ? 1f : Math.Clamp(1f - Total / InitialTotal, 0f, 1f);
+    /// <summary>The ink living creatures are made of (drunk from the ground, not yet freed), in the same units as Total.</summary>
+    public float Held { get; private set; }
+    /// <summary>Per cell, all the ink drunk from it so far (a view tells a creature's drinking from her cleansing).</summary>
+    public readonly float[] Drunk = new float[N * N];
+    /// <summary>How much of the level's corruption is cleansed, 0..1: what lies on the ground and what creatures hold both count.</summary>
+    public float Cleansed => InitialTotal <= 0f ? 1f : Math.Clamp(1f - (Total + Held) / InitialTotal, 0f, 1f);
     /// <summary>Bumped on every change, so a view knows when to upload.</summary>
     public int Version { get; private set; }
 
@@ -180,6 +186,79 @@ public sealed class CorruptionField
             Version++;
         }
         return removed;
+    }
+
+    /// <summary>
+    /// A birth's draught: the ink (density·m²) a creature costs, from anywhere on the level — the nearest corrupted cells
+    /// first, then further and further out until it has it. Null when the whole level holds less than that.
+    /// </summary>
+    public InkDraw? Plan(Vector2 at, float cost)
+    {
+        float want = cost / CorruptionTuning.CellArea;
+        var draw = new InkDraw();
+        float got = 0f, weighted = 0f;
+        var ring = new List<(float D, int I)>();
+        // Outward in rings (2 m at a time), each taken nearest first.
+        float maxReach = LevelMap.Size * 1.5f;
+        for (float inner = -1f, outer = 2f; got < want - 1e-4f && inner < maxReach; inner = outer, outer += 2f)
+        {
+            ring.Clear();
+            Span(at, outer, out int x0, out int y0, out int x1, out int y1);
+            for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+            {
+                float d = Vector2.Distance(CellCentre(x, y), at);
+                int i = Index(x, y);
+                if (d > inner && d <= outer && Density[i] > 0.02f) ring.Add((d, i));
+            }
+            ring.Sort((l, r) => l.D != r.D ? l.D.CompareTo(r.D) : l.I.CompareTo(r.I));
+            foreach (var (d, i) in ring)
+            {
+                float take = MathF.Min(Density[i], want - got);
+                draw.Cells.Add(i);
+                draw.Amounts.Add(take);
+                draw.Taken.Add(0f);
+                got += take;
+                weighted += Density[i];
+                draw.Radius = d + CorruptionTuning.Cell * 0.5f;
+                if (got >= want - 1e-4f) break;
+            }
+        }
+        if (got < want - 1e-4f) return null;
+        draw.Total = got;
+        draw.Ink = weighted / draw.Cells.Count;
+        return draw;
+    }
+
+    /// <summary>Drinks a share of a draught (0..1 of each cell's part) into the creature: off the ground, held by it. Returns the ink taken.</summary>
+    public float Drink(InkDraw draw, float share)
+    {
+        float taken = 0f;
+        for (int k = 0; k < draw.Cells.Count; k++)
+        {
+            int i = draw.Cells[k];
+            float t = MathF.Min(Density[i], MathF.Min(draw.Amounts[k] * share, draw.Amounts[k] - draw.Taken[k]));
+            if (t <= 0f) continue;
+            Density[i] -= t;
+            Drunk[i] += t;
+            draw.Taken[k] += t;
+            taken += t;
+        }
+        if (taken > 0f)
+        {
+            Total -= taken;
+            Held += taken;
+            Version++;
+        }
+        return taken;
+    }
+
+    /// <summary>A creature made of ink is freed: the ink it held is cleansed.</summary>
+    public void Release(float matter)
+    {
+        if (matter <= 0f) return;
+        Held = MathF.Max(0f, Held - matter);
+        Version++;
     }
 
     /// <summary>Raises a cell toward a target by at most step (Blightroot regrowth, a pulse's stain).</summary>
@@ -303,4 +382,17 @@ public sealed class CorruptionField
         h = (h ^ (h >> 13)) * 1274126177u;
         return ((h ^ (h >> 16)) & 0xFFFFFF) / 16777216f;
     }
+}
+
+/// <summary>
+/// A creature's draught of ink (CorruptionField.Plan): the cells it drinks from, nearest first, and how much of each;
+/// how far out it had to reach (Radius, its farthest cell) and how thick the ink was (Ink, mean density 0..1).
+/// </summary>
+public sealed class InkDraw
+{
+    public readonly List<int> Cells = new();
+    public readonly List<float> Amounts = new();
+    /// <summary>What has been drunk from each cell so far.</summary>
+    public readonly List<float> Taken = new();
+    public float Total, Radius, Ink;
 }

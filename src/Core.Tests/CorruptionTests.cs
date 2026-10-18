@@ -620,10 +620,23 @@ public class CorruptionTests
         Assert.True(m.ThrowAge < 0.05f);
     }
 
-    static Murkling BudAt(PlaneWorld w, Vector2 at, bool prime) =>
-        (Murkling)typeof(PlaneWorld).GetMethod("Bud", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(w, new object[] { at, -1, prime })!;
+    static Murkling? BudAt(PlaneWorld w, Vector2 at, bool prime, bool drink = true) =>
+        (Murkling?)typeof(PlaneWorld).GetMethod("Bud", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(w, new object[] { at, -1, prime, drink });
 
     /// <summary>The densest open cell of the level at least this far from her.</summary>
+    /// <summary>A dense spot with a prime's ink within 7 m.</summary>
+    static Vector2 PrimeSpot(PlaneWorld w, float away)
+    {
+        var field = w.Corruption!;
+        for (int i = 0; i < field.Density.Length; i++)
+        {
+            var c = CellAt(i);
+            if (field.Density[i] < 0.95f || Vector2.Distance(c, w.Player.Position) < away || !w.Clear(c, 2f)) continue;
+            if (field.Plan(c, BlightTuning.PrimeInk) is { Radius: < 7f }) return c;
+        }
+        throw new InvalidOperationException("no spot for a prime");
+    }
+
     static Vector2 DenseSpot(PlaneWorld w, float away)
     {
         var field = w.Corruption!;
@@ -640,37 +653,75 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void ABudSucksUpTheInkUnderIt()
+    public void ABudDrinksAFixedAmountOfInkAndHoldsItUntilFreed()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
+        // No regrowth meanwhile: the ink moves only between the ground and the murkling.
+        foreach (var root in w.Blightroots) root.Alive = false;
+        var field = w.Corruption!;
         var at = DenseSpot(w, 20f);
-        float before = w.Corruption!.Total;
-        var m = BudAt(w, at, prime: false);
+        float before = field.Total, cleansed = field.Cleansed, cost = BlightTuning.Ink / CorruptionTuning.CellArea;
+        var m = BudAt(w, at, prime: false)!;
         var bud = w.Events.Single(e => e.Type == PlaneEventType.MurklingBud);
-        Assert.Equal(BlightTuning.SuckRadius, bud.Direction.X);
+        Assert.InRange(bud.Direction.X, 0.5f, 3.5f);
         Assert.True(bud.Direction.Y > 0.5f, "the ink it will gather");
         for (int i = 0; i < (int)(BlightTuning.BudSeconds * 60f) + 2; i++) w.Step(default);
         Assert.False(m.Budding);
-        Assert.True(w.Corruption.At(at) < 0.05f, "the ground under it is drunk clean");
-        Assert.True(w.Corruption.Total < before - 2f);
+        Assert.True(field.At(at) < 0.05f, "the ground under it is drunk clean");
+        // Exactly its cost left the ground, and it holds it: the level is no cleaner for its birth.
+        Assert.InRange(field.Total, before - cost - 0.05f, before - cost + 0.05f);
+        Assert.Equal(cost, m.Matter, 2);
+        Assert.Equal(cost, field.Held, 2);
+        Assert.Equal(cleansed, field.Cleansed, 4);
+        // Freed: the ink it was made of is cleansed.
+        w.Shots.Add(Light(m.Position, m.Corruption.Max + 1f));
+        w.Step(default);
+        Assert.False(m.Alive);
+        Assert.Equal(0f, field.Held, 3);
+        Assert.True(field.Cleansed >= cleansed + cost / field.InitialTotal - 1e-4f);
     }
 
     [Fact]
-    public void AMurklingPrimeIsFiveTimesTheSizeScaledUpAndAlwaysLeavesShells()
+    public void ABudReachesAsFarAsItMustNothingBudsOnADrainedLevelAndAnAmbushBudsOfItsOwn()
     {
         var w = Level(p => !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
-        var at = DenseSpot(w, 12f);
-        var m = BudAt(w, at, prime: true);
+        // From the clean start it reaches out to the nearest ink, however far.
+        var far = w.Corruption!.Plan(w.Player.Position, BlightTuning.Ink);
+        Assert.NotNull(far);
+        Assert.True(far!.Radius > 3f, "the start is clean: its ink comes from further off");
+        // With the level drained (and nothing to regrow it), nothing buds.
+        foreach (var root in w.Blightroots) root.Alive = false;
+        System.Array.Clear(w.Corruption.Density);
+        Assert.Null(BudAt(w, w.Player.Position, prime: false));
+        Assert.Null(BudAt(w, w.Player.Position, prime: true));
+        // An ambush's bud is the trap's own ink: it drinks nothing and holds nothing.
+        float total = w.Corruption.Total;
+        var m = BudAt(w, w.Player.Position + new Vector2(0f, 4f), prime: false, drink: false)!;
+        for (int i = 0; i < (int)(BlightTuning.BudSeconds * 60f) + 2; i++) w.Step(default);
+        Assert.Equal(0f, m.Matter);
+        Assert.Equal(0f, w.Corruption.Held);
+        Assert.True(w.Corruption.Total <= total + 1e-3f);
+    }
+
+    [Fact]
+    public void AMurklingPrimeIsFiveTimesTheSizeTwiceAsToughLeavesShellsAndBreaksIntoMurklings()
+    {
+        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var at = PrimeSpot(w, 12f);
+        var m = BudAt(w, at, prime: true)!;
         Assert.True(m.Prime);
         Assert.Equal(BlightTuning.MurkRadius * 5f, m.Radius, 3);
         Assert.True(m.Body < m.Radius, "it squeezes through the passes");
-        Assert.Equal(BlightTuning.MurkCorruption * 5f, m.Corruption.Max, 2);
+        Assert.Equal(BlightTuning.MurkCorruption * 10f, m.Corruption.Max, 2);
         Assert.Equal(BlightTuning.Sense * 1.5f, m.Sense, 3);
-        Assert.Equal(BlightTuning.PrimeSuck, w.Events.Single(e => e.Type == PlaneEventType.MurklingBud).Direction.X);
+        // It drinks twelve murklings' ink, from much farther round it.
+        Assert.InRange(w.Events.Single(e => e.Type == PlaneEventType.MurklingBud).Direction.X, 2.5f, 7f);
         for (int i = 0; i < (int)(BlightTuning.PrimeBud * 60f) + 2; i++) w.Step(default);
         Assert.False(m.Budding);
+        Assert.Equal(BlightTuning.PrimeInk / CorruptionTuning.CellArea, m.Matter, 1);
 
         // Its throw: a bigger drop, hitting harder, after a longer bend.
         var her = w.Player.Position;
@@ -695,6 +746,11 @@ public class CorruptionTests
         w.Step(default);
         Assert.False(m.Alive);
         Assert.InRange(w.Shells.Count - shells, BlightTuning.PrimeShellsMin, BlightTuning.PrimeShellsMax + 3);
+        // And it breaks apart into five murklings, already out, each made of a murkling's ink of its own; the rest is cleansed.
+        var pieces = w.Murklings.Where(x => x.Alive && !x.Prime && !x.Budding).ToList();
+        Assert.Equal(BlightTuning.PrimeSplit, pieces.Count);
+        Assert.All(pieces, x => Assert.Equal(BlightTuning.Ink / CorruptionTuning.CellArea, x.Matter, 2));
+        Assert.Equal(BlightTuning.PrimeSplit * BlightTuning.Ink / CorruptionTuning.CellArea, w.Corruption!.Held, 1);
     }
 
     [Fact]

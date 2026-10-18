@@ -132,7 +132,7 @@ public partial class BlightView
                 float r = Mathf.Lerp(1.8f, 0.7f, k);
                 view.Mark.Position = new Vector3(t.To.X, Floor(t.To) + 0.07f, t.To.Y);
                 view.Mark.Scale = new Vector3(r, 1f, r);
-                view.Mark.SetInstanceShaderParameter(SN.Of("tint"), new Color(0.05f, 0.02f, 0.08f, 0.35f + 0.55f * k));
+                view.Mark.SetInstanceShaderParameter(SN.Of("tint"), new Color(0.1f, 0.3f, 0.02f, 0.35f + 0.55f * k));
                 view.Mark.SetInstanceShaderParameter(SN.Of("width"), 0.12f + 0.12f * k);
             }
         }
@@ -146,6 +146,7 @@ public partial class BlightView
         body.SetInstanceShaderParameter(SN.Of("ember"), 0.25f);
         body.SetInstanceShaderParameter(SN.Of("wobble"), 0.5f);
         body.SetInstanceShaderParameter(SN.Of("seed"), t.Seed);
+        body.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Thumpsquirt, 0.7f));
         node.AddChild(body);
         var siphons = new MeshInstance3D[2];
         for (int i = 0; i < siphons.Length; i++)
@@ -153,6 +154,8 @@ public partial class BlightView
             siphons[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.11f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             siphons[i].SetInstanceShaderParameter(SN.Of("seed"), t.Seed + i * 7f);
             siphons[i].SetInstanceShaderParameter(SN.Of("wobble"), 0.4f);
+            siphons[i].SetInstanceShaderParameter(SN.Of("ember_tint"), Kin.Tint(Kin.Thumpsquirt));
+            siphons[i].SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Thumpsquirt, 0.5f));
             node.AddChild(siphons[i]);
         }
         var mark = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };

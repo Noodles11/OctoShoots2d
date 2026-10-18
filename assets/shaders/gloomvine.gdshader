@@ -15,8 +15,9 @@ void fragment() {
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	float fres = pow(1.0 - facing, 2.6);
 	float pulse = smoothstep(0.85, 1.0, sin(along * 9.0 - TIME * 3.0) * 0.5 + 0.5);
-	ALBEDO = vec3(0.012, 0.009, 0.018);
+	ALBEDO = vec3(0.01, 0.025, 0.07);
 	ROUGHNESS = 0.14;
 	SPECULAR = 0.8;
-	EMISSION = vec3(0.3, 0.08, 0.52) * (fres * 0.4 + pulse * 0.5 + coil * 0.6) + vec3(1.0, 0.7, 0.3) * gone * 1.4;
+	// The Blightroot's blue, as its root (docs/CORRUPTION.md, each kind its own colour).
+	EMISSION = vec3(0.12, 0.32, 0.95) * (fres * 0.55 + pulse * 0.6 + coil * 0.7) + vec3(1.0, 0.7, 0.3) * gone * 1.4;
 }

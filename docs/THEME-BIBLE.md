@@ -209,7 +209,7 @@ The comic onomatopoeia is retired; comic-cover boss title cards survive (“CLEM
 
 ### 6.9 Post stack (fixed, restated)
 
-Marine snow between camera and level · faint refraction wobble · vignette deepening with depth · chromatic aberration on hurt only · cool grade · depth-focus blur. God rays rake across the view, never into the lens. Caustics on upward faces, fading with depth.
+Marine snow between camera and level · faint refraction wobble · vignette deepening with depth · a dark violet low-health veil closing in from the edges, radially blurred (DESIGN-TOPDOWN §2.5) · chromatic aberration on hurt only · cool grade · depth-focus blur. God rays rake across the view, never into the lens. Caustics on upward faces, fading with depth.
 
 ## 7. The seven depths as themed acts
 

@@ -504,23 +504,61 @@ public partial class LevelView : Node3D
     }
 
     /// <summary>
-    /// The occlusion rule (DESIGN-TOPDOWN §3): canopy over Clementine dissolves while she is underneath and returns when
-    /// she leaves. Fade is done; the blur half of "blurs out and dissolves" is still a stub.
+    /// The occlusion rule (DESIGN-TOPDOWN §3): any canopy (arch, cave roof, overhang) that stands between Clementine and
+    /// the camera dissolves, and returns once it no longer does. Not only what is straight over her: the camera looks
+    /// down at a slant, so rock a few metres to the camera's side of her hides her too. Her line of sight to the camera
+    /// is followed up through each canopy's height, and a canopy within OcclusionMargin of it fades — early, before her
+    /// bell is under the rock. A cave's roof fades whole.
     /// </summary>
-    public void UpdateCanopy(System.Numerics.Vector2 player, float dt)
+    public void UpdateCanopy(System.Numerics.Vector2 player, float dt, Vector3 camera)
     {
-        int under = _map.CanopyAt(player);
-        // A cave's roof is several pieces: uncover the whole cave at once.
-        int cave = under >= 0 && _map.Canopies[under].Kind == CanopyKind.CaveRoof ? CaveOf(_map.Canopies[under]) : -1;
+        var her = new Vector3(player.X, LevelMap.SwimBand, player.Y);
+        var sight = (camera - her).Normalized();
+        var hiddenCaves = new HashSet<int>();
+        var hide = new bool[_canopies.Count];
+        for (int i = 0; i < _canopies.Count; i++)
+        {
+            var c = _canopies[i].Canopy;
+            if (!Blocks(c, her, sight)) continue;
+            hide[i] = true;
+            if (c.Kind == CanopyKind.CaveRoof && CaveOf(c) is int cave and >= 0) hiddenCaves.Add(cave);
+        }
         for (int i = 0; i < _canopies.Count; i++)
         {
             var (c, material, alpha) = _canopies[i];
-            bool hide = i == under || (cave >= 0 && c.Kind == CanopyKind.CaveRoof && CaveOf(c) == cave);
-            alpha = Mathf.MoveToward(alpha, hide ? 0.12f : 1f, dt * 4f);
+            bool gone = hide[i] || (c.Kind == CanopyKind.CaveRoof && hiddenCaves.Contains(CaveOf(c)));
+            // Quick to clear the way, gentle to come back.
+            alpha = Mathf.MoveToward(alpha, gone ? 0.12f : 1f, dt * (gone ? 7f : 3f));
             // A dithered dissolve: the rock stays opaque, so the depth focus still blurs it like other high rock.
             material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), alpha);
             _canopies[i] = (c, material, alpha);
         }
+    }
+
+    /// <summary>How near (metres) her line of sight may pass a canopy's footprint before it fades.</summary>
+    const float OcclusionMargin = 2.2f;
+
+    /// <summary>Whether a canopy stands in (or within OcclusionMargin of) her line of sight to the camera, over its height.</summary>
+    static bool Blocks(Canopy c, Vector3 her, Vector3 sight)
+    {
+        float lo = Mathf.Max(c.Bottom - 0.5f, her.Y), hi = c.Top + 0.5f;
+        if (sight.Y <= 1e-3f) return Near(c, new System.Numerics.Vector2(her.X, her.Z));
+        for (float h = lo; h <= hi + 1e-3f; h += 0.75f)
+        {
+            var at = her + sight * ((h - her.Y) / sight.Y);
+            if (Near(c, new System.Numerics.Vector2(at.X, at.Z))) return true;
+        }
+        // And straight over her, too.
+        return Near(c, new System.Numerics.Vector2(her.X, her.Z));
+    }
+
+    static bool Near(Canopy c, System.Numerics.Vector2 p)
+    {
+        var d = p - c.Center;
+        if (c.Radius > 0f) return d.LengthSquared() <= (c.Radius + OcclusionMargin) * (c.Radius + OcclusionMargin);
+        float along = System.Numerics.Vector2.Dot(d, c.Axis);
+        float across = System.Numerics.Vector2.Dot(d, new System.Numerics.Vector2(-c.Axis.Y, c.Axis.X));
+        return MathF.Abs(along) <= c.HalfLength + OcclusionMargin && MathF.Abs(across) <= c.HalfWidth + OcclusionMargin;
     }
 
     int CaveOf(Canopy roof)
@@ -746,21 +784,15 @@ public partial class LevelView : Node3D
         {
             var pos = new Vector3(d.Position.X, d.Height, d.Position.Y);
             var basis = new Basis(Vector3.Up, d.Yaw).Scaled(Vector3.One * d.Scale);
+            // Only the seagrass meadows and the brain corals (the sponge-like rocks): the rest of the dressing drew the eye
+            // away from what matters (DESIGN-TOPDOWN §4.1).
             FloraKind? kind = d.Kind switch
             {
                 DecorKind.GrassMeadow => FloraKind.TurtleGrass,
-                DecorKind.SeaRod => FloraKind.SeaRod,
-                DecorKind.SeaFan => FloraKind.SeaFan,
-                DecorKind.TubeSponge => FloraKind.TubeSponge,
-                DecorKind.CliffCoral => FloraKind.Staghorn,
-                DecorKind.EncrustingCoral => FloraKind.BrainCoral,
                 DecorKind.Bommie => FloraKind.BrainCoral,
-                DecorKind.CrownGarden => FloraKind.SeaFan,
                 _ => null,
             };
-            if (d.Kind == DecorKind.Boulder) rocks.Add(new Transform3D(basis.Scaled(new Vector3(0.9f, 0.6f, 0.8f)), pos));
-            else if (d.Kind == DecorKind.BiolumAccent) glows.Add(new Transform3D(basis.Scaled(Vector3.One * 0.12f), pos + Vector3.Up * 0.3f));
-            else if (kind is { } k)
+            if (kind is { } k)
             {
                 // Seen from 30 m up, reef life is drawn a little larger than life, so it reads.
                 basis = basis.Scaled(Vector3.One * (d.Kind switch
@@ -782,9 +814,10 @@ public partial class LevelView : Node3D
 
     /// <summary>
     /// Ground cover, for the look only (nothing in play depends on it): a deterministic scatter from the level's seed so
-    /// the seabed reads as a living reef rather than a beach (THEME-BIBLE §7, Depth 1: healthy neighbours everywhere).
-    /// Seagrass meadows in drifting patches; small corals, sponges and sea rods crowding the feet of the walls; lone
-    /// coral heads and bits of rubble out on the open sand. The exit is left clear around the shaft.
+    /// the seabed reads as a living reef rather than a beach (THEME-BIBLE §7, Depth 1: healthy neighbours everywhere),
+    /// kept sparse so it never draws the eye from play: seagrass meadows in drifting patches, a few small brain corals at
+    /// the feet of the walls and a lone coral head now and then out on the open sand. The exit is left clear round the
+    /// shaft.
     /// </summary>
     static void Scatter(LevelMap map, List<FloraItem> items, List<Transform3D> rocks)
     {
@@ -820,19 +853,13 @@ public partial class LevelView : Node3D
             var at = new Vector3(p.X, h - 0.05f, p.Y);
             var tint = new Color(Hash(x, y, 6) < 0.42f ? 1f : 0f, 0.86f + 0.26f * Hash(x, y, 7), 1f, Hash(x, y, 8));
             FloraItem Item(FloraKind kind, float scale) => new(kind, new Transform3D(new Basis(Vector3.Up, yaw).Scaled(Vector3.One * scale), at), tint);
-            if (nearWall && r < 0.32f)
-            {
-                // The reef's foot: a crowd of small life.
-                float pick = Hash(x, y, 9);
-                var kind = pick < 0.3f ? FloraKind.BrainCoral : pick < 0.55f ? FloraKind.TubeSponge : pick < 0.78f ? FloraKind.Staghorn : FloraKind.SeaRod;
-                items.Add(Item(kind, kind == FloraKind.BrainCoral ? 0.55f + 0.4f * size : 0.75f + 0.5f * size));
-            }
+            if (nearWall && r < 0.06f)
+                // The reef's foot: a few small brain corals.
+                items.Add(Item(FloraKind.BrainCoral, 0.55f + 0.4f * size));
             else if (meadow > 0.1f && slope < 0.35f && r < 0.85f * Mathf.SmoothStep(0.1f, 0.35f, meadow))
                 items.Add(Item(FloraKind.TurtleGrass, 1.9f + 1.1f * size));
             else if (slope < 0.3f && r < 0.012f)
                 items.Add(Item(FloraKind.BrainCoral, 1.1f + 0.9f * size));
-            else if (slope < 0.4f && r > 0.988f)
-                rocks.Add(new Transform3D(new Basis(Vector3.Up, yaw).Scaled(new Vector3(0.35f, 0.22f, 0.3f) * (0.7f + 0.8f * size)), at + Vector3.Up * 0.05f));
         }
     }
 

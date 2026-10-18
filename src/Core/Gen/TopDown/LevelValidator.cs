@@ -106,7 +106,7 @@ public static class LevelValidator
     /// <summary>How far a pinned height may stray from its stamp.</summary>
     public const float StampTolerance = 0.1f;
 
-    /// <summary>Every grid point within the pinned radius of the start and the exit (outside the shaft) matches its stamp.</summary>
+    /// <summary>Every grid point within the pinned radius of the start and the exit (outside the shaft) matches its stamp (or its stamp on the flat seabed).</summary>
     public static string? CheckStamps(LevelMap map)
     {
         var entry = Stamp.Generate(map.EntryStampSeed, map.EntryFromArena);
@@ -119,8 +119,9 @@ public static class LevelValidator
             {
                 var p = new Vector2(x, y);
                 if (Vector2.Distance(p, at) > r || map.Shaft.Contains(p, 0.5f)) continue;
-                float want = stamp.HeightAt(p - at);
-                if (MathF.Abs(map[x, y] - want) > StampTolerance) return $"the {name}'s stamp is off by {map[x, y] - want:0.00} m at ({x}, {y})";
+                // Its floor may have been lifted to the flat seabed (TopDownGenerator.FlattenSeabed).
+                float want = stamp.HeightAt(p - at), flat = MathF.Max(want, TopDownGenerator.Seabed);
+                if (MathF.Abs(map[x, y] - want) > StampTolerance && MathF.Abs(map[x, y] - flat) > StampTolerance) return $"the {name}'s stamp is off by {map[x, y] - want:0.00} m at ({x}, {y})";
             }
         }
         return null;

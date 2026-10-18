@@ -73,6 +73,8 @@ public class PlaneCombatTests
     public void APufferlingFacesHerBlowsUpAndFiresEightNeedlesInARing()
     {
         var (w, mob) = Alone(6f);
+        // No pots in the way (they stop needles).
+        w.Vases.Clear();
         int swellAt = -1, firedAt = -1;
         List<PlaneShot> needles = new();
         for (int i = 0; i < 60 * 6 && firedAt < 0; i++)

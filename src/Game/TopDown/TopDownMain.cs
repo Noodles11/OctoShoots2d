@@ -50,6 +50,7 @@ public partial class TopDownMain : Node3D
     SurgeView _surgeView = null!;
     GeyserView _geysers = null!;
     CurseDarkness _dark = null!;
+    LowHealthVeil _lowHealth = null!;
     bool _inCurse;
     /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
     float _crackOpen;
@@ -61,7 +62,7 @@ public partial class TopDownMain : Node3D
     BannerView _banner = null!;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
-    bool _autoFire, _autoActive, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
+    bool _autoFire, _autoActive, _dbgPop, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
     /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
     string? _dbgBoss;
     float? _startHp;
@@ -232,6 +233,7 @@ public partial class TopDownMain : Node3D
         AddChild(_springs);
         _vapour = new InkVapour();
         AddChild(_vapour);
+        _blight.Vapour = _vapour;
         _camera = new CameraRig();
         AddChild(_camera);
         _snow = new MarineSnow(900, new Vector3(22f, 7f, 17f), 0.11f);
@@ -280,6 +282,7 @@ public partial class TopDownMain : Node3D
             else if (arg == "--fire") _autoFire = true;
             else if (arg == "--use-active") _autoActive = true;
             else if (arg == "--dbg-surge") _dbgSurge = true;
+            else if (arg == "--dbg-pop") _dbgPop = true;
             else if (arg == "--dbg-geyser") _dbgGeyser = true;
             else if (arg == "--dbg-shells") _dbgShells = true;
             else if (arg == "--dbg-murkfish") _dbgMurkFish = true;
@@ -428,6 +431,7 @@ public partial class TopDownMain : Node3D
         look.ApplyTo(_environment.Environment);
         _sunLight.Configure(look.Sun, look.SunEnergy);
         _bell.Lantern = look.Lantern;
+        BlightView.Lantern = look.Lantern;
     }
 
     /// <summary>The water: shared with the title screen's backdrop.</summary>
@@ -465,6 +469,9 @@ public partial class TopDownMain : Node3D
         AddChild(darkLayer);
         _dark = new CurseDarkness();
         darkLayer.AddChild(_dark);
+        // Her low health: a violet veil closing in, over the reef (and the curse's dark), under the HUD.
+        _lowHealth = new LowHealthVeil { ReducedMotion = _view.ReducedMotion };
+        darkLayer.AddChild(_lowHealth);
         var layer = new CanvasLayer { Layer = 2 };
         AddChild(layer);
         _debugMap = new DebugMapOverlay { Visible = OS.GetCmdlineUserArgs().Contains("--f3") };
@@ -480,7 +487,7 @@ public partial class TopDownMain : Node3D
         // Tab: the whole level on one sheet, drawn by the minimap's rules (wall edges, fog, places only once spotted).
         _fullMap = new TopoMap
         {
-            Visible = OS.GetCmdlineUserArgs().Contains("--map"), ShowLegend = true, MetresAcross = LevelMap.Size + 4f,
+            Visible = OS.GetCmdlineUserArgs().Contains("--map"), ShowLegend = true, EmblemScale = 1.5f, MetresAcross = LevelMap.Size + 4f,
             ShowDetail = false, EdgesOnly = true, ArrowScale = 1.3f, ArrowColor = new Color(1f, 0.72f, 0.35f),
         };
         layer.AddChild(_fullMap);
@@ -689,6 +696,9 @@ public partial class TopDownMain : Node3D
                 _world.Player.Position = _world.Player.PrevPosition = her;
                 _camera.Track(Focus(1f), 0f, snap: true);
                 _world.DebugBud(at, prime);
+                // Its bud's event now (the next step clears the events), so its gathering shows.
+                foreach (var e in _world.Events)
+                    if (e.Type == PlaneEventType.MurklingBud) _blight.OnEvent(e);
                 break;
             }
             _dbgBud = null;
@@ -1402,7 +1412,9 @@ public partial class TopDownMain : Node3D
         // The readouts first (her meter, the boss's bar, the clock), so they follow the world whatever the views do.
         _hud.Elapsed = _elapsed;
         _hud.Track(_world, _catalog, dt);
-        _minimap.SetHealth(_world.Run.MaxHp > 0f ? _world.Player.Hp / _world.Run.MaxHp : 0f);
+        float health = _world.Run.MaxHp > 0f ? _world.Player.Hp / _world.Run.MaxHp : 0f;
+        _minimap.SetHealth(health);
+        _lowHealth.Sync(health, dt);
         // Each view on its own: one that fails is reported (once) and the rest carry on.
         Guard("bell", () => _bell.Sync(_world, alpha, dt));
         Guard("lantern", SyncLantern);
@@ -1447,7 +1459,7 @@ public partial class TopDownMain : Node3D
         _bell.Dim = 1f - 0.475f * _dark.Amount;
         _minimap.Blackout = _dark.Amount;
         _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
-        _level.UpdateCanopy(_world.Player.Position, dt);
+        _level.UpdateCanopy(_world.Player.Position, dt, _camera.Camera.GlobalPosition);
         // The Crack opens: the sand over it sags, turns and drains away into the dark, and its glow comes up.
         if (_map.HasBoss && _world.ExitOpen && _crackOpen < 1f)
         {
@@ -2336,6 +2348,16 @@ public partial class TopDownMain : Node3D
     void Capture()
     {
         _frame++;
+        if (_dbgPop && _frame == 30)
+        {
+            // Verification (`--dbg-pop`): a murkling, a prime, a Thumpsquirt and a Lashjaw freed round her at once.
+            var her = _world.Player.Position;
+            _blight.OnEvent(new PlaneEvent(PlaneEventType.MurklingBurst, her + new System.Numerics.Vector2(-4f, -2f), System.Numerics.Vector2.Zero, 0f));
+            _blight.OnEvent(new PlaneEvent(PlaneEventType.MurklingBurst, her + new System.Numerics.Vector2(0f, -6f), System.Numerics.Vector2.UnitX, 0f));
+            _blight.OnEvent(new PlaneEvent(PlaneEventType.ThumpBurst, her + new System.Numerics.Vector2(4.5f, -1f), System.Numerics.Vector2.Zero, 0f));
+            _blight.OnEvent(new PlaneEvent(PlaneEventType.LashFreed, her + new System.Numerics.Vector2(-5f, 3f), System.Numerics.Vector2.Zero, 0f));
+            _dbgPop = false;
+        }
         if (_captureDir is null || _captureFrames.Count == 0 || _frame < _captureFrames.Peek()) return;
         int frame = _captureFrames.Dequeue();
         string path = $"{_captureDir}/td_{frame:0000}.png";

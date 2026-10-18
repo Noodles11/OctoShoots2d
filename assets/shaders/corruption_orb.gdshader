@@ -1,5 +1,6 @@
 // Corrupted bodies (docs/CORRUPTION.md): a murkling, a Blightroot's ink sac, a murkling's throw, the boss's crust. A
-// wobbling glossy membrane of darkness with a cold violet rim; inside, a dim stolen ember (ember 0 for none).
+// wobbling glossy membrane of darkness with a cold violet rim (or its kind's own colour: skin); inside, a dim stolen
+// ember (ember 0 for none).
 // swell inflates it (a sac's telegraph); fade dissolves it (a burst). A murkling's throw: pull bends it back away from
 // aim like a drawn slingshot (−1), then lunges it forward (+1); bud swells the piece it throws out of its front.
 // A throw itself: drip draws its back out into the neck it is pinching off from (1 → 0 as it parts).
@@ -15,6 +16,8 @@ uniform vec3 ember_color : source_color = vec3(1.0, 0.42, 0.16);
 // One body's own ember (alpha 1 to use it): a lesser murkling's carries its fish's old colour.
 instance uniform vec4 ember_tint = vec4(0.0);
 uniform vec3 rim_color : source_color = vec3(0.34, 0.09, 0.6);
+// A kind's own base colour (alpha: how much of it): its skin under the ink and its rim (murklings stay ink-black).
+instance uniform vec4 skin = vec4(0.0);
 instance uniform vec3 aim = vec3(0.0, 0.0, 1.0);
 instance uniform float pull = 0.0;
 instance uniform float bud = 0.0;
@@ -68,9 +71,12 @@ void fragment() {
 	vec3 n = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 	float swirl = 0.5 + 0.5 * sin(n.x * 7.0 + n.z * 5.0 + TIME * 1.6 + seed);
 	ALBEDO = vec3(0.008, 0.006, 0.014) + vec3(0.02, 0.005, 0.03) * swirl;
+	ALBEDO = mix(ALBEDO, skin.rgb * (0.16 + 0.1 * swirl), skin.a);
+	vec3 rim = mix(rim_color, skin.rgb, skin.a);
 	ROUGHNESS = 0.1;
 	SPECULAR = 0.85;
 	float flicker = 0.7 + 0.3 * sin(TIME * 7.0 + seed * 3.0) * sin(TIME * 4.3 + seed);
 	vec3 glow = ember_tint.a > 0.5 ? ember_tint.rgb : ember_color;
-	EMISSION = rim_color * fres * (0.55 + 0.3 * swirl + swell * 0.8) + glow * pow(facing, 6.0) * ember * flicker * 1.4;
+	// Its rim glows in its colour, brighter for a coloured kind, so it reads in the dark depths.
+	EMISSION = rim * fres * (0.55 + 0.3 * swirl + swell * 0.8) * (1.0 + 1.2 * skin.a) + rim * skin.a * 0.08 + glow * pow(facing, 6.0) * ember * flicker * 1.4;
 }

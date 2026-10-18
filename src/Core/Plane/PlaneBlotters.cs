@@ -28,8 +28,12 @@ public static class BlotterTuning
     /// <summary>Its guards: every GuardEvery seconds (less with Menace) GuardChance to bud a murkling 2.5–4.5 m from it, up to Guards + Menace alive.</summary>
     public const float GuardEvery = 6f, GuardChance = 0.7f;
     public const int Guards = 2;
-    /// <summary>Born from corruption: every BirthEvery seconds a BirthChance (+ per Menace) roll to rise from thick ground far from her.</summary>
-    public const float BirthEvery = 20f, BirthChance = 0.05f, BirthPerMenace = 0.03f, BirthClearance = 18f;
+    /// <summary>
+    /// Born from corruption: every BirthEvery seconds a BirthChance (+ per Menace) roll to rise from thick ground far from
+    /// her. It is made of ink: rising, it drinks BirthInk (six murklings' worth, density × m²), the nearest first and then
+    /// further out; with less left on the level, it is not born. The ones that wake with the level drink nothing.
+    /// </summary>
+    public const float BirthEvery = 20f, BirthChance = 0.05f, BirthPerMenace = 0.03f, BirthClearance = 18f, BirthInk = BlightTuning.Ink * 6f;
     /// <summary>Waking with the level: this far from her start, and apart.</summary>
     public const float FromStart = 25f, Spacing = 15f;
     /// <summary>Cleansed, it bursts: its light washes this wide.</summary>
@@ -106,8 +110,11 @@ public sealed class Blotter
         else Trail[0] = Position;
         while (Trail.Count > BlotterTuning.Segments * 4 + 2) Trail.RemoveAt(Trail.Count - 1);
     }
-    /// <summary>Rising out of the ground (counting down; above zero it is not yet out).</summary>
-    public float Rise;
+    /// <summary>Rising out of the ground (counting down; above zero it is not yet out), out of RiseTotal.</summary>
+    public float Rise, RiseTotal;
+    /// <summary>The ink it is drinking as it rises (one born during the level), and the ink it is made of (freed when it bursts).</summary>
+    public InkDraw? Draw;
+    public float Matter;
 }
 
 public sealed partial class PlaneWorld
@@ -151,6 +158,7 @@ public sealed partial class PlaneWorld
             Position = at,
             Target = at,
             Rise = rise,
+            RiseTotal = rise,
             Seed = _blightRng.Range(0f, 100f),
             GuardTimer = _blightRng.Range(1f, BlotterTuning.GuardEvery),
         };
@@ -175,8 +183,12 @@ public sealed partial class PlaneWorld
                 for (int tries = 0; tries < 40; tries++)
                 {
                     if (!ThickSpot(field, out var at) || Vector2.Distance(at, p.Position) < BlotterTuning.BirthClearance) continue;
-                    Blotters.Add(NewBlotter(at, rise: 1.5f));
-                    Events.Add(new PlaneEvent(PlaneEventType.BlotterBorn, at, Vector2.Zero, 1.5f));
+                    if (field.Plan(at, BlotterTuning.BirthInk) is not { } draught) continue;
+                    var born = NewBlotter(at, rise: 1.5f);
+                    born.Draw = draught;
+                    Blotters.Add(born);
+                    // How far out it drinks and how thick that ink is (the view gathers it in).
+                    Events.Add(new PlaneEvent(PlaneEventType.BlotterBorn, at, new Vector2(draught.Radius, draught.Ink), 1.5f));
                     break;
                 }
         }
@@ -189,6 +201,12 @@ public sealed partial class PlaneWorld
             if (b.Rise > 0f)
             {
                 b.Rise -= Dt;
+                // It drinks the ink round it up into its body as it rises.
+                if (b.Draw is { } draw)
+                {
+                    b.Matter += field.Drink(draw, b.Rise > 0f ? Dt / b.RiseTotal : 1f);
+                    if (b.Rise <= 0f) b.Draw = null;
+                }
                 continue;
             }
             // Where to: clean floor in sight, the nearer the better; re-picked on arrival, when bored, or stuck.
@@ -258,7 +276,7 @@ public sealed partial class PlaneWorld
                 {
                     float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(2.5f, 4.5f);
                     var at = b.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
-                    if (Clear(at, BlightTuning.MurkRadius) && Vector2.Distance(at, p.Position) > 3f) Bud(at, -1).Guarding = b;
+                    if (Clear(at, BlightTuning.MurkRadius) && Vector2.Distance(at, p.Position) > 3f && Bud(at, -1) is { } guard) guard.Guarding = b;
                 }
             }
         }
@@ -340,6 +358,9 @@ public sealed partial class PlaneWorld
     {
         b.Alive = false;
         Stats.MobsDefeated++;
+        // The ink it was made of is cleansed with it.
+        b.Draw = null;
+        field.Release(b.Matter);
         field.Cleanse(b.Position, BlotterTuning.BurstRadius, 1f);
         foreach (var m in Murklings)
             if (m.Guarding == b) m.Guarding = null;

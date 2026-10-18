@@ -24,7 +24,25 @@ murklings).
   never harms her.
 - **A popping bubble** cleanses a burst of 1.4 m + 0.22 m per merged bubble (at most 4.2 m), scaled by the bubble's
   remaining light.
-- Totals are kept as cells change, so the level's cleanse share (`PlaneWorld.Cleansed`) costs nothing to read.
+- **The ink is the matter the corrupted are made of.** Every creature born during the level (a budding murkling or
+  prime, a Blotter's guard, a Blotter born from corruption) drinks a fixed amount of ink (`CorruptionField.Plan`,
+  `Drink`) from anywhere on the level: the nearest corrupted cells first, then further and further out until its
+  cost is paid, however far that is. So its draught is small on thick ink and reaches far where the ink is thin or
+  gone. Only when the whole level holds less than its cost is it not born. The ground it drank is left
+  dark and empty: the shards there stop and no gold shows, since she did not cleanse it (`CorruptionField.Drunk`). A
+  living Blightroot regrows that ground like any other. The creature holds the ink (`CorruptionField.Held`) until she
+  frees it; then it is cleansed (`Release`). Costs are in density × m² (1 is a square metre of the thickest ink):
+  a murkling 3.6 (about a 1.2 m disc of thick ink), a prime 43.2 (twelve murklings), a Blotter born 21.6 (six
+  murklings).
+- **The look of a birth** (`BlightView.Gathers.cs`): the ink is sucked in as if by a vacuum. Dots of ink leave the
+  very cells it drinks (as many from each as its share), are lifted off the floor, creep, then whoosh in, stretching
+  along their flight and arcing over any rock in the way, into a blob of darkness swelling low over the floor as they
+  arrive. Once all the ink is in, the blob rises to her plane as the creature. The dots are drawn after the water
+  pass, like the ink, so they stay sharp. The creatures that wake with the level, ambush buds (the trap's
+  own ink) and lesser murklings (turned fish) drink nothing.
+- Totals are kept as cells change, so the level's cleanse share (`PlaneWorld.Cleansed`) costs nothing to read. It
+  counts the ink on the ground and the ink the living creatures hold, so a birth never makes the level cleaner: only
+  her light and freeing them do.
 - **Tipping points:** at 50% cleansed murkling budding slows (×2 interval everywhere); at 75% regrowth stops.
 
 ## Blightroot (`Blightroot`)
@@ -33,7 +51,7 @@ murklings).
   are 3 + 1.5 × Menace of them, at most 6.
 - **Regrowth:** it restores its 9 m reach toward the starting density at 0.1/s, strongest at the stump.
 - **Shot down:** its corruption meter (see "Corruption meters" below) is 125 × (1 + 0.2 × Menace), so it takes 13
-  default shots on its 0.9 m sac in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with Menace) once 0.5 s pass without a hit. Emptied, it bursts. A
+  default shots on its 0.9 m sac in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with Menace) once 0.5 s pass without a hit. Emptied, its sac pops (see evaporation below). A
   wave of cleansing runs through its whole reach in 0.7 s and its vines dissolve. Cleansing the ground round it no
   longer harms it.
 - **The pulse:** every 4 s the sac inflates for 0.8 s (the telegraph), then a ring of ink runs out at 10 m/s. The ring
@@ -47,13 +65,15 @@ Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
 - **Waking:** 2 + 1 per Menace (at most 6 alive) wake with the level. They start on thick ground (≥ 0.6), at least
   25 m from her start and 15 m apart, out of the arena and the shaft.
 - **Born from corruption:** every 20 s there is a 5% chance (+3% per Menace) that one rises out of thick ground at
-  least 18 m from her. It takes 1.5 s, with a dark ripple.
+  least 18 m from her, while the level holds ink enough for it. It takes 1.5 s, with a dark ripple, and drinks six
+  murklings' worth of ink (21.6) as it rises, sucked into it from the nearest ink. Freed, that ink is cleansed.
 - **Creeping:** 1.2 m/s (+0.2 per Menace), with a surging slug gait. It turns slowly (1.6 rad/s) toward clean floor
   in sight 4–20 m off, the nearer the better, avoiding safe places and the arena. It re-picks a target on arrival,
   after 10 s, when stuck for 2.5 s, or once its target has been corrupted.
 - **Spreading:** it smears ink over a 2.6 m disc beneath it, toward density 0.9.
 - **Tough:** its corruption meter is 100 (+25% per Menace), about ten default shots in the Shallows. It regrows
-  slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, it bursts into gold and cleanses a 5 m disc.
+  slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, every mound of it pops (see evaporation
+  below) and it cleanses a 5 m disc.
 - **Body:** six segments along its trail, tapering from 1.1 m (`Blotter.Segment`). Every segment takes hits and hurts
   on contact; the view draws the same segments.
 - **Contact:** 8 corruption, with the usual hit grace, and a 7 m/s shove away.
@@ -92,7 +112,7 @@ stolen ember. It stands on the floor where the floor comes near her plane and ha
 - **The rest:** 2.5 s upright, heaving: the best moment to strike it.
 - **Freeing it:** its corruption meter is 90 × (1 + 0.2 × Menace) (about 9 default shots), regrowing 20/s after 1 s
   without a hit; anything but the leap can be struck (her shots, pops, surges, bursts; homing bubbles seek it). Freed,
-  it bursts into gold, cleansing 4 m, leaves 2–3 shells, and a pale, translucent sea squirt is left settled on the
+  its ink pops off it (see evaporation below), cleansing 4 m; it leaves 2–3 shells, and a pale, translucent sea squirt is left settled on the
   floor where it was.
 
 ## Inkwardens (`Inkwarden`, `PlaneInkwardens.cs`)
@@ -111,7 +131,8 @@ with ten slowly writhing tentacles tipped violet, a faint ring of ink on the flo
   the wardens are always the way in. The ground round them can still be cleansed.
 - **Passive:** it never attacks and does not hurt to touch.
 - **Freeing it:** its corruption meter is 60 × (1 + 0.2 × Menace) (about 6 default shots), regrowing 10/s after 1 s
-  without a hit. Freed, its tethers snap in a burst of gold, it cleanses 3 m and leaves 1–2 shells, and a healthy
+  without a hit. Freed, its tethers snap and its ink pops off it (see evaporation below); it cleanses 3 m and leaves
+  1–2 shells, and a healthy
   pale-pink anemone is left on the floor.
 
 ## Lashjaws (`Lashjaw`, `PlaneLashjaws.cs`)
@@ -138,7 +159,7 @@ poking out of the rock at her height; it never moves.
   freed. Until then it hunts on. An Inkwarden can ward it like any kin.
 - **Fish:** with her out of its fan (or held by another), it lashes the nearest reef fish in it, reels it in and
   swallows it, chewing 4 s: her chance to strike.
-- **Freed:** a burst of gold (cleansing 3 m) and 3–4 shells; every fish it swallowed swims back out alive, and the
+- **Freed:** it pops (see evaporation below), cleansing 3 m, and leaves 3–4 shells; every fish it swallowed swims back out alive, and the
   healthy moray draws back into its hole.
 
 ## Buried caches (`BuriedCache`) and light orbs
@@ -159,10 +180,11 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 ## Murklings (`Murkling`)
 
 - **Budding:** each living Blightroot's area buds one from dense ground (≥ 0.6), at least 5 m from her, every
-  15 s / (1 + 0.6 × Menace). The bud takes 0.8 s. **It is made of the ink under it:** over the bud it sucks up the
-  corruption within 1.2 m, leaving that floor clean (it counts as cleansed). The dots of corruption over the disc draw
-  in to its middle in a slow swirl under a dark ring closing in, then rise together to her plane and close into the
-  sphere that is the murkling, swelling up as they arrive. Ambush and guard buds gather the same way.
+  15 s / (1 + 0.6 × Menace), while the level holds ink enough for it. The bud takes 0.8 s. **It is made of ink:**
+  over the bud it drinks 3.6 (about a 1.2 m disc of thick ink, the nearest first and further out where it is thin),
+  leaving that floor dark and empty, and holds it until freed (see the field above). The ink is sucked into it and it
+  rises as the murkling (see the look of a birth above). Guard buds drink the same way. Ambush buds gather a 1.2 m
+  disc of dots but drink nothing: they are the trap's own ink.
 - **Cap:** 2 + 1.5 × Menace per area. An area cleansed past 80% stops budding for good.
 - **The arena** buds every 6 s, but only while its boss fights.
 - **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
@@ -195,20 +217,23 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 
 ## Murkling primes (`Murkling.Prime`)
 
-- **Rare:** an area's bud is a prime with a chance of 6% + 4% × Menace, where at least 60% of the 3.5 m disc round it
-  is dense ink (≥ 0.6), it has room and she is over 6.5 m off. At most one is alive per area and two bud a level;
+- **Rare:** an area's bud is a prime with a chance of 6% + 4% × Menace, where it has room, she is over 10 m off and
+  the level still holds a prime's ink (else it buds a murkling). At most one is alive per area and two bud a level;
   ambushes and guards never bud one.
-- **Its bud** takes 2 s and sucks up the whole 3.5 m disc, a great swirl of dots drawing in and rising into it.
+- **Its bud** takes 2 s and drinks twelve murklings' worth of ink (43.2), about a 3.7 m disc of thick ink and further
+  out where it is thin: a great stream of ink sucked in from all round into it.
 - **Size:** five times a murkling's: a 2.25 m radius (4.5 m across, against her 0.84 m) to see and to hit; it moves as
   a 1.4 m body, so it squeezes through the passes.
-- **Every stat scaled:** its corruption meter is five times a murkling's (180 × (1 + 0.2 × Menace)); its sense and
+- **Every stat scaled:** its corruption meter is ten times a murkling's (360 × (1 + 0.2 × Menace)); its sense and
   throw range 1.5 times (21 m and 13.5 m); its throws 2.5 times as big and as hard (17.5 damage, radius 0.25 m,
   splashing 2 m on fish, staining 2.25 m where they fall), after a 1 s slingshot wind-up (shorter with Menace). It
   moves at 0.7 times a murkling's pace. It hunts fish as a murkling does.
 - **It rams instead of clinging:** touching her deals 15 and shoves her off at 9 m/s.
-- **Freed:** a great burst of ink and gold, felt (a deep chime, a shake); its ember blooms a 6 m patch of colour
+- **Freed:** it pops in a great shower of its ink, glowing magenta, felt (a deep chime, a shake); its ember blooms a
+  6 m patch of colour
   wherever it bursts, and it always leaves 4–6 shells, and a light orb
-  30% of the time.
+  30% of the time. It breaks apart as it bursts: five murklings are flung out of it, already out of the ground, and
+  fight on. They are made of its ink, a murkling's worth each; the rest of its ink is cleansed.
 
 ## Lesser murklings (`PlaneMurkFish.cs`)
 
@@ -344,6 +369,7 @@ Cleared corruption never just vanishes. It evaporates.
 | The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Ink lifts off them as dark curls that rise and swell, then thin to violet and fade. Gold glints rise with them. The chance of a curl grows with how much a cell lost. At most 48 curls a frame. |
 | Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same vapour steams off her body. It is thicker the faster she clears. |
 | Her meter (`MinimapView` frame) | Wisps of ink steam off the arc's receding tip. They drift outward and up, curling, and turn violet, then gold, as they fade. |
+| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's sac, each of a Blotter's mounds, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the ink evaporates off it in the floor's dark curls, thinning to violet, with their gold glints. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
 
 ## Presentation
 
@@ -365,8 +391,16 @@ Cleared corruption never just vanishes. It evaporates.
   the rest of the level's life as she dives.
 - **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the drops; nothing covers it and it
   never glows. The level below shows its own corruption through the shaft.
-- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, sacs, stumps, throws, the crust) share one look:
-  ink-black, glossy, a cold violet rim, and murklings carry a dim stolen ember.
+- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, sacs, stumps, throws, the crust) are glossy ink, and
+  **each kind has its own base colour** (its skin under the ink and its glowing rim), shared by its projectiles and its
+  rings: murklings stay ink-black with a violet rim, each with its core's colour (a murkling's amber, a prime's
+  magenta, a lesser one's its fish's); Blightroots blue (their sacs, rings and gloomvines too); Blotters orange (their
+  bombs and landing marks too); Thumpsquirts acid green (their landing rings and marks too); Inkwardens violet (their
+  tethers too); Lashjaws crimson (their tongues too).
+- **Their light** (`BlightView.Lights.cs`): each casts a little light in its core's or base colour (murklings and
+  their throws their core's), so the creatures show in the dark depths: a pool of 24 small shadowless lights goes to
+  the ones nearest her, stronger the darker the depth (× Lantern^0.8, §5.1 of DESIGN-TOPDOWN), always well under her
+  own lantern.
 - Other shaders:
   - `ink_ring.gdshader`: pulses, buds, bursts.
   - `gloomvine.gdshader`: glossy tubes with a violet pulse, dissolving in gold.

@@ -56,14 +56,18 @@ public static class BlightTuning
     /// </summary>
     public const float MurkCorruption = 36f, MurkRegen = 14f, MurkDelay = 0.8f;
     public const float BudSeconds = 0.8f, BudInterval = 15f, BudDensity = 0.6f, BudClearance = 5f;
-    /// <summary>A budding murkling sucks up the ink in this radius under it (it is made of it), emptying it by the time it is out.</summary>
-    public const float SuckRadius = 1.2f;
     /// <summary>
-    /// A murkling prime: a rare bud (PrimeChance + PrimeChancePerMenace × Menace) where PrimeDense of its PrimeSuck
-    /// disc is dense ink, at most one alive per area and PrimePerLevel a level, never from ambushes or guards. It
-    /// sucks in that whole disc over PrimeBud seconds into a body PrimeScale times a murkling's (colliding as PrimeBody).
+    /// A murkling is made of ink: budding, it drinks Ink (density × m², about a 1.2 m disc of thick ink) from anywhere
+    /// on the level, the nearest ink first and then further out until it has it, over its bud. An ambush's buds are the
+    /// trap's own ink and drink nothing; they gather a GatherRadius disc.
     /// </summary>
-    public const float PrimeChance = 0.06f, PrimeChancePerMenace = 0.04f, PrimeDense = 0.6f, PrimeSuck = 3.5f, PrimeBud = 2f;
+    public const float Ink = 3.6f, GatherRadius = 1.2f;
+    /// <summary>
+    /// A murkling prime: a rare bud (PrimeChance + PrimeChancePerMenace × Menace), at most one alive per area and
+    /// PrimePerLevel a level, at least PrimeClearance metres from her, never from ambushes or guards. It drinks PrimeInk
+    /// (twelve murklings' worth) over PrimeBud seconds into a body PrimeScale times a murkling's (colliding as PrimeBody).
+    /// </summary>
+    public const float PrimeChance = 0.06f, PrimeChancePerMenace = 0.04f, PrimeInk = Ink * 12f, PrimeClearance = 10f, PrimeBud = 2f;
     public const float PrimeScale = 5f, PrimeBody = 1.4f;
     public const int PrimePerLevel = 2;
     /// <summary>
@@ -71,10 +75,12 @@ public static class BlightTuning
     /// big, splashing PrimeSplash on fish); sense and throw range ×PrimeReach; pace ×PrimeSpeed; its wind-up
     /// PrimeWindup. It rams instead of clinging, shoving her off at PrimeShove.
     /// </summary>
-    public const float PrimeMeter = 5f, PrimeHit = 2.5f, PrimeSplash = 2f, PrimeReach = 1.5f, PrimeSpeed = 0.7f, PrimeWindup = 1f, PrimeShove = 9f;
+    public const float PrimeMeter = 10f, PrimeHit = 2.5f, PrimeSplash = 2f, PrimeReach = 1.5f, PrimeSpeed = 0.7f, PrimeWindup = 1f, PrimeShove = 9f;
     /// <summary>Freed, a prime's ember blooms PrimeBloom metres; it always leaves PrimeShellsMin–Max shells, and a light orb PrimeOrb of the time.</summary>
     public const float PrimeBloom = 6f, PrimeOrb = 0.3f;
     public const int PrimeShellsMin = 4, PrimeShellsMax = 6;
+    /// <summary>Freed, a prime breaks apart into this many murklings, flung out round where it burst, each made of a murkling's ink of its own (the rest is cleansed).</summary>
+    public const int PrimeSplit = 5;
     /// <summary>An area stops budding for good once it is cleansed this far (below a fifth of its corruption left).</summary>
     public const float AreaSpent = 0.8f;
     public const int CapBase = 2;
@@ -201,9 +207,12 @@ public sealed class Murkling
     public float Radius = BlightTuning.MurkRadius, ClingDrain = BlightTuning.ClingDrain;
     /// <summary>The body it moves as (a prime collides smaller than it looks, so it can squeeze through the passes).</summary>
     public float Body = BlightTuning.MurkRadius;
-    /// <summary>A murkling prime (rare, five times the size, every stat scaled up); its bud's length and the ink disc it sucks up.</summary>
+    /// <summary>A murkling prime (rare, five times the size, every stat scaled up); its bud's length.</summary>
     public bool Prime;
-    public float BudTotal = BlightTuning.BudSeconds, Suck = BlightTuning.SuckRadius;
+    public float BudTotal = BlightTuning.BudSeconds;
+    /// <summary>The ink it is drinking while it buds (null once drunk, or for one that drinks nothing), and the ink it is made of (field units, freed when it bursts).</summary>
+    public InkDraw? Draw;
+    public float Matter;
     /// <summary>How far it senses her (and fish), and how far it throws.</summary>
     public float Sense => Prime ? BlightTuning.Sense * BlightTuning.PrimeReach : BlightTuning.Sense;
     public float ThrowRange => Prime ? BlightTuning.ThrowRange * BlightTuning.PrimeReach : BlightTuning.ThrowRange;
@@ -749,12 +758,11 @@ public sealed partial class PlaneWorld
                 int cell = area.Cells[_blightRng.Int(area.Cells.Count)];
                 var at = CorruptionField.CellCentre(cell % CorruptionField.N, cell / CorruptionField.N);
                 if (field.Density[cell] < BlightTuning.BudDensity || Vector2.Distance(at, p.Position) < BlightTuning.BudClearance || !Clear(at, BlightTuning.MurkRadius)) continue;
-                // Now and then, on deep enough ink, a prime.
+                // Now and then a prime (else a murkling), where the level still holds ink enough for it.
                 bool prime = _primesBorn < BlightTuning.PrimePerLevel && !Murklings.Any(x => x.Alive && x.Prime && x.Area == index)
                     && _blightRng.NextFloat() < BlightTuning.PrimeChance + BlightTuning.PrimeChancePerMenace * Menace
-                    && Vector2.Distance(at, p.Position) > BlightTuning.PrimeSuck + 3f && Clear(at, BlightTuning.PrimeBody)
-                    && DenseShare(field, at, BlightTuning.PrimeSuck) >= BlightTuning.PrimeDense;
-                Bud(at, index, prime);
+                    && Vector2.Distance(at, p.Position) > BlightTuning.PrimeClearance && Clear(at, BlightTuning.PrimeBody);
+                if ((prime ? Bud(at, index, prime: true) : null) is null && Bud(at, index) is null) continue;
                 break;
             }
         }
@@ -764,9 +772,13 @@ public sealed partial class PlaneWorld
             if (!m.Alive) continue;
             if (m.Budding)
             {
-                // It sucks the ink under it up into itself.
-                field.Cleanse(m.Position, m.Suck, 3f * Dt / m.BudTotal);
+                // It drinks the ink round it up into itself: the ground it takes is left empty (no gold: she did not cleanse it).
                 m.Bud -= Dt;
+                if (m.Draw is { } draw)
+                {
+                    m.Matter += field.Drink(draw, m.Budding ? Dt / m.BudTotal : 1f);
+                    if (!m.Budding) m.Draw = null;
+                }
                 if (!m.Budding) Events.Add(new PlaneEvent(PlaneEventType.MurklingEmerged, m.Position, Vector2.Zero));
                 continue;
             }
@@ -974,8 +986,18 @@ public sealed partial class PlaneWorld
         return SafeNormalize(prey.Position + prey.Velocity * (Vector2.Distance(prey.Position, m.Position) / speed) - m.Position);
     }
 
-    Murkling Bud(Vector2 at, int area, bool prime = false)
+    /// <summary>
+    /// A murkling (or a prime) buds here, made of the nearest ink (<paramref name="drink"/>): null when the level no
+    /// longer holds that much. Without drink it is made of nothing from the ground (an ambush's, a prime's pieces).
+    /// </summary>
+    Murkling? Bud(Vector2 at, int area, bool prime = false, bool drink = true)
     {
+        InkDraw? draught = null;
+        if (drink && Corruption is { } ground)
+        {
+            draught = ground.Plan(at, prime ? BlightTuning.PrimeInk : BlightTuning.Ink);
+            if (draught is null) return null;
+        }
         var m = new Murkling { Position = at, Area = area, Seed = _blightRng.Range(0f, 100f), ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f) };
         m.Corruption.Regen *= 1f + 0.5f * Menace;
         m.Corruption.Max = m.Corruption.Value = BlightTuning.MurkCorruption * (1f + BlightTuning.MeterPerMenace * Menace) * (prime ? BlightTuning.PrimeMeter : 1f);
@@ -985,18 +1007,19 @@ public sealed partial class PlaneWorld
             m.Radius = BlightTuning.MurkRadius * BlightTuning.PrimeScale;
             m.Body = BlightTuning.PrimeBody;
             m.Bud = m.BudTotal = BlightTuning.PrimeBud;
-            m.Suck = BlightTuning.PrimeSuck;
             _primesBorn++;
         }
+        m.Draw = draught;
         Murklings.Add(m);
-        // The bud: its time, and the disc it sucks up and how much ink lies in it (the view gathers that many dots).
-        float ink = Corruption is { } field ? DenseShare(field, at, m.Suck, 0.15f) : 0f;
-        Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, new Vector2(m.Suck, ink), m.BudTotal));
+        // The bud: its time, how far out it drinks and how thick that ink is (the view pulls dots in from the cells it drinks).
+        float radius = draught?.Radius ?? BlightTuning.GatherRadius;
+        float ink = draught?.Ink ?? (Corruption is { } field ? DenseShare(field, at, radius, 0.15f) : 0f);
+        Events.Add(new PlaneEvent(PlaneEventType.MurklingBud, at, new Vector2(radius, ink), m.BudTotal));
         return m;
     }
 
-    /// <summary>Verification: a murkling (or a prime) budding here now.</summary>
-    public Murkling DebugBud(Vector2 at, bool prime) => Bud(at, -1, prime);
+    /// <summary>Verification: a murkling (or a prime) budding here now (of nothing, where there is not ink enough).</summary>
+    public Murkling DebugBud(Vector2 at, bool prime) => Bud(at, -1, prime) ?? Bud(at, -1, prime, drink: false)!;
 
     /// <summary>The share of a disc's open floor whose ink is at least so dense (sampled on a grid).</summary>
     float DenseShare(CorruptionField field, Vector2 at, float radius, float dense = BlightTuning.BudDensity)
@@ -1022,6 +1045,9 @@ public sealed partial class PlaneWorld
     {
         m.Alive = false;
         Stats.MobsDefeated++;
+        // The ink it was made of is cleansed with it (a prime's pieces keep theirs).
+        float matter = m.Matter;
+        m.Draw = null;
         if (m.Lesser)
         {
             // A lesser one is a fish again.
@@ -1038,9 +1064,27 @@ public sealed partial class PlaneWorld
             int shells = BlightTuning.PrimeShellsMin + _drops.Int(BlightTuning.PrimeShellsMax - BlightTuning.PrimeShellsMin + 1);
             for (int i = 0; i < shells; i++) Shells.Add(new PlaneShell { Position = m.Position, Velocity = Fling(2f, 5f) });
             if (_drops.NextFloat() < BlightTuning.PrimeOrb) Hearts.Add(new PlaneHeart { Position = m.Position, Velocity = Fling(1.5f, 3f) });
+            // It breaks apart: murklings flung out of it, already out of the ground, each made of a murkling's ink of its own.
+            float share = MathF.Min(BlightTuning.Ink / CorruptionTuning.CellArea, matter / BlightTuning.PrimeSplit);
+            for (int i = 0; i < BlightTuning.PrimeSplit; i++)
+            {
+                float a = i * MathF.Tau / BlightTuning.PrimeSplit + _blightRng.Range(-0.3f, 0.3f);
+                var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                var at = m.Position + dir * 1.2f;
+                for (int k = 0; k < 4 && !Clear(at, BlightTuning.MurkRadius); k++) at = Vector2.Lerp(at, m.Position, 0.35f);
+                var piece = Bud(at, m.Area, drink: false)!;
+                piece.Bud = 0f;
+                piece.Matter = share;
+                matter -= share;
+                piece.Velocity = dir * 6f;
+                piece.Shaken = 0.5f;
+                piece.ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.6f, 1.2f);
+            }
+            Corruption?.Release(matter);
             if (damage > 0f) Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, m.Position, Vector2.Zero, damage));
             return;
         }
+        Corruption?.Release(matter);
         bool blooms = ember && Corruption is { } field && field.At(m.Position) < CorruptionTuning.Clean;
         if (blooms) Corruption!.Cleanse(m.Position, CorruptionTuning.EmberRadius, 1f);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingBurst, m.Position, Vector2.Zero, blooms ? CorruptionTuning.EmberRadius : 0f));
@@ -1061,7 +1105,8 @@ public sealed partial class PlaneWorld
             {
                 var at = p.Position + dir * r;
                 if (!Clear(at, BlightTuning.MurkRadius)) continue;
-                Bud(at, -1);
+                // The trap's own ink: an ambush's buds drink nothing from the ground.
+                Bud(at, -1, drink: false);
                 spawned++;
                 break;
             }

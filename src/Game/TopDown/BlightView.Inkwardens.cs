@@ -134,6 +134,7 @@ public partial class BlightView
         body.SetInstanceShaderParameter(SN.Of("ember"), 0.15f);
         body.SetInstanceShaderParameter(SN.Of("wobble"), 0.4f);
         body.SetInstanceShaderParameter(SN.Of("seed"), w.Seed);
+        body.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Inkwarden, 0.7f));
         node.AddChild(body);
         var tentacles = new MeshInstance3D[WardenTentacles];
         var tips = new MeshInstance3D[WardenTentacles];
@@ -142,6 +143,7 @@ public partial class BlightView
             tentacles[i] = new MeshInstance3D { Mesh = _tentacleMesh, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             tentacles[i].SetInstanceShaderParameter(SN.Of("ember"), 0f);
             tentacles[i].SetInstanceShaderParameter(SN.Of("wobble"), 0.2f);
+            tentacles[i].SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Inkwarden, 0.7f));
             tips[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.07f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             tips[i].SetInstanceShaderParameter(SN.Of("ember"), 1.2f);
             tips[i].SetInstanceShaderParameter(SN.Of("ember_tint"), new Color(0.7f, 0.35f, 1f, 1f));
@@ -164,7 +166,7 @@ public partial class BlightView
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             VertexColorUseAsAlbedo = true,
-            AlbedoColor = new Color(0.08f, 0.03f, 0.14f),
+            AlbedoColor = new Color(0.42f, 0.16f, 0.7f),
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             RenderPriority = 2,
         };

@@ -236,7 +236,7 @@ public partial class TitleMain : Node3D
             _puffers.Sync(_world, dt);
             _camera.Track(Focus(alpha), dt);
             _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
-            _level.UpdateCanopy(_world.Player.Position, dt);
+            _level.UpdateCanopy(_world.Player.Position, dt, _camera.Camera.GlobalPosition);
         }
         Capture();
     }

@@ -8,9 +8,11 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// The corruption's creatures and works on screen (docs/CORRUPTION.md), presentation only: Blightroots (a blackened
-/// stump crowned with a pulsing ink sac; its ring of ink; its burst into golden motes and a wave of cleansing),
+/// stump crowned with a pulsing ink sac; its ring of ink; its sac popping and a wave of cleansing),
 /// gloomvines (glossy ink tubes rising from the floor to her plane, coiling round her), murklings (wobbling dark orbs with a stolen ember, budding from the floor) and their throws. Everything
-/// corrupted shares one look: ink-black, light-drinking, slightly glossy, with a cold violet rim.
+/// corrupted shares one look: ink-black, light-drinking, slightly glossy, with a cold violet rim. Every one of them,
+/// freed, pops like a water balloon: the ink it was made of showers out glowing in its colour and evaporates
+/// (InkVapour.Pop), never a flash of light.
 /// </summary>
 public partial class BlightView : Node3D
 {
@@ -44,6 +46,11 @@ public partial class BlightView : Node3D
     FxParticles _motes = null!, _droplets = null!;
     LevelMap? _map;
     PlaneWorld? _lastWorld;
+    /// <summary>The ink's evaporation (shared with the floor's): a freed creature pops into it.</summary>
+    public InkVapour? Vapour;
+
+    /// <summary>A freed creature pops: its ink showers out, glowing in its colour, and evaporates.</summary>
+    void Pop(Vector3 at, float size, Color glow) => Vapour?.Pop(at, size, glow);
     float _time;
 
     public override void _Ready()
@@ -67,6 +74,7 @@ public partial class BlightView : Node3D
     /// <summary>A new level: its Blightroots.</summary>
     public void Show(PlaneWorld world)
     {
+        _lastWorld = world;
         _map = world.Map;
         foreach (var r in _roots) r.Node.QueueFree();
         foreach (var r in _ripples) r.Mesh.QueueFree();
@@ -101,6 +109,7 @@ public partial class BlightView : Node3D
         };
         stump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
         stump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
+        stump.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blightroot, 0.7f));
         node.AddChild(stump);
         for (int i = 0; i < 5; i++)
         {
@@ -115,12 +124,15 @@ public partial class BlightView : Node3D
             };
             spur.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
             spur.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
+            spur.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blightroot, 0.7f));
             stump.AddChild(spur);
             spur.Position -= stump.Position;
         }
         // The sac: a glossy membrane of ink round a stolen light.
         var sac = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _sacMat, Position = new Vector3(0f, SacHeight, 0f), Scale = Vector3.One * 0.75f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), root.Position.X * 0.37f);
+        sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blightroot, 0.6f));
+        sac.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), Kin.Tint(new Color(0.55f, 0.8f, 1f)));
         node.AddChild(sac);
         var ring = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, Visible = false, Position = new Vector3(0f, LevelMap.SwimBand - 0.35f, 0f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         node.AddChild(ring);
@@ -139,6 +151,7 @@ public partial class BlightView : Node3D
         _lastWorld = world;
         SyncWardens(world, dt, camera);
         SyncLashjaws(world, dt, camera);
+        SyncKinLights(world);
         SyncMeters(world, dt);
         SyncVines(world);
         StepRipples(dt);
@@ -190,26 +203,15 @@ public partial class BlightView : Node3D
                 float r = Mathf.Max(root.PulseRadius, 0.1f);
                 view.Ring.Scale = Vector3.One * (r / 0.8f);
                 float fadeOut = 1f - Mathf.Clamp(r / BlightTuning.Reach, 0f, 1f);
-                view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(Ink.R, Ink.G, Ink.B, 0.85f * (0.35f + 0.65f * fadeOut)));
+                view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(Kin.Blightroot.R * 0.5f, Kin.Blightroot.G * 0.5f, Kin.Blightroot.B * 0.6f, 0.85f * (0.35f + 0.65f * fadeOut)));
                 view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("width"), 0.09f + 0.4f / r);
                 view.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), i * 1.7f);
             }
         }
     }
 
-    /// <summary>A Blightroot bursts: golden motes, ink droplets and a ring of cleansing light running out over its reach.</summary>
-    void Burst(System.Numerics.Vector2 at)
-    {
-        var p = new Vector3(at.X, SacHeight, at.Y);
-        for (int i = 0; i < 90; i++)
-        {
-            var dir = _motes.RandDir();
-            dir.Y = Mathf.Abs(dir.Y) * 0.8f + 0.2f;
-            _motes.Emit(p + dir * 0.4f, dir * _motes.RandRange(1.5f, 5.5f), _motes.RandRange(1.0f, 2.2f), _motes.RandRange(0.12f, 0.3f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.9f);
-        }
-        _droplets.Burst(p, Vector3.Up, 26, 3.5f, 1f, 0.7f, 0.22f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.9f), new Color(0.05f, 0.02f, 0.08f, 0f), drag: 2.5f);
-        AddRipple(at, Floor(at) + 0.08f, 0.3f, BlightTuning.Reach, BlightTuning.BurstSeconds + 0.3f, new Color(Gold.R * 1.3f, Gold.G * 1.3f, Gold.B, 0.9f));
-    }
+    /// <summary>A Blightroot bursts: its sac pops, its ink showering out blue and evaporating (the floor's cleansing wave is the field's).</summary>
+    void Burst(System.Numerics.Vector2 at) => Pop(new Vector3(at.X, SacHeight, at.Y), BlightTuning.SacRadius, Kin.Blightroot);
 
     void SyncMurklings(PlaneWorld world)
     {
@@ -229,16 +231,17 @@ public partial class BlightView : Node3D
             float scale = m.Radius;
             // A lesser one carries a dim ember in its fish's old colour, so it shows what it was.
             float ember = m.Lesser ? 0.7f : m.Prime ? 0.75f : 0.45f;
-            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), m.Fish is { } fish ? FishEmber(fish.Kind) : new Color(0f, 0f, 0f, 0f));
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), m.Fish is { } fish ? FishEmber(fish.Kind) : m.Prime ? Kin.Tint(Kin.PrimeCore) : new Color(0f, 0f, 0f, 0f));
             if (m.Budding)
             {
-                // Budding: nothing yet while the ink draws in (StartGather's dots); then the sphere forms out of the dots
-                // as they rise, swelling up from the floor to her plane.
+                // Budding: a blob swelling low over the floor as the ink is sucked into it (StartGather's dots, on the
+                // same clock); once it is all in, it rises to her plane.
                 float k = 1f - m.Bud / m.BudTotal;
+                float grow = BlobGrowth(k);
                 float rise = Mathf.Clamp((k - GatherIn) / (1f - GatherIn), 0f, 1f);
                 float e = rise * rise * (3f - 2f * rise);
-                y = Mathf.Lerp(Floor(m.Position) + 0.1f, y, e);
-                scale *= 0.05f + 0.95f * e;
+                y = Mathf.Lerp(BlobHeight(Floor(m.Position), m.Radius, k), y, e);
+                scale *= grow;
                 ember = 0.05f + 0.4f * e;
             }
             else if (m.Clinging)
@@ -533,16 +536,31 @@ public partial class BlightView : Node3D
                 break;
             }
             case PlaneEventType.BlotterBorn:
+                // The ink it is made of gathers in as it rises.
+                if (e.Direction.X > 0f)
+                {
+                    var bornAt = e.Position;
+                    StartGather(e.Position, e.Direction.X, e.Direction.Y, e.Size, true,
+                        _lastWorld?.Blotters.Find(b => b.Alive && b.Rise > 0f && b.Position == bornAt)?.Draw, BlotterTuning.Radius);
+                }
                 AddRipple(e.Position, Floor(e.Position) + 0.06f, 0.4f, 4f, e.Size, new Color(Ink.R, Ink.G, Ink.B, 0.95f));
                 _droplets.Burst(new Vector3(e.Position.X, Floor(e.Position) + 0.2f, e.Position.Y), Vector3.Up, 30, 3.5f, 0.6f, 0.8f, 0.2f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2f);
                 break;
             case PlaneEventType.BlotterBurst:
-                // Cleansed: it bursts into gold, and its light washes the floor round it.
-                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.5f, e.Size, 1.1f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
-                _droplets.Burst(at, Vector3.Up, 40, 4f, 1f, 0.7f, 0.22f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
-                for (int i = 0; i < 70; i++)
-                    _motes.Emit(at + _motes.RandDir() * 0.8f, _motes.RandDir() * _motes.RandRange(1f, 4f) + Vector3.Up * 1.5f, _motes.RandRange(0.8f, 1.6f), _motes.RandRange(0.1f, 0.24f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+            {
+                // Cleansed: every mound of it pops, its ink showering out orange and evaporating.
+                // Its drawn mounds, where they stood (the world has already let it go).
+                bool popped = false;
+                foreach (var (b, slug) in _slugs)
+                {
+                    if (b.Alive || b.Position != e.Position) continue;
+                    foreach (var mound in slug.Body) Pop(mound.Position, Mathf.Max(mound.Scale.X, 0.4f), Kin.Blotter);
+                    popped = true;
+                    break;
+                }
+                if (!popped) Pop(at, BlotterTuning.SegmentRadius * 1.4f, Kin.Blotter);
                 break;
+            }
             case PlaneEventType.FishTurned:
                 // The ink closes over it: a puff of violet mist.
                 _droplets.Burst(at, Vector3.Up, 6, 0.5f, 0.9f, 0.45f, 0.18f, 0.3f, new Color(0.25f, 0.1f, 0.4f, 0.4f), new Color(0.35f, 0.15f, 0.55f, 0f), drag: 2f);
@@ -573,20 +591,15 @@ public partial class BlightView : Node3D
                     _motes.Emit(at + Vector3.Up * 0.3f + _motes.RandDir() * 0.3f, _motes.RandDir() * _motes.RandRange(0.6f, 2f) + Vector3.Up * 0.6f, _motes.RandRange(0.5f, 1f), _motes.RandRange(0.06f, 0.14f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 2f, buoyancy: 0.4f);
                 break;
             case PlaneEventType.LashFreed:
-                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.3f, e.Size, 0.8f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
-                _droplets.Burst(at, Vector3.Up, 26, 3f, 1f, 0.55f, 0.16f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
-                for (int i = 0; i < 36; i++)
-                    _motes.Emit(at + _motes.RandDir() * 0.4f, _motes.RandDir() * _motes.RandRange(1f, 3f) + Vector3.Up, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                // Freed: it pops, its ink showering out crimson and evaporating.
+                Pop(at, 1f, Kin.Lashjaw);
                 break;
             case PlaneEventType.Warded:
                 if (_lastWorld is not null) OnWarded(_lastWorld, e);
                 break;
             case PlaneEventType.WardenFreed:
-                // Freed: its tethers snap in a burst of gold, and a healthy anemone is left.
-                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.3f, e.Size, 0.8f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
-                _droplets.Burst(at, Vector3.Up, 24, 3f, 1f, 0.55f, 0.16f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
-                for (int i = 0; i < 30; i++)
-                    _motes.Emit(at + _motes.RandDir() * 0.4f, _motes.RandDir() * _motes.RandRange(1f, 3f) + Vector3.Up, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                // Freed: its ink pops off it, showering out violet and evaporating, and a healthy anemone is left.
+                Pop(at, 0.8f, Kin.Inkwarden);
                 LeaveFreedAnemone(e.Position);
                 break;
             case PlaneEventType.ThumpLeap:
@@ -597,41 +610,33 @@ public partial class BlightView : Node3D
             {
                 // It lands: ink flung out and a dark ring running out over the floor (the knockback wave).
                 float floor = Floor(e.Position);
-                AddRipple(e.Position, floor + 0.08f, 0.4f, e.Size, e.Size / ThumpTuning.RingSpeed + 0.2f, new Color(Ink.R, Ink.G, Ink.B, 0.95f));
-                AddRipple(e.Position, LevelMap.SwimBand - 0.2f, 0.4f, e.Size, e.Size / ThumpTuning.RingSpeed + 0.1f, new Color(0.3f, 0.1f, 0.5f, 0.6f));
+                AddRipple(e.Position, floor + 0.08f, 0.4f, e.Size, e.Size / ThumpTuning.RingSpeed + 0.2f, new Color(0.08f, 0.22f, 0.02f, 0.95f));
+                AddRipple(e.Position, LevelMap.SwimBand - 0.2f, 0.4f, e.Size, e.Size / ThumpTuning.RingSpeed + 0.1f, new Color(Kin.Thumpsquirt.R, Kin.Thumpsquirt.G, Kin.Thumpsquirt.B, 0.6f));
                 _droplets.Burst(new Vector3(e.Position.X, TubeBase(e.Position) + 0.15f, e.Position.Y), Vector3.Up, 30, 4.5f, 0.75f, 0.6f, 0.18f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2.5f);
                 break;
             }
             case PlaneEventType.ThumpBurst:
             {
-                // Freed: a burst of gold, its light washing the floor, and a pale sea squirt left settled there.
-                AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.4f, e.Size, 0.9f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.9f));
-                _droplets.Burst(at, Vector3.Up, 30, 3.5f, 1f, 0.6f, 0.18f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
-                for (int i = 0; i < 40; i++)
-                    _motes.Emit(at + _motes.RandDir() * 0.5f, _motes.RandDir() * _motes.RandRange(1f, 3.5f) + Vector3.Up * 1.2f, _motes.RandRange(0.7f, 1.4f), _motes.RandRange(0.08f, 0.2f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.6f);
+                // Freed: its ink pops off it, showering out green and evaporating, and a pale sea squirt is left settled there.
+                Pop(at, 0.7f, Kin.Thumpsquirt);
                 LeaveFreedSquirt(e.Position);
                 break;
             }
             case PlaneEventType.MurklingBud:
-                // The ink under it gathers into it (the disc it sucks up, and how inked it is).
-                StartGather(e.Position, e.Direction.X, e.Direction.Y, e.Size, e.Direction.X > BlightTuning.SuckRadius + 0.1f);
+            {
+                // The ink it drinks is sucked into it from the very cells it drinks (a prime's bud is the long one).
+                bool prime = e.Size > BlightTuning.BudSeconds + 0.1f;
+                var budAt = e.Position;
+                var bud = _lastWorld?.Murklings.Find(m => m.Alive && m.Budding && m.Position == budAt);
+                StartGather(e.Position, e.Direction.X, e.Direction.Y, e.Size, prime, bud?.Draw,
+                    BlightTuning.MurkRadius * (prime ? BlightTuning.PrimeScale : 1f));
                 break;
+            }
             case PlaneEventType.MurklingBurst:
-                _droplets.Burst(at, Vector3.Up, 18, 3f, 1f, 0.55f, 0.16f, 0.04f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
-                if (e.Direction.X > 0.5f)
-                {
-                    // A prime bursts: a great spray of ink and a wide ring of gold.
-                    _droplets.Burst(at, Vector3.Up, 90, 6f, 1f, 0.9f, 0.3f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 2.5f);
-                    for (int i = 0; i < 80; i++)
-                        _motes.Emit(at + _motes.RandDir() * 1.5f, _motes.RandDir() * _motes.RandRange(1f, 5f) + Vector3.Up * 1.2f, _motes.RandRange(0.8f, 1.6f), _motes.RandRange(0.1f, 0.24f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.6f, buoyancy: 0.5f);
-                }
-                if (e.Size > 0f)
-                {
-                    // Its stolen ember falls and blooms a patch of colour.
-                    AddRipple(e.Position, Floor(e.Position) + 0.08f, 0.2f, e.Size, 0.9f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.85f));
-                    for (int i = 0; i < 24; i++)
-                        _motes.Emit(at, _motes.RandDir() * _motes.RandRange(0.6f, 2.4f) + Vector3.Down * 1.2f, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 2f, buoyancy: 0.4f);
-                }
+                // Freed: it pops like a water balloon, its ink showering out in its core's colour and evaporating (a
+                // prime's a great shower). Where its ember blooms, the floor's own cleansing shows it.
+                if (e.Direction.X > 0.5f) Pop(at, BlightTuning.MurkRadius * BlightTuning.PrimeScale, Kin.PrimeCore);
+                else Pop(at, BlightTuning.MurkRadius, Kin.MurklingCore);
                 break;
         }
     }

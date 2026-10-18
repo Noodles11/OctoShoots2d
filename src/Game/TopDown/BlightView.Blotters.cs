@@ -49,6 +49,8 @@ public partial class BlightView
                 ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.08f);
                 ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 1.4f);
                 ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), bomb.From.X * 0.3f);
+                ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blotter, 0.85f));
+                ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), Kin.Tint(Kin.Blotter));
                 var mark = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
                 mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), bomb.To.Y * 0.2f);
                 AddChild(ball);
@@ -64,7 +66,7 @@ public partial class BlightView
             float r = BlotterTuning.SplashRadius * (1.25f - 0.25f * t);
             view.Mark.Position = new Vector3(bomb.To.X, Floor(bomb.To) + 0.07f, bomb.To.Y);
             view.Mark.Scale = new Vector3(r, 1f, r);
-            view.Mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(0.05f, 0.02f, 0.08f, 0.35f + 0.5f * t));
+            view.Mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tint"), new Color(0.45f, 0.18f, 0.02f, 0.35f + 0.5f * t));
             view.Mark.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("width"), 0.12f + 0.1f * t);
         }
     }
@@ -96,6 +98,7 @@ public partial class BlightView
             body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), b.Seed + i * 1.9f);
             body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), i == 0 ? 0.15f : 0.05f);
             body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.5f);
+            body[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blotter, 0.75f));
             node.AddChild(body[i]);
         }
         var stalks = new MeshInstance3D[2];
@@ -110,9 +113,11 @@ public partial class BlightView
             };
             stalks[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
             stalks[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
+            stalks[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blotter, 0.75f));
             eyes[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _sacMat, Scale = Vector3.One * 0.13f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             eyes[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 1.2f);
             eyes[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
+            eyes[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), Kin.Tint(new Color(1f, 0.75f, 0.2f)));
             node.AddChild(stalks[i]);
             node.AddChild(eyes[i]);
         }
