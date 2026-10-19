@@ -176,12 +176,12 @@ public sealed class SpawnEntry
 }
 
 /// <summary>
-/// One generated level (DESIGN-TOPDOWN §4): a 125×125 m heightfield on a 1 m grid plus everything the generator
+/// One generated level (DESIGN-TOPDOWN §4): a 140×140 m heightfield on a 1 m grid plus everything the generator
 /// decided. Produced only by <see cref="TopDownGenerator"/>; the game reads it and never generates or scatters.
 /// </summary>
 public sealed class LevelMap
 {
-    public const int Size = 125;
+    public const int Size = 140;
     public const int Samples = Size + 1;
 
     /// <summary>Where the bell is drawn: floating just above the swim level (0), which every height is measured from.</summary>
@@ -214,7 +214,7 @@ public sealed class LevelMap
     /// <summary>Where the floor gives way to the level below.</summary>
     public Shaft Shaft;
 
-    /// <summary>Heights in metres at the 151×151 grid points, row-major (index = y * Samples + x).</summary>
+    /// <summary>Heights in metres at the 141×141 grid points, row-major (index = y * Samples + x).</summary>
     public float[] Heights = new float[Samples * Samples];
 
     /// <summary>

@@ -104,7 +104,8 @@ public class PlanePearlTests
         w1.Step(default);
 
         var w2 = new PlaneWorld(Room2.Value, new Tuning(), run);
-        Assert.Equal(55f, w2.Player.Hp);
+        // (A pearl that mends her may have healed her a little in that step.)
+        Assert.Equal(w1.Player.Hp, w2.Player.Hp);
         Assert.Contains(pearl.ItemId, w2.Run.Items);
         // The next treasure room never offers what she already has.
         Assert.All(w2.Pearls, p => Assert.NotEqual(pearl.ItemId, p.ItemId));

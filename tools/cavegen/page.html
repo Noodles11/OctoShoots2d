@@ -111,16 +111,16 @@ canvas { display: block; width: 100%; height: 100%; }
   const G = window.CaveGen;
   // The game's depth water (ReefLook): shallow tone for open water, deep tone for the shaft, murk for its bottom.
   const DEPTHS = [
-    { name: 'Sunlit Shallows', shallow: '#7FDCD2', deep: '#3FBFBE', murk: '#17707A' },
-    { name: 'Kelp Jungle', shallow: '#8FBF6F', deep: '#2E7D5B', murk: '#173F31' },
-    { name: 'Sunken Galleon', shallow: '#6B7A84', deep: '#4A5A66', murk: '#1F272E' },
-    { name: 'Coral Carnival', shallow: '#5A3E8A', deep: '#3A2A5E', murk: '#1A1230' },
-    { name: 'Twilight Trench', shallow: '#304878', deep: '#1F3460', murk: '#0D1830' },
-    { name: 'The Abyss', shallow: '#34407A', deep: '#222A55', murk: '#10132C' },
-    { name: 'The Tank', shallow: '#F4F8FF', deep: '#DCE6F5', murk: '#9AA8C0' },
+    { name: 'Sunlit Shallows', shallow: '#7FDCD2', deep: '#3FBFBE', murk: '#17707A', rock: '#979487' },
+    { name: 'Kelp Jungle', shallow: '#8FBF6F', deep: '#2E7D5B', murk: '#173F31', rock: '#616A54' },
+    { name: 'Sunken Galleon', shallow: '#6B7A84', deep: '#4A5A66', murk: '#1F272E', rock: '#705C49' },
+    { name: 'Coral Carnival', shallow: '#5A3E8A', deep: '#3A2A5E', murk: '#1A1230', rock: '#585066' },
+    { name: 'Twilight Trench', shallow: '#304878', deep: '#1F3460', murk: '#0D1830', rock: '#505764' },
+    { name: 'The Abyss', shallow: '#34407A', deep: '#222A55', murk: '#10132C', rock: '#4B4E59' },
+    { name: 'The Tank', shallow: '#F4F8FF', deep: '#DCE6F5', murk: '#9AA8C0', rock: '#979BA0' },
   ];
   // Fixed chart colours (the game's map ink and paper), the same in both page themes.
-  const INK = '#2e2e2e', PAPER = '#eeece6';
+  const INK = '#2e2e2e';
   const POI_COLOR = { TreasureCave: '#ffc740', Shop: '#59f273', CurseDen: '#ff4040', Secret: '#b366ff', Exit: '#ff8c26', Start: '#f2f2f2', ShellCache: '#4de6d9', Ambush: '#ff734d' };
   const MINI_METRES = 90;
 
@@ -281,14 +281,15 @@ canvas { display: block; width: 100%; height: 100%; }
     return { ctx, w: r.width, h: r.height };
   }
 
-  /** The chart at a scale: rock paper, depth water, the shaft, hatching, the fineliner outline. ppm: pixels a metre. */
+  /** The chart at a scale: stone-toned rock, depth water, the shaft, hatching, the fineliner outline. ppm: pixels a metre. */
   function drawChart(ctx, lv, ch, ppm, ox, oy, opts) {
     const hatch = ch.hatchFor(ppm, opts.bandPx || 16);
     const depth = DEPTHS[+depthSel.value];
     ctx.save();
     ctx.translate(ox, oy); ctx.scale(ppm, ppm);
     const N = ch.N;
-    ctx.fillStyle = PAPER; ctx.fillRect(-200, -200, N + 400, N + 400);
+    // The rock in the depth's stone tone (the game's TopoMap.RockTone), never paper white.
+    ctx.fillStyle = depth.rock; ctx.fillRect(-200, -200, N + 400, N + 400);
     const waterPath = () => {
       ctx.beginPath();
       for (const loop of ch.loops) { ctx.moveTo(loop[0][0], loop[0][1]); for (let i = 1; i < loop.length; i++) ctx.lineTo(loop[i][0], loop[i][1]); ctx.closePath(); }

@@ -1,4 +1,4 @@
-# Cave generator (m2 prototype)
+# Cave generator (m2)
 
 A new level generator in the manner of Watabou's Cave Generator, written from scratch for Ink Deep (Watabou's code is
 not published, so nothing is ported). It lives as a standalone prototype in `tools/cavegen/` and is not wired into
@@ -45,7 +45,8 @@ way down, every planned place placed, about 45 ms a level in Node.
 
 ## The map look
 
-- Rock is paper; water is the depth's shallow water colour (`ReefLook.WaterShallow`); the shaft is its deep water,
+- Rock is the depth's reef rock in a stone tone (`TopoMap.RockTone`: `ReefLook.Rock` greyed toward stone and a shade
+  darker), never paper white; water is the depth's shallow water colour (`ReefLook.WaterShallow`); the shaft is its deep water,
   darkening to murk, with a dashed rim.
 - The wall line is fineliner: marching squares on the softened water mask, smoothed twice (Chaikin), drawn in ink with
   its weight wavering along it, plus a finer second pass a hair off.
@@ -56,11 +57,19 @@ way down, every planned place placed, about 45 ms a level in Node.
   small inked pebbles are scattered along the walls on both sides.
 - Place emblems are the game's (`TopoMap.DrawEmblem`), unchanged.
 
-## Bringing it into the game
+## In the game
 
-1. Port `cavegen.js` to `src/Core/Gen/Caves/CaveGenerator.cs`, filling a `LevelMap` (chambers to `Plazas`, tunnels to
-   `Corridors`, places to `Pois`, the shaft to `Shaft`), with `LevelPlan` deciding the places.
-2. Replace the size rules in `LevelValidator` with the area rule; keep reachability, spacing and the shaft rules.
-3. Keep the 3D terrain pass (wall noise, slopes, cave roofs) on the new outline; arches and passes become optional.
-4. `TopoMap` / `topo_map.gdshader`: the depth water fill, the fineliner outline and the hatching, as on the page.
-5. Rewrite the generator and validator tests.
+- `src/Core/Gen/TopDown/CaveLayout.cs` is the C# port. `TopDownGenerator.LayCave` hands it the plan's places and records
+  the cave: chambers as `Plazas`, tunnels as `Corridors` (Main, Side, and each special room's Spur), places as `Pois`.
+  `RaiseCaveWalls` raises the rock from the water mask; the caves, passes, arches, slopes, shaft, decoration, loot and
+  spawns are the old stages, unchanged.
+- Special rooms (shop, secret, clam room, curse den) are laid right after the main chain, before the side branches:
+  dead-end chambers left as rock with rock kept round them, their tunnel ending at the room's mouth; the old cave
+  carving hollows them out behind it.
+- `LevelMap.Size` is 140. `LevelValidator` checks the area rule (`WaterArea`, 5,100–6,900 m²) instead of the old
+  corridor, plaza, side-canyon, open-share and stamp rules; reachability, spacing, the early place, the 90 m way down,
+  the shaft, peaks, caves and loot rules stay.
+- The minimap and the Tab map (`TopoMap`, `topo_map.gdshader`, `edges_only`) draw the look above in the shader: the
+  heights texture carries the height and the distances into rock and into water, for the hatching band (Voronoi
+  bundles of strokes at their own angles, laid in screen pixels) and the walls' shadow.
+- In 200 test levels every one generates, in 1.6 attempts on average (about 0.1 s a level).

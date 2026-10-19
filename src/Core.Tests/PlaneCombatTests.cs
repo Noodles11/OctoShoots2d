@@ -70,14 +70,16 @@ public class PlaneCombatTests
         return (w, mob);
     }
 
-    /// <summary>Her spot this far from a mob, in its sight, with a 1.6 m-wide channel 4 m behind the mob; null when none.</summary>
+    /// <summary>Her spot this far from a mob, in its sight, with open water round the mob and a 1.6 m-wide channel 4 m behind it; null when none.</summary>
     static Vector2? Roomy(PlaneWorld w, Vector2 from, float distance)
     {
         for (int i = 0; i < 64; i++)
         {
             var dir = new Vector2(MathF.Cos(i * MathF.Tau / 64f), MathF.Sin(i * MathF.Tau / 64f));
             var p = from + dir * distance;
-            if (w.Clear(p, w.Radius + 0.3f) && w.LineOfSight(from, p) && Enumerable.Range(1, 4).All(k => w.Clear(from - dir * k, 1.6f))) return p;
+            // Open water all round it too, so a ring of needles flies clear.
+            bool ring = Enumerable.Range(0, 8).All(k => w.Clear(from + new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)) * 2.5f, 0.6f));
+            if (ring && w.Clear(p, w.Radius + 0.3f) && w.LineOfSight(from, p) && Enumerable.Range(1, 4).All(k => w.Clear(from - dir * k, 1.6f))) return p;
         }
         return null;
     }

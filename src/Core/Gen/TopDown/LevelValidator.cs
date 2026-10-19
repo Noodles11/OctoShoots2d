@@ -13,7 +13,7 @@ public static class LevelValidator
 {
     public const float MinExitGeodesic = 90f;
     /// <summary>The longest spur from the network to a place.</summary>
-    public const float MaxSpur = 24f;
+    public const float MaxSpur = 34f;
 
     /// <summary>Null when the level keeps every rule; otherwise the first one it breaks.</summary>
     public static string? Validate(LevelMap map)
@@ -39,28 +39,14 @@ public static class LevelValidator
         var early = others.Where(p => p.Early).ToList();
         if (others.Any(p => p.Kind != PoiKind.ShellCache) && (early.Count != 1 || Vector2.Distance(early[0].Position, start.Position) > 47f)) return $"{early.Count} early POIs (want exactly one, 39–47 m from the start)";
 
-        // Path network.
-        var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
-        if (mains.Count is < 3 or > 5) return $"{mains.Count} corridors (want 3–5)";
-        if (mains.Any(c => c.Width is < 6f or > 10f)) return "a corridor width outside 6–10 m";
-        if (map.Plazas.Count is < 1 or > 4) return $"{map.Plazas.Count} plazas (want 1–4)";
-        float sideBySide = LongestParallelRun(map);
-        if (sideBySide > MaxSideBySide) return $"two routes run side by side for {sideBySide:0} m (want ≤ {MaxSideBySide:0} m)";
+        // Tunnels: a room's spur stays short, a pass narrow, and nothing on a tunnel's middle above the swim level.
         foreach (var spur in map.Corridors.Where(c => c.Kind == CorridorKind.Spur))
             if (spur.Length > MaxSpur) return $"a spur of {spur.Length:0.0} m (want ≤ {MaxSpur:0} m)";
         if (map.Corridors.Any(c => c.Kind == CorridorKind.Pass && c.Width is < 3f or > 5f)) return "a pass width outside 3–5 m";
-
-        // Nothing above the swim level on a path: water at least a metre deep everywhere on it.
         string? flat = CheckCorridorFloors(map);
         if (flat is not null) return flat;
 
-        // Topography.
-        float raised = AboveFraction(map);
-        if (raised > MaxAbove) return $"{raised:P0} of the interior above the swim level (want ≤ {MaxAbove:P0})";
-        // The labyrinth: side canyons branch off the routes.
-        int sides = map.Corridors.Count(c => c.Kind == CorridorKind.Side);
-        if (sides < MinSideCanyons) return $"{sides} side canyons (want ≥ {MinSideCanyons})";
-        // The shaft is the only deep water: the deepest point of the level lies in it.
+        // Topography: the shaft is the only deep water (the deepest point of the level lies in it).
         if (!map.Shaft.Contains(DeepestPoint(map), 1f)) return "the shaft is not the deepest point";
         float peak = InteriorPeak(map);
         if (peak is < 3f or > 14f) return $"highest peak {peak:0.0} m (want 3–14 m)";
@@ -88,49 +74,25 @@ public static class LevelValidator
         if (map.Pockets.Count is < 3 or > 5) return $"{map.Pockets.Count} sealed pockets (want 3–5)";
         if (map.Coins.Count is < 6 or > 10) return $"{map.Coins.Count} buried coins (want 6–10)";
 
-        // The stamps: the rock around the start and the exit is exactly the rock the neighbouring levels share.
-        string? stamps = CheckStamps(map);
-        if (stamps is not null) return stamps;
-
         // Reachability and the exit's distance.
         var dist = Distances(map, start.Position);
         foreach (var poi in map.Pois)
             if (float.IsPositiveInfinity(DistanceAt(dist, poi.Position))) return $"the {poi.Kind} cannot be reached from the start";
-        float swim = OpenFraction(map);
-        if (swim < MinOpen) return $"only {swim:P0} of the level is free-swimming water (want ≥ {MinOpen:P0})";
+        // The playable area: the water she can reach.
+        int area = WaterArea(map);
+        if (area is < (int)AreaMin or > (int)AreaMax) return $"{area} m² of water to swim (want {AreaMin:0}–{AreaMax:0} m²)";
         float geodesic = DistanceAt(dist, exit.Position);
         if (geodesic < MinExitGeodesic) return $"the exit is only {geodesic:0} m from the start (want ≥ {MinExitGeodesic:0} m)";
-        return null;
-    }
-
-    /// <summary>How far a pinned height may stray from its stamp.</summary>
-    public const float StampTolerance = 0.1f;
-
-    /// <summary>Every grid point within the pinned radius of the start and the exit (outside the shaft) matches its stamp (or its stamp on the flat seabed).</summary>
-    public static string? CheckStamps(LevelMap map)
-    {
-        var entry = Stamp.Generate(map.EntryStampSeed, map.EntryFromArena);
-        var exit = Stamp.Generate(map.ExitStampSeed, map.HasBoss);
-        foreach (var (stamp, at, name) in new[] { (entry, map.Start.Position, "start"), (exit, map.Exit.Position, "exit") })
-        {
-            float r = Stamp.Pin - 0.5f;
-            for (int y = (int)(at.Y - r); y <= (int)(at.Y + r) + 1; y++)
-            for (int x = (int)(at.X - r); x <= (int)(at.X + r) + 1; x++)
-            {
-                var p = new Vector2(x, y);
-                if (Vector2.Distance(p, at) > r || map.Shaft.Contains(p, 0.5f)) continue;
-                // Its floor may have been lifted to the flat seabed (TopDownGenerator.FlattenSeabed).
-                float want = stamp.HeightAt(p - at), flat = MathF.Max(want, TopDownGenerator.Seabed);
-                if (MathF.Abs(map[x, y] - want) > StampTolerance && MathF.Abs(map[x, y] - flat) > StampTolerance) return $"the {name}'s stamp is off by {map[x, y] - want:0.00} m at ({x}, {y})";
-            }
-        }
         return null;
     }
 
     /// <summary>Water under a path is at least this deep.</summary>
     public const float PathClearance = 1f;
 
-    /// <summary>Samples across every corridor: the seabed lies at least <see cref="PathClearance"/> below the swim level.</summary>
+    /// <summary>How far either side of a tunnel's centre line its floor is checked (its walls are craggy past that).</summary>
+    public const float PathCore = 0.6f;
+
+    /// <summary>Samples along every tunnel's middle: the seabed lies at least <see cref="PathClearance"/> below the swim level.</summary>
     public static string? CheckCorridorFloors(LevelMap map)
     {
         foreach (var c in map.Corridors)
@@ -139,9 +101,9 @@ public static class LevelValidator
             {
                 Vector2 tangent = Geo.Normalize(c.Points[Math.Min(i + 1, c.Points.Count - 1)] - c.Points[Math.Max(i - 1, 0)], Vector2.UnitX);
                 Vector2 nrm = Geo.Perp(tangent);
-                for (float k = -0.95f; k <= 0.951f; k += 0.19f)
+                for (float k = -1f; k <= 1.01f; k += 0.5f)
                 {
-                    Vector2 p = c.Points[i] + nrm * (k * c.HalfWidth);
+                    Vector2 p = c.Points[i] + nrm * (k * MathF.Min(PathCore, c.HalfWidth));
                     if (!InSquare(p)) continue;
                     float h = map.HeightAt(p);
                     if (h > -PathClearance) return $"a {c.Kind} corridor rises to {h:0.00} m at ({p.X:0.0}, {p.Y:0.0})";
@@ -151,73 +113,38 @@ public static class LevelValidator
         return null;
     }
 
-    /// <summary>Share of the square inside the rim that is free-swimming water reachable from the start.</summary>
-    public static float OpenFraction(LevelMap map)
-    {
-        var dist = Distances(map, map.Start.Position);
-        int margin = (int)MathF.Ceiling(LevelMap.RimWidth);
-        int open = 0, total = 0;
-        for (int y = margin; y < N - 1 - margin; y++)
-        for (int x = margin; x < N - 1 - margin; x++)
-        {
-            total++;
-            if (float.IsFinite(dist[y * N + x])) open++;
-        }
-        return open / (float)total;
-    }
+    /// <summary>The playable area rule (docs/CAVEGEN.md): reachable water between these (m²).</summary>
+    public const float AreaMin = CaveLayout.AreaMin, AreaMax = CaveLayout.AreaMax;
 
-    /// <summary>Two routes closer than this (centre lines) leave no ridge between them: they read as one wide lane.</summary>
-    public const float SideBySideGap = 16f;
-    /// <summary>How long two routes may run that close away from where they meet.</summary>
-    public const float MaxSideBySide = 30f;
-
-    /// <summary>
-    /// The longest stretch (metres) of any main corridor that runs alongside another, its centre line within
-    /// <paramref name="near"/> of the other's, away from where they meet (start, rift, plazas).
-    /// </summary>
-    public static float LongestParallelRun(LevelMap map, float near = SideBySideGap)
+    /// <summary>The playable area: grid points under the swim level joined (4-way) to the start's, in m².</summary>
+    public static int WaterArea(LevelMap map)
     {
-        var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
-        float worst = 0f;
-        foreach (var c in mains)
+        const int S = LevelMap.Samples;
+        var (sx, sy) = ((int)MathF.Round(map.Start.Position.X), (int)MathF.Round(map.Start.Position.Y));
+        var seen = new bool[S * S];
+        var stack = new Stack<int>();
+        if (map[sx, sy] > LevelMap.BlockHeight) return 0;
+        stack.Push(sy * S + sx);
+        seen[sy * S + sx] = true;
+        int area = 0;
+        while (stack.Count > 0)
         {
-            float run = 0f;
-            for (int i = 1; i < c.Points.Count; i++)
+            int i = stack.Pop(), x = i % S, y = i / S;
+            area++;
+            foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
             {
-                var p = c.Points[i];
-                // Routes share the stamps' canyons out of the start and into the exit.
-                bool meeting = Vector2.Distance(p, map.Start.Position) < Stamp.Blend + 14f || Vector2.Distance(p, map.Exit.Position) < Stamp.Blend + 14f
-                    || map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 18f);
-                bool beside = !meeting && mains.Any(o => o != c && o.DistanceToCentre(p) < near);
-                run = beside ? run + Vector2.Distance(c.Points[i - 1], p) : 0f;
-                worst = MathF.Max(worst, run);
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= S || ny >= S) continue;
+                int j = ny * S + nx;
+                if (seen[j] || map[nx, ny] > LevelMap.BlockHeight) continue;
+                seen[j] = true;
+                stack.Push(j);
             }
         }
-        return worst;
+        return area;
     }
 
     static bool InSquare(Vector2 p) => p.X >= 0f && p.Y >= 0f && p.X <= LevelMap.Size && p.Y <= LevelMap.Size;
-
-    /// <summary>The highest ground inside the rim.</summary>
-    public const int MinSideCanyons = 2;
-    /// <summary>At least this share of the interior is water reachable from the start.</summary>
-    public const float MinOpen = 0.45f;
-
-    /// <summary>At most this share of the interior (inside the rim) stands above the swim level.</summary>
-    public const float MaxAbove = 0.4f;
-
-    /// <summary>Share of the interior (inside the rim) whose terrain stands above the swim level.</summary>
-    public static float AboveFraction(LevelMap map)
-    {
-        int lo = (int)LevelMap.RimWidth, hi = LevelMap.Size - lo, above = 0, total = 0;
-        for (int y = lo; y <= hi; y++)
-        for (int x = lo; x <= hi; x++)
-        {
-            total++;
-            if (map[x, y] > LevelMap.BlockHeight) above++;
-        }
-        return above / (float)total;
-    }
 
     /// <summary>The lowest grid point inside the rim.</summary>
     public static Vector2 DeepestPoint(LevelMap map)
@@ -235,6 +162,7 @@ public static class LevelValidator
         return at;
     }
 
+    /// <summary>The highest ground inside the rim.</summary>
     public static float InteriorPeak(LevelMap map)
     {
         float best = float.MinValue;

@@ -27,7 +27,7 @@
 | Player | **Clementine**, a one-of-her-kind **absorbent jellyfish** — she absorbs the skills locked inside pearls (§2). |
 | Pearls | **Consumed by the bell** — each pearl adds a permanent glowing pattern to the bell (§2.4, §7). |
 | Shooting | **Bubbles**, mouse-aim (twin-stick optional), ammo visible as orbs under the bell. |
-| Levels | **Static 125×125 m seeded squares**, reef-ringed; free swimming inside; one way down — a blue hole, or on a depth's boss level the Crack in the boss arena; caves as special rooms (§4). |
+| Levels | **Seeded caves of 6,000 m² of water (±15%) in a 140×140 m square**, reef-ringed; free swimming inside; one way down — a blue hole, or on a depth's boss level the Crack in the boss arena; caves as special rooms (§4). |
 | Level gen | **Plan → POIs → 3–4 intersecting paths → topographic reef**; the rock around the start and the hole shared with the levels above and below; mountains never on paths; arches over paths; caves & passes in ridges (§4.1, §4.6). |
 | Occlusion | Canopy layer (arch bodies, cave roofs) **blurs out and fades** while Clementine is underneath (§3, §4.5). |
 | Lighting | **The core visual pillar.** Atmospheric, volumetric, per-depth darkening (§5). |
@@ -296,8 +296,10 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 ## 4. The Level — one seeded square, generated from paths
 
 ### 4.0 The contract
-- **Static footprint: 125×125 m on every level, every depth** (1 m grid).
-  Difficulty comes from content, menace and light — never from map size.
+- **The playable area rule: every level holds 6,000 m² of water she can reach,
+  within 15% (5,100–6,900 m²)**, on every level of every depth. The 140×140 m
+  square (1 m grid) is only its container. Difficulty comes from content,
+  menace and light — never from map size.
 - The square is **ringed by an impassable reef wall** — cliffs and coral
   ramparts; the rim is scenery and collision, never a soft boundary.
 - **A depth is a chain of 4–5 levels** (§8). **Every level has exactly one way
@@ -311,35 +313,51 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 
 ### 4.1 Generation pipeline (one run seed; independent sub-stream per stage)
 
-**The feel:** swimming through a labyrinth of canyon channels — but under
+**The feel:** swimming through a cave of chambers and tunnels — but under
 water. Heights are measured from the **swim level (0)**: Clementine floats on
 it. Anything above 0 is an obstacle; anything at or below 0 is open water she
 floats over, however deep the floor lies beneath.
 
-**Stage 0 — The plan, the stamps, the seabed.** A level's plan is rolled
-from the run seed before anything is shaped (`LevelPlan`): whether its boss
-stands here, which places it holds (Stage 1), its Menace, and the seeds of its
-two **stamps** — the rock around its start (shared with the hole of the level
-above) and the rock around its exit (shared with the start of the level below;
-§4.6). Every attempt starts from a bare seabed at **level −1** (1 m under the
-swim level). Everything else is placed on it, and the reef is raised out of it
-afterwards.
+**The feel has changed with the cave generator (docs/CAVEGEN.md):** a level
+is one organic cave in the manner of Watabou's Cave Generator — craggy
+chambers joined by winding tunnels — rather than a labyrinth of canyons.
 
-**Stage 1 — POIs.** The named places come first, scattered on the bare
-seabed by the rules below.
-- **Start** — on a border band (its centre 24 m in from the edge, so its stamp
-  clears the rim), on a side where one of its stamp's canyons opens toward the
-  exit. On whole metres, like the exit: two levels then sample their shared
-  stamp at the very same points.
-- **Exit** — far from the start, each end's stamp opening toward the other;
-  hard constraint: geodesic distance from start **≥ 90 m**. On most levels a
-  **blue hole**: an 8 m clearing with a 6.5 m shaft in its middle. On the
-  depth's boss level the **boss arena**: a round, level arena at level −1,
-  ~30 m across — room for the fight — with **the Crack** across its middle, a
-  fissure 14–18 m long; the Crack is the shaft.
-- **The level's places** come from its plan. At most **5** besides the start
-  and the exit (the boss arena counts); over the cap they are dropped in the
-  order ambushes, curse den, secret, shell cache (clam rooms stay):
+**Stage 0 — The plan.** A level's plan is rolled from the run seed before
+anything is shaped (`LevelPlan`): whether its boss stands here, which places
+it holds, and its Menace. Levels no longer share rock with the level above or
+below (the old stamps are gone): she lands in the start chamber of a cave of
+its own.
+
+**Stage 1 — The cave (`CaveLayout`).**
+- **The main chain:** the start chamber (9–11 m across its radius; 16 m when
+  she arrives from a boss arena) 26 m in from one side, then up to nine
+  chambers (6–10 m) wandering toward the far side, 16–22 m apart, joined by
+  main tunnels 6–9 m wide (gentle Bézier curves), and last the way down's
+  chamber. Start and way down lie ≥ 78 m apart in a straight line and
+  **≥ 90 m along the water**.
+- **The special rooms** (shop, secret, clam room, curse den) are laid next,
+  while the rock is whole: each a dead-end branch off the chain, its chamber
+  left as rock with rock kept round it (6 m; 8 m for a clam room's deeper
+  chambers; 9 m for the curse den's tunnel), its tunnel — the room's spur —
+  stopping at the room's mouth. Stage 4 hollows the cave out behind it.
+- **Side branches:** chambers (5–9 m) off any chamber, 14–21 m out, on side
+  tunnels 5–7 m wide, a quarter of them closing a loop back into the cave
+  with a second tunnel (4.5–6 m). They keep 3 m of rock from every other
+  chamber and tunnel. They grow until the water covers the area rule (first
+  by estimate, then measured, never past its top); where branches no longer
+  fit, the chambers swell instead.
+- **Rasterised craggy:** the chambers as blobs whose radius wavers (four low
+  harmonics), the tunnels as tubes whose width breathes along them, all
+  roughened by two octaves of noise (±2 m), the tunnels' middles always kept
+  open; two majority-vote passes smooth it, and only water joined to the
+  start is kept.
+- **The places** use the old scatter rules: ≥ 21 m apart (rooms ≥ 25 m),
+  ≥ 40 m from the way down and ≥ 39 m from the start; exactly one sits
+  "early", 39–47 m from the start — the shop if the level has one (usually;
+  to teach the economy), else a clam room, else another place. Open places
+  (ambushes, the shell cache) take a chamber or a tunnel wide enough; the
+  shell cache keeps to the middle of the way (30–70% along start → way down),
+  off the main tunnels, and never sits early.
 
   | Place | Level 1 of a depth | Level 2+ |
   |---|---|---|
@@ -351,84 +369,36 @@ seabed by the rules below.
   | Ambush | 0–2 | 0–2 |
   | Boss arena | — | level 4 at 50%, else level 5 |
 
-  The tutorial (Depth 0, §8) is the exception: its two levels' places are set,
-  not rolled, so that every kind appears in it.
+  At most **5** places besides the start and the exit (the boss arena counts);
+  over the cap they are dropped in the order ambushes, curse den, secret,
+  shell cache (clam rooms stay). The tutorial (Depth 0, §8) sets its places
+  rather than rolling them.
+- **The way down:** on most levels a **blue hole** (a 6.5 m shaft) in a
+  10.5 m chamber; on the depth's boss level the **boss arena**, a round level
+  chamber ~34 m across with **the Crack** across its middle, a fissure
+  14–18 m long.
+- The cave's records: its tunnels are the level's corridors (main, side, and
+  each room's spur), its chambers the plazas.
 
-  The shop, secrets, clam rooms and curse den sit in caves (Stage 4);
-  ambushes and the shell cache are open clearings. The shell cache sits at
-  40–60% of the start→exit axis, preferentially *off* the main corridors
-  (rewards leaving the path).
-- **Scatter rules:** places ≥ 21 m apart (caves ≥ 25 m), ≥ 40 m from the exit
-  and ≥ 39 m from the start (their keep-outs never reach a stamp), and clear of
-  the stamps' canyon lines; exactly one sits "early", 39–47 m from the start —
-  the shop if the level has one (usually; to teach the economy), else a
-  clam room, else another place. The shell cache never sits early (it keeps
-  to the middle of the way), so a level whose only place is the cache has no
-  early place.
-
-**Stage 2 — Route canyons.** 3–4 canyons from start to exit, laid out
-between the places, before any rock exists:
-- Deliberately varied routes: one near-direct, wide arcs left and right, an
-  S-curve through the middle. Canyon width **6–10 m**, floor at the seabed
-  (level −1).
-- **Through the stamps:** each route leaves the start and reaches the exit
-  straight down one of the stamps' canyons (anchored every few metres, so the
-  line stays inside the canyon); routes share those canyons; a stamp's other
-  canyons become dead-end side canyons. Past its canyon a route keeps outside
-  the stamp's rock.
-- Corridors **intersect 1–4 times** at seeded crossing nodes; each crossing
-  opens into a small plaza (~14 m) — natural fight arenas and orientation
-  landmarks.
-- **Routes keep apart:** away from the stamps and their crossings, routes do
-  not run side by side — they spread to leave a ridge between them. Two routes
-  may run closer than 16 m (centre to centre) for at most 30 m; otherwise the
-  layout regenerates.
-- **Places are passed on one side:** a route bends round each place (or each
-  group of places too close together to pass between) on the side its first
-  draft lies on.
-- **Connectivity guarantee:** every POI joins the network via a spur corridor
-  (≤ 24 m). Validation: flood-fill from start must reach every POI and the
-  exit; otherwise regenerate from the next sub-seed (inherited retry rule).
-
-**Stage 3 — The canyon labyrinth.**
-- **Side canyons** (4–6.5 m wide) branch off the route canyons and off each
-  other, turning sharply every 8–16 m, mostly into dead ends; now and then one
-  breaks through into the canyon it meets, closing a loop. Every canyon keeps
-  at least 3.5 m of rock between itself and the next, and none comes near a
-  place or a stamp (caves and stamps keep their rock). At least 2 per level;
-  they grow until about 63% of the interior is open.
-- **Walls** rise out of the seabed everywhere else: from the edge of the open
-  ground they climb over 3.5 m with the reef prototype's cosine brush to a
-  top 4–14 m high, taken from the prototype's terrain (`reef_generator.html`,
-  reproduced exactly for the seed text), so plateaus roll rather than lie flat.
-- **Most walls slope** (`SoftenSlopes`): once the reef is raised, the rock
-  above the swim level is held under a slope rising from the water's edge,
-  between 37° and 51° and varying slowly over the level. A face leans back
-  and a narrow ridge rounds over lower, and two light smoothing passes round
-  off the facets. About a sixth of the walls stay sheer cliffs, for variety.
-  Only rock above the swim level is lowered, never below it, so the water she
-  swims stays the same (its edge moves by a fraction of a metre). The rock
-  under and beside a roof (arches, caves, overhangs) keeps its height, since
-  it carries the roof. The stamps lean their own faces back the same way
-  (about 45° from the wall's foot), so both levels that share one still match.
-- **The stamps are pinned in:** exactly within 14 m of the start and the exit,
-  blending into the level's own rock by 20 m (the blend never raises the
-  level's open water; the rim stays impassable through it). Pinned again after
-  the caves are raised (Stage 4): the stamp wins.
-- **At most 40%** stands above the swim level: where the walls would cover
-  more, the cores of the biggest wall masses (farthest from any canyon, then
-  lowest on the prototype's terrain) sink into shallow plateaus just under the
-  swim level, so the canyon walls themselves stay; a stamp's rock counts but
-  never sinks. At least 45% of the interior is water reachable from the start.
-- **Hard rule: nothing above 0 on a path** — the canyon floors lie at level −1
-  to −1.2 (flat: every deeper floor is lifted to −1.2); the rift's arena and the shaft alone lie deeper.
+**Stage 2 — The rock.**
+- Open water lies on the seabed at level −1 to −1.6 (the boss arena level at
+  −1); the rock climbs from the water's edge (0.4 m, then 1.6 m a metre) to a
+  top 4–14 m high, taken from the reef prototype's terrain
+  (`reef_generator.html`, reproduced exactly for the seed text), so plateaus
+  roll rather than lie flat. The impassable rim rises out of it.
+- **Most walls slope** (`SoftenSlopes`): the rock above the swim level is held
+  under a slope rising from the water's edge, between 37° and 51° and varying
+  slowly over the level; about a sixth of the walls stay sheer cliffs. Only
+  rock above the swim level is lowered, so the water she swims stays the same.
+  The rock under and beside a roof (arches, caves, overhangs) keeps its height.
+- **Hard rule: nothing above 0 on a tunnel's middle** — floors are flattened
+  to −1.2; the rift's arena and the shaft alone lie deeper.
 - **The shaft is the only deep water:** in the exit's floor the floor gives way
   to the next level's seabed, **9 m under the swim level** (the next level's
   swim plane lies 8 m below this one), over a rounded lip. No trenches.
-- The impassable rim rises out of the walls with the same brush.
 
 **Stage 4 — Arches, caves, passes:**
-- **Arches ×0–5 (where flanks allow; none in a stamp):** peak pairs flanking a
+- **Arches ×0–5 (where flanks allow; none near the start or the way down):** peak pairs flanking a
   corridor get arch spans (10–20 m) across the path. Swimming under one triggers the canopy fade (§3). Where
   no flank stands high enough, a pair of short rock ridges is raised either
   side of a corridor to carry one.
@@ -449,7 +419,7 @@ between the places, before any rock exists:
 
 **Stage 5 — Reef & decoration from the map:**
 - **The seabed is flat:** once the reef is raised, every floor deeper than
-  **−1.2** (inside the stamps too, on both levels alike) is lifted to it, so no hollows or rolling
+  **−1.2** is lifted to it, so no hollows or rolling
   floor draw the eye; only the walls' feet slope. The shaft and the rift's
   arena keep their depth. On it, sparse on purpose so play stays readable:
   seagrass meadows and lone sponge-like coral heads (bommies), nothing else.
@@ -547,14 +517,13 @@ Running after the checks, it never changes what she can reach.
 
 | Knob | Value | Why |
 |---|---|---|
-| Footprint | **125×125 m, static** | a 6–7-minute explore budget per level |
+| Playable area | **6,000 m² of reachable water ±15%**, in a 140×140 m square | a 6–7-minute explore budget per level |
 | View on screen | ~30×22 m | a corridor reads at a glance |
-| Corridors | 6–10 m wide, under open water | rush speed; nothing blocks |
-| Crossing plazas | ~14 m | natural fight arenas |
+| Tunnels | main 6–9 m, side 4.5–7 m, craggy | rush speed; nothing blocks |
+| Chambers | 5–10 m radius | natural fight arenas |
 | Peaks | up to 14 m | occlude and cast shade, never block |
 | The shaft | blue hole 6.5 m; the Crack 14–18 m; floor −9 m | the way down |
 | Level drop | **8 m** swim plane to swim plane | a real dive that still reads through the fog (§4.6) |
-| Stamps | pinned 14 m, blended out by 20 m | the cliffs around the hole carry on below |
 | Arches | ×0–5, span 10–20 m | canopy-fade showcase |
 | Passes | 3–5 m cuts | network braiding |
 | Boss arena | ~30 m disc | room for 2D bullet rings |
@@ -566,26 +535,21 @@ Rush math: exit ≥ 90 m away by swimming → 20–25 s pure swim at cruise (les
 with jet bursts), plus partial fights and maybe one cave. A depth is 4–5
 levels: ~5–7 min rushed, ~30 min explored.
 
-### 4.6 The way down — holes, stamps and the dive
+### 4.6 The way down — holes and the dive
 - **One way down per level:** a blue hole, or the Crack on the boss level
   (Stage 1). Over it the floor gives way to a shaft; through it she sees the
   level below, through plain water (nothing marks what lies there).
 - **The level below lies 8 m down** (swim plane to swim plane), moved so its
-  start sits right under the hole. Map coordinates need not match: only the
-  rock around the hole does.
-- **The stamp:** the rock around a hole is a patch of terrain generated alone
-  from its own seed — a clearing (the hole, the start) with 2–3 canyons leaving
-  it, or for the Crack the arena's level floor. It is pinned into both levels at
-  the same height above each level's swim plane: the mountain to the left of the
-  hole and the hill below it are the same mountain and hill around her when she
-  arrives, one level lower. Under the hole the level below has a floor (its
-  hole is ≥ 90 m from its start, never in view down the shaft), so she can never
-  cross two levels at once.
-- **Each level depends only on seeds** (the run seed, its id, its two stamp
-  seeds): any level can be generated on its own. Two levels live at once — the
+  start sits right under the hole. Map coordinates need not match, and the rock
+  does not either (the old shared stamps are dropped): she lands in the start
+  chamber of the level's own cave. Under the hole the level below has a floor
+  (its hole is ≥ 90 m from its start, never in view down the shaft), so she can
+  never cross two levels at once.
+- **Each level depends only on seeds** (the run seed and its id): any level
+  can be generated on its own. Two levels live at once — the
   current one and the one below its hole. The one below is made off the main
   thread as soon as she arrives (on one thread, so the game keeps its frame
-  rate), shown under the hole, and drawn only within the stamp's ring through
+  rate), shown under the hole, and drawn only within a 14 m ring through
   the shaft; the level she leaves is freed when she has dived. Continue
   regenerates only the saved level and the one below.
 - **The dive: Shift** over the shaft. Not in an active battle — while a

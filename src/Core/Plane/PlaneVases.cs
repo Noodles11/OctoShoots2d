@@ -15,6 +15,8 @@ public static class VaseTuning
     public const float GroupSpacing = 12f;
     /// <summary>They stand where the seabed is this deep (so they rise into her swim plane), within WallReach of rock.</summary>
     public const float FloorMin = -1.6f, FloorMax = -0.3f, WallReach = 3f;
+    /// <summary>Most of the water round them stays open this far out: they stand in chambers, never plugging a narrow tunnel.</summary>
+    public const float OpenReach = 4.5f;
     /// <summary>Kept clear of the start, of the way down, and of the places.</summary>
     public const float StartClear = 20f, PlaceClear = 4f;
     /// <summary>A pot's footprint on the swim plane: it blocks swimmers and shots like rock.</summary>
@@ -99,7 +101,20 @@ public sealed partial class PlaneWorld
             if (Map.Shaft.Contains(p)) return false;
             foreach (var poi in Map.Pois)
                 if (poi.Kind != PoiKind.Start && Vector2.Distance(p, poi.Position) < poi.Radius + VaseTuning.PlaceClear) return false;
+            if (!Wide(p)) return false;
             return Mobs.All(m => Vector2.Distance(m.Home, p) > 1.5f);
+        }
+
+        // By the wall of a chamber, never in a narrow tunnel (where a group could plug the way).
+        bool Wide(Vector2 p)
+        {
+            int open = 0;
+            for (int i = 0; i < 12; i++)
+            {
+                float a = i * MathF.Tau / 12f;
+                if (Map.IsOpen(p + new Vector2(MathF.Cos(a), MathF.Sin(a)) * VaseTuning.OpenReach)) open++;
+            }
+            return open >= 8;
         }
 
         bool NearWall(Vector2 p)

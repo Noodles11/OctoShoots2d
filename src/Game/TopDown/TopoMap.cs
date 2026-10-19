@@ -74,10 +74,11 @@ public partial class TopoMap : Control
     public void SetMap(LevelMap map, IEnumerable<int>? sealedCaves = null)
     {
         _map = map;
-        var image = Image.CreateEmpty(LevelMap.Samples, LevelMap.Samples, false, Image.Format.Rf);
-        for (int y = 0; y < LevelMap.Samples; y++)
-        for (int x = 0; x < LevelMap.Samples; x++)
-            image.SetPixel(x, y, new Color(float.IsNaN(map.LidAt(x, y)) ? map[x, y] : map.LidAt(x, y), 0f, 0f));
+        const int N = LevelMap.Samples;
+        var shown = new float[N * N];
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+            shown[y * N + x] = float.IsNaN(map.LidAt(x, y)) ? map[x, y] : map.LidAt(x, y);
         if (sealedCaves is not null)
             foreach (int c in sealedCaves)
             {
@@ -94,9 +95,26 @@ public partial class TopoMap : Control
                         hidden |= System.Numerics.Vector2.Distance(p, centre) < radius + 2.5f;
                     if (cave.Chambers.Count > 0) hidden |= Geo.SegmentDistance(p, cave.Mouth, cave.Chambers[0].Center) < 3.5f;
                     for (int i = 1; i < cave.Chambers.Count; i++) hidden |= Geo.SegmentDistance(p, cave.Chambers[i - 1].Center, cave.Chambers[i].Center) < 3.5f;
-                    if (hidden) image.SetPixel(x, y, new Color(Mathf.Max(image.GetPixel(x, y).R, LevelMap.BlockHeight + 3f), 0f, 0f));
+                    if (hidden) shown[y * N + x] = Mathf.Max(shown[y * N + x], LevelMap.BlockHeight + 3f);
                 }
             }
+        // The chart's channels: the height, and how far into the rock and into the water each point lies (the hatching
+        // band and the walls' shadow).
+        var water = shown.Select(h => h <= LevelMap.BlockHeight).ToArray();
+        var intoRock = CaveLayout.Chamfer(water, true);
+        var intoWater = CaveLayout.Chamfer(water, false);
+        var image = Image.CreateEmpty(N, N, false, Image.Format.Rgbf);
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            int i = y * N + x;
+            image.SetPixel(x, y, new Color(shown[i], Mathf.Min(intoRock[i], 64f), Mathf.Min(intoWater[i], 64f)));
+        }
+        // The depth's own water, and its reef rock in a stone tone (never paper white).
+        var look = ReefLook.For(map.Depth);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("water_col"), look.WaterShallow);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("deep_col"), look.Murk);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("rock_col"), RockTone(look));
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("heights"), ImageTexture.CreateFromImage(image));
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("samples"), (float)LevelMap.Samples);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("shore"), LevelMap.BlockHeight);
@@ -104,6 +122,9 @@ public partial class TopoMap : Control
         Extremes(map, _soundings, 6f, 18f, -1f);
         QueueRedraw();
     }
+
+    /// <summary>The chart's rock: the depth's reef rock, greyed toward stone and a shade darker, so the walls read as rock.</summary>
+    public static Color RockTone(ReefLook look) => look.Rock.Lerp(new Color(0.5f, 0.5f, 0.48f), 0.45f) * new Color(0.9f, 0.9f, 0.9f, 1f);
 
     /// <summary>
     /// Summits worth a cross (<paramref name="sign"/> +1: local maxima of at least <paramref name="min"/> m) or soundings
@@ -152,6 +173,11 @@ public partial class TopoMap : Control
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("view_size"), Size / PixelsPerMetre);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("interval"), ContourInterval);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("edges_only"), EdgesOnly);
+        // The fineliner and the hatching band in screen pixels, a little bolder on the larger Tab map.
+        float ppm = PixelsPerMetre;
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ppm"), ppm);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("line_px"), ppm > 3f ? 2.8f : 2.2f);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("band_px"), ppm > 4f ? Mathf.Clamp(ppm * 3.2f, 14f, 26f) : 16f);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_fog"), Fog is not null);
         if (Fog is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fog"), Fog.Texture);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mud"), Mud);

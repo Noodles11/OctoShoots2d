@@ -138,26 +138,19 @@ public class TopDownGenTests
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void TheNextLevelStartsInTheRockAroundTheHole(string seed)
+    public void TheNextLevelStartsInOpenWater(string seed)
     {
         var code = SeedCode.Parse(seed);
         foreach (var id in new[] { LevelId.First, new LevelId(1, LevelPlan.Tutorial, 2), BossLevel(seed) })
         {
-            var above = Map(seed, id);
             var below = Map(seed, LevelPlan.NextOf(code, id));
-            int matched = 0;
-            for (float y = -Stamp.Pin + 0.5f; y <= Stamp.Pin - 0.5f; y += 1f)
-            for (float x = -Stamp.Pin + 0.5f; x <= Stamp.Pin - 0.5f; x += 1f)
+            // She lands in the start's chamber: open water all round, and a floor under her (no shaft).
+            for (int i = 0; i < 16; i++)
             {
-                var off = new Vector2(x, y);
-                if (off.Length() > Stamp.Pin - 1f || above.Shaft.Contains(above.Exit.Position + off, 1f)) continue;
-                float a = above.HeightAt(above.Exit.Position + off), b = below.HeightAt(below.Start.Position + off);
-                Assert.True(MathF.Abs(a - b) <= 0.15f, $"{id}: {a:0.00} above vs {b:0.00} below at {off}");
-                matched++;
+                float a = i * MathF.Tau / 16f;
+                Assert.True(below.IsOpen(below.Start.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 4f));
             }
-            Assert.True(matched > 300);
-            // Below the hole the next level has a floor: no shaft there.
-            Assert.False(below.Shaft.Contains(below.Start.Position, Stamp.Pin));
+            Assert.False(below.Shaft.Contains(below.Start.Position, 20f));
         }
     }
 
@@ -223,28 +216,26 @@ public class TopDownGenTests
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void MostOfTheLevelIsFreeSwimmingWater(string seed)
+    public void ThePlayableAreaKeepsTheAreaRule(string seed)
     {
-        float open = LevelValidator.OpenFraction(Map(seed));
-        Assert.True(open >= LevelValidator.MinOpen, $"only {open:P0} of the level is swimmable");
+        foreach (var map in new[] { Map(seed), Map(seed, BossLevel(seed)) })
+        {
+            int area = LevelValidator.WaterArea(map);
+            _out.WriteLine($"{seed} {map.Id}: {area} m² of water, attempt {map.Attempt + 1}");
+            Assert.InRange(area, LevelValidator.AreaMin, LevelValidator.AreaMax);
+        }
     }
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void RoutesKeepARidgeBetweenThemAwayFromWhereTheyMeet(string seed)
-    {
-        float run = LevelValidator.LongestParallelRun(Map(seed));
-        Assert.True(run <= LevelValidator.MaxSideBySide, $"two routes run within {LevelValidator.SideBySideGap} m of each other for {run:0} m");
-    }
-
-    [Theory]
-    [MemberData(nameof(Seeds))]
-    public void SideCanyonsMakeALabyrinth(string seed)
+    public void SideTunnelsMakeALabyrinth(string seed)
     {
         var map = Map(seed);
         var sides = map.Corridors.Where(c => c.Kind == CorridorKind.Side).ToList();
-        Assert.True(sides.Count >= LevelValidator.MinSideCanyons, $"{sides.Count} side canyons");
-        Assert.All(sides, c => Assert.InRange(c.Width, 4f, 6.5f));
+        Assert.True(sides.Count >= 3, $"{sides.Count} side tunnels");
+        Assert.All(sides, c => Assert.InRange(c.Width, 4.5f, 7f));
+        // Some side branches close a loop back into the cave.
+        Assert.True(map.Plazas.Count >= 6, $"{map.Plazas.Count} chambers");
     }
 
     [Theory]
@@ -278,12 +269,13 @@ public class TopDownGenTests
     public void ThePathNetworkKeepsItsShape(string seed)
     {
         var map = Map(seed);
+        // The main chain: tunnels from chamber to chamber, from the start to the way down.
         var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
-        Assert.InRange(mains.Count, 3, 5);
-        Assert.All(mains, c => Assert.InRange(c.Width, 6f, 10f));
-        Assert.All(mains, c => Assert.Equal(map.Start.Position, c.Points[0]));
-        Assert.All(mains, c => Assert.Equal(map.Exit.Position, c.Points[^1]));
-        Assert.InRange(map.Plazas.Count, 1, 4);
+        Assert.InRange(mains.Count, 2, 10);
+        Assert.All(mains, c => Assert.InRange(c.Width, 6f, 9f));
+        Assert.Equal(map.Start.Position, mains[0].Points[0]);
+        Assert.Equal(map.Exit.Position, mains[^1].Points[^1]);
+        for (int i = 1; i < mains.Count; i++) Assert.Equal(mains[i - 1].Points[^1], mains[i].Points[0]);
         Assert.All(map.Corridors.Where(c => c.Kind == CorridorKind.Spur), c => Assert.True(c.Length <= LevelValidator.MaxSpur, $"spur {c.Length:0.0} m"));
         Assert.All(map.Corridors.Where(c => c.Kind == CorridorKind.Pass), c => Assert.InRange(c.Width, 3f, 5f));
     }
@@ -309,7 +301,7 @@ public class TopDownGenTests
     public void ArchesSpanTheirCorridors(string seed)
     {
         var map = Map(seed);
-        // Where flanks allow (a smaller square has fewer, and the stamps keep theirs bare).
+        // Where flanks allow.
         var arches = map.Canopies.Where(c => c.Kind == CanopyKind.Arch).ToList();
         Assert.InRange(arches.Count, 0, 5);
         foreach (var arch in arches)
@@ -371,7 +363,7 @@ public class TopDownGenTests
                     Assert.True(Vector2.Distance(others[i].Position, others[j].Position) >= 21f);
             }
             if (others.Count == 0) continue;
-            // The first place she meets sits just past the start's stamp (unless the shell cache is the only place).
+            // The first place she meets sits just past the start (unless the shell cache is the only place).
             if (others.Any(p => p.Kind != PoiKind.ShellCache))
             {
                 var early = Assert.Single(others, p => p.Early);
