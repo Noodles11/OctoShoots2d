@@ -6,8 +6,8 @@ using System.Numerics;
 namespace OctoShoots.Core.Plane;
 
 /// <summary>
-/// Blotters (docs/CORRUPTION.md): giant ink slugs that spread the corruption. Each one creeps toward clean floor and
-/// smears ink over the ground it crawls across. They are slow but take a lot of light to cleanse, and murklings bud
+/// Blotters (docs/CORRUPTION.md): hermit crabs the corruption took over, a tiny crab under a huge shell of ink, that
+/// spread the corruption. Each one creeps toward clean floor and smears ink over the ground it crawls across. They are slow but take a lot of light to cleanse, and murklings bud
 /// round them as guards. A few wake with the level; more may be born out of thick corruption as it goes on.
 /// </summary>
 public static class BlotterTuning
@@ -17,8 +17,8 @@ public static class BlotterTuning
     public const int Max = 6;
     /// <summary>Its corruption meter: 100 in the Shallows (+25% per Menace); it regrows slowly once Delay passes without a hit.</summary>
     public const float Meter = 100f, MeterPerMenace = 0.25f, Regen = 5f, Delay = 2f;
-    /// <summary>Its body (for hits and collision), its creep (m/s, more with Menace) and how quickly it turns.</summary>
-    public const float Radius = 1.1f, Speed = 1.2f, SpeedPerMenace = 0.2f, Turn = 1.6f;
+    /// <summary>Its footprint against rock, its creep (m/s, more with Menace) and how quickly it turns.</summary>
+    public const float Radius = 1.4f, Speed = 1.2f, SpeedPerMenace = 0.2f, Turn = 1.6f;
     /// <summary>It smears the ground under it this wide toward Ink, by Smear a second at its middle.</summary>
     public const float SmearRadius = 2.6f, Ink = 0.9f, Smear = 1.6f;
     /// <summary>Touching her corrupts her (with the usual hit grace) and shoves her off.</summary>
@@ -38,13 +38,12 @@ public static class BlotterTuning
     public const float FromStart = 25f, Spacing = 15f;
     /// <summary>Cleansed, it bursts: its light washes this wide.</summary>
     public const float BurstRadius = 5f;
-    /// <summary>Its body: Segments mounds, Spacing metres apart along its trail, tapering from SegmentRadius; any of them takes hits.</summary>
-    public const int Segments = 6;
-    public const float SegmentSpacing = 0.75f, SegmentRadius = 1.1f, Taper = 0.12f;
+    /// <summary>Its shell: one round body this wide that takes her hits and touches her (the crab under it is too small to matter).</summary>
+    public const float ShellRadius = 1.9f;
     /// <summary>Touching her shoves her off this hard (m/s).</summary>
     public const float ContactKnockback = 7f;
     /// <summary>
-    /// Corruption bombs: every BombEvery seconds it spits one up from its mouth. It flies BombSeconds in an arc and lands
+    /// Corruption bombs: every BombEvery seconds its shell pushes one out of its top. It flies BombSeconds in an arc and lands
     /// BombNear–BombFar metres off (at a random spot, or, while it is under attack, where she is), splashing corruption
     /// over SplashRadius and, if she is within it, corrupting her for BombDamage and throwing her back.
     /// </summary>
@@ -54,7 +53,7 @@ public static class BlotterTuning
     public const float Provoked = 3f;
 }
 
-/// <summary>A Blotter's corruption bomb: arcing from its mouth to where it will land.</summary>
+/// <summary>A Blotter's corruption bomb: arcing from the top of its shell to where it will land.</summary>
 public sealed class CorruptionBomb
 {
     public Vector2 From, To;
@@ -66,7 +65,7 @@ public sealed class CorruptionBomb
     public Vector2 Position => Vector2.Lerp(From, To, T);
 }
 
-/// <summary>A Blotter: a giant ink slug creeping toward clean floor and corrupting it.</summary>
+/// <summary>A Blotter: a corrupted hermit crab under a huge shell of ink, creeping toward clean floor and corrupting it.</summary>
 public sealed class Blotter
 {
     public Vector2 Position, Velocity, Target;
@@ -75,41 +74,10 @@ public sealed class Blotter
     public bool Alive = true;
     public CorruptionMeter Corruption = new(BlotterTuning.Meter, BlotterTuning.Regen, BlotterTuning.Delay);
     public float Seeking, StuckFor, GuardTimer, Seed, BombTimer, SinceStruck = 99f;
-    /// <summary>Where its head has been, newest first (a point every 0.25 m): its body follows it.</summary>
-    public readonly List<Vector2> Trail = new();
 
-    /// <summary>The middle of body segment i (0 the head) and its radius.</summary>
-    public (Vector2 At, float Radius) Segment(int i)
-    {
-        float r = BlotterTuning.SegmentRadius * (i == 0 ? 0.85f : 1f - BlotterTuning.Taper * (i - 1));
-        float distance = i * BlotterTuning.SegmentSpacing;
-        for (int k = 1; k < Trail.Count; k++)
-        {
-            float seg = Vector2.Distance(Trail[k - 1], Trail[k]);
-            if (distance <= seg) return (Trail[k - 1] + (Trail[k] - Trail[k - 1]) * (seg > 1e-5f ? distance / seg : 0f), r);
-            distance -= seg;
-        }
-        return (Trail.Count > 0 ? Trail[^1] : Position, r);
-    }
-
-    /// <summary>Whether a circle touches any part of its body.</summary>
-    public bool Touches(Vector2 at, float radius)
-    {
-        for (int i = 0; i < BlotterTuning.Segments; i++)
-        {
-            var (c, r) = Segment(i);
-            if (Vector2.DistanceSquared(c, at) < (r + radius) * (r + radius)) return true;
-        }
-        return false;
-    }
-
-    /// <summary>Records where its head is now.</summary>
-    public void Track()
-    {
-        if (Trail.Count == 0 || Vector2.Distance(Trail[0], Position) >= 0.25f) Trail.Insert(0, Position);
-        else Trail[0] = Position;
-        while (Trail.Count > BlotterTuning.Segments * 4 + 2) Trail.RemoveAt(Trail.Count - 1);
-    }
+    /// <summary>Whether a circle touches its shell.</summary>
+    public bool Touches(Vector2 at, float radius) =>
+        Vector2.DistanceSquared(Position, at) < (BlotterTuning.ShellRadius + radius) * (BlotterTuning.ShellRadius + radius);
     /// <summary>Rising out of the ground (counting down; above zero it is not yet out), out of RiseTotal.</summary>
     public float Rise, RiseTotal;
     /// <summary>The ink it is drinking as it rises (one born during the level), and the ink it is made of (freed when it bursts).</summary>
@@ -169,8 +137,6 @@ public sealed partial class PlaneWorld
         float a = _blightRng.Range(0f, MathF.Tau);
         b.Heading = new Vector2(MathF.Cos(a), MathF.Sin(a));
         b.BombTimer = _blightRng.Range(1.5f, BlotterTuning.BombEvery);
-        // Laid out behind its head, so it has a whole body from the start.
-        for (int i = 0; i < BlotterTuning.Segments * 4; i++) b.Trail.Add(at - b.Heading * (i * 0.25f));
         return b;
     }
 
@@ -229,35 +195,31 @@ public sealed partial class PlaneWorld
                 float c = MathF.Cos(turn), s = MathF.Sin(turn);
                 b.Heading = SafeNormalize(new Vector2(b.Heading.X * c - b.Heading.Y * s, b.Heading.X * s + b.Heading.Y * c));
             }
-            // A slug's gait: it surges and eases.
+            // A crab's gait under its load: it surges and eases.
             float gait = 0.7f + 0.3f * MathF.Sin(Time * 2.2f + b.Seed);
             float facing = MathF.Max(0f, Vector2.Dot(b.Heading, want));
             b.Velocity = b.Heading * speed * gait * (0.25f + 0.75f * facing);
             var before = b.Position;
             Move(ref b.Position, ref b.Velocity, BlotterTuning.Radius, report: false, barrier: ArenaBarrier.Outside);
-            b.Track();
             float moved = Vector2.Distance(before, b.Position);
             b.StuckFor = moved < speed * Dt * 0.2f ? b.StuckFor + Dt : 0f;
             // Its trail: ink smeared over the ground beneath it.
             field.Spread(b.Position, BlotterTuning.SmearRadius, BlotterTuning.Ink, BlotterTuning.Smear * Dt);
 
-            // Touching any of it corrupts her and shoves her off.
-            for (int i = 0; i < BlotterTuning.Segments; i++)
+            // Touching its shell corrupts her and shoves her off.
+            if (b.Touches(p.Position, Radius))
             {
-                var (c, r) = b.Segment(i);
-                if (Vector2.Distance(c, p.Position) >= r + Radius) continue;
-                var away = SafeNormalize(p.Position - c);
+                var away = SafeNormalize(p.Position - b.Position);
                 if (HurtPlayer(BlotterTuning.ContactDamage, away, DamageSource.Blotter)) p.Velocity += away * BlotterTuning.ContactKnockback;
-                break;
             }
 
-            // Its bombs: up from its mouth, at her while she is attacking it, else anywhere near.
+            // Its bombs: pushed up out of the top of its shell, at her while she is attacking it, else anywhere near.
             b.SinceStruck += Dt;
             b.BombTimer -= Dt;
             if (b.BombTimer <= 0f)
             {
                 b.BombTimer = BlotterTuning.BombEvery;
-                var mouth = b.Position + b.Heading * BlotterTuning.SegmentRadius * 0.8f;
+                var mouth = b.Position;
                 Vector2 to;
                 if (b.SinceStruck < BlotterTuning.Provoked && Vector2.Distance(p.Position, mouth) < BlotterTuning.BombReach) to = p.Position;
                 else

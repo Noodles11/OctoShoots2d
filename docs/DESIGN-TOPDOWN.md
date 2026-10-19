@@ -1066,9 +1066,10 @@ at mist distance (inherited fade rule).
    15 m of her (a third of its radius, with a soft 10 m gradient centred on that edge), and it stays revealed for the
    level. A place shows on the maps (minimap and Tab) only once she has been there, always as its emblem (never a
    bare dot): a badge in its landmark colour with its sign — the start a pennant, the shop a "$", a clam room a
-   pearl in an open clam, the shell cache the HUD's shell, the curse den a spider, a secret a "?", an ambush a "!" —
+   pearl in an open clam, the shell cache the HUD's shell, the curse den a spider, a secret a "?" —
    and the way down the evacuation sign (a white figure running out of a door, on a green plate). The Tab map's
-   legend shows the same emblems (the Tab map draws them half again as large). There are no hints for places not yet found. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
+   legend shows the same emblems (the Tab map draws them half again as large). There are no hints for places not yet found. The maps never show enemies: no creatures, and no ambush (it
+   springs unannounced, even once she has been there), nor the corruption. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
    names it under the minimap (all but the start); there are no beacons.
 3. **Ninja respawn:** §6.3 carries the ninja over "intact (… nest respawn)"; the inherited Ink Deep rules
    (DESIGN-2D §1, DEPTH1-BESTIARY §8) free a defeated ninja into its school for good, and the current Core does that.

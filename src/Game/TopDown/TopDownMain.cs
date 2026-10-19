@@ -947,16 +947,12 @@ public partial class TopDownMain : Node3D
             _corruptTex = null;
             _level.SetCorruption(null);
             _corruption.Show(null, null);
-            _minimap.SetCorruption(null);
-            _fullMap.Corruption = null;
             _blight.Show(_world);
             _springs.Show(_world);
             return;
         }
         _corruptTex = new CorruptionTexture(field);
         _level.SetCorruption(_corruptTex.Texture);
-        _minimap.SetCorruption(_corruptTex.Texture);
-        _fullMap.Corruption = _corruptTex.Texture;
         _blight.Show(_world);
         _springs.Show(_world);
         // The shards were laid out already if she dived here; otherwise they are laid out now, off the main thread.
@@ -992,8 +988,8 @@ public partial class TopDownMain : Node3D
         _blight.Sync(_world, dt, _camera.Camera);
         _springs.Sync(dt, _camera.Camera);
         _cleanse.Track(_world, dt);
-        MinimapView.FillBlight(_fullMap, _world);
-        _minimap.SetBlight(_world);
+        MinimapView.FillSprings(_fullMap, _world);
+        _minimap.SetSprings(_world);
     }
 
     /// <summary>Verification: start somewhere interesting.</summary>
@@ -1028,6 +1024,8 @@ public partial class TopDownMain : Node3D
             "lashjaw" => _world.Lashjaws.Select(l => (System.Numerics.Vector2?)(l.Position + l.Facing * 6f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "warden" => _world.Inkwardens.Select(w => (System.Numerics.Vector2?)(w.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "thump" => _world.Thumpsquirts.Select(t => (System.Numerics.Vector2?)(t.Position + new System.Numerics.Vector2(0f, 8f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // A few metres south of the level's first Blotter.
+            "blotter" => _world.Blotters.Select(b => (System.Numerics.Vector2?)(b.Position + new System.Numerics.Vector2(0f, 3.4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1058,7 +1056,7 @@ public partial class TopDownMain : Node3D
     Vector3 Focus(float alpha)
     {
         var p = System.Numerics.Vector2.Lerp(_world.Player.PrevPosition, _world.Player.Position, alpha);
-        // Verification: `--dbg-follow=mob|fish` keeps the camera on the nearest pufferling instead, and
+        // Verification: `--dbg-follow=mob|fish|blotter` keeps the camera on the nearest pufferling (or Blotter) instead, and
         // `--dbg-follow=clownfish|bluetang|chromis` on the nearest reef fish of that kind.
         if (_follow is not null)
         {
@@ -1067,6 +1065,7 @@ public partial class TopDownMain : Node3D
             {
                 "fish" => _world.Fish.OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
                 "boss" => _world.Boss is { } b ? b.Position : null,
+                "blotter" => _world.Blotters.OrderBy(b => System.Numerics.Vector2.Distance(b.Position, from)).Select(b => (System.Numerics.Vector2?)b.Position).FirstOrDefault(),
                 "mob" => _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault(),
                 _ => _world.ReefFish.Where(f => f.Kind.ToString().Equals(_follow, StringComparison.OrdinalIgnoreCase))
                     .OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
@@ -2077,10 +2076,6 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.MurkShotLanded:
                 _sfx.PlayPitched("merge", 0.7f, -16f);
                 break;
-            case PlaneEventType.CacheRevealed:
-                _sfx.PlayPitched("merge", e.Size > 0f ? 1.5f : 1.2f, -6f);
-                _haptics.Pulse(0.2f, 0.1f, 0.12f);
-                break;
             case PlaneEventType.BlotterBorn:
                 _sfx.PlayPitched("merge", 0.5f, -6f);
                 break;
@@ -2481,6 +2476,7 @@ public partial class TopDownMain : Node3D
               // Else the nearest corrupted creature (not the wardens: what they guard).
               ?? _world.Murklings.Where(m => m.Alive && !m.Budding).Select(m => m.Position)
                   .Concat(_world.Blightroots.Where(r => r.Alive).Select(r => r.Position))
+                  .Concat(_world.Blotters.Where(b => b.Alive && b.Rise <= 0f).Select(b => b.Position))
                   .Concat(_world.Thumpsquirts.Where(t => t.Alive).Select(t => t.Position))
                   .Concat(_world.Lashjaws.Where(l => l.Alive).Select(l => l.Position))
                   .Where(q => System.Numerics.Vector2.Distance(q, from) < 14f)

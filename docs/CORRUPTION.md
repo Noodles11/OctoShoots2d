@@ -80,33 +80,42 @@ which is why the ground round it is the level's main source of ink. Freeing it b
 
 ## Blotters (`Blotter`)
 
-Giant ink slugs that spread the corruption (`PlaneBlotters.cs`).
+Hermit crabs the corruption took over: a small crab under a huge shell of ink, spreading the corruption
+(`PlaneBlotters.cs`).
 
 - **Waking:** 2 + 1 per Menace (at most 6 alive) wake with the level. They start on thick ground (≥ 0.6), at least
   25 m from her start and 15 m apart, out of the arena and the shaft.
 - **Born from corruption:** every 20 s there is a 5% chance (+3% per Menace) that one rises out of thick ground at
   least 18 m from her, while the level holds ink enough for it. It takes 1.5 s, with a dark ripple, and drinks six
   murklings' worth of ink (21.6) as it rises, sucked into it from the nearest ink. Freed, that ink is cleansed.
-- **Creeping:** 1.2 m/s (+0.2 per Menace), with a surging slug gait. It turns slowly (1.6 rad/s) toward clean floor
+- **Creeping:** 1.2 m/s (+0.2 per Menace), surging and easing under its load. It turns slowly (1.6 rad/s) toward clean floor
   in sight 4–20 m off, the nearer the better, avoiding safe places and the arena. It re-picks a target on arrival,
   after 10 s, when stuck for 2.5 s, or once its target has been corrupted.
 - **Spreading:** it smears ink over a 2.6 m disc beneath it, toward density 0.9.
 - **Tough:** its corruption meter is 100 (+25% per Menace), about ten default shots in the Shallows. It regrows
-  slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, every mound of it pops (see evaporation
-  below) and it cleanses a 5 m disc.
-- **Body:** six segments along its trail, tapering from 1.1 m (`Blotter.Segment`). Every segment takes hits and hurts
-  on contact; the view draws the same segments.
+  slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, its shell pops (see evaporation below) and it
+  cleanses a 5 m disc.
+- **Body:** one round shell, 1.9 m in radius (`BlotterTuning.ShellRadius`, `Blotter.Touches`), takes her hits and hurts
+  on contact; the crab under it is too small to matter. Against rock its footprint is 1.4 m.
 - **Contact:** 8 corruption, with the usual hit grace, and a 7 m/s shove away.
-- **Corruption bombs:** every 3.5 s it spits an ink ball up from its mouth. The ball arcs for 1.1 s and lands 3–7 m
+- **Corruption bombs:** every 3.5 s its shell pushes an ink ball out of its top. The ball arcs for 1.1 s and lands 3–7 m
   away at random. If her light struck it in the last 3 s, it lands where she stood when it was thrown, if she is
   within 13 m. A dark ring on the ground marks the landing spot and tightens as the ball falls. The splash spreads
   corruption over 2.2 m. If she is in it, she takes 10 corruption and is thrown back at 9 m/s. A dash slips it.
 - **Guards:** every ~6 s (less with Menace) there is a 70% chance a murkling buds 2.5–4.5 m from it, up to 2 + Menace
   guards alive (`Murkling.Guarding`).
-- **Looks** (`BlightView.Blotters.cs`): a chain of six glossy ink mounds from the floor up past her plane, following
-  the head along its trail with a wave down its back. Two eye stalks are tipped with violet, and ink beads off it. On
-  both maps it is a fat ink slug shape pointing the way it creeps. The corruption shards now hang over all open floor,
-  so a Blotter's trail grows them.
+- **Looks** (`BlightView.Blotters.cs`):
+  - **The shell:** a round bun of glossy orange-rimmed ink like a bao (or a Bulbasaur's bulb), flat underneath, from
+    just off the floor up past her plane. Its soft pleats swirl up into a pinched knot on top. It bobs and rocks on the
+    crab's steps, and ink beads off it.
+  - **The crab:** lobster red, far too small for its shell. It pokes out of the shell's front with amber-tipped eye
+    stalks, one big claw and one small one, and four legs scuttling.
+  - **Its bombs:** over the last 0.6 s before one, the shell squashes, swells and twists its knot. Then it springs up
+    and pushes the ball out of the knot with a spurt of ink, while the crab keeps walking.
+  - **Freed:** the shell pops. The bare crab, its soft pink tail showing, does a double take (a hop, its eyes shooting
+    up, a look one way and the other). Then it scuttles off sideways, away from her and round rock, until it is off the
+    screen, where it is gone.
+  - **Shards:** the corruption shards hang over all open floor, so a Blotter's trail grows them.
 
 ## Thumpsquirts (`Thumpsquirt`, `PlaneThumpsquirts.cs`)
 
@@ -182,18 +191,12 @@ poking out of the rock at her height; it never moves.
 - **Freed:** it pops (see evaporation below), cleansing 3 m, and leaves 3–4 shells; every fish it swallowed swims back out alive, and the
   healthy moray draws back into its hole.
 
-## Buried caches (`BuriedCache`) and light orbs
+## Light orbs
 
-With the corruption on there are no pots (`PlaneOptions.Vases` is off). Loot lies **buried under the ink** instead
-(`PlaneCaches.cs`):
+With the corruption on there are no pots (`PlaneOptions.Vases` is off), and nothing lies buried under the ink: loot
+comes from what she frees, the places and the shop.
 
-- **Placement:** 8–12 a level, under ink at least 0.55 thick, 9 m apart. They sit at least 14 m from her start and
-  stay clear of places, the arena and the shaft.
-- **Look:** a glossy bump in the ink (`BlightView.Caches.cs`). A faint warm glint shows through now and then. The bump
-  sinks as the ink over it thins.
-- **Uncovering:** once the ground over it is cleansed (her light, a pop), it breaks open in a puff of gold with a chime. Its loot floats up: a light orb (45%) or 2–4 shells.
-
-**Light orbs** replace hearts everywhere: drops, the shop's top-up stand and caches. Each is a bubble with her light
+**Light orbs** replace hearts everywhere: drops and the shop's top-up stand. Each is a bubble with her light
 inside, like her old bubble shots, with a soft halo and a warm light. It washes 12 corruption away. The sim still calls
 it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 
@@ -390,13 +393,13 @@ Cleared corruption never just vanishes. It evaporates.
 | The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Ink lifts off them as dark curls that rise and swell, then thin to violet and fade. Gold glints rise with them. The chance of a curl grows with how much a cell lost. At most 48 curls a frame. |
 | Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same vapour steams off her body. It is thicker the faster she clears. |
 | Her meter (`MinimapView` frame) | Wisps of ink steam off the arc's receding tip. They drift outward and up, curling, and turn violet, then gold, as they fade. |
-| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, each of a Blotter's mounds, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the ink evaporates off it in the floor's dark curls, thinning to violet, with their gold glints. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
+| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, a Blotter's shell, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the ink evaporates off it in the floor's dark curls, thinning to violet, with their gold glints. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
 
 ## Presentation
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
   out from how fast each cell falls and fades over ~1.2 s. It uploads at most 30 times a second, and only while
-  something changes. The level's floor, its shards and both maps read it.
+  something changes. The level's floor and its shards read it.
 - **Ink drip** (`corruption_shards.gdshader`, `CorruptionView`): the corruption's only mark on the floor, as if from
   another dimension: ink dripping upward out of the ground, as fine as plankton (drops 4–8 cm across, about 70%
   opaque). From its own spot on corrupted ground (no current moves the spot) each drop wells up out of the floor and
@@ -428,8 +431,7 @@ Cleared corruption never just vanishes. It evaporates.
     brightens as they pull taut, falling away in specks as a vine dissolves.
 - **HUD** (`CleanseMeter`): the level cleansed, with the 50% and 75% tipping points marked. On boss levels it also
   shows the arena, with the Crack's 60% mark and the crust as pips.
-- **Maps:** open water reads ink-violet where corrupted, so the map regains its colour as she plays. Blightroots are
-  marked once seen.
+- **Maps:** they show neither the corruption nor any corrupted creature; only the light springs, of its works.
 
 ## Not yet
 

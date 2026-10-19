@@ -179,18 +179,11 @@ public partial class MinimapView : Control
         }
     }
 
-    /// <summary>The corruption's texture and works on the minimap (docs/CORRUPTION.md).</summary>
-    public void SetCorruption(Texture2D? texture) => _map.Corruption = texture;
+    public void SetSprings(PlaneWorld world) => FillSprings(_map, world);
 
-    public void SetBlight(PlaneWorld world) => FillBlight(_map, world);
-
-    /// <summary>Copies the world's Blightroots, Blotters and light springs onto a map.</summary>
-    public static void FillBlight(TopoMap map, PlaneWorld world)
+    /// <summary>Copies the world's light springs onto a map (the maps show no enemies and no corruption).</summary>
+    public static void FillSprings(TopoMap map, PlaneWorld world)
     {
-        map.Blights.Clear();
-        foreach (var b in world.Blightroots) map.Blights.Add((b.Position, b.Alive));
-        map.Blotters.Clear();
-        foreach (var b in world.Blotters) map.Blotters.Add((b.Position, b.Heading));
         map.Springs.Clear();
         // A spent spring is gone from the maps too.
         foreach (var sp in world.Springs)

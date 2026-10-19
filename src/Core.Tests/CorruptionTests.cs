@@ -283,27 +283,10 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void LootLiesBuriedUnderTheInkUntilItsGroundIsCleansed()
+    public void NoPotsWithTheCorruptionOn()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
-        Quiet(w);
         Assert.Empty(w.Vases);
-        Assert.InRange(w.Caches.Count, 4, CacheTuning.Max);
-        var cache = w.Caches[0];
-        Assert.True(w.Corruption!.At(cache.Position) >= CacheTuning.Buried);
-        int shells = w.Shells.Count + w.Run.Shells, orbs = w.Hearts.Count;
-        for (int i = 0; i < 30; i++) w.Step(default);
-        Assert.False(cache.Revealed);
-        // She swims over it: her light cleanses the ground, and the loot floats up.
-        for (int i = 0; i < 4 * 60 && !cache.Revealed; i++)
-        {
-            w.Player.Position = w.Player.PrevPosition = cache.Position;
-            w.Step(default);
-        }
-        Assert.True(cache.Revealed);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.CacheRevealed);
-        // Shells (some already gathered as she sits on them) or a light orb (she is not corrupted, so it waits).
-        Assert.True(w.Shells.Count + w.Run.Shells > shells || w.Hearts.Count > orbs);
     }
 
     [Fact]
@@ -327,17 +310,16 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void ABlotterTakesHitsAlongItsWholeBody()
+    public void ABlotterTakesHitsAnywhereOnItsShell()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
         var b = w.Blotters[0];
         w.Blotters.RemoveAt(1);
         Quiet(w);
         w.Blotters.Add(b);
-        // A shot at its tail (the last segment), well behind its head.
-        var (tail, _) = b.Segment(BlotterTuning.Segments - 1);
-        Assert.True(Vector2.Distance(tail, b.Position) > 3f);
-        w.Shots.Add(Light(tail));
+        // A shot at the rim of its shell, beside it, far from the crab at its front.
+        var rim = b.Position + new Vector2(-b.Heading.Y, b.Heading.X) * (BlotterTuning.ShellRadius - 0.1f);
+        w.Shots.Add(Light(rim));
         w.Step(default);
         Assert.True(b.Corruption.Value < b.Corruption.Max);
     }

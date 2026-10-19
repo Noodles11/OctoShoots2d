@@ -44,13 +44,8 @@ public partial class TopoMap : Control
     public FogOfWar? Fog;
     /// <summary>What she has seen (the minimap's own fog).</summary>
     public FogOfWar? Seen;
-    /// <summary>The corruption's texture (null: none), and its Blightroots (shown once seen through the fog).</summary>
-    public Texture2D? Corruption;
-    public readonly List<(System.Numerics.Vector2 At, bool Alive)> Blights = new();
     /// <summary>Light springs (docs/CORRUPTION.md), and whether she is bathing in one.</summary>
     public readonly List<(System.Numerics.Vector2 At, bool Bathing)> Springs = new();
-    /// <summary>Blotters (docs/CORRUPTION.md): where each is and which way it creeps.</summary>
-    public readonly List<(System.Numerics.Vector2 At, System.Numerics.Vector2 Heading)> Blotters = new();
     /// <summary>The places' emblems' size (the Tab map draws them larger than the minimap).</summary>
     public float EmblemScale = 1f;
     /// <summary>Clementine's arrow: size and fill.</summary>
@@ -181,8 +176,6 @@ public partial class TopoMap : Control
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_fog"), Fog is not null);
         if (Fog is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fog"), Fog.Texture);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mud"), Mud);
-        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_corruption"), Corruption is not null);
-        if (Corruption is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("corruption_tex"), Corruption);
         QueueRedraw();
     }
 
@@ -245,10 +238,12 @@ public partial class TopoMap : Control
             DrawString(font, P(at) + new Vector2(-6f, 4f), $"{depth:0}", HorizontalAlignment.Left, -1, 10, Pebble);
 
         // Places: nothing until Clementine has been there (no hints), then its emblem — never a bare coloured dot. With
-        // the Brass Compass every place shows from the start, except secret rooms.
+        // the Brass Compass every place shows from the start, except secret rooms. Ambushes never show: the map tells
+        // nothing of enemies (nor of the corruption).
         for (int i = 0; i < map.Pois.Count; i++)
         {
             var poi = map.Pois[i];
+            if (poi.Kind == PoiKind.Ambush) continue;
             bool shown = Visited.Contains(i) || Landmarks && poi.Kind != PoiKind.Secret;
             if (!shown) continue;
             Vector2 p = P(poi.Position);
@@ -259,40 +254,6 @@ public partial class TopoMap : Control
                 DrawArc(p, poi.Radius * ppm, 0f, Mathf.Tau, 48, col, 2f, true);
             }
             DrawEmblem(poi.Kind, p, font, EmblemScale);
-        }
-
-        // The corruption's works, once seen: a Blightroot as an ink sac in a violet ring (a small gold star where one has
-        // burst).
-        foreach (var (at, alive) in Blights)
-        {
-            if (Fog is not null && Fog.At(at) < 0.5f) continue;
-            Vector2 q = P(at);
-            if (alive)
-            {
-                DrawCircle(q, 7.5f, new Color(0f, 0f, 0f, 0.6f));
-                DrawCircle(q, 6f, new Color(0.05f, 0.02f, 0.08f));
-                DrawArc(q, 6f, 0f, Mathf.Tau, 20, new Color(0.62f, 0.3f, 0.95f), 1.6f, true);
-            }
-            else
-            {
-                var gold = new Color(1f, 0.8f, 0.4f);
-                DrawLine(q - new Vector2(4f, 0f), q + new Vector2(4f, 0f), gold, 1.5f, true);
-                DrawLine(q - new Vector2(0f, 4f), q + new Vector2(0f, 4f), gold, 1.5f, true);
-            }
-        }
-
-        // A Blotter, once seen: a fat ink slug shape pointing the way it creeps, rimmed violet.
-        foreach (var (at, heading) in Blotters)
-        {
-            if (Fog is not null && Fog.At(at) < 0.5f) continue;
-            Vector2 q = P(at), f = new Vector2(heading.X, heading.Y).Normalized() * 5f, s = new Vector2(-f.Y, f.X);
-            DrawCircle(q - f * 0.6f, 6.5f, new Color(0f, 0f, 0f, 0.6f));
-            DrawCircle(q + f * 0.4f, 6.5f, new Color(0f, 0f, 0f, 0.6f));
-            DrawCircle(q - f * 0.6f, 5f, new Color(0.08f, 0.03f, 0.12f));
-            DrawCircle(q + f * 0.4f, 5f, new Color(0.08f, 0.03f, 0.12f));
-            DrawArc(q + f * 0.4f, 5f, 0f, Mathf.Tau, 20, new Color(0.7f, 0.35f, 1f), 1.4f, true);
-            DrawLine(q + f * 0.9f + s * 0.4f, q + f * 1.5f + s * 0.7f, new Color(0.7f, 0.35f, 1f), 1.2f, true);
-            DrawLine(q + f * 0.9f - s * 0.4f, q + f * 1.5f - s * 0.7f, new Color(0.7f, 0.35f, 1f), 1.2f, true);
         }
 
         // A light spring, once seen: a pool of clear aqua with a gold heart (brighter while she bathes).
@@ -494,7 +455,7 @@ public partial class TopoMap : Control
         var rows = new (PoiKind Kind, string Name)[]
         {
             (PoiKind.Start, "Start"), (PoiKind.Exit, "Way down"), (PoiKind.ShellCache, "Shell cache"), (PoiKind.Shop, "Shop"),
-            (PoiKind.TreasureCave, "Clam room"), (PoiKind.CurseDen, "Curse den"), (PoiKind.Secret, "Secret"), (PoiKind.Ambush, "Ambush"),
+            (PoiKind.TreasureCave, "Clam room"), (PoiKind.CurseDen, "Curse den"), (PoiKind.Secret, "Secret"),
         };
         const float row = 22f;
         var at = new Vector2(Size.X - 132f, Size.Y - rows.Length * row - 14f);

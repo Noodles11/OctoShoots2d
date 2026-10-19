@@ -69,8 +69,7 @@ public partial class BlightView : Node3D
         foreach (var meter in _meters.Values) meter.Ring.QueueFree();
         _meters.Clear();
         _ripples.Clear();
-        ClearSlugs();
-        ClearBumps();
+        ClearHermits();
         ClearBombs();
         ClearThumps();
         ClearWardens();
@@ -85,8 +84,8 @@ public partial class BlightView : Node3D
         _time += dt;
         SyncRoots(world, dt);
         SyncMurklings(world);
-        SyncSlugs(world, dt);
-        SyncBumps(world);
+        SyncHermits(world, dt);
+        SyncRunaways(world, dt, camera);
         SyncBombs(world);
         SyncThumps(world, dt);
         _lastWorld = world;
@@ -327,17 +326,6 @@ public partial class BlightView : Node3D
                 _droplets.Burst(at, Vector3.Up, 5, 0.6f, 1f, 0.5f, 0.28f, 0.45f, new Color(0.25f, 0.1f, 0.4f, 0.35f), new Color(0.35f, 0.15f, 0.55f, 0f), drag: 2f);
                 break;
             }
-            case PlaneEventType.CacheRevealed:
-            {
-                // The ground breaks open over it in a puff of gold, and the loot floats up.
-                float floor = Floor(e.Position);
-                var from = new Vector3(e.Position.X, floor + 0.1f, e.Position.Y);
-                AddRipple(e.Position, floor + 0.08f, 0.2f, 2.2f, 0.8f, new Color(Gold.R * 1.4f, Gold.G * 1.3f, Gold.B, 0.85f));
-                _droplets.Burst(from, Vector3.Up, 16, 2.5f, 0.8f, 0.5f, 0.12f, 0.03f, new Color(0.02f, 0.01f, 0.04f, 0.9f), new Color(0.06f, 0.02f, 0.1f, 0f), drag: 3f);
-                for (int i = 0; i < 26; i++)
-                    _motes.Emit(from + _motes.RandDir() * 0.3f, new Vector3(0f, _motes.RandRange(1.2f, 3f), 0f) + _motes.RandDir() * 0.8f, _motes.RandRange(0.6f, 1.2f), _motes.RandRange(0.08f, 0.18f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.4f, buoyancy: 0.6f);
-                break;
-            }
             case PlaneEventType.GuardiansWoke:
                 // Struck, it calls its guardians: a dark blue ripple runs out through its chains over the floor.
                 AddRipple(e.Position, Floor(e.Position) + 0.07f, 0.6f, BlightTuning.GuardFar, 0.8f, new Color(Kin.Blightroot.R * 0.4f, Kin.Blightroot.G * 0.4f, Kin.Blightroot.B * 0.7f, 0.9f));
@@ -354,20 +342,9 @@ public partial class BlightView : Node3D
                 _droplets.Burst(new Vector3(e.Position.X, Floor(e.Position) + 0.2f, e.Position.Y), Vector3.Up, 30, 3.5f, 0.6f, 0.8f, 0.2f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2f);
                 break;
             case PlaneEventType.BlotterBurst:
-            {
-                // Cleansed: every mound of it pops, its ink showering out orange and evaporating.
-                // Its drawn mounds, where they stood (the world has already let it go).
-                bool popped = false;
-                foreach (var (b, slug) in _slugs)
-                {
-                    if (b.Alive || b.Position != e.Position) continue;
-                    foreach (var mound in slug.Body) Pop(mound.Position, Mathf.Max(mound.Scale.X, 0.4f), Kin.Blotter);
-                    popped = true;
-                    break;
-                }
-                if (!popped) Pop(at, BlotterTuning.SegmentRadius * 1.4f, Kin.Blotter);
+                // Cleansed: its shell pops, and the bare crab runs.
+                FreeHermit(e.Position);
                 break;
-            }
             case PlaneEventType.FishTurned:
                 // The ink closes over it: a puff of violet mist.
                 _droplets.Burst(at, Vector3.Up, 6, 0.5f, 0.9f, 0.45f, 0.18f, 0.3f, new Color(0.25f, 0.1f, 0.4f, 0.4f), new Color(0.35f, 0.15f, 0.55f, 0f), drag: 2f);
@@ -496,7 +473,7 @@ public partial class BlightView : Node3D
     {
         for (int i = 0; i < _murks.Count && i < world.Murklings.Count; i++) Glow(_murks[i], HitGlow(world.Murklings[i].Corruption));
         for (int i = 0; i < _roots.Count && i < world.Blightroots.Count; i++) Glow(_roots[i].Node, HitGlow(world.Blightroots[i].Corruption));
-        foreach (var (b, slug) in _slugs) Glow(slug.Node, HitGlow(b.Corruption));
+        foreach (var (b, h) in _hermits) Glow(h.Node, HitGlow(b.Corruption));
         foreach (var (t, tube) in _tubes) Glow(tube.Node, HitGlow(t.Corruption));
         foreach (var (w, view) in _wardens) Glow(view.Node, HitGlow(w.Corruption));
         foreach (var (l, jaw) in _jaws) Glow(jaw.Node, HitGlow(l.Corruption));

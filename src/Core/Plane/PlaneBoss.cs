@@ -430,8 +430,6 @@ public sealed partial class PlaneWorld
             if (b.Alive && Inside(b.Position, BlotterTuning.Radius) < 0f)
             {
                 b.Position = OutsideArena(b.Position);
-                b.Trail.Clear();
-                b.Track();
                 b.Target = b.Position;
             }
         Bombs.RemoveAll(bomb => Inside(bomb.To, 0f) < 0f);
