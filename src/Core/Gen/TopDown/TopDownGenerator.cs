@@ -69,6 +69,7 @@ public static class TopDownGenerator
             {
                 Seed = streams.Seed.Value, Id = id, Attempt = attempt, HasBoss = plan.HasBoss, Rift = plan.Rift, Menace = plan.Menace,
                 EntryStampSeed = plan.EntryStamp, ExitStampSeed = plan.ExitStamp, EntryFromArena = plan.EntryFromArena,
+                Template = plan.Template,
             };
             Array.Fill(map.Heights, -PathDepth);
             // The wall tops come from the reef prototype's terrain for this text (the run's first try: the seed itself).
@@ -152,7 +153,7 @@ public static class TopDownGenerator
             kinds.Insert(0, earlyKind);
         }
 
-        var (cave, why) = CaveLayout.Build(rng, plan.HasBoss, plan.EntryFromArena, kinds, RadiusOf);
+        var (cave, why) = CaveLayout.Build(rng, plan.HasBoss, plan.EntryFromArena, kinds, RadiusOf, plan.Template?.Layout);
         open = cave?.Open ?? Array.Empty<bool>();
         if (cave is null) return why;
         map.Pois.Add(new Poi { Kind = PoiKind.Start, Position = cave.Start.At, Radius = plan.EntryFromArena ? ArenaRadius : StartRadius });
@@ -169,7 +170,12 @@ public static class TopDownGenerator
         foreach (var t in cave.Tunnels)
             map.Corridors.Add(new Corridor { Kind = t.Kind, Width = t.Width, Points = t.Points.ToList(), Poi = spurOf.TryGetValue(t, out int poi) ? poi : -1 });
         foreach (var c in cave.Chambers)
-            if (!c.Room) map.Plazas.Add(new Plaza(c.At, c.R));
+        {
+            if (c.Room) continue;
+            map.Plazas.Add(new Plaza(c.At, c.R));
+            bool main = c.Role is CaveLayout.Role.Start or CaveLayout.Role.Main or CaveLayout.Role.Exit;
+            map.Chambers.Add(new CaveChamber(c.At, c.R, main, c.Role == CaveLayout.Role.Branch && c.Links.Count(l => !l.Room) <= 1));
+        }
         return null;
     }
 

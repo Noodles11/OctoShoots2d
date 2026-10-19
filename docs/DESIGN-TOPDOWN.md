@@ -323,8 +323,8 @@ is one organic cave in the manner of Watabou's Cave Generator — craggy
 chambers joined by winding tunnels — rather than a labyrinth of canyons.
 
 **Stage 0 — The plan.** A level's plan is rolled from the run seed before
-anything is shaped (`LevelPlan`): whether its boss stands here, which places
-it holds, and its Menace. Levels no longer share rock with the level above or
+anything is shaped (`LevelPlan`): whether its boss stands here, its
+**template** (§4.8), which places it holds, and its Menace. Levels no longer share rock with the level above or
 below (the old stamps are gone): she lands in the start chamber of a cave of
 its own.
 
@@ -584,6 +584,69 @@ levels: ~5–7 min rushed, ~30 min explored.
   autosaves.
 
 ---
+
+### 4.8 Level templates — what a level is about
+
+Every level outside the tutorial rolls one **template** (`data/level_templates.json`, embedded in Core;
+`LevelTemplates`, `LevelPlan.DepthTemplates`): a named recipe that gives the level a character instead of a little of
+everything scattered. A template:
+- **places:** requires some, allows others with a chance, forbids the rest; kinds it does not name keep the general
+  roll;
+- **layout:** shapes the cave, as multipliers on CaveLayout's chamber radii, tunnel widths and lengths, and loop
+  chance (the cave still grows to its area);
+- **cast:** says which corrupted kinds appear, how many (a range, plus so many per Menace) and where each stands, by
+  anchor. Kinds it does not name keep their general rule. The anchors:
+  - `place:<kind>`: 4–14 m from that place;
+  - `path`: on the main chain from the start to the way down;
+  - `tunnels`: in a tunnel, not a chamber;
+  - `chambers`: in an open chamber;
+  - `deadEnds`: in a branch chamber with one tunnel;
+  - `walls`: by the rock;
+  - `spread`: anywhere.
+
+  A kind's anchors are used in turn, one per creature.
+- **rules**, on top of the general ones:
+  - `prime: <place>`: a murkling prime waits there from the start.
+  - `guardians: <place>`: the nearest Blightroot's guardians bud round that place.
+  - `budRate`, `budCap`: murkling budding faster or slower, its cap higher.
+  - `ink`: more corruption.
+  - `springs`: so many light springs.
+  - `fish`: more reef fish.
+  - `wardenFor`: Inkwardens stand by that kind.
+  - `quiet`: no ambush springs, no Blotter is born.
+
+**Rolling.** A depth's templates are rolled together from their own stream, so any level's is known on its own:
+- Each level draws by weight among the templates that fit its shown depth and its slot: the first level, a middle
+  one, the one before the boss, or the boss's.
+- Never the same template as the level before (but for the default, the fallback).
+- No more of one than its `maxPerDepth`.
+- At least three different ones in a depth.
+
+**The general rules win:**
+- The validator.
+- The 5-place cap: a template's optional places go before its required ones.
+- A depth's first level has a clam room and no shop or shell cache.
+- At most two clam rooms per depth: a template that requires one takes the depth's second, and none takes a level
+  that must hold one if it forbids it.
+- The creature kinds' depth gates.
+- Menace scaling.
+
+**The templates:**
+
+| Template | Slots, depths | Places | Cast | Rules |
+|---|---|---|---|---|
+| The Hoard | first, middle; 1–6 | clam room, secret, curse den required; cache 30%; no shop or ambush | 2 Blightroots by the clam room and the secret; 1–2 Inkwardens by the clam room | a prime by the clam room, which the guardians bud round; cap +2 |
+| The Long Haul | middle, before boss; 2–6 | shop required; cache 40%, secret 20%; no curse den or ambush | 2–3 Thumpsquirts in the tunnels, 2–3 Blotters on the path, 1 Blightroot in a dead end | small chambers (×0.6), narrow long tunnels (×0.8, ×1.4), no loops; budding ×0.6 |
+| The Open Grotto | first, middle; 3–6 | an ambush; cache 60%, secret 30% | 2–3 (+1 per Menace) Lashjaws in the walls, 2–3 Blightroots and 0–1 Blotter in the chambers | wide chambers (×1.4), loops ×1.5 |
+| The Ink Fields | middle; 1–6 | cache 50%, curse den 30%, shop 30%, secret 20%; no ambush | 4–5 Blightroots, 3–4 Blotters, 0–1 Inkwarden | ink +0.15; 2 light springs |
+| The Warden Garden | middle, before boss; 2–6 | secret 50%, cache 40% | 3–4 Inkwardens, 2 Thumpsquirts, 2 Blightroots in the chambers | the wardens stand by the Thumpsquirts |
+| The Ambush Run | middle; 3–6 | 2 ambushes and a cache required; secret 30%; no shop or curse den | 1–2 Lashjaws, 1–2 Blightroots on the path | tunnels ×0.9 |
+| The Quiet Reach | middle, before boss (×4); 1–6; once a depth | shop required; clam room 30%, cache 50%; no curse den or ambush | 1 Blightroot in a dead end | quiet; 1 light spring; fish ×2; budding ×0.5 |
+| The Approach | boss; 1–6 | shop 50%, cache 30%; nothing else | 1–2 Blightroots and 0–1 Blotter on the path | quiet |
+| Default | every slot | the general rolls | the general rules | — |
+
+Kinds a template names as absent are absent; the others outside its cast keep their general rules. Its name shows
+after the level's title at the top of the HUD ("Depth 2 · Level 3 · The Hoard"; the default has none).
 
 ### 4.7 The reef director — the world acts without her
 A level is not a stage that waits for the actor. A seeded **reef director**

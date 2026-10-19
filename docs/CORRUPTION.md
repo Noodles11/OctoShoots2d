@@ -47,14 +47,34 @@ murklings).
 
 ## Blightroot (`Blightroot`)
 
+A captive octopus (`BlightView.Octopus.cs`): the corruption has chained its arms to the seabed and drains its ink,
+which is why the ground round it is the level's main source of ink. Freeing it breaks the chains and it escapes.
+
+- **Its look:** an octopus sitting on the floor, with no eyes.
+  - Its mantle rises from the floor to her plane: the target her light drains.
+  - Its eight arms lie splayed flat on the ground, thick at the mantle and curling at their tips, twitching weakly.
+  - Three chains of glossy ink links (`ink_chain.gdshader`) pin each arm, arching over it from one little ink well to
+    another. Dark droplets drain off its arms into the wells.
+  - It wears the Blightroot's blue under the ink, and its hit outline like every corrupted creature.
+- **Freed:** its ink pops off its mantle and the chains snap, their links flying. It turns its own healthy coral,
+  gathers its arms up round itself, pushes off the floor and jets up and away to the north, its arms trailing, with a
+  trail of clean bubbles. It is gone in 2.6 s.
+- **Its guardians:** while it has been struck by her light within the last 3 s, its area's murklings wake to guard
+  it. Its area buds every 5 s ÷ (1 + 1.5 × Menace) (5 s in the early depths, 2 s by the Tank), each bud 4–7 m round
+  it (at least 5 m from her, drinking its ink as any bud does). Its cap rises by 1 + round(2 × Menace), and it buds
+  even when its area has been cleansed out of budding. As they wake a dark blue ripple runs out over the floor and a
+  low call sounds (`GuardiansWoke`).
 - Placed on plazas and canyon points, reachable from the start, 22 m apart, never in the arena or the shaft. There
-  are 3 + 1.5 × Menace of them, at most 6.
-- **Regrowth:** it restores its 9 m reach toward the starting density at 0.1/s, strongest at the stump.
+  are 3 + 1.5 × Menace of them, at most 6. A level's template (DESIGN-TOPDOWN §4.8) may cast them otherwise: so many,
+  at its anchors (by a place it guards, in dead ends…), or none; and every corrupted kind below likewise.
+- **Regrowth:** it restores its 9 m reach toward the starting density at 0.1/s, strongest at the octopus.
 - **Shot down:** its corruption meter (see "Corruption meters" below) is 125 × (1 + 0.2 × Menace), so it takes 13
-  default shots on its 0.9 m sac in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with Menace) once 0.5 s pass without a hit. Emptied, its sac pops (see evaporation below). A
-  wave of cleansing runs through its whole reach in 0.7 s and its vines dissolve. Cleansing the ground round it no
+  default shots on its 0.9 m mantle in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with
+  Menace) once 0.5 s pass without a hit. Emptied, it is freed (above; its ink pops, see evaporation below). A wave of
+  cleansing runs through its whole reach in 0.7 s and its vines dissolve. Cleansing the ground round it no
   longer harms it.
-- **The pulse:** every 4 s the sac inflates for 0.8 s (the telegraph), then a ring of ink runs out at 10 m/s. The ring
+- **The pulse:** every 4 s its mantle swells for 0.8 s (the telegraph), its chains pulling taut and its arms
+  flinching, then a ring of ink runs out at 10 m/s. The ring
   stains cleansed ground back to 0.35 and snuffs out each of her shots it crosses. Passing over her, it corrupts her
   for 6 + 2 × Menace (once per ring). Dashing through it takes nothing.
 
@@ -282,7 +302,8 @@ drains away. It is shown only while partly emptied: it fades out when full again
 
 ## Gloomvines (`Gloomvine`)
 
-- Two per Blightroot. They rest as 2.6 m curls of ink.
+- Two per Blightroot: two of its chains torn loose from their wells, drawn as the same ink links, thicker. They rest
+  as 2.6 m curls, rising from the floor toward her plane; their rim brightens while one coils her.
 - When she lingers (under 1 m/s for 0.6 s) within reach, the tip creeps toward her at 0.8 m/s, up to 11.7 m long.
   This only punishes standing still.
 - **Coil:** a tip that reaches her holds her for 1.2 s, draining 5 HP/s. A dash frees her. It then lets go and draws
@@ -369,7 +390,7 @@ Cleared corruption never just vanishes. It evaporates.
 | The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Ink lifts off them as dark curls that rise and swell, then thin to violet and fade. Gold glints rise with them. The chance of a curl grows with how much a cell lost. At most 48 curls a frame. |
 | Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same vapour steams off her body. It is thicker the faster she clears. |
 | Her meter (`MinimapView` frame) | Wisps of ink steam off the arc's receding tip. They drift outward and up, curling, and turn violet, then gold, as they fade. |
-| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's sac, each of a Blotter's mounds, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the ink evaporates off it in the floor's dark curls, thinning to violet, with their gold glints. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
+| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, each of a Blotter's mounds, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the ink evaporates off it in the floor's dark curls, thinning to violet, with their gold glints. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
 
 ## Presentation
 
@@ -391,10 +412,10 @@ Cleared corruption never just vanishes. It evaporates.
   the rest of the level's life as she dives.
 - **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the drops; nothing covers it and it
   never glows. The level below shows its own corruption through the shaft.
-- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, sacs, stumps, throws, the crust) are glossy ink, and
+- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, the octopus, throws, the crust) are glossy ink, and
   **each kind has its own base colour** (its skin under the ink and its glowing rim), shared by its projectiles and its
   rings: murklings stay ink-black with a violet rim, each with its core's colour (a murkling's amber, a prime's
-  magenta, a lesser one's its fish's); Blightroots blue (their sacs, rings and gloomvines too); Blotters orange (their
+  magenta, a lesser one's its fish's); Blightroots blue (the octopus under its ink, its rings and chains too); Blotters orange (their
   bombs and landing marks too); Thumpsquirts acid green (their landing rings and marks too); Inkwardens violet (their
   tethers too); Lashjaws crimson (their tongues too).
 - **Their light** (`BlightView.Lights.cs`): each casts a little light in its core's or base colour (murklings and
@@ -403,7 +424,8 @@ Cleared corruption never just vanishes. It evaporates.
   own lantern.
 - Other shaders:
   - `ink_ring.gdshader`: pulses, buds, bursts.
-  - `gloomvine.gdshader`: glossy tubes with a violet pulse, dissolving in gold.
+  - `ink_chain.gdshader`: the chains' links (one MultiMesh for all of them), ink-black with a blue rim that
+    brightens as they pull taut, falling away in specks as a vine dissolves.
 - **HUD** (`CleanseMeter`): the level cleansed, with the 50% and 75% tipping points marked. On boss levels it also
   shows the arena, with the Crack's 60% mark and the crust as pips.
 - **Maps:** open water reads ink-violet where corrupted, so the map regains its colour as she plays. Blightroots are

@@ -48,17 +48,17 @@ public sealed partial class PlaneWorld
     void PlaceInkwardens()
     {
         if (Map.Depth < WardenTuning.FirstDepth) return;
+        var cast = CastOf(Gen.TopDown.CastKind.Inkwarden);
+        if (cast is { None: true }) return;
+        if (cast is not null)
+        {
+            PlaceCastWardens(cast);
+            return;
+        }
         foreach (var root in Blightroots)
         {
             if (Inkwardens.Count >= WardenTuning.Max) break;
-            for (int tries = 0; tries < 24; tries++)
-            {
-                float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(WardenTuning.NearMin, WardenTuning.NearMax);
-                var at = root.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
-                if (!Clear(at, WardenTuning.Radius + 0.2f)) continue;
-                Inkwardens.Add(NewWarden(at, roams: false));
-                break;
-            }
+            WardBeside(root.Position);
         }
         if (Map.Depth <= WardenTuning.FirstDepth) return;
         int roamers = (int)MathF.Round(WardenTuning.Roamers + Menace);
@@ -66,12 +66,59 @@ public sealed partial class PlaneWorld
         for (int tries = 0; tries < 400 && roamers > 0 && Inkwardens.Count < WardenTuning.Max; tries++)
         {
             var at = new Vector2(_blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f), _blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f));
-            if (!Clear(at, WardenTuning.Radius + 0.4f) || Vector2.Distance(at, Map.Start.Position) < WardenTuning.FromStart) continue;
-            if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + 4f) continue;
-            if (Map.Shaft.Contains(at, 3f) || float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) continue;
-            if (Inkwardens.Any(w => Vector2.Distance(w.Position, at) < WardenTuning.Spacing)) continue;
+            if (!WardenSpot(at, reach)) continue;
             Inkwardens.Add(NewWarden(at, roams: true));
             roamers--;
+        }
+    }
+
+    /// <summary>A warden standing guard 3–5 m from a creature (false when no spot was clear).</summary>
+    bool WardBeside(Vector2 guarded)
+    {
+        for (int tries = 0; tries < 24; tries++)
+        {
+            float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(WardenTuning.NearMin, WardenTuning.NearMax);
+            var at = guarded + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+            if (!Clear(at, WardenTuning.Radius + 0.2f)) continue;
+            Inkwardens.Add(NewWarden(at, roams: false));
+            return true;
+        }
+        return false;
+    }
+
+    bool WardenSpot(Vector2 at, float[] reach)
+    {
+        if (!Clear(at, WardenTuning.Radius + 0.4f) || Vector2.Distance(at, Map.Start.Position) < WardenTuning.FromStart) return false;
+        if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + 4f) return false;
+        if (Map.Shaft.Contains(at, 3f) || float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) return false;
+        return !Inkwardens.Any(w => Vector2.Distance(w.Position, at) < WardenTuning.Spacing);
+    }
+
+    /// <summary>
+    /// The template's wardens: so many, standing guard beside the kind its rules name (wardenFor), else at their anchors
+    /// (by a place, in the chambers…), else beside the Blightroots as usual.
+    /// </summary>
+    void PlaceCastWardens(Gen.TopDown.CastRule cast)
+    {
+        int want = CastCount(cast, WardenTuning.Max);
+        var guarded = Rules?.WardenFor switch
+        {
+            Gen.TopDown.CastKind.Thumpsquirt => Thumpsquirts.Select(t => t.Position),
+            Gen.TopDown.CastKind.Lashjaw => Lashjaws.Select(l => l.Position),
+            Gen.TopDown.CastKind.Blotter => Blotters.Select(b => b.Position),
+            _ => cast.Anchors.All(a => a == "spread") ? Blightroots.Select(b => b.Position) : Enumerable.Empty<Vector2>(),
+        };
+        foreach (var at in guarded.ToList())
+        {
+            if (Inkwardens.Count >= want) return;
+            WardBeside(at);
+        }
+        var reach = Gen.TopDown.LevelValidator.Distances(Map, Map.Start.Position);
+        for (int tries = 0; tries < 4000 && Inkwardens.Count < want; tries++)
+        {
+            var at = new Vector2(_blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f), _blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f));
+            if (!WardenSpot(at, reach) || !Anchored(cast, Inkwardens.Count, at)) continue;
+            Inkwardens.Add(NewWarden(at, roams: false));
         }
     }
 

@@ -110,6 +110,13 @@ public static class BlightTuning
     public const float DrainReport = 1f;
     /// <summary>The arena buds faster while the boss fights.</summary>
     public const float ArenaInterval = 6f;
+    /// <summary>
+    /// Its guardians: while a Blightroot has been struck by her light within GuardWindow seconds, its area buds every
+    /// GuardInterval / (1 + GuardPerMenace × Menace) seconds (5 s early, 2 s by the Tank), in a ring GuardNear–GuardFar
+    /// metres round it, its cap raised by GuardCap + round(GuardCapPerMenace × Menace).
+    /// </summary>
+    public const float GuardWindow = 3f, GuardInterval = 5f, GuardPerMenace = 1.5f, GuardNear = 4f, GuardFar = 7f, GuardCapPerMenace = 2f;
+    public const int GuardCap = 1;
     /// <summary>An ambush buds this many murklings round her.</summary>
     public const int AmbushBuds = 3;
 }
@@ -175,6 +182,12 @@ public sealed class Blightroot
     /// <summary>The burst's cleansing wave radius (negative: not bursting).</summary>
     public float BurstRadius = -1f;
     public float Dead;
+    /// <summary>Under attack: struck by her light within GuardWindow seconds (its guardians awake).</summary>
+    public bool Guarded => Alive && Corruption.LastHit > 0f && Corruption.Since < BlightTuning.GuardWindow;
+    /// <summary>Whether its guardians were awake last step (to tell when they wake).</summary>
+    public bool WasGuarded;
+    /// <summary>Where its guardians bud round (its level template may set a place it guards; else itself).</summary>
+    public Vector2? GuardAt;
 }
 
 /// <summary>A gloomvine: a thick ink vine rooted at a Blightroot, as points from the root to its tip.</summary>
@@ -313,6 +326,7 @@ public sealed partial class PlaneWorld
         PlaceThumpsquirts();
         PlaceInkwardens();
         PlaceLashjaws();
+        PlaceTemplateGuards();
         PlaceCaches(field);
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
@@ -326,23 +340,34 @@ public sealed partial class PlaneWorld
     {
         var field = Corruption!;
         var reach = LevelValidator.Distances(Map, Map.Start.Position);
+        var cast = CastOf(CastKind.Blightroot);
+        if (cast is { None: true }) return;
         var candidates = Map.Plazas.Select(p => p.Center).ToList();
-        foreach (var c in Map.Corridors.Where(c => c.Kind is CorridorKind.Main or CorridorKind.Side))
-            for (int i = 0; i < c.Points.Count; i += 3) candidates.Add(c.Points[i]);
+        foreach (var c in Map.Corridors.Where(c => c.Kind is CorridorKind.Main or CorridorKind.Side || cast is not null && c.Kind == CorridorKind.Spur))
+            for (int i = 0; i < c.Points.Count; i += cast is null ? 3 : 1) candidates.Add(c.Points[i]);
+        // With a template, every chamber's ring too, so its anchors have spots to choose from.
+        if (cast is not null)
+            foreach (var ch in Map.Chambers)
+                for (int k = 0; k < 8; k++)
+                    candidates.Add(ch.At + new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)) * ch.Radius * 0.6f);
         for (int i = candidates.Count - 1; i > 0; i--)
         {
             int j = _blightRng.Int(i + 1);
             (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
         }
         var safes = SafePlaces().ToList();
-        int want = Math.Min(BlightTuning.Max, BlightTuning.Base + (int)MathF.Round(Menace * BlightTuning.PerMenace));
+        int want = cast is not null ? CastCount(cast, BlightTuning.Max)
+            : Math.Min(BlightTuning.Max, BlightTuning.Base + (int)MathF.Round(Menace * BlightTuning.PerMenace));
         foreach (var at in candidates)
         {
             if (Blightroots.Count >= want) break;
             if (float.IsPositiveInfinity(LevelValidator.DistanceAt(reach, at)) || !Clear(at, 1.2f)) continue;
+            if (!Anchored(cast, Blightroots.Count, at)) continue;
             // It stands in the corruption, never on clean floor.
             if (field.At(at) < 0.5f) continue;
-            if (safes.Any(s => Vector2.Distance(at, s.Centre) < s.Radius + BlightTuning.SafeDistance)) continue;
+            // Never near a safe place, but for the one its template has it guard (it may stand at that one's door).
+            var guards = AnchorPlace(cast, Blightroots.Count);
+            if (safes.Any(s => Vector2.Distance(at, s.Centre) < s.Radius + (guards is { } g && Map.Pois.Any(q => q.Kind == g && q.Position == s.Centre) ? 4f : BlightTuning.SafeDistance))) continue;
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + BlightTuning.Reach + 2f) continue;
             if (Map.Shaft.Contains(at, BlightTuning.Reach)) continue;
             if (Blightroots.Any(b => Vector2.Distance(b.Position, at) < BlightTuning.Spacing)) continue;
@@ -367,11 +392,13 @@ public sealed partial class PlaneWorld
 
     float BudInterval()
     {
-        float interval = BlightTuning.BudInterval / (1f + 0.6f * Menace);
+        float interval = BlightTuning.BudInterval / (1f + 0.6f * Menace) / BudRateFactor;
         return Cleansed >= CorruptionTuning.SlowBudding ? interval * 2f : interval;
     }
 
-    int BudCap => BlightTuning.CapBase + (int)(Menace * BlightTuning.CapPerMenace);
+    float GuardInterval() => BlightTuning.GuardInterval / (1f + BlightTuning.GuardPerMenace * Menace);
+
+    int BudCap => BlightTuning.CapBase + (int)(Menace * BlightTuning.CapPerMenace) + BudCapBonus;
 
     /// <summary>The war's turn, after combat: her light, pops, Blightroots, vines, murklings, the arena.</summary>
     void StepCorruption()
@@ -746,13 +773,36 @@ public sealed partial class PlaneWorld
         // Budding: from the dense ground of each living area. Never in the arena: during the fight only she is in it.
         foreach (var area in Areas)
         {
-            if (area.Spent || area.Arena) continue;
-            if (!Blightroots.Any(b => b.Alive && Areas[b.Area] == area)) continue;
+            if (area.Arena) continue;
+            var root = Blightroots.FirstOrDefault(b => b.Alive && Areas[b.Area] == area);
+            if (root is null) continue;
+            // Under attack, its guardians wake: the area buds fast round it (even an area cleansed out of budding).
+            bool guarded = root.Guarded;
+            if (guarded && !root.WasGuarded)
+            {
+                area.BudTimer = MathF.Min(area.BudTimer, GuardInterval());
+                Events.Add(new PlaneEvent(PlaneEventType.GuardiansWoke, root.Position, Vector2.Zero));
+            }
+            root.WasGuarded = guarded;
+            if (area.Spent && !guarded) continue;
             area.BudTimer -= Dt;
             if (area.BudTimer > 0f) continue;
-            area.BudTimer = area.Arena ? BlightTuning.ArenaInterval : BudInterval();
+            area.BudTimer = guarded ? GuardInterval() : BudInterval();
             int index = Areas.IndexOf(area);
-            if (Murklings.Count(m => m.Alive && m.Area == index) >= BudCap + (area.Arena ? 1 : 0)) continue;
+            int cap = BudCap + (guarded ? BlightTuning.GuardCap + (int)MathF.Round(BlightTuning.GuardCapPerMenace * Menace) : 0);
+            if (Murklings.Count(m => m.Alive && m.Area == index) >= cap) continue;
+            if (guarded)
+            {
+                // A guardian buds in a ring round it, drinking its ink as any bud does.
+                for (int tries = 0; tries < 12; tries++)
+                {
+                    float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(BlightTuning.GuardNear, BlightTuning.GuardFar);
+                    var at = (root.GuardAt ?? root.Position) + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+                    if (Vector2.Distance(at, p.Position) < BlightTuning.BudClearance || !Clear(at, BlightTuning.MurkRadius)) continue;
+                    if (Bud(at, index) is not null) break;
+                }
+                continue;
+            }
             for (int tries = 0; tries < 12 && area.Cells.Count > 0; tries++)
             {
                 int cell = area.Cells[_blightRng.Int(area.Cells.Count)];

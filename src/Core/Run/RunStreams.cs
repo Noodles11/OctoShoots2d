@@ -40,6 +40,8 @@ public sealed class RunStreams
     public Rng BossRoll(int cycle, int depth) => _root.Stream($"boss/{cycle}/{depth}");
     /// <summary>Whether a depth has its second treasure room, and on which level.</summary>
     public Rng TreasureRoll(int cycle, int depth) => _root.Stream($"treasure/{cycle}/{depth}");
+    /// <summary>A depth's level templates (LevelPlan.DepthTemplates).</summary>
+    public Rng TemplateRoll(int cycle, int depth) => _root.Stream($"templates/{cycle}/{depth}");
     /// <summary>The reef director's schedule of world events on a level (currents, …).</summary>
     public Rng Events(LevelId id) => _root.Stream($"events/{id.Cycle}/{id.Depth}/{id.Level}");
     /// <summary>The stamp of rock around the start of a level (and around the hole above it).</summary>

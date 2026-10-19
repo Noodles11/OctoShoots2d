@@ -134,6 +134,9 @@ public sealed partial class PlaneWorld
         }
         var rng = new Rng(Map.Seed ^ 0x2EEF15UL ^ ((ulong)Map.Level << 20) ^ ((ulong)Map.Depth << 28) ^ ((ulong)Map.Attempt << 44));
         var n = ReefFishTuning.ForDepth(Map.Depth);
+        // The level's template may bring more fish (its fish rule).
+        float more = Map.Template?.Rules.Fish is > 0f and var f ? f : 1f;
+        int More(int count) => (int)MathF.Round(count * more);
         int ids = 0;
         var exit = Map.Exit;
         bool Allowed(Vector2 q) => Vector2.Distance(q, Map.Start.Position) >= ReefFishTuning.StartClear
@@ -148,7 +151,7 @@ public sealed partial class PlaneWorld
         Shuffle(channel, rng);
 
         // Anemones on the seabed at the foot of the rock, a pair or trio of clownfish in each.
-        int want = n.AnemoneMin + rng.Int(n.AnemoneMax - n.AnemoneMin + 1);
+        int want = More(n.AnemoneMin + rng.Int(n.AnemoneMax - n.AnemoneMin + 1));
         foreach (var anchor in anchors)
         {
             if (Anemones.Count >= want) break;
@@ -173,7 +176,7 @@ public sealed partial class PlaneWorld
         }
 
         // Blue tangs, alone or in pairs.
-        want = n.TangMin + rng.Int(n.TangMax - n.TangMin + 1);
+        want = More(n.TangMin + rng.Int(n.TangMax - n.TangMin + 1));
         var groups = new List<Vector2>();
         int tangs = 0;
         foreach (var anchor in anchors)
@@ -195,7 +198,7 @@ public sealed partial class PlaneWorld
         }
 
         // Chromis schools over the channels.
-        want = n.SchoolMin + rng.Int(n.SchoolMax - n.SchoolMin + 1);
+        want = More(n.SchoolMin + rng.Int(n.SchoolMax - n.SchoolMin + 1));
         foreach (var at in channel)
         {
             if (Schools.Count >= want) break;

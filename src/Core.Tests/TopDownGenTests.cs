@@ -88,7 +88,10 @@ public class TopDownGenTests
                 Assert.InRange(t, 0, 1);
                 total += t;
             }
-            Assert.Equal(second == 0 ? 1 : 2, total);
+            // The general roll's second always comes (on its level, or on a level whose template requires one);
+            // with no second rolled, a template that requires a clam room may still bring one.
+            if (second == 0) Assert.InRange(total, 1, 2);
+            else Assert.Equal(2, total);
         }
     }
 

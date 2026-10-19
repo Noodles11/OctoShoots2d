@@ -15,6 +15,8 @@ namespace OctoShoots.Core.Tests;
 public class PlaneCombatTests
 {
     static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), new LevelId(1, 2, 3)));
+    /// <summary>A level on the general rules with an ambush (a template may forbid them).</summary>
+    static readonly Lazy<LevelMap> WithAmbush = new(() => TestLevels.Get(TestLevels.Find(p => TestLevels.General(p) && p.Ambushes > 0 && !p.HasBoss && p.Id.Depth > LevelPlan.Tutorial)));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 
@@ -296,7 +298,7 @@ public class PlaneCombatTests
     [Fact]
     public void AnAmbushSpringsOnceAroundHer()
     {
-        var w = World();
+        var w = new PlaneWorld(WithAmbush.Value, new Tuning());
         var ambush = w.Ambushes.First();
         int before = w.Mobs.Count;
         w.Player.Position = w.Player.PrevPosition = ambush.Center;

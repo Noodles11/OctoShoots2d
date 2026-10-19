@@ -27,7 +27,7 @@ public class CorruptionTests
     [Fact]
     public void ThePufferlingsAreRetracted()
     {
-        var w = Level(p => p.Ambushes > 0 && !p.HasBoss);
+        var w = Level(p => TestLevels.General(p) && p.Ambushes > 0 && !p.HasBoss);
         Assert.Empty(w.Mobs);
         // An ambush buds murklings instead.
         var ambush = w.Ambushes[0];
@@ -41,7 +41,7 @@ public class CorruptionTests
     [Fact]
     public void SafePlacesStartClean()
     {
-        var w = Level(p => p.Shops > 0 && p.Treasures > 0 && !p.HasBoss);
+        var w = Level(p => p.Template?.Id != "hoard" && p.Shops > 0 && p.Treasures > 0 && !p.HasBoss);
         var field = w.Corruption!;
         foreach (var poi in w.Map.Pois.Where(p => p.Kind is PoiKind.Start or PoiKind.Shop or PoiKind.TreasureCave))
             Assert.Equal(0f, field.At(poi.Position));
@@ -57,7 +57,7 @@ public class CorruptionTests
     [Fact]
     public void HerLightCleansesTheGroundAndTheGroundNeverHurtsHer()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var field = w.Corruption!;
         // A thick patch far from every Blightroot.
@@ -79,7 +79,7 @@ public class CorruptionTests
     [Fact]
     public void ABlightrootTakesAboutThirteenShotsAndReCorruptsQuickly()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var root = w.Blightroots[0];
         // A few shots: its meter drops by each one's light, shown as partly emptied.
@@ -110,7 +110,7 @@ public class CorruptionTests
     [Fact]
     public void AMurklingTakesFourShotsInARowOrOneStrongOne()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var at = w.Player.Position + new Vector2(0f, -3f);
         var m = new Murkling { Position = at, Bud = 0f };
@@ -143,7 +143,7 @@ public class CorruptionTests
     [Fact]
     public void ADashThrowsAClingingMurklingOffAndItComesBack()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var m = new Murkling { Position = w.Player.Position + new Vector2(0.5f, 0f), Bud = 0f, Clinging = true, ClingOffset = new Vector2(0.5f, 0f) };
         w.Murklings.Add(m);
@@ -175,7 +175,7 @@ public class CorruptionTests
     [Fact]
     public void ABlightrootPulseCorruptsHerUnlessSheDashesThroughIt()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var root = w.Blightroots[0];
         // She waits in its reach, where the ring will pass.
@@ -230,15 +230,30 @@ public class CorruptionTests
     [Fact]
     public void BlottersCreepTowardCleanFloorAndCorruptIt()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
         Assert.Equal(2, w.Blotters.Count);
         var b = w.Blotters[0];
         Assert.Equal(BlotterTuning.Meter, b.Corruption.Max);
         float before = w.Corruption!.InitialTotal;
         var start = b.Position;
-        // Her far away: it creeps on and smears ink as it goes.
-        for (int i = 0; i < 20 * 60; i++) w.Step(default);
-        Assert.True(Vector2.Distance(b.Position, start) > 3f);
+        // Clean floor in its sight, 9 m off, for it to creep toward.
+        for (int k = 0; k < 16; k++)
+        {
+            var dir = new Vector2(MathF.Cos(k * MathF.Tau / 16f), MathF.Sin(k * MathF.Tau / 16f));
+            var spot = start + dir * 9f;
+            if (!w.Clear(spot, 1.5f) || !w.LineOfSight(start, spot)) continue;
+            w.Corruption.Cleanse(spot, 3f, 2f);
+            before = w.Corruption.InitialTotal;
+            break;
+        }
+        // Her far away: it creeps on (it may turn back for new clean floor) and smears ink as it goes.
+        float farthest = 0f;
+        for (int i = 0; i < 20 * 60; i++)
+        {
+            w.Step(default);
+            farthest = MathF.Max(farthest, Vector2.Distance(b.Position, start));
+        }
+        Assert.True(farthest > 3f);
         // Clean floor it crossed is corruption now (the level's total to cleanse grew).
         Assert.True(w.Corruption.InitialTotal > before + 5f);
         Assert.True(w.Corruption.At(b.Position) > 0.5f);
@@ -249,7 +264,7 @@ public class CorruptionTests
     [Fact]
     public void ABlotterTakesTenShotsAndBurstsCleansingAround()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
         var b = w.Blotters[0];
         w.Blotters.RemoveAt(1);
         Quiet(w);
@@ -270,7 +285,7 @@ public class CorruptionTests
     [Fact]
     public void LootLiesBuriedUnderTheInkUntilItsGroundIsCleansed()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         Assert.Empty(w.Vases);
         Assert.InRange(w.Caches.Count, 4, CacheTuning.Max);
@@ -294,7 +309,7 @@ public class CorruptionTests
     [Fact]
     public void TheSurgeBackFromAHitCleansesAThinLineOfGround()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var field = w.Corruption!;
         // A murkling 6 m off over thick ink; she stands on clean ground.
@@ -314,7 +329,7 @@ public class CorruptionTests
     [Fact]
     public void ABlotterTakesHitsAlongItsWholeBody()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
         var b = w.Blotters[0];
         w.Blotters.RemoveAt(1);
         Quiet(w);
@@ -330,7 +345,7 @@ public class CorruptionTests
     [Fact]
     public void AnAttackedBlotterBombsHerAndTheSplashCorruptsAndThrowsHer()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
         var b = w.Blotters[0];
         w.Blotters.RemoveAt(1);
         Quiet(w);
@@ -364,7 +379,7 @@ public class CorruptionTests
     [Fact]
     public void AStarburstShotBurstsIntoLightThatCleansesAndStrikesTheCorrupted()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var field = w.Corruption!;
         int cell = Enumerable.Range(0, field.Density.Length).First(i => field.Density[i] > 0.8f && w.Clear(CellAt(i), 1.5f)
@@ -523,7 +538,7 @@ public class CorruptionTests
     [Fact]
     public void HerLightFliesToWhereSheAimsAndClearsALittleWhereItGoesOut()
     {
-        var w = Level(p => !p.HasBoss);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss);
         Quiet(w);
         // The longest open line from her start; she aims 6 m along it.
         var from = w.Player.Position;
@@ -551,7 +566,7 @@ public class CorruptionTests
     [Fact]
     public void AThrowFallsAtItsRangeAndStainsTheSand_ButStruckInTheAirItSplattersAndStainsNothing()
     {
-        var w = Level(p => !p.HasBoss);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss);
         Quiet(w);
         var field = w.Corruption!;
         // A throw along an open stretch of the level, its landing well clear of the safe places; she watches from
@@ -596,7 +611,7 @@ public class CorruptionTests
     [Fact]
     public void AMurklingBendsBackBeforeItThrowsAndLocksItsAimForTheSnap()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var her = w.Player.Position;
         var m = new Murkling { Position = her + new Vector2(0f, -5f), Bud = 0f, ThrowTimer = 0f };
@@ -653,9 +668,35 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void ABlightrootUnderAttackWakesItsGuardians()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var root = w.Blightroots[0];
+        // She stands well off; her light strikes it (and keeps striking it).
+        w.Player.Position = w.Player.PrevPosition = root.Position + new Vector2(0f, 14f);
+        root.Corruption.Hit(1f);
+        w.Step(default);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.GuardiansWoke);
+        Assert.True(root.Guarded);
+        float interval = BlightTuning.GuardInterval / (1f + BlightTuning.GuardPerMenace * w.Menace);
+        for (int i = 0; i < (int)((interval + 1f) * 60f); i++)
+        {
+            if (i % 60 == 0) root.Corruption.Hit(1f);
+            w.Step(default);
+        }
+        // A guardian budded in its ring, even though its area had been spent.
+        Assert.Contains(w.Murklings, m => m.Alive && m.Area == root.Area
+            && Vector2.Distance(m.Position, root.Position) is >= BlightTuning.GuardNear - 0.01f and <= BlightTuning.GuardFar + 0.01f);
+        // Left alone for the window, it calms down.
+        for (int i = 0; i < (int)((BlightTuning.GuardWindow + 0.2f) * 60f); i++) w.Step(default);
+        Assert.False(root.Guarded);
+    }
+
+    [Fact]
     public void ABudDrinksAFixedAmountOfInkAndHoldsItUntilFreed()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         // No regrowth meanwhile: the ink moves only between the ground and the murkling.
         foreach (var root in w.Blightroots) root.Alive = false;
@@ -685,7 +726,7 @@ public class CorruptionTests
     [Fact]
     public void ABudReachesAsFarAsItMustNothingBudsOnADrainedLevelAndAnAmbushBudsOfItsOwn()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         // From the clean start it reaches out to the nearest ink, however far.
         var far = w.Corruption!.Plan(w.Player.Position, BlightTuning.Ink);
@@ -708,7 +749,7 @@ public class CorruptionTests
     [Fact]
     public void AMurklingPrimeIsFiveTimesTheSizeTwiceAsToughLeavesShellsAndBreaksIntoMurklings()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var at = PrimeSpot(w, 12f);
         var m = BudAt(w, at, prime: true)!;
@@ -757,7 +798,7 @@ public class CorruptionTests
     public void ThumpsquirtsLiveFromDepthTwoOn()
     {
         Assert.Empty(Level(p => p.Id.Depth == 2 && !p.HasBoss).Thumpsquirts);
-        var deeper = TestLevels.All(p => p.Id.Depth >= ThumpTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
+        var deeper = TestLevels.All(p => TestLevels.General(p) && p.Id.Depth >= ThumpTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
         if (deeper == default) return;
         Assert.InRange(World(TestLevels.Get(deeper)).Thumpsquirts.Count, 1, ThumpTuning.Max);
     }
@@ -765,7 +806,7 @@ public class CorruptionTests
     [Fact]
     public void AThumpsquirtLeapsAtHerUnharmedInTheAirLandsWithARingThenRollsAndRests()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var her = w.Player.Position;
         var at = her + new Vector2(0f, -7f);
@@ -803,7 +844,7 @@ public class CorruptionTests
     [Fact]
     public void AThumpsquirtLandingOnCleanGroundStainsItAndIsFreedByHerLight()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         // Out on ground that was corrupted (not a safe place), with room to land.
         var her = DenseSpot(w, 25f);
@@ -836,7 +877,7 @@ public class CorruptionTests
     public void InkwardensGuardTheBlightrootsFromDepthTwo()
     {
         Assert.Empty(Level(p => p.Id.Depth == 2 && !p.HasBoss).Inkwardens);
-        var plan = TestLevels.All(p => p.Id.Depth == WardenTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
+        var plan = TestLevels.All(p => TestLevels.General(p) && p.Id.Depth == WardenTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
         if (plan == default) return;
         var w = World(TestLevels.Get(plan));
         Assert.NotEmpty(w.Inkwardens);
@@ -846,7 +887,7 @@ public class CorruptionTests
     [Fact]
     public void AnInkwardenTurnsAsideAllHarmToItsKinUntilItIsFreed()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         var at = w.Player.Position + new Vector2(0f, -4f);
         var m = new Murkling { Position = at, Bud = 0f };
@@ -882,10 +923,10 @@ public class CorruptionTests
     public void LashjawsWaitInTheWallsFromDepthThree()
     {
         Assert.Empty(Level(p => p.Id.Depth == LashTuning.FirstDepth - 1 && !p.HasBoss).Lashjaws);
-        var plan = TestLevels.All(p => p.Id.Depth >= LashTuning.FirstDepth && !p.HasBoss).FirstOrDefault();
-        if (plan == default) return;
-        var w = World(TestLevels.Get(plan));
-        Assert.NotEmpty(w.Lashjaws);
+        // The first level on the general rules, past their depth, whose walls give them a place.
+        var w = TestLevels.All(p => TestLevels.General(p) && p.Id.Depth >= LashTuning.FirstDepth && !p.HasBoss)
+            .Select(id => World(TestLevels.Get(id))).FirstOrDefault(x => x.Lashjaws.Count > 0);
+        Assert.NotNull(w);
         foreach (var l in w.Lashjaws)
         {
             Assert.False(w.Map.IsOpen(l.Position - l.Facing * 1.1f), "rock behind it");
@@ -896,7 +937,7 @@ public class CorruptionTests
     /// <summary>A Lashjaw on a wall with her in front of it (out on ground that is not a safe place).</summary>
     static (PlaneWorld W, Lashjaw L, Vector2 Her) Lashing()
     {
-        var w = Level(p => !p.HasBoss && p.Id.Level > 1);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
         for (int c = 0; c < w.Corruption!.Density.Length; c += 13)
         {

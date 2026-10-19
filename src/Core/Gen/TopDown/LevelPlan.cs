@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using OctoShoots.Core.Run;
 
 namespace OctoShoots.Core.Gen.TopDown;
@@ -85,6 +87,8 @@ public sealed class LevelPlan
     public LevelId Next { get; init; }
 
     public int Places => Treasures + Secrets + Curses + Shops + Caches + Ambushes + (HasBoss ? 1 : 0);
+    /// <summary>The level's template (docs/LEVEL-TEMPLATES-PROPOSAL.md): null in the tutorial.</summary>
+    public LevelTemplate? Template { get; init; }
 
     /// <summary>The level of this depth (in this loop) where its boss stands: 4 or 5 (the tutorial's rift: its 2nd).</summary>
     public static int BossLevel(SeedCode seed, int cycle, int depth) =>
@@ -127,23 +131,49 @@ public sealed class LevelPlan
         if (id.Depth == Tutorial) return Tutorial_(seed, streams, id);
         bool boss = id.Level == BossLevel(seed, id.Cycle, id.Depth);
         bool first = id.Level == 1;
-        int treasures = first || id.Level == SecondTreasureLevel(seed, id.Cycle, id.Depth) ? 1 : 0;
+        var (templates, treasureLevels) = DepthTemplates(seed, id.Cycle, id.Depth);
+        var template = templates[id.Level - 1];
+        int treasures = treasureLevels.Contains(id.Level) ? 1 : 0;
         int secrets = rng.NextFloat() < LevelStocking.Secret ? 1 : 0;
         int curses = rng.NextFloat() < LevelStocking.Curse ? 1 : 0;
         int shops = !first && rng.NextFloat() < LevelStocking.Shop ? 1 : 0;
         int caches = !first && rng.NextFloat() < LevelStocking.Cache ? 1 : 0;
         int ambushes = rng.Int(LevelStocking.MaxAmbushes + 1);
 
-        // Over the cap: drop ambushes, then the curse den, the secret, the shell cache. Treasure rooms stay.
-        int Total() => treasures + secrets + curses + shops + caches + ambushes + (boss ? 1 : 0);
-        while (Total() > LevelStocking.MaxPlaces)
+        // The template's places over the general roll: required, a chance, or none (treasure rooms keep the depth's rule).
+        var required = new HashSet<PoiKind>();
+        int Apply(PoiKind kind, int general)
         {
-            if (ambushes > 0) ambushes--;
-            else if (curses > 0) curses--;
-            else if (secrets > 0) secrets--;
-            else if (caches > 0) caches--;
-            else break;
+            if (template is null || !template.Places.TryGetValue(kind, out var rule)) return general;
+            if (rule.None) return 0;
+            if (rule.Required > 0)
+            {
+                required.Add(kind);
+                return rule.Required;
+            }
+            return rule.Chance is { } p ? (rng.NextFloat() < p ? 1 : 0) : general;
         }
+        secrets = Apply(PoiKind.Secret, secrets);
+        curses = Apply(PoiKind.CurseDen, curses);
+        shops = Apply(PoiKind.Shop, shops);
+        caches = Apply(PoiKind.ShellCache, caches);
+        ambushes = Apply(PoiKind.Ambush, ambushes);
+        // The general rule wins: a depth's first level has no shop and no shell cache.
+        if (first) shops = caches = 0;
+
+        // Over the cap: drop ambushes, then the curse den, the secret, the shell cache — what the template requires last.
+        // Treasure rooms stay.
+        int Total() => treasures + secrets + curses + shops + caches + ambushes + (boss ? 1 : 0);
+        for (int pass = 0; pass < 2 && Total() > LevelStocking.MaxPlaces; pass++)
+            while (Total() > LevelStocking.MaxPlaces)
+            {
+                bool Free(PoiKind k) => pass == 1 || !required.Contains(k);
+                if (ambushes > 0 && Free(PoiKind.Ambush)) ambushes--;
+                else if (curses > 0 && Free(PoiKind.CurseDen)) curses--;
+                else if (secrets > 0 && Free(PoiKind.Secret)) secrets--;
+                else if (caches > 0 && Free(PoiKind.ShellCache)) caches--;
+                else break;
+            }
 
         var previous = PreviousOf(seed, id);
         var next = NextOf(seed, id);
@@ -162,7 +192,67 @@ public sealed class LevelPlan
             ExitStamp = streams.StampSeed(next),
             Menace = MenaceOf(id),
             Next = next,
+            Template = template,
         };
+    }
+
+    /// <summary>
+    /// The templates of a depth's levels (from its own stream, so any level's is known on its own), and the levels that
+    /// hold its treasure rooms. Each level draws from the templates that fit its depth and slot (the first level, a
+    /// middle one, the one before the boss, the boss's), by weight: never the same as the level before, no more of one
+    /// than its MaxPerDepth, at least three different ones in a depth of three or more, and never one that forbids the
+    /// treasure room a level must hold. The first level always holds one; a template that requires one elsewhere takes
+    /// the depth's second (at most one such), else the second falls where the general roll put it.
+    /// </summary>
+    public static (LevelTemplate?[] Templates, HashSet<int> TreasureLevels) DepthTemplates(SeedCode seed, int cycle, int depth)
+    {
+        int boss = BossLevel(seed, cycle, depth);
+        int second = SecondTreasureLevel(seed, cycle, depth);
+        var all = LevelTemplates.All;
+        var fallback = LevelTemplates.Get("default");
+        var rng = new RunStreams(seed).TemplateRoll(cycle, depth);
+        int shown = depth - Tutorial;
+        for (int attempt = 0; ; attempt++)
+        {
+            var picked = new LevelTemplate?[boss];
+            var treasures = new HashSet<int> { 1 };
+            bool secondFree = true;
+            for (int level = 1; level <= boss; level++)
+            {
+                var slot = level == boss ? TemplateSlot.Boss : level == 1 ? TemplateSlot.First : level == boss - 1 ? TemplateSlot.BeforeBoss : TemplateSlot.Middle;
+                bool mustTreasure = level == 1 || secondFree && level == second;
+                var previous = level > 1 ? picked[level - 2] : null;
+                var fits = all.Where(t => t.Fits(shown, slot) && t != previous
+                    && (t.MaxPerDepth <= 0 || picked.Count(x => x == t) < t.MaxPerDepth)
+                    && !(mustTreasure && t.Forbids(PoiKind.TreasureCave))
+                    && !(!mustTreasure && t.Requires(PoiKind.TreasureCave) && !secondFree)).ToList();
+                LevelTemplate? choice = fallback;
+                float sum = fits.Sum(t => t.WeightOn(slot));
+                if (sum > 0f)
+                {
+                    float roll = rng.NextFloat() * sum;
+                    foreach (var t in fits)
+                    {
+                        roll -= t.WeightOn(slot);
+                        choice = t;
+                        if (roll <= 0f) break;
+                    }
+                }
+                picked[level - 1] = choice;
+                if (level == second && secondFree && !(choice?.Forbids(PoiKind.TreasureCave) ?? false))
+                {
+                    treasures.Add(level);
+                    secondFree = false;
+                }
+                else if (level > 1 && choice is not null && choice.Requires(PoiKind.TreasureCave) && secondFree)
+                {
+                    treasures.Add(level);
+                    secondFree = false;
+                }
+            }
+            // A depth of three levels or more shows at least three different ones (a few rolls, then as it is).
+            if (boss < 3 || picked.Distinct().Count() >= 3 || attempt >= 12) return (picked, treasures);
+        }
     }
 
     /// <summary>The tutorial's levels: every kind of place between its two, set rather than rolled.</summary>

@@ -13,6 +13,9 @@ static class TestLevels
 
     public static LevelMap Get(LevelId id) => Maps.GetOrAdd(id, i => TopDownGenerator.Generate(new RunStreams(Seed), i));
 
+    /// <summary>A level on the general rules alone (the tutorial's, or the default template's): what the mechanics tests assume.</summary>
+    public static bool General(LevelPlan p) => p.Template is null || p.Template.Id == "default";
+
     /// <summary>The first level of the seed's first loop whose plan matches (from the tutorial on).</summary>
     public static LevelId Find(Func<LevelPlan, bool> match)
     {

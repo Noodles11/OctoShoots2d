@@ -39,6 +39,12 @@ public sealed class CaveLayout
 
     public enum Role { Start, Main, Branch, Exit }
 
+    /// <summary>The level template's shape: multipliers on the chambers' radii, the tunnels' widths and lengths, and the loops.</summary>
+    LayoutRule _shape = new();
+    float Radius(Rng rng, (float Lo, float Hi) r) => Pick(rng, r) * _shape.ChamberRadius;
+    float Width(Rng rng, (float Lo, float Hi) r) => MathF.Max(Pick(rng, r) * _shape.TunnelWidth, 4.2f);
+    float Step(Rng rng, (float Lo, float Hi) r) => Pick(rng, r) * _shape.TunnelLength;
+
     public sealed class Chamber
     {
         public Vector2 At;
@@ -84,9 +90,9 @@ public sealed class CaveLayout
     /// One cave for the level, or why it failed. <paramref name="kinds"/> are the plan's places in order of preference
     /// for the early one; <paramref name="radius"/> gives each its room or clearing.
     /// </summary>
-    public static (CaveLayout? Layout, string? Why) Build(Rng rng, bool boss, bool fromArena, IReadOnlyList<PoiKind> kinds, Func<PoiKind, float> radius)
+    public static (CaveLayout? Layout, string? Why) Build(Rng rng, bool boss, bool fromArena, IReadOnlyList<PoiKind> kinds, Func<PoiKind, float> radius, LayoutRule? shape = null)
     {
-        var g = new CaveLayout();
+        var g = new CaveLayout { _shape = shape ?? new LayoutRule() };
         uint seed = (uint)(rng.NextU64() >> 34);
         g.MainChain(rng, boss, fromArena);
         if (Vector2.Distance(g.Exit.At, g.Start.At) < MinStraight) return (null, "the way down is too close to the start");
@@ -193,11 +199,11 @@ public sealed class CaveLayout
             float wobble = rng.Range(-0.65f, 0.65f);
             Vector2 next = new(dir.X * MathF.Cos(wobble) - dir.Y * MathF.Sin(wobble), dir.X * MathF.Sin(wobble) + dir.Y * MathF.Cos(wobble));
             next = Vector2.Normalize(next * 0.55f + (goal - cur.At) / toGoal * 0.45f);
-            float step = MathF.Min(Pick(rng, StepMain), toGoal - 8f);
-            float r = Pick(rng, RadiusMain);
+            float step = MathF.Min(Step(rng, StepMain), toGoal - 8f);
+            float r = Radius(rng, RadiusMain);
             var chamber = MakeChamber(rng, Clamp(cur.At + next * step, r), r, Role.Main);
             Chambers.Add(chamber);
-            Tunnels.Add(MakeTunnel(rng, cur, chamber, Pick(rng, WidthMain), CorridorKind.Main));
+            Tunnels.Add(MakeTunnel(rng, cur, chamber, Width(rng, WidthMain), CorridorKind.Main));
             cur = chamber;
             dir = next;
         }
@@ -206,7 +212,7 @@ public sealed class CaveLayout
         // The arena stays round.
         if (boss) Exit.Harm = Exit.Harm.Select(h => (h.K, h.A * 0.3f, h.P)).ToArray();
         Chambers.Add(Exit);
-        Tunnels.Add(MakeTunnel(rng, cur, Exit, Pick(rng, WidthMain), CorridorKind.Main));
+        Tunnels.Add(MakeTunnel(rng, cur, Exit, Width(rng, WidthMain), CorridorKind.Main));
     }
 
     /// <summary>One side branch off a chamber (and now and then a second tunnel making a loop); false when it does not fit.</summary>
@@ -216,7 +222,7 @@ public sealed class CaveLayout
     {
         var options = Chambers.Where(c => c.Role != Role.Exit && !c.Room).ToList();
         var parent = options[rng.Int(options.Count)];
-        float a = rng.Range(0f, MathF.Tau), step = Pick(rng, StepBranch), r = Pick(rng, RadiusBranch);
+        float a = rng.Range(0f, MathF.Tau), step = Step(rng, StepBranch), r = Radius(rng, RadiusBranch);
         Vector2 at = parent.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (parent.R + step);
         if (!InBounds(at, r)) return null;
         foreach (var c in Chambers)
@@ -229,8 +235,8 @@ public sealed class CaveLayout
             foreach (var p in t.Points)
                 if (Vector2.Distance(p, at) < r + t.Width / 2f + 1f) return null;
         }
-        var tunnels = new List<Tunnel> { MakeTunnel(rng, parent, chamber, Pick(rng, WidthBranch), CorridorKind.Side) };
-        if (rng.NextFloat() < LoopChance)
+        var tunnels = new List<Tunnel> { MakeTunnel(rng, parent, chamber, Width(rng, WidthBranch), CorridorKind.Side) };
+        if (rng.NextFloat() < LoopChance * _shape.Loops)
         {
             Chamber? best = null;
             float bd = LoopReach;
@@ -244,7 +250,7 @@ public sealed class CaveLayout
                     best = o;
                 }
             }
-            if (best is not null) tunnels.Add(MakeTunnel(rng, chamber, best, Pick(rng, WidthLoop), CorridorKind.Side));
+            if (best is not null) tunnels.Add(MakeTunnel(rng, chamber, best, Width(rng, WidthLoop), CorridorKind.Side));
         }
         return (chamber, tunnels);
     }

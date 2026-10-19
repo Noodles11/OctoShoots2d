@@ -117,7 +117,8 @@ public sealed class CorruptionField
     {
         var safes = safe.ToList();
         float seed = (map.Seed % 997) * 0.37f;
-        float cover = MathF.Min(CorruptionTuning.Cover + CorruptionTuning.CoverPerMenace * MathF.Max(map.Menace, 0f), CorruptionTuning.CoverMax);
+        // (The level's template may lay more: its ink rule.)
+        float cover = MathF.Min(CorruptionTuning.Cover + CorruptionTuning.CoverPerMenace * MathF.Max(map.Menace, 0f) + (map.Template?.Rules.Ink ?? 0f), CorruptionTuning.CoverMax);
         var score = new float[N * N];
         var open = new List<float>(N * N / 2);
         for (int y = 0; y < N; y++)

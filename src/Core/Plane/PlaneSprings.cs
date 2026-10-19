@@ -24,7 +24,9 @@ public static class LightSprings
     {
         var found = new List<Vector2>();
         var rng = new Rng(map.Seed ^ 0x5B21C5UL ^ ((ulong)map.Level << 18) ^ ((ulong)map.Depth << 26) ^ ((ulong)map.Cycle << 34) ^ ((ulong)map.Attempt << 50));
-        if (rng.NextFloat() >= SpringTuning.Chance) return found;
+        // As many as the level's template says, else the general chance of one.
+        int want = map.Template?.Rules.Springs ?? (rng.NextFloat() < SpringTuning.Chance ? 1 : 0);
+        if (want <= 0) return found;
         var candidates = map.Plazas.Select(p => p.Center).ToList();
         foreach (var c in map.Corridors.Where(c => c.Kind is CorridorKind.Main or CorridorKind.Side))
             for (int i = 2; i < c.Points.Count; i += 4) candidates.Add(c.Points[i]);
@@ -46,8 +48,9 @@ public static class LightSprings
                 open = map.IsOpen(at + new Vector2(MathF.Cos(a), MathF.Sin(a)) * SpringTuning.Clearance);
             }
             if (!open) continue;
+            if (found.Any(f => Vector2.Distance(f, at) < 25f)) continue;
             found.Add(at);
-            break;
+            if (found.Count >= want) break;
         }
         return found;
     }

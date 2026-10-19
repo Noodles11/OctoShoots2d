@@ -68,6 +68,9 @@ public sealed class Corridor
 /// <summary>An open crossing where two corridors meet (~14 m).</summary>
 public readonly record struct Plaza(Vector2 Center, float Radius);
 
+/// <summary>A chamber of the cave: on the main chain (start to way down), or a dead end (a branch with one tunnel).</summary>
+public readonly record struct CaveChamber(Vector2 At, float Radius, bool Main, bool DeadEnd);
+
 
 /// <summary>
 /// The shaft down to the next level (DESIGN-TOPDOWN §4.6): an ellipse in the exit's floor (a disc for a blue hole, the
@@ -236,6 +239,10 @@ public sealed class LevelMap
     public List<Poi> Pois = new();
     public List<Corridor> Corridors = new();
     public List<Plaza> Plazas = new();
+    /// <summary>The cave's open chambers, with their roles (the level templates' anchors read them).</summary>
+    public List<CaveChamber> Chambers = new();
+    /// <summary>The level's template (null: the general rules alone, as in the tutorial).</summary>
+    public LevelTemplate? Template;
     public List<CaveSite> Caves = new();
     public List<Canopy> Canopies = new();
     public List<WeakRock> WeakRocks = new();

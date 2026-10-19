@@ -86,13 +86,16 @@ public sealed partial class PlaneWorld
     void PlaceThumpsquirts()
     {
         if (Map.Depth < ThumpTuning.FirstDepth) return;
+        var cast = CastOf(Gen.TopDown.CastKind.Thumpsquirt);
+        if (cast is { None: true }) return;
         int want = Map.Depth == ThumpTuning.FirstDepth ? 1 : Map.Depth == ThumpTuning.FirstDepth + 1 ? 1 + _blightRng.Int(2) : 2;
-        want = Math.Min(want, ThumpTuning.Max);
+        want = cast is not null ? CastCount(cast, ThumpTuning.Max) : Math.Min(want, ThumpTuning.Max);
         var reach = Gen.TopDown.LevelValidator.Distances(Map, Map.Start.Position);
-        for (int tries = 0; tries < 400 && Thumpsquirts.Count < want; tries++)
+        for (int tries = 0; tries < (cast is null ? 400 : 4000) && Thumpsquirts.Count < want; tries++)
         {
             var at = new Vector2(_blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f), _blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f));
             if (!Clear(at, 1.2f) || Vector2.Distance(at, Map.Start.Position) < ThumpTuning.FromStart) continue;
+            if (!Anchored(cast, Thumpsquirts.Count, at)) continue;
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + 4f) continue;
             if (Map.Shaft.Contains(at, 3f) || float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) continue;
             if (Thumpsquirts.Any(t => Vector2.Distance(t.Position, at) < ThumpTuning.Spacing)) continue;

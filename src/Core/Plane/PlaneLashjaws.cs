@@ -71,12 +71,16 @@ public sealed partial class PlaneWorld
     void PlaceLashjaws()
     {
         if (Map.Depth < LashTuning.FirstDepth) return;
-        int want = Math.Min(LashTuning.Max, Map.Depth == LashTuning.FirstDepth ? 1 + _blightRng.Int(2) : 2 + _blightRng.Int(2));
+        var cast = CastOf(Gen.TopDown.CastKind.Lashjaw);
+        if (cast is { None: true }) return;
+        int want = cast is not null ? CastCount(cast, LashTuning.Max)
+            : Math.Min(LashTuning.Max, Map.Depth == LashTuning.FirstDepth ? 1 + _blightRng.Int(2) : 2 + _blightRng.Int(2));
         var reach = Gen.TopDown.LevelValidator.Distances(Map, Map.Start.Position);
         for (int tries = 0; tries < 4000 && Lashjaws.Count < want; tries++)
         {
             var at = new Vector2(_blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f), _blightRng.Range(4f, Gen.TopDown.LevelMap.Size - 4f));
             if (!Clear(at, 0.5f) || Vector2.Distance(at, Map.Start.Position) < LashTuning.FromStart) continue;
+            if (!Anchored(cast, Lashjaws.Count, at)) continue;
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + 6f) continue;
             if (Map.Shaft.Contains(at, 4f) || float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) continue;
             if (Map.Pois.Any(p => p.Kind != Gen.TopDown.PoiKind.Ambush && Vector2.Distance(p.Position, at) < p.Radius + LashTuning.FromPlaces)) continue;

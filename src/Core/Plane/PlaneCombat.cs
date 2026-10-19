@@ -277,7 +277,8 @@ public sealed partial class PlaneWorld
             if (!Options.Pufferlings)
             {
                 // The pufferlings are retracted: the clearing's corruption buds murklings round her instead.
-                if (Corruption is not null) AmbushBuds(ambush);
+                // (A quiet level's template springs none.)
+                if (Corruption is not null && !Quiet) AmbushBuds(ambush);
                 Events.Add(new PlaneEvent(PlaneEventType.AmbushSprung, ambush.Center, Vector2.Zero));
                 continue;
             }

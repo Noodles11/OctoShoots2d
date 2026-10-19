@@ -884,6 +884,8 @@ public partial class TopDownMain : Node3D
         _seedField.Text = _seed.ToString();
         // The level's title, always on beside the clock (a new depth's first level names the depth too).
         _hud.LevelTitle = _id.Level == 1 ? $"{ReefLook.For(_id.Depth).Name} · {_id}" : _id.ToString();
+        // What the level is about: its template's name (DESIGN-TOPDOWN §4.1; the default template has none).
+        if (_map.Template is { Name.Length: > 0 } template) _hud.LevelTitle += $" · {template.Name}";
         GD.Print($"Top-down level {_seed} {_id}: attempt {_map.Attempt + 1}, {ms} ms, {_map.Pois.Count} POIs{(_map.HasBoss ? ", boss" : "")}, {_map.Canopies.Count} canopy pieces, {_map.Decor.Count} decor");
         _belowTask = Shape(LevelPlan.NextOf(_seed, _id), background: true);
     }
@@ -1021,6 +1023,8 @@ public partial class TopDownMain : Node3D
             // A few metres off the level's first Thumpsquirt.
             // A few metres off the level's first Inkwarden.
             // In front of the level's first Lashjaw, in its reach.
+            // A few metres south of the first Blightroot, in sight of it.
+            "root" => _world.Blightroots.Select(r => (System.Numerics.Vector2?)(r.Position + new System.Numerics.Vector2(0f, 6f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "lashjaw" => _world.Lashjaws.Select(l => (System.Numerics.Vector2?)(l.Position + l.Facing * 6f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "warden" => _world.Inkwardens.Select(w => (System.Numerics.Vector2?)(w.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "thump" => _world.Thumpsquirts.Select(t => (System.Numerics.Vector2?)(t.Position + new System.Numerics.Vector2(0f, 8f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1366,7 +1370,6 @@ public partial class TopDownMain : Node3D
                     _sfx.PlayPitched("bell_ring", 1.1f, -3f);
                     _camera.Shake(0.25f);
                     _haptics.Pulse(1f, 1f, 0.45f);
-                    _hud.ShowPearl(pearl);
                     AnnounceSynergies();
                 }
                 else if (e.Type == PlaneEventType.ShellCollected)
@@ -1898,11 +1901,11 @@ public partial class TopDownMain : Node3D
         }
     }
 
+    /// <summary>A status line for the F3 debug panel (nothing on the HUD: the game shows no log of messages).</summary>
     void Say(string text)
     {
         _status = text;
         _statusTimer = 3f;
-        _hud.ShowMessage(text);
     }
 
     void TogglePause()
@@ -1934,7 +1937,6 @@ public partial class TopDownMain : Node3D
             if (!_announced.Add(id)) continue;
             var syn = _catalog.Synergies.FirstOrDefault(s => s.Id == id);
             if (syn is null) continue;
-            _hud.ShowSynergy(syn.Name, syn.Description);
             _sfx.Play("synergy", -2f, 0f);
             _combat.Shockwave(_world.Player.Position, 3f, HerColor.Light with { A = 0.8f }, 0.6f);
         }
@@ -1965,6 +1967,10 @@ public partial class TopDownMain : Node3D
     {
         switch (e.Type)
         {
+            case PlaneEventType.GuardiansWoke:
+                // Its guardians wake: a low call.
+                _sfx.PlayPitched("curse_enter", 1.5f, -12f);
+                break;
             case PlaneEventType.BlightrootBurst:
                 _camera.Shake(0.35f);
                 _sfx.PlayPitched("bell_ring", 0.75f, -8f);

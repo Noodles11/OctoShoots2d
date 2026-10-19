@@ -22,6 +22,8 @@ instance uniform vec3 aim = vec3(0.0, 0.0, 1.0);
 instance uniform float pull = 0.0;
 instance uniform float bud = 0.0;
 instance uniform float drip = 0.0;
+// Struck by her light (1 at the hit, fading): a short bright outline round the body.
+instance uniform float hit = 0.0;
 
 varying vec3 v_dir;
 
@@ -79,4 +81,6 @@ void fragment() {
 	vec3 glow = ember_tint.a > 0.5 ? ember_tint.rgb : ember_color;
 	// Its rim glows in its colour, brighter for a coloured kind, so it reads in the dark depths.
 	EMISSION = rim * fres * (0.55 + 0.3 * swirl + swell * 0.8) * (1.0 + 1.2 * skin.a) + rim * skin.a * 0.08 + glow * pow(facing, 6.0) * ember * flicker * 1.4;
+	// Her light's hit: a thin warm-white outline along the silhouette.
+	if (hit > 0.0) EMISSION += vec3(1.0, 0.93, 0.75) * smoothstep(0.45, 0.85, 1.0 - facing) * hit * 4.0;
 }

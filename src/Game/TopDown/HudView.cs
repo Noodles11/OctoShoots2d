@@ -18,8 +18,6 @@ public partial class HudView : Control
     const float Margin = 18f;
 
     PlaneRun? _run;
-    ItemCatalog? _catalog;
-    string _caption = "";
     int _shells;
     /// <summary>1 when a shell has just reached the counter, easing back to 0: the counter brightens and swells.</summary>
     float _pulse;
@@ -33,7 +31,6 @@ public partial class HudView : Control
     /// <summary>A flight's length (s): brief, so it does not get in the way, quick enough to read as a flick.</summary>
     const float FlightTime = 0.55f;
     int _side = 1;
-    float _captionTimer;
 
     public override void _Ready()
     {
@@ -79,8 +76,6 @@ public partial class HudView : Control
             _bossCrust = boss.Crust;
         }
         _run = world.Run;
-        _catalog = catalog;
-        _captionTimer -= dt;
         _shells = world.Run.Shells;
         _pulse = Mathf.MoveToward(_pulse, 0f, dt * 2.5f);
         _ring = Mathf.MoveToward(_ring, 0f, dt * 3f);
@@ -154,28 +149,6 @@ public partial class HudView : Control
         poly.Add(hinge);
         DrawPolyline(poly.ToArray(), ink, 1.5f, true);
         DrawRect(new Rect2(hinge - new Vector2(size * 0.28f, size * 0.12f), new Vector2(size * 0.56f, size * 0.22f)), fill);
-    }
-
-    /// <summary>A short message (a new room, "Not enough shells") shown where pearl captions show.</summary>
-    public void ShowMessage(string text)
-    {
-        _caption = text;
-        _captionTimer = 2.5f;
-    }
-
-    /// <summary>Announces a synergy her pearls have just made.</summary>
-    public void ShowSynergy(string name, string description)
-    {
-        _caption = $"Synergy! {name} — {description}";
-        _captionTimer = 5f;
-    }
-
-    /// <summary>Announces a pearl just taken.</summary>
-    public void ShowPearl(string itemId)
-    {
-        if (_catalog is null || !_catalog.TryGet(itemId, out var item)) return;
-        _caption = $"{item.Name} — {item.Tagline}";
-        _captionTimer = 4f;
     }
 
     public override void _Draw()
@@ -294,12 +267,6 @@ public partial class HudView : Control
             }
             var col = _promptReady ? new Color(1f, 0.93f, 0.8f, a) : new Color(0.85f, 0.85f, 0.9f, 0.75f * a);
             DrawString(font, new Vector2(x, p.Y + 24f), _prompt, HorizontalAlignment.Left, -1, fs, col);
-        }
-
-        if (_captionTimer > 0f)
-        {
-            float alpha = Mathf.Clamp(_captionTimer, 0f, 1f);
-            DrawString(font, at + new Vector2(0f, -72f), _caption, HorizontalAlignment.Left, -1, 20, new Color(1f, 0.93f, 0.8f, alpha));
         }
     }
 }

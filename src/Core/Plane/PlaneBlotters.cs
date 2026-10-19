@@ -128,11 +128,14 @@ public sealed partial class PlaneWorld
     /// <summary>A level's Blotters wake: on thick corruption, far from her start, apart, out of the arena.</summary>
     void PlaceBlotters(CorruptionField field)
     {
-        int want = Math.Min(BlotterTuning.Max, (int)MathF.Round(BlotterTuning.Start + BlotterTuning.PerMenace * Menace));
+        var cast = CastOf(Gen.TopDown.CastKind.Blotter);
+        if (cast is { None: true }) return;
+        int want = cast is not null ? CastCount(cast, BlotterTuning.Max)
+            : Math.Min(BlotterTuning.Max, (int)MathF.Round(BlotterTuning.Start + BlotterTuning.PerMenace * Menace));
         var reach = Gen.TopDown.LevelValidator.Distances(Map, Map.Start.Position);
-        for (int tries = 0; tries < 600 && Blotters.Count < want; tries++)
+        for (int tries = 0; tries < (cast is null ? 600 : 4000) && Blotters.Count < want; tries++)
         {
-            if (!ThickSpot(field, out var at)) continue;
+            if (!ThickSpot(field, out var at) || !Anchored(cast, Blotters.Count, at)) continue;
             if (Vector2.Distance(at, Map.Start.Position) < BlotterTuning.FromStart) continue;
             if (float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) continue;
             if (Blotters.Any(b => Vector2.Distance(b.Position, at) < BlotterTuning.Spacing)) continue;
@@ -176,6 +179,8 @@ public sealed partial class PlaneWorld
         var p = Player;
         // Born from the corruption itself: now and then one rises from thick ground far from her.
         _birthTimer -= Dt;
+        // A quiet level (its template's rule) and one whose template casts no Blotters: none is born.
+        if (_birthTimer <= 0f && (Quiet || CastOf(Gen.TopDown.CastKind.Blotter) is { None: true })) _birthTimer = BlotterTuning.BirthEvery;
         if (_birthTimer <= 0f)
         {
             _birthTimer = BlotterTuning.BirthEvery;
