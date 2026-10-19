@@ -102,14 +102,15 @@ public static class TopDownGenerator
         var spurDirs = new Dictionary<int, Vector2>();
         string? cave = LayCave(map, Stage("cave"), plan, spurDirs, out var open);
         if (cave is not null) return cave;
-        RaiseCaveWalls(map, open, terrainText, Stage("topo"));
-        string? features = BuildFeatures(map, Stage("features"), spurDirs);
+        var strata = new WallStrata(Stage("strata"));
+        RaiseCaveWalls(map, open, terrainText, Stage("topo"), strata);
+        string? features = BuildFeatures(map, Stage("features"), spurDirs, strata);
         if (features is not null) return features;
         FlattenSeabed(map);
-        SoftenSlopes(map, Stage("slopes"));
+        SoftenSlopes(map, Stage("slopes"), strata);
         CutShaft(map, Stage("shaft"));
         ClampHeights(map);
-        Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed);
+        Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed, strata);
         PlacePickups(map, Stage("pickups"));
         PlaceSpawns(map, Stage("spawns"), plan.Menace);
         return null;
@@ -181,10 +182,12 @@ public static class TopDownGenerator
 
     /// <summary>
     /// The rock round the cave: open water lies on the seabed (the boss arena a level floor), and the rock climbs from
-    /// the water's edge to the prototype's terrain, mapped between <see cref="WallTopMin"/> and <see cref="WallTopMax"/>;
-    /// the impassable rim rises out of it with the same brush.
+    /// the water's edge to the prototype's terrain, mapped between <see cref="WallTopMin"/> and <see cref="WallTopMax"/>.
+    /// The terrain is read through the strata's low-frequency warp, so wall outlines wander like real reef edges, and
+    /// the rock is terraced into the level's strata (<see cref="WallStrata.Terrace"/>). Only rock is shaped: the water
+    /// is exactly the cave's. The impassable rim rises out of it with the same brush.
     /// </summary>
-    static void RaiseCaveWalls(LevelMap map, bool[] open, string terrainText, Rng rng)
+    static void RaiseCaveWalls(LevelMap map, bool[] open, string terrainText, Rng rng, WallStrata strata)
     {
         const int N = LevelMap.Samples;
         var tops = new float[N * N];
@@ -192,26 +195,50 @@ public static class TopDownGenerator
         uint dipSeed = (uint)(rng.NextU64() >> 32);
         var toWater = CaveLayout.Chamfer(open, true);
         var rift = map.Exit;
+        // The raw profile first: the floor, and the rock rising from the water's edge to its warped top.
+        var raw = new float[N * N];
         for (int y = 0; y < N; y++)
         for (int x = 0; x < N; x++)
         {
             int i = y * N + x;
-            float h;
             if (open[i])
             {
-                h = -PathDepth - 0.6f * FloorDip(x, y, dipSeed);
+                float h = -PathDepth - 0.6f * FloorDip(x, y, dipSeed);
                 if (map.HasBoss) h = MathUtil.Lerp(-PathDepth, h, Smooth(rift.Radius, rift.Radius + 5f, Vector2.Distance(new Vector2(x, y), rift.Position)));
+                raw[i] = h;
             }
             else
             {
-                float top = WallTopMin + (WallTopMax - WallTopMin) * (tops[i] - ReefTerrain.HMin) / (ReefTerrain.HMax - ReefTerrain.HMin);
-                h = MathF.Max(WallFoot, MathF.Min(top, WallFoot + WallRise * (toWater[i] - 1f)));
+                var warp = strata.Warp(x, y);
+                float t = Bilinear(tops, x + warp.X, y + warp.Y);
+                float top = WallTopMin + (WallTopMax - WallTopMin) * (t - ReefTerrain.HMin) / (ReefTerrain.HMax - ReefTerrain.HMin);
+                raw[i] = MathF.Max(WallFoot, MathF.Min(top, WallFoot + WallRise * (toWater[i] - 1f)));
             }
+        }
+        float RawAt(float x, float y) => Bilinear(raw, x, y);
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            int i = y * N + x;
+            // Terraced: rock only, and never down to the swim level.
+            float h = open[i] ? raw[i] : MathF.Max(WallFoot, strata.Terrace(raw[i], x, y, RawAt));
             float e = MathF.Min(MathF.Min(x, y), MathF.Min(Size - x, Size - y));
             float w = ReefTerrain.Falloff(e / (Rim + 1f));
             if (w > 0f) h += w * (ReefTerrain.HMax - h);
             map.Heights[i] = h;
         }
+    }
+
+    /// <summary>A grid field's bilinear value at a point (clamped to the square).</summary>
+    static float Bilinear(float[] f, float x, float y)
+    {
+        const int N = LevelMap.Samples;
+        x = Math.Clamp(x, 0f, N - 1.001f);
+        y = Math.Clamp(y, 0f, N - 1.001f);
+        int ix = (int)x, iy = (int)y;
+        float tx = x - ix, ty = y - iy;
+        int i = iy * N + ix;
+        return MathUtil.Lerp(MathUtil.Lerp(f[i], f[i + 1], tx), MathUtil.Lerp(f[i + N], f[i + N + 1], tx), ty);
     }
 
     /// <summary>The nearest point on a polyline.</summary>
@@ -317,18 +344,15 @@ public static class TopDownGenerator
         foreach (int i in raise) map.Heights[i] = Seabed;
     }
 
-    /// <summary>The walls' faces lean back: at most this many metres up per metre in from the water's edge (between SlopeMin and SlopeMax).</summary>
-    const float SlopeMin = 0.75f, SlopeMax = 1.25f;
-    /// <summary>The share of the walls left as sheer cliffs (where a slow noise is lowest).</summary>
-    const float CliffShare = 0.15f;
-
     /// <summary>
-    /// Most walls slope rather than stand sheer (DESIGN-TOPDOWN §4.1): above the swim level the rock is held under a
-    /// slope rising from the water's edge — between 37° and 51°, varying slowly over the level — so a face leans back
-    /// and a narrow ridge rounds over lower; about a sixth of the walls stay cliffs. Only rock above the swim level
-    /// is lowered, never below it, so the water she swims is the same (the edge moves only by a fraction of a metre).
+    /// Most walls slope rather than stand sheer (DESIGN-TOPDOWN §4.1): above the swim level the rock is held under the
+    /// strata's profile rising from the water's edge (<see cref="WallStrata.SlopeCap"/>): the lowest stratum a cliff of
+    /// 50–60°, its steepness varying slowly over the level, each layer above leaning back further, so a face reads as a
+    /// reef's and a narrow ridge rounds over lower. A share of the walls, rolled per level, stays sheer. Only rock above
+    /// the swim level is lowered, never below it, so the water she swims is the same (the edge moves only by a
+    /// fraction of a metre).
     /// </summary>
-    static void SoftenSlopes(LevelMap map, Rng rng)
+    static void SoftenSlopes(LevelMap map, Rng rng, WallStrata strata)
     {
         const int N = LevelMap.Samples;
         // Distance (metres) from every grid point to the nearest open water, and to the nearest roof (an arch's deck,
@@ -346,14 +370,13 @@ public static class TopDownGenerator
             var p = new Vector2(x, y);
             // Where the walls stay cliffs, and how steep the rest lean (two slow noises).
             float cliff = 0.5f + 0.5f * TerrainNoise.Fbm(x / 22f + 31f, y / 22f - 17f, seed, 2);
-            float soft = MathUtil.Smoothstep(MathUtil.Clamp01((cliff - CliffShare + 0.06f) / 0.12f));
+            float soft = MathUtil.Smoothstep(MathUtil.Clamp01((cliff - strata.CliffShare + 0.06f) / 0.12f));
             float steep = 0.5f + 0.5f * TerrainNoise.Fbm(x / 30f - 7f, y / 30f + 11f, seed + 5u, 2);
-            float slope = MathUtil.Lerp(SlopeMin, SlopeMax, MathUtil.Clamp01(steep));
             // Not under or beside a roof.
             soft *= MathUtil.Smoothstep(MathUtil.Clamp01((roof[i] - 1f) / 3f));
             if (soft <= 0f) continue;
-            // Held under the slope, but never down to the swim level (a wall stays a wall).
-            float cap = MathF.Max(slope * d[i], 0.4f);
+            // Held under the strata's profile, but never down to the swim level (a wall stays a wall).
+            float cap = MathF.Max(strata.SlopeCap(d[i], steep, x, y), 0.4f);
             if (cap >= h) continue;
             map.Heights[i] = MathUtil.Lerp(h, cap, soft);
             eased[i] = true;
@@ -531,7 +554,7 @@ public static class TopDownGenerator
 
     // ───────────────────────── stage 4: arches, caves, passes ─────────────────────────
 
-    static string? BuildFeatures(LevelMap map, Rng rng, Dictionary<int, Vector2> spurDirs)
+    static string? BuildFeatures(LevelMap map, Rng rng, Dictionary<int, Vector2> spurDirs, WallStrata strata)
     {
         // Caves: every special room gets one, carved into the ridge behind its spur.
         for (int pi = 0; pi < map.Pois.Count; pi++)
@@ -723,6 +746,9 @@ public static class TopDownGenerator
             if (map.HeightAt(p + nrm * (corridor.HalfWidth + 4f)) < 8f) continue;
             Vector2 at = p + nrm * (corridor.HalfWidth + 0.5f);
             if (map.Canopies.Any(c => Vector2.Distance(c.Center, at) < 15f)) continue;
+            // It juts from a ledge where the wall has one at about its height (a stratum's edge), else at 5.5 m.
+            float ledge = strata.NearestLedge(5.5f, at.X, at.Y, 2f);
+            float bottom = ledge >= 4.5f ? ledge : 5.5f;
             map.Canopies.Add(new Canopy
             {
                 Kind = CanopyKind.Overhang,
@@ -730,8 +756,8 @@ public static class TopDownGenerator
                 Axis = tangent,
                 HalfLength = rng.Range(3f, 5f),
                 HalfWidth = rng.Range(1.5f, 2.5f),
-                Bottom = 5.5f,
-                Top = 7.5f,
+                Bottom = bottom,
+                Top = bottom + 2f,
                 Corridor = map.Corridors.IndexOf(corridor),
             });
         }
@@ -952,7 +978,7 @@ public static class TopDownGenerator
 
     // ───────────────────────── stage 5: reef & decoration ─────────────────────────
 
-    static void Decorate(LevelMap map, Rng rng, uint seed)
+    static void Decorate(LevelMap map, Rng rng, uint seed, WallStrata strata)
     {
         float fanYaw = MathF.Atan2(Current.Y, Current.X);
         for (float y = 1f; y < Size - 1f; y += 2f)
@@ -981,6 +1007,15 @@ public static class TopDownGenerator
                 else if (h > -6f && meadow > 0.2f && roll < 0.35f) map.Decor.Add(new DecorSpot(DecorKind.GrassMeadow, p, h, scale, yaw));
                 else if (roll < 0.04f) map.Decor.Add(new DecorSpot(DecorKind.SandChannel, p, h, scale, yaw));
             }
+            else if (Ledge(map, p, h, strata))
+            {
+                // A ledge's lip (a stratum's edge, the drop just beyond): fans and sea rods low down, cliff coral higher.
+                if (roll < 0.3f)
+                {
+                    DecorKind kind = h < 6f ? (zone > 0.45f ? DecorKind.SeaFan : DecorKind.SeaRod) : roll < 0.2f ? DecorKind.CliffCoral : DecorKind.EncrustingCoral;
+                    map.Decor.Add(new DecorSpot(kind, p, h, scale, kind == DecorKind.SeaFan ? fanYaw : yaw));
+                }
+            }
             else if (h < 6f)
             {
                 // The reef wall where it breaks the swim level.
@@ -998,6 +1033,18 @@ public static class TopDownGenerator
                 else if (roll < 0.12f) map.Decor.Add(new DecorSpot(DecorKind.EncrustingCoral, p, h, scale, yaw));
             }
         }
+    }
+
+    /// <summary>A ledge's lip: rock at about a stratum's height, nearly level, with a drop of a metre or more just beyond.</summary>
+    static bool Ledge(LevelMap map, Vector2 p, float h, WallStrata strata)
+    {
+        if (h <= LevelMap.BlockHeight || strata.NearestLedge(h, p.X, p.Y, 0.6f) < 0f || map.Gradient(p).Length() > 0.5f) return false;
+        for (int a = 0; a < 8; a++)
+        {
+            var dir = new Vector2(MathF.Cos(a * MathF.PI / 4f), MathF.Sin(a * MathF.PI / 4f));
+            if (map.HeightAt(p + dir * 1.5f) < h - 1f) return true;
+        }
+        return false;
     }
 
     static bool IsLocalPeak(LevelMap map, Vector2 p, float h)

@@ -384,13 +384,28 @@ its own.
 - Open water lies on the seabed at level −1 to −1.6 (the boss arena level at
   −1); the rock climbs from the water's edge (0.4 m, then 1.6 m a metre) to a
   top 4–14 m high, taken from the reef prototype's terrain
-  (`reef_generator.html`, reproduced exactly for the seed text), so plateaus
-  roll rather than lie flat. The impassable rim rises out of it.
+  (`reef_generator.html`, reproduced exactly for the seed text). The terrain is
+  read through a **domain warp** (a second, low-frequency noise moving each
+  sample ±3–6 m, rolled per level), so wall outlines wander like real reef
+  edges. The impassable rim rises out of it.
+- **The walls are layered** (`WallStrata`): each level's rock rises in 2–4
+  strata. Every boundary is a ledge height (the first 2.6–4.2 m up, the rest
+  spread to 9–11 m) drifting ±0.9 m with a slow noise. At each boundary the
+  rock pauses: the next stretch of its rise (2.4 m with two layers, 1.8 m with
+  three, 1.4 m with four) is laid flat into a ledge, each corner eased over
+  ±0.4 m, and then it climbs on. On a face that is a bench between two cliffs;
+  over rolling tops, a plateau at the ledge's height. Each stratum above the
+  first finds its edge by testing the rock at its own shift of the warp (moving
+  it by at most ±0.8 m of height), so every stratum's edge is differently
+  irregular.
 - **Most walls slope** (`SoftenSlopes`): the rock above the swim level is held
-  under a slope rising from the water's edge, between 37° and 51° and varying
-  slowly over the level; about a sixth of the walls stay sheer cliffs. Only
-  rock above the swim level is lowered, so the water she swims stays the same.
-  The rock under and beside a roof (arches, caves, overhangs) keeps its height.
+  under the strata's profile rising from the water's edge. The lowest stratum is
+  a cliff of 50–60°, its steepness varying slowly over the level; each layer
+  above leans back to 0.55–0.75 (rolled per level) of the one below, as a real
+  reef's profile does. A share of the walls, 8–25% rolled per level, stays
+  sheer. Only rock above the swim level is lowered, so the water she swims stays
+  the same. The rock under and beside a roof (arches, caves, overhangs) keeps
+  its height.
 - **Hard rule: nothing above 0 on a tunnel's middle** — floors are flattened
   to −1.2; the rift's arena and the shaft alone lie deeper.
 - **The shaft is the only deep water:** in the exit's floor the floor gives way
@@ -425,6 +440,11 @@ its own.
   seagrass meadows and lone sponge-like coral heads (bommies), nothing else.
 - The reef wall where it breaks the swim level (0 < h < 6 m): flora zonation
   by height + noise — sea rods, fans broadside to the current, tube sponges.
+- **Ledge lips** (rock at a stratum's height, nearly level, with a drop of a
+  metre or more just beyond): fans and sea rods below 6 m, cliff and
+  encrusting coral above, three in ten spots, so the reef looks grown along its
+  ledges. A ledge overhang (canopy) juts from a ledge where the wall has one
+  within 2 m of 5.5 m (at least 4.5 m up), else at 5.5 m.
 - Steep ground (h ≥ 6 m): reef-rock cliffs, encrusting corals, ledge
   overhangs (canopy); peaks get crown gardens of fans and glowing anemones.
 - The shaft: open water all the way down; nothing grows in it. Buried-coin X
