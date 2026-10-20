@@ -360,17 +360,17 @@ public class TopDownGenTests
             var others = map.Pois.Where(p => p.Kind is not (PoiKind.Start or PoiKind.Exit)).ToList();
             for (int i = 0; i < others.Count; i++)
             {
-                Assert.True(Vector2.Distance(others[i].Position, exit) >= 40f);
-                Assert.True(Vector2.Distance(others[i].Position, start) >= 39f);
+                Assert.True(Vector2.Distance(others[i].Position, exit) >= CaveLayout.FromExit);
+                Assert.True(Vector2.Distance(others[i].Position, start) >= CaveLayout.FromStart);
                 for (int j = i + 1; j < others.Count; j++)
-                    Assert.True(Vector2.Distance(others[i].Position, others[j].Position) >= 21f);
+                    Assert.True(Vector2.Distance(others[i].Position, others[j].Position) >= CaveLayout.Spacing);
             }
             if (others.Count == 0) continue;
             // The first place she meets sits just past the start (unless the shell cache is the only place).
             if (others.Any(p => p.Kind != PoiKind.ShellCache))
             {
                 var early = Assert.Single(others, p => p.Early);
-                Assert.InRange(Vector2.Distance(early.Position, start), 39f, 47f);
+                Assert.InRange(Vector2.Distance(early.Position, start), CaveLayout.FromStart, CaveLayout.EarlyMax);
             }
             else Assert.DoesNotContain(others, p => p.Early);
 
@@ -390,8 +390,8 @@ public class TopDownGenTests
     public void LootAndSpawnsAreLaidOut(string seed)
     {
         var map = Map(seed);
-        Assert.InRange(map.Pockets.Count, 3, 5);
-        Assert.InRange(map.Coins.Count, 6, 10);
+        Assert.InRange(map.Pockets.Count, TopDownGenerator.PocketsMin, TopDownGenerator.PocketsMax);
+        Assert.InRange(map.Coins.Count, TopDownGenerator.CoinsMin, TopDownGenerator.CoinsMax);
         Assert.All(map.Coins, c => Assert.True(map.HeightAt(c.Position) <= -1f, "coins lie in the seabed under open water"));
         Assert.Contains(map.Spawns, s => s.Role == SpawnRole.Patrol);
         Assert.Contains(map.Spawns, s => s.Role == SpawnRole.Ambush);

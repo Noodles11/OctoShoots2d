@@ -17,6 +17,8 @@ namespace OctoShoots.Core.Gen.TopDown;
 public static class TopDownGenerator
 {
     public const int MaxAttempts = 100;
+    /// <summary>Buried coins and sealed pockets a level holds (the validator checks them).</summary>
+    public const int CoinsMin = 4, CoinsMax = 7, PocketsMin = 2, PocketsMax = 4;
 
     const float Size = LevelMap.Size;
     const float Rim = LevelMap.RimWidth;
@@ -37,7 +39,7 @@ public static class TopDownGenerator
     /// with a bend between each, ending in a chamber of TunnelEndRadius. Its passes keep TunnelWall of rock apart.
     /// </summary>
     public const float TunnelHalfWidth = 1.4f, TunnelEndRadius = 2.4f;
-    const float TunnelMin = 26f, TunnelMax = 44f, TunnelLegMin = 5f, TunnelLegMax = 9f, TunnelStep = 2.5f, TunnelWall = 3.5f;
+    const float TunnelMin = 16f, TunnelMax = 32f, TunnelLegMin = 5f, TunnelLegMax = 9f, TunnelStep = 2.5f, TunnelWall = 3.5f;
 
     // Stage 3
     /// <summary>Open shapes are pinned flat this far past their edge, so bilinear sampling anywhere inside them reads exactly 0.</summary>
@@ -177,7 +179,42 @@ public static class TopDownGenerator
             bool main = c.Role is CaveLayout.Role.Start or CaveLayout.Role.Main or CaveLayout.Role.Exit;
             map.Chambers.Add(new CaveChamber(c.At, c.R, main, c.Role == CaveLayout.Role.Branch && c.Links.Count(l => !l.Room) <= 1));
         }
+        AssignNaves(map);
         return null;
+    }
+
+    /// <summary>
+    /// The naves (DESIGN-TOPDOWN §4.9): every chamber off the main route holds something. A place in it (an open
+    /// place's clearing within it) or opening off it (a room whose tunnel leaves from it) is its content, one place to a
+    /// nave; every nave left over is a den.
+    /// </summary>
+    static void AssignNaves(LevelMap map)
+    {
+        var naves = map.Chambers.Where(c => !c.Main).ToList();
+        var poiOf = new int[naves.Count];
+        Array.Fill(poiOf, -1);
+        for (int pi = 0; pi < map.Pois.Count; pi++)
+        {
+            var poi = map.Pois[pi];
+            if (poi.Kind is PoiKind.Start or PoiKind.Exit) continue;
+            // A room's: where its tunnel leaves the cave; an open place's: where it lies.
+            var spur = map.Corridors.FirstOrDefault(c => c.Poi == pi);
+            var at = spur is { Points.Count: > 0 } ? spur.Points[0] : poi.Position;
+            int best = -1;
+            float bestD = 3f;
+            for (int n = 0; n < naves.Count; n++)
+            {
+                if (poiOf[n] >= 0) continue;
+                float d = Vector2.Distance(at, naves[n].At) - naves[n].Radius;
+                if (d < bestD)
+                {
+                    bestD = d;
+                    best = n;
+                }
+            }
+            if (best >= 0) poiOf[best] = pi;
+        }
+        for (int n = 0; n < naves.Count; n++) map.Naves.Add(new Nave(naves[n].At, naves[n].Radius, poiOf[n]));
     }
 
     /// <summary>
@@ -1068,19 +1105,19 @@ public static class TopDownGenerator
             Vector2 tangent = Geo.Normalize(c.Points[i + 1] - c.Points[i - 1], Vector2.UnitX);
             return c.Points[i] + Geo.Perp(tangent) * (rng.Range(-1f, 1f) * offset * c.HalfWidth);
         }
-        int coins = 6 + rng.Int(5);
+        int coins = CoinsMin + rng.Int(CoinsMax - CoinsMin + 1);
         for (int tries = 0; tries < 400 && map.Coins.Count < coins; tries++)
         {
             Vector2 p = OnFlat(0.8f);
-            if (map.HeightAt(p) > -PathDepth || map.Coins.Any(c => Vector2.Distance(c.Position, p) < 10f)) continue;
+            if (map.HeightAt(p) > -PathDepth || map.Coins.Any(c => Vector2.Distance(c.Position, p) < 8f)) continue;
             if (Vector2.Distance(p, map.Start.Position) < 12f || Vector2.Distance(p, map.Exit.Position) < map.Exit.Radius + 2f) continue;
             map.Coins.Add(new BuriedCoins(p, rng.NextFloat() < 0.1f ? 5 : 2 + rng.Int(2)));
         }
-        int pockets = 3 + rng.Int(3);
+        int pockets = PocketsMin + rng.Int(PocketsMax - PocketsMin + 1);
         for (int tries = 0; tries < 400 && map.Pockets.Count < pockets; tries++)
         {
             Vector2 p = OnFlat(0.9f);
-            if (map.HeightAt(p) > -PathDepth || map.Pockets.Any(c => Vector2.Distance(c.Position, p) < 15f)) continue;
+            if (map.HeightAt(p) > -PathDepth || map.Pockets.Any(c => Vector2.Distance(c.Position, p) < 12f)) continue;
             if (map.Coins.Any(c => Vector2.Distance(c.Position, p) < 4f)) continue;
             if (Vector2.Distance(p, map.Start.Position) < 15f || Vector2.Distance(p, map.Exit.Position) < map.Exit.Radius + 4f) continue;
             map.Pockets.Add(new SealedPocket(p, 1.6f));

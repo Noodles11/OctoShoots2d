@@ -73,7 +73,7 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     ChargeFull, LightBurst, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
     SurgeStarted, SurgeEnded, GeyserFizz, GeyserSpray, GeyserEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, GuardiansWoke, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, ThumpWindup, ThumpLeap, ThumpLand, ThumpRoll, ThumpBurst, Warded, WardenFreed, LashWindup, LashOut, LashCatch, LashSwallow, LashBite, LashStun, LashFreed, SealLit, SealOpened, FishStruck, FishTurned, FishFreed,
-    MurklingCling, VineCoiled, VineCut, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
+    MurklingCling, VineCoiled, VineCut, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, DenCleared, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
     ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>

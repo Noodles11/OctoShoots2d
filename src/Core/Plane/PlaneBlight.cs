@@ -247,6 +247,9 @@ public sealed class Murkling
     public float ThrowTimer, Seed;
     /// <summary>The Blotter it guards (it budded round one), if any.</summary>
     public Blotter? Guarding;
+    /// <summary>A den's murkling: its nave (centre and radius), where it drifts back to while she is away.</summary>
+    public Vector2? Home;
+    public float HomeRadius;
     /// <summary>Thrown off her by a dash (counting down): it tumbles away and cannot cling or chase until it recovers.</summary>
     public float Shaken;
     /// <summary>Its corruption meter: her shots empty it; empty, it bursts.</summary>
@@ -327,6 +330,7 @@ public sealed partial class PlaneWorld
         PlaceInkwardens();
         PlaceLashjaws();
         PlaceTemplateGuards();
+        PlaceDens(field);
         if (Boss is { } boss) boss.Crust = CorruptionTuning.CrustLayers;
         foreach (var area in Areas)
         {
@@ -370,23 +374,30 @@ public sealed partial class PlaneWorld
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + BlightTuning.Reach + 2f) continue;
             if (Map.Shaft.Contains(at, BlightTuning.Reach)) continue;
             if (Blightroots.Any(b => Vector2.Distance(b.Position, at) < BlightTuning.Spacing)) continue;
-            var root = new Blightroot { Position = at, PulseTimer = _blightRng.Range(1.5f, BlightTuning.PulseEvery) };
-            var area = new CorruptArea { Center = at, Radius = BlightTuning.Reach, Cells = field.CellsWithin(at, BlightTuning.Reach) };
-            root.Area = Areas.Count;
-            Areas.Add(area);
-            root.Corruption.Regen *= 1f + 0.5f * Menace;
-            root.Corruption.Max = root.Corruption.Value = BlightTuning.RootCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
-            root.CellDistance = area.Cells.Select(i => Vector2.Distance(CorruptionField.CellCentre(i % CorruptionField.N, i / CorruptionField.N), at)).ToArray();
-            Blightroots.Add(root);
-            for (int v = 0; v < BlightTuning.VinesPer; v++)
-            {
-                float a = MathF.Tau * v / BlightTuning.VinesPer + _blightRng.Range(-0.6f, 0.6f);
-                var vine = new Gloomvine { Root = root, RestDir = new Vector2(MathF.Cos(a), MathF.Sin(a)), Curl = _blightRng.Range(-1.2f, 1.2f) };
-                vine.Points.Add(at);
-                Vines.Add(vine);
-                while (vine.Length < BlightTuning.Rest && Extend(vine, Rested(vine))) { }
-            }
+            AddBlightroot(at, field);
         }
+    }
+
+    /// <summary>A Blightroot at a spot: its area of ground, its meter, its two gloomvines resting curled.</summary>
+    Blightroot AddBlightroot(Vector2 at, CorruptionField field)
+    {
+        var root = new Blightroot { Position = at, PulseTimer = _blightRng.Range(1.5f, BlightTuning.PulseEvery) };
+        var area = new CorruptArea { Center = at, Radius = BlightTuning.Reach, Cells = field.CellsWithin(at, BlightTuning.Reach) };
+        root.Area = Areas.Count;
+        Areas.Add(area);
+        root.Corruption.Regen *= 1f + 0.5f * Menace;
+        root.Corruption.Max = root.Corruption.Value = BlightTuning.RootCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
+        root.CellDistance = area.Cells.Select(i => Vector2.Distance(CorruptionField.CellCentre(i % CorruptionField.N, i / CorruptionField.N), at)).ToArray();
+        Blightroots.Add(root);
+        for (int v = 0; v < BlightTuning.VinesPer; v++)
+        {
+            float a = MathF.Tau * v / BlightTuning.VinesPer + _blightRng.Range(-0.6f, 0.6f);
+            var vine = new Gloomvine { Root = root, RestDir = new Vector2(MathF.Cos(a), MathF.Sin(a)), Curl = _blightRng.Range(-1.2f, 1.2f) };
+            vine.Points.Add(at);
+            Vines.Add(vine);
+            while (vine.Length < BlightTuning.Rest && Extend(vine, Rested(vine))) { }
+        }
+        return root;
     }
 
     float BudInterval()
@@ -420,6 +431,7 @@ public sealed partial class PlaneWorld
         StepInkwardens();
         StepLashjaws();
         StepMurklings(field);
+        StepDens(field);
         _pops.Clear();
 
         if (Tick % 15 == 0)
@@ -870,8 +882,11 @@ public sealed partial class PlaneWorld
             var to = target - m.Position;
             float dist = to.Length();
             Vector2 wish = dist < m.Sense ? SafeNormalize(to) : Vector2.Zero;
-            // She is away: it hunts the reef's fish instead, keeping a throw's distance from the one it is after.
-            var prey = her && dist >= m.Sense ? Prey(m) : null;
+            // She is away: a den's murkling drifts home into its nave (DenTuning.Leash); else it hunts the reef's fish,
+            // keeping a throw's distance from the one it is after.
+            bool away = her && dist >= m.Sense;
+            if (away && m.Home is { } home && Vector2.Distance(m.Position, home) > m.HomeRadius) wish = SafeNormalize(home - m.Position) * 0.6f;
+            var prey = away && (m.Home is not { } h2 || Vector2.Distance(m.Position, h2) <= m.HomeRadius) ? Prey(m) : null;
             float preyDist = 0f;
             if (prey is not null)
             {

@@ -296,18 +296,20 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 ## 4. The Level — one seeded square, generated from paths
 
 ### 4.0 The contract
-- **The playable area rule: every level holds 6,000 m² of water she can reach,
-  within 15% (5,100–6,900 m²)**, on every level of every depth. The 140×140 m
+- **The playable area rule: every level holds 4,000 m² of water she can reach,
+  within 15% (3,400–4,600 m²)**, on every level of every depth. The 140×140 m
   square (1 m grid) is only its container. Difficulty comes from content,
   menace and light — never from map size.
 - The square is **ringed by an impassable reef wall** — cliffs and coral
   ramparts; the rim is scenery and collision, never a soft boundary.
-- **A depth is a chain of 4–5 levels** (§8). **Every level has exactly one way
+- **A depth is a chain of 5 levels** (§8). **Every level has exactly one way
   out:** a blue hole in its floor, or — on the depth's boss level — the Crack in
   the boss arena, which opens when the boss is freed. She dives down it (§4.6),
   or perishes. No return to shallower levels within a run.
-- **Pacing contract (the master knobs):** rushing start→exit takes **~1–1.5
-  min**; looking under every rock takes **~6–7 min**; a depth takes ~30 min.
+- **Something in every side chamber** (§4.9): each nave holds a place or a den
+  to clear, so every detour pays.
+- **Pacing contract (the master knobs):** rushing start→exit takes **~45–60
+  s**; clearing every nave takes **~4–5 min**; a depth takes ~25 min.
   Every number in §4.5 exists to hit that, and the generation pipeline below is
   built around it.
 
@@ -330,11 +332,12 @@ its own.
 
 **Stage 1 — The cave (`CaveLayout`).**
 - **The main chain:** the start chamber (9–11 m across its radius; 16 m when
-  she arrives from a boss arena) 26 m in from one side, then up to nine
+  she arrives from a boss arena) 38 m in from one side, then up to nine
   chambers (6–10 m) wandering toward the far side, 16–22 m apart, joined by
   main tunnels 6–9 m wide (gentle Bézier curves), and last the way down's
-  chamber. Start and way down lie ≥ 78 m apart in a straight line and
-  **≥ 90 m along the water**.
+  chamber, 38 m in from the far side. Start and way down lie ≥ 56 m apart in a
+  straight line and **≥ 65 m along the water**. The square's water she never
+  reaches becomes mountains.
 - **The special rooms** (shop, secret, clam room, curse den) are laid next,
   while the rock is whole: each a dead-end branch off the chain, its chamber
   left as rock with rock kept round it (6 m; 8 m for a clam room's deeper
@@ -351,11 +354,12 @@ its own.
   roughened by two octaves of noise (±2 m), the tunnels' middles always kept
   open; two majority-vote passes smooth it, and only water joined to the
   start is kept.
-- **The places** use the old scatter rules: ≥ 21 m apart (rooms ≥ 25 m),
-  ≥ 40 m from the way down and ≥ 39 m from the start; exactly one sits
-  "early", 39–47 m from the start — the shop if the level has one (usually;
+- **The places** keep apart (`CaveLayout.Spacing` and the rest): ≥ 17 m apart
+  (rooms ≥ 20 m), ≥ 30 m from the way down and ≥ 30 m from the start; exactly
+  one sits "early", 30–38 m from the start — the shop if the level has one (usually;
   to teach the economy), else a clam room, else another place. Open places
-  (ambushes, the shell cache) take a chamber or a tunnel wide enough; the
+  (ambushes, the shell cache) take a chamber or a tunnel wide enough, a nave
+  first (§4.9); the
   shell cache keeps to the middle of the way (30–70% along start → way down),
   off the main tunnels, and never sits early.
 
@@ -486,7 +490,7 @@ Running after the checks, it never changes what she can reach.
   the whole secret cave (its chamber, its way in and the seal) as wall, so the charts give it away no more than the
   reef does.
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
-  into the ridge behind its spur, 26–44 m long (about 2.8 m wide, in bending legs of 5–10 m), so finding its end
+  into the ridge behind its spur, 16–32 m long (about 2.8 m wide, in bending legs of 5–10 m), so finding its end
   in the dark takes a good few seconds. Black fog seeps out of its mouth into the canyon.
   - **The dark:** past its mouth a dense black fog closes in over the first 6 m. Only the water within about 1.35–3.9 m
     of Clementine stays readable — wide enough that both of the tunnel's walls show beside her — with a quarter of the
@@ -506,7 +510,7 @@ Running after the checks, it never changes what she can reach.
   orange (the Crack); and white (the start), teal (the shell cache), coral (ambushes; warm but not gold, so
   they never read as treasure). In dark depths these lights are the level's signage —
   Below's campfire principle.
-- **Sealed pockets** (3–5/level) and **buried coins** (6–10/level, scratched
+- **Sealed pockets** (2–4/level) and **buried coins** (4–7/level, scratched
   X marks) inherited (DESIGN-2D §26, DESIGN-3D §6.3) — bomb the floor, loot
   below.
 - **Destructible reef** inherited: ink bombs dig craters through the floor
@@ -537,7 +541,7 @@ Running after the checks, it never changes what she can reach.
 
 | Knob | Value | Why |
 |---|---|---|
-| Playable area | **6,000 m² of reachable water ±15%**, in a 140×140 m square | a 6–7-minute explore budget per level |
+| Playable area | **4,000 m² of reachable water ±15%**, in a 140×140 m square | a 4–5-minute clear per level, five to a depth |
 | View on screen | ~30×22 m | a corridor reads at a glance |
 | Tunnels | main 6–9 m, side 4.5–7 m, craggy | rush speed; nothing blocks |
 | Chambers | 5–10 m radius | natural fight arenas |
@@ -548,12 +552,12 @@ Running after the checks, it never changes what she can reach.
 | Passes | 3–5 m cuts | network braiding |
 | Boss arena | ~30 m disc | room for 2D bullet rings |
 | Cruise speed | **6 m/s** (jet 1.8× for 0.38 s; dash 3.4×, 0.85 s cd) | brisk — dash crosses a corridor in ~0.4 s |
-| Rush time | **~1–1.5 min** | ~110–140 m route + partial fights |
-| Full clear | **~6–7 min** | ≤ 5 places + encounters + caves/shop/secrets |
+| Rush time | **~45–60 s** | ~65–90 m route + partial fights |
+| Full clear | **~4–5 min** | ≤ 5 places + every nave's den + caves/shop/secrets |
 
-Rush math: exit ≥ 90 m away by swimming → 20–25 s pure swim at cruise (less
-with jet bursts), plus partial fights and maybe one cave. A depth is 4–5
-levels: ~5–7 min rushed, ~30 min explored.
+Rush math: exit ≥ 65 m away by swimming → 12–16 s pure swim at cruise (less
+with jet bursts), plus partial fights and maybe one cave. A depth is 5
+levels: ~4–5 min rushed, ~25 min explored.
 
 ### 4.6 The way down — holes and the dive
 - **One way down per level:** a blue hole, or the Crack on the boss level
@@ -563,7 +567,7 @@ levels: ~5–7 min rushed, ~30 min explored.
   start sits right under the hole. Map coordinates need not match, and the rock
   does not either (the old shared stamps are dropped): she lands in the start
   chamber of the level's own cave. Under the hole the level below has a floor
-  (its hole is ≥ 90 m from its start, never in view down the shaft), so she can
+  (its hole is ≥ 65 m from its start, never in view down the shaft), so she can
   never cross two levels at once.
 - **Each level depends only on seeds** (the run seed and its id): any level
   can be generated on its own. Two levels live at once — the
@@ -667,6 +671,26 @@ everything scattered. A template:
 
 Kinds a template names as absent are absent; the others outside its cast keep their general rules. Its name shows
 after the level's title at the top of the HUD ("Depth 2 · Level 3 · The Hoard"; the default has none).
+
+### 4.9 Naves — something in every side chamber
+
+Every chamber off the main route (a side branch or a dead end; `LevelMap.Naves`) holds something, so clearing it
+pays (the main route's chambers are the way through):
+- **A place** in it or opening off it: an open place (an ambush, the shell cache) whose clearing lies in it (open
+  places take a nave first), or a room whose tunnel leaves from it (the rooms — shop, clam room, secret, curse den —
+  are themselves dead-end chambers of their own). One place to a nave.
+- **Else a den** (`PlaneDens.cs`, docs/CORRUPTION.md), a knot of the corruption:
+  - Its ground lies thick with ink (0.8) out past its rim.
+  - 1 murkling, plus 1 per Menace, waits in it, drifting back home while she is away.
+  - Most dens have a heart (rolled 40% / 30% / 30%): a Blightroot (never near a safe place), a Thumpsquirt (from
+    Depth 2), or an Inkwarden warding the murklings (from Depth 2).
+  - A heart never comes from a kind the level's template leaves out, nor past the most of it the template casts or
+    the kind's own limit (else the den holds murklings only).
+  - A small nave (under 6 m) and a quiet level's naves hold a single murkling.
+  - A nave in the boss arena or in a safe place's clean water (round the start, a shop or a clam room) holds no den.
+- **Its battle over:** once every creature of the den is freed and no murkling is left in the nave, the whole nave is
+  cleansed at once (out to 3 m past its rim), and it pays out: 4 shells, plus 2 per Menace, give or take one, and a
+  light orb 40% of the time. Gold light washes out over the nave and rises off it, with a bell.
 
 ### 4.7 The reef director — the world acts without her
 A level is not a stage that waits for the actor. A seeded **reef director**
@@ -912,8 +936,8 @@ The FP staging ("look up through the surface") is replaced:
 
 - **7 depths** (Shallows → Kelp → Galleon → Carnival → Trench → Abyss → Tank),
   numbered from **Depth 0**: the Sunlit Shallows are Depth 0, the tutorial, and
-  the run proper is Depths 1–6. Each real depth is a chain of **4–5 levels**: the
-  boss stands on level 4 (50%) or else level 5. HUD `Depth x · Level y`. After
+  the run proper is Depths 1–6. Each real depth is a chain of **5 levels**: the
+  boss stands on level 5. HUD `Depth x · Level y`. After
   the Tank's boss **the run loops** endlessly: Depth 1 again (never the
   tutorial), with Menace still rising (the cycle shows in the HUD from the second
   pass). Menace rises only through the Crack (§6.2). (In code and saves a depth

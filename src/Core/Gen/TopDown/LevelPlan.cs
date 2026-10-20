@@ -7,7 +7,7 @@ namespace OctoShoots.Core.Gen.TopDown;
 
 /// <summary>
 /// Which level of the run (DESIGN-TOPDOWN §8): the loop through the seven depths, the depth (biome) and the level within
-/// it. A depth is a chain of 4–5 levels; its boss stands on the last one. The first depth (Depth 1 here, the Sunlit
+/// it. A depth is a chain of 5 levels; its boss stands on the last one. The first depth (Depth 1 here, the Sunlit
 /// Shallows) is the tutorial, Depth 0 to the player: two levels, no boss; runs start below it (Depth 2 here, Depth 1 to
 /// the player) once she has passed it. Depth is kept 1-based in code and saves; only its name is one less.
 /// </summary>
@@ -36,7 +36,7 @@ public static class LevelStocking
     public const int MaxPlaces = 5;
     /// <summary>
     /// At most two treasure rooms per depth: always one on level 1, and this often a second on one level from 2 to the
-    /// boss level (4 or 5).
+    /// boss level (5).
     /// </summary>
     public const float SecondTreasure = 0.5f;
     public const float Secret = 0.4f, Curse = 0.3f;
@@ -46,8 +46,8 @@ public static class LevelStocking
     /// <summary>The tutorial's two levels, between them every kind of place: level 1 a clam room, a secret, a shell cache
     /// and an ambush; level 2 a shop, a curse den, an ambush and the open rift (the arena with no boss).</summary>
     public const int TutorialLevels = 2;
-    /// <summary>The boss stands on level 4 this often; otherwise on level 5.</summary>
-    public const float BossOnFour = 0.5f;
+    /// <summary>A depth's levels (DESIGN-TOPDOWN §8): the boss stands on the last.</summary>
+    public const int LevelsPerDepth = 5;
 }
 
 /// <summary>
@@ -90,9 +90,9 @@ public sealed class LevelPlan
     /// <summary>The level's template (docs/LEVEL-TEMPLATES-PROPOSAL.md): null in the tutorial.</summary>
     public LevelTemplate? Template { get; init; }
 
-    /// <summary>The level of this depth (in this loop) where its boss stands: 4 or 5 (the tutorial's rift: its 2nd).</summary>
+    /// <summary>The level of this depth (in this loop) where its boss stands: the 5th (the tutorial's rift: its 2nd).</summary>
     public static int BossLevel(SeedCode seed, int cycle, int depth) =>
-        depth == Tutorial ? LevelStocking.TutorialLevels : new RunStreams(seed).BossRoll(cycle, depth).NextFloat() < LevelStocking.BossOnFour ? 4 : 5;
+        depth == Tutorial ? LevelStocking.TutorialLevels : LevelStocking.LevelsPerDepth;
 
     /// <summary>The level of this depth (in this loop) with its second treasure room (2 to the boss level), or 0 for none.</summary>
     public static int SecondTreasureLevel(SeedCode seed, int cycle, int depth)

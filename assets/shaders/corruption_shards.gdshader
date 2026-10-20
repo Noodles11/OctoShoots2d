@@ -8,7 +8,9 @@
 // then another wells up. A drop is a camera-facing quad shaped and shaded here (a sphere with a neck), half clear. It
 // takes no light, shading or fog from the scene and is drawn after the water (topdown_post, the first thing in the
 // transparent pass), so nothing tints or blurs it: its roundness is its own (a fixed soft key, a cold violet rim, a
-// glint), as if from another dimension (rock in front still hides it: it tests the depth). Where the ground is
+// glint), as if from another dimension (rock in front still hides it: it tests the depth). It is seen out of phase, a
+// fixed chromatic aberration: its red is printed a little to one side and its cyan to the other, so every drop wears
+// a red fringe on its left and a cyan one on its right. Where the ground is
 // cleansed a spot's drops stop coming; the last of them light up in the gold of corruption dying as they go (only the
 // drops glow; the ground does not). `fade` brings a level's whole drift in and out (shown, the dive).
 // One MultiMesh instance per drop: its transform at the floor (its scale is the drop's radius); instance custom:
@@ -27,6 +29,14 @@ uniform float opacity = 0.7;
 /// One drop's loop takes this long (seconds), give or take period_spread.
 uniform float period = 5.5;
 uniform float period_spread = 2.0;
+/// The chromatic aberration: how far the red and the cyan are printed apart (in units of a drop's radius, each way),
+/// and how strongly their fringes show.
+uniform float split = 0.2;
+uniform float fringe = 0.75;
+uniform vec3 fringe_red : source_color = vec3(1.0, 0.16, 0.3);
+uniform vec3 fringe_cyan : source_color = vec3(0.1, 0.9, 1.0);
+/// The quad is this much wider than the drop, so the fringes fit (a split up to 0.25).
+const float WIDE = 1.5;
 
 varying float v_burn;
 varying float v_show;
@@ -90,38 +100,54 @@ void vertex() {
 		vec3 up = vec3(0.0, 1.0, 0.0) - fwd * fwd.y;
 		up = length(up) > 0.15 ? normalize(up) : INV_VIEW_MATRIX[1].xyz;
 		vec3 right = normalize(cross(up, fwd));
-		float x = (UV.x * 2.0 - 1.0) * rb;
+		float x = (UV.x * 2.0 - 1.0) * rb * WIDE;
 		float y = (bottom + (1.0 - UV.y) * (top - bottom)) * rb;
 		vec3 centre = base + vec3(0.0, lift, 0.0) + sway;
 		VERTEX = centre + right * x + up * y;
 	}
 }
 
+// Whether a point (x across, y up from its centre, in units of its radius) lies in the drop: its body, a sphere pulled
+// a little long while it stretches, or its neck, down to the floor below the body, thick at the ground and thinning
+// toward the drop.
+bool in_drop(float x, float y) {
+	vec2 q = vec2(x * v_squash, y / v_squash);
+	if (dot(q, q) < 1.0) return true;
+	if (v_neck > 0.001 && y < 0.0) {
+		float along = clamp((y - v_y0) / max(-v_y0 - 0.9, 0.01), 0.0, 1.0);
+		return abs(x) < v_neck * mix(0.5, 0.12, along);
+	}
+	return false;
+}
+
 void fragment() {
 	// Where in the drop: x across, y up from its centre, in units of its radius.
-	float x = UV.x * 2.0 - 1.0;
+	float x = (UV.x * 2.0 - 1.0) * WIDE;
 	float y = v_y0 + (1.0 - UV.y) * v_span;
-	// The body: a sphere, pulled a little long while it stretches.
-	vec2 q = vec2(x * v_squash, y / v_squash);
-	float r2 = dot(q, q);
-	bool body = r2 < 1.0;
-	// The neck: down to the floor below the body, thick at the ground and thinning toward the drop.
-	bool neck = false;
-	if (!body && v_neck > 0.001 && y < 0.0) {
-		float along = clamp((y - v_y0) / max(-v_y0 - 0.9, 0.01), 0.0, 1.0);
-		float half_w = v_neck * mix(0.5, 0.12, along);
-		neck = abs(x) < half_w;
+	// Out of phase: the red print lies to the left, the cyan to the right; where only one covers, its fringe shows.
+	bool here = in_drop(x, y);
+	bool red = in_drop(x + split, y), cyan = in_drop(x - split, y);
+	if (!here && red == cyan) discard;
+	if (!here) {
+		ALBEDO = red ? fringe_red : fringe_cyan;
+		ALPHA = clamp(opacity * v_show * fade * fringe, 0.0, 1.0);
+	} else {
+		vec2 q = vec2(x * v_squash, y / v_squash);
+		float r2 = dot(q, q);
+		bool body = r2 < 1.0;
+		vec3 n = body ? vec3(q, sqrt(max(1.0 - r2, 0.0))) : normalize(vec3(x * 2.0, 0.0, 1.0));
+		// Its own roundness: a soft key from the upper left, a cold violet rim, a small glint (view space).
+		vec3 key = normalize(vec3(-0.45, 0.6, 0.65));
+		float shade = 0.45 + 0.55 * clamp(dot(n, key), 0.0, 1.0);
+		float rim = pow(1.0 - n.z, 2.0);
+		float glint = pow(clamp(dot(reflect(-key, n), vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 24.0);
+		vec3 col = ink * 2.6 * shade + rim_color * rim * 0.7 + vec3(0.85, 0.75, 1.0) * glint * 0.6;
+		// Its own edges where only one print covers: tinted toward that print's colour.
+		if (!red) col = mix(col, fringe_cyan * 0.7, 0.5 * fringe);
+		else if (!cyan) col = mix(col, fringe_red * 0.7, 0.5 * fringe);
+		// Cleansed: the drop itself lights up gold (the ground under it does not).
+		float lit = clamp(v_burn * 1.5, 0.0, 1.0);
+		ALBEDO = mix(col, gold * (1.4 + 0.8 * glint), lit);
+		ALPHA = clamp(opacity * v_show * fade * (0.85 + 0.25 * rim) + lit * 0.3 * v_show * fade, 0.0, 1.0);
 	}
-	if (!body && !neck) discard;
-	vec3 n = body ? vec3(q, sqrt(max(1.0 - r2, 0.0))) : normalize(vec3(x * 2.0, 0.0, 1.0));
-	// Its own roundness: a soft key from the upper left, a cold violet rim, a small glint (view space).
-	vec3 key = normalize(vec3(-0.45, 0.6, 0.65));
-	float shade = 0.45 + 0.55 * clamp(dot(n, key), 0.0, 1.0);
-	float rim = pow(1.0 - n.z, 2.0);
-	float glint = pow(clamp(dot(reflect(-key, n), vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 24.0);
-	vec3 col = ink * 2.6 * shade + rim_color * rim * 0.7 + vec3(0.85, 0.75, 1.0) * glint * 0.6;
-	// Cleansed: the drop itself lights up gold (the ground under it does not).
-	float lit = clamp(v_burn * 1.5, 0.0, 1.0);
-	ALBEDO = mix(col, gold * (1.4 + 0.8 * glint), lit);
-	ALPHA = clamp(opacity * v_show * fade * (0.85 + 0.25 * rim) + lit * 0.3 * v_show * fade, 0.0, 1.0);
 }

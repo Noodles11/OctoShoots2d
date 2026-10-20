@@ -123,7 +123,8 @@ public class MurkFishTests
     public void ALesserMurklingChasesHerClingsWithoutAHitAndIsFreedBackIntoItsFish()
     {
         var w = World();
-        var f = w.ReefFish.First(x => x.Kind == ReefFishKind.Chromis);
+        // A chromis in open water (room to chase her in).
+        var f = w.ReefFish.First(x => x.Kind == ReefFishKind.Chromis && w.Clear(x.Position, 3f));
         var lesser = Turn(w, f);
         Assert.DoesNotContain(w.ReefFish, x => x != f && x.Corrupted);
         // She comes near: it chases, faster than a murkling.

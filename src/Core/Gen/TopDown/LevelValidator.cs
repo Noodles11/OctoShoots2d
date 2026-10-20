@@ -11,7 +11,7 @@ namespace OctoShoots.Core.Gen.TopDown;
 /// </summary>
 public static class LevelValidator
 {
-    public const float MinExitGeodesic = 90f;
+    public const float MinExitGeodesic = 65f;
     /// <summary>The longest spur from the network to a place.</summary>
     public const float MaxSpur = 34f;
 
@@ -30,14 +30,14 @@ public static class LevelValidator
         if (others.Count + (map.HasBoss ? 1 : 0) > LevelStocking.MaxPlaces) return $"{others.Count} places (want at most {LevelStocking.MaxPlaces})";
         for (int i = 0; i < others.Count; i++)
         {
-            if (Vector2.Distance(others[i].Position, exit.Position) < 40f) return $"{others[i].Kind} inside the exit's exclusion zone";
-            if (Vector2.Distance(others[i].Position, start.Position) < 39f) return $"{others[i].Kind} too close to the start";
+            if (Vector2.Distance(others[i].Position, exit.Position) < CaveLayout.FromExit) return $"{others[i].Kind} inside the exit's exclusion zone";
+            if (Vector2.Distance(others[i].Position, start.Position) < CaveLayout.FromStart) return $"{others[i].Kind} too close to the start";
             for (int j = i + 1; j < others.Count; j++)
-                if (Vector2.Distance(others[i].Position, others[j].Position) < 21f) return $"{others[i].Kind} and {others[j].Kind} closer than 21 m";
+                if (Vector2.Distance(others[i].Position, others[j].Position) < CaveLayout.Spacing) return $"{others[i].Kind} and {others[j].Kind} closer than {CaveLayout.Spacing:0} m";
         }
         // One place sits early, unless the shell cache (which keeps to the middle of the way) is the level's only place.
         var early = others.Where(p => p.Early).ToList();
-        if (others.Any(p => p.Kind != PoiKind.ShellCache) && (early.Count != 1 || Vector2.Distance(early[0].Position, start.Position) > 47f)) return $"{early.Count} early POIs (want exactly one, 39–47 m from the start)";
+        if (others.Any(p => p.Kind != PoiKind.ShellCache) && (early.Count != 1 || Vector2.Distance(early[0].Position, start.Position) > CaveLayout.EarlyMax)) return $"{early.Count} early POIs (want exactly one, {CaveLayout.FromStart:0}–{CaveLayout.EarlyMax:0} m from the start)";
 
         // Tunnels: a room's spur stays short, a pass narrow, and nothing on a tunnel's middle above the swim level.
         foreach (var spur in map.Corridors.Where(c => c.Kind == CorridorKind.Spur))
@@ -71,8 +71,10 @@ public static class LevelValidator
         }
 
         // Loot under the floor.
-        if (map.Pockets.Count is < 3 or > 5) return $"{map.Pockets.Count} sealed pockets (want 3–5)";
-        if (map.Coins.Count is < 6 or > 10) return $"{map.Coins.Count} buried coins (want 6–10)";
+        if (map.Pockets.Count < TopDownGenerator.PocketsMin || map.Pockets.Count > TopDownGenerator.PocketsMax)
+            return $"{map.Pockets.Count} sealed pockets (want {TopDownGenerator.PocketsMin}–{TopDownGenerator.PocketsMax})";
+        if (map.Coins.Count < TopDownGenerator.CoinsMin || map.Coins.Count > TopDownGenerator.CoinsMax)
+            return $"{map.Coins.Count} buried coins (want {TopDownGenerator.CoinsMin}–{TopDownGenerator.CoinsMax})";
 
         // Reachability and the exit's distance.
         var dist = Distances(map, start.Position);

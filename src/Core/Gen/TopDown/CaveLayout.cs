@@ -18,9 +18,9 @@ public sealed class CaveLayout
     const float Rim = LevelMap.RimWidth;
 
     /// <summary>Reachable water the level aims for (m²), and how far it may stray (the validator's band).</summary>
-    public const float Area = 6000f, AreaSlack = 0.15f;
+    public const float Area = 4000f, AreaSlack = 0.15f;
     public const float AreaMin = Area * (1f - AreaSlack), AreaMax = Area * (1f + AreaSlack);
-    const float MinPath = LevelValidator.MinExitGeodesic, MinStraight = 78f;
+    const float MinPath = LevelValidator.MinExitGeodesic, MinStraight = 56f;
     static readonly (float Lo, float Hi) StepMain = (16f, 22f), StepBranch = (14f, 21f);
     static readonly (float Lo, float Hi) RadiusMain = (6f, 10f), RadiusBranch = (5f, 9f), RadiusStart = (9f, 11f);
     static readonly (float Lo, float Hi) WidthMain = (6f, 9f), WidthBranch = (5f, 7f), WidthLoop = (4.5f, 6f);
@@ -33,8 +33,9 @@ public sealed class CaveLayout
     /// </summary>
     static float RoomKeep(PoiKind kind) => kind switch { PoiKind.CurseDen => 9f, PoiKind.TreasureCave => 8f, _ => 6f };
     const int RoomTries = 600;
-    // The validator's scatter rules.
-    const float FromStart = 39f, FromExit = 40f, Spacing = 21f, CaveSpacing = 25f, EarlyMax = 47f;
+    /// <summary>The scatter rules (the validator checks them): how far every place keeps from the start and the way down
+    /// and from each other (rooms further), and how far from the start the early place may lie.</summary>
+    public const float FromStart = 30f, FromExit = 30f, Spacing = 17f, CaveSpacing = 20f, EarlyMax = 38f;
     const int Misses = 1500;
 
     public enum Role { Start, Main, Branch, Exit }
@@ -177,7 +178,8 @@ public sealed class CaveLayout
     void MainChain(Rng rng, bool boss, bool fromArena)
     {
         int side = rng.Int(4);
-        float inset = 26f, along = rng.Range(0.3f, 0.7f) * Size, far = rng.Range(0.2f, 0.8f) * Size;
+        // The start and the way down lie on opposite sides, 38 m in from the edge: about 62 m apart, or more across.
+        float inset = 38f, along = rng.Range(0.33f, 0.67f) * Size, far = rng.Range(0.28f, 0.72f) * Size;
         static Vector2 P(int s, float t, float d) => s switch
         {
             0 => new Vector2(t, d),
@@ -561,7 +563,9 @@ public sealed class CaveLayout
     string? PlaceOpen(IReadOnlyList<PoiKind> kinds, Func<PoiKind, float> radius)
     {
         var clearance = Chamfer(Open, false);
-        var spots = Chambers.Where(c => c.Role is Role.Main or Role.Branch && !c.Room).Select(c => c.At).ToList();
+        // The naves (side chambers) first, so they hold the places (DESIGN-TOPDOWN §4.9); then the main chambers and the tunnels.
+        var spots = Chambers.Where(c => c.Role == Role.Branch && !c.Room).Select(c => c.At)
+            .Concat(Chambers.Where(c => c.Role == Role.Main && !c.Room).Select(c => c.At)).ToList();
         foreach (var t in Tunnels)
             for (int i = 2; i < t.Points.Count - 2; i += 3) spots.Add(t.Points[i]);
         bool Fits(Vector2 p, float r) => Open[Index(p)] && clearance[Index(p)] >= MathF.Min(r, 6f) * 0.8f;

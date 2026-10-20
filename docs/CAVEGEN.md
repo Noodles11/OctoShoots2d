@@ -7,13 +7,14 @@ the game yet. The page `tools/cavegen/index.html` (built by `tools/cavegen/build
 
 ## Rules (replacing the old size and shape rules)
 
-- **Area:** reachable water covers **6,000 m², ±15%** (5,100 to 6,900 m²). Measured on the old generator: 5,350 to
-  7,200 m², about 6,100 on average. The 140 m square is only a container, with the 8 m impassable rim.
+- **Area:** reachable water covers **4,000 m², ±15%** (3,400 to 4,600 m²), about 4,150 on average. The 140 m square is only a container, with the 8 m impassable rim.
 - **Start and way down:** the start is a chamber on one side. The way down is the chamber at the end of the main
-  chain, at least **90 m** along the water and **78 m** in a straight line. Boss levels end in a round 15 m arena with
+  chain, at least **65 m** along the water and **56 m** in a straight line (both chambers 38 m in from their sides of
+  the square). Boss levels end in a round 15 m arena with
   the Crack (an ellipse, 7–9 by 2.5–3.5 m); other levels end in a 6.5 m blue hole.
-- **Places** (carried over from `LevelValidator`): exactly one place 39–47 m from the start along the water; every
-  other place farther than that, at least 40 m from the way down and 21 m from the next place. Rooms (shop,
+- **Places** (`CaveLayout.FromStart` and the rest, which `LevelValidator` checks): exactly one place 30–38 m from the
+  start; every other place at least 30 m from the start and the way down and 17 m from the next place (rooms 20 m).
+  Open places take a side chamber first, so the naves hold them (DESIGN-TOPDOWN §4.9). Rooms (shop,
   treasure, secret, curse den) prefer dead-end chambers. At most 5 places (`LevelStocking` caps).
 - **Dropped:** the shared entry and exit stamps between neighbouring levels, the 3–5 main routes, the plaza counts and
   the 40% / 45% wall and water ratios.
@@ -66,8 +67,8 @@ way down, every planned place placed, about 45 ms a level in Node.
 - Special rooms (shop, secret, clam room, curse den) are laid right after the main chain, before the side branches:
   dead-end chambers left as rock with rock kept round them, their tunnel ending at the room's mouth; the old cave
   carving hollows them out behind it.
-- `LevelMap.Size` is 140. `LevelValidator` checks the area rule (`WaterArea`, 5,100–6,900 m²) instead of the old
-  corridor, plaza, side-canyon, open-share and stamp rules; reachability, spacing, the early place, the 90 m way down,
+- `LevelMap.Size` is 140. `LevelValidator` checks the area rule (`WaterArea`, 3,400–4,600 m²) instead of the old
+  corridor, plaza, side-canyon, open-share and stamp rules; reachability, spacing, the early place, the 65 m way down,
   the shaft, peaks, caves and loot rules stay.
 - The minimap and the Tab map (`TopoMap`, `topo_map.gdshader`, `edges_only`) draw the look above in the shader: the
   heights texture carries the height and the distances into rock and into water, for the hatching band (Voronoi

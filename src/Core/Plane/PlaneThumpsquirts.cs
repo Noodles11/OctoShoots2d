@@ -99,11 +99,18 @@ public sealed partial class PlaneWorld
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + 4f) continue;
             if (Map.Shaft.Contains(at, 3f) || float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) continue;
             if (Thumpsquirts.Any(t => Vector2.Distance(t.Position, at) < ThumpTuning.Spacing)) continue;
-            var t = new Thumpsquirt { Position = at, Seed = _blightRng.Range(0f, 100f), Timer = _blightRng.Range(0f, 2f) };
-            t.Corruption.Max = t.Corruption.Value = ThumpTuning.Meter * (1f + ThumpTuning.MeterPerMenace * Menace);
-            t.Corruption.Regen *= 1f + 0.5f * Menace;
-            Thumpsquirts.Add(t);
+            AddThumpsquirt(at);
         }
+    }
+
+    /// <summary>A Thumpsquirt at a spot, its meter by the Menace.</summary>
+    Thumpsquirt AddThumpsquirt(Vector2 at)
+    {
+        var t = new Thumpsquirt { Position = at, Seed = _blightRng.Range(0f, 100f), Timer = _blightRng.Range(0f, 2f) };
+        t.Corruption.Max = t.Corruption.Value = ThumpTuning.Meter * (1f + ThumpTuning.MeterPerMenace * Menace);
+        t.Corruption.Regen *= 1f + 0.5f * Menace;
+        Thumpsquirts.Add(t);
+        return t;
     }
 
     void StepThumpsquirts(CorruptionField field)

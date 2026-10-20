@@ -3,7 +3,7 @@
 How Ink Deep's corruption, its enemies and the boss arena are built. The design brief is "Corruption & Combat:
 Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruption.cs` (the field, its tuning and
 `PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, gloomvines, murklings, the arena). The
-presentation is in `src/Game/TopDown/BlightView.cs`, `CameraRig.cs` (the phase shift), `CorruptionView.cs` (the field's
+presentation is in `src/Game/TopDown/BlightView.cs`, `CorruptionView.cs` (the field's
 texture) and `CleanseMeter.cs`, and in the shaders
 named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed, and ambush
 clearings bud murklings instead. The healthy fish still swim the reef, and the murklings hunt them (see Lesser
@@ -191,6 +191,15 @@ poking out of the rock at her height; it never moves.
   swallows it, chewing 4 s: her chance to strike.
 - **Freed:** it pops (see evaporation below), cleansing 3 m, and leaves 3–4 shells; every fish it swallowed swims back out alive, and the
   healthy moray draws back into its hole.
+
+## Dens (`Den`, `PlaneDens.cs`)
+
+Every nave (a chamber off the main route) that holds no place holds a den: a knot of the corruption to clear
+(DESIGN-TOPDOWN §4.9 has the rules). Its ground lies thick with ink. A murkling or more waits in it (1 plus 1 per
+Menace, drifting back into the nave while she is away), and most dens have a heart: a Blightroot (its guardians bud
+round it as ever), a Thumpsquirt, or an Inkwarden warding the murklings (free the warden first). When every creature
+of it is freed and no murkling is left in the nave, the battle is over: the whole nave is cleansed at once, and it pays
+out shells (4 plus 2 per Menace) and, 40% of the time, a light orb (`DenCleared`; gold light over the nave, a bell).
 
 ## Light orbs
 
@@ -402,19 +411,7 @@ Cleared corruption never just vanishes. It evaporates.
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
   out from how fast each cell falls and fades over ~1.2 s. It uploads at most 30 times a second, and only while
-  something changes. The level's floor, its shards and the phase shift read it.
-- **The phase shift** (`topdown_post.gdshader`, the post pass; `CameraRig`): corrupted ground is seen out of phase,
-  like a misprinted anaglyph: its red slides one way and its cyan the other, up to 10 px at full corruption (from
-  density 0.04, full by 0.5). The split drifts in width and angle over the ground, and a few times a second a band of
-  it jumps sideways (a glitch, never all of it at once). What stands on corrupted ground below her plane splits with
-  it; rock above her plane never does. Nothing is hidden or darkened.
-  - **Her light sets it true:** round her (true within about 1.8 m, out of true again by about 6.8 m) and wherever her
-    light falls (walls keep it from what lies behind them). Her bubbles' light sets the ground under them true as they
-    fly. A dash (3.2 m), a bubble's pop (1.6 m plus three times the bubble), a light burst, a freeing (3.5 m) and a
-    Blightroot's bursting (7 m) each set the ground round them true for a moment, spreading fast and fading over
-    1.6 s.
-  - **Cleansing sets it true for good**, since it follows the field itself.
-  - `--dbg-noshift` shows a level without it.
+  something changes. The level's floor and its shards read it.
 - **Ink drip** (`corruption_shards.gdshader`, `CorruptionView`): the corruption's only mark on the floor, as if from
   another dimension: ink dripping upward out of the ground, as fine as plankton (drops 4–8 cm across, about 70%
   opaque). From its own spot on corrupted ground (no current moves the spot) each drop wells up out of the floor and
@@ -422,7 +419,9 @@ Cleared corruption never just vanishes. It evaporates.
   0.6–1.5 m (slow off the mark, quicker, easing) with a small sway and fades near the top; then another wells up, on its
   own loop (3.5–7.5 s, its own phase, so it never pulses together). One to five drops per half-metre cell, more where the
   corruption is thicker. They take no light, shading or fog from the scene and are drawn after the water pass, so
-  nothing tints or blurs them; their roundness is their own (a fixed soft key, a cold violet rim, a glint). Rock in front
+  nothing tints or blurs them; their roundness is their own (a fixed soft key, a cold violet rim, a glint). Each is seen
+  out of phase, a fixed chromatic aberration: its red printed a fifth of its radius to the left and its cyan as far to
+  the right, so every drop wears a red fringe on its left and a cyan one on its right. Rock in front
   still hides them. None within 2.5 m of a dive's gateway (the shaft). Drawn as camera-facing quads shaped in the shader,
   in 64 chunked MultiMeshes (only those on screen are drawn), laid out off the main thread (a level below while she is
   still above it). Where the ground is cleansed a spot's drops stop coming, and the last of them light up gold as they

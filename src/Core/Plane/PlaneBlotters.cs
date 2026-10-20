@@ -240,11 +240,15 @@ public sealed partial class PlaneWorld
                 b.GuardTimer = BlotterTuning.GuardEvery / (1f + 0.3f * Menace) * _blightRng.Range(0.8f, 1.2f);
                 int guards = Murklings.Count(m => m.Alive && m.Guarding == b);
                 if (guards < BlotterTuning.Guards + (int)Menace && _blightRng.NextFloat() < BlotterTuning.GuardChance)
-                {
-                    float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(2.5f, 4.5f);
-                    var at = b.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
-                    if (Clear(at, BlightTuning.MurkRadius) && Vector2.Distance(at, p.Position) > 3f && Bud(at, -1) is { } guard) guard.Guarding = b;
-                }
+                    // A few spots round it, the first in open water (it is often against rock in a narrow cave).
+                    for (int tries = 0; tries < 8; tries++)
+                    {
+                        float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(2.5f, 4.5f);
+                        var at = b.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+                        if (!Clear(at, BlightTuning.MurkRadius) || Vector2.Distance(at, p.Position) <= 3f) continue;
+                        if (Bud(at, -1) is { } guard) guard.Guarding = b;
+                        break;
+                    }
             }
         }
 

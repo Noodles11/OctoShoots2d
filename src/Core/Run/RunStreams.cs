@@ -36,8 +36,6 @@ public sealed class RunStreams
     public Rng TopDown(LevelId id, int attempt, string stage) => _root.Stream($"topdown/{id.Cycle}/{id.Depth}/{id.Level}/{attempt}/{stage}");
     /// <summary>What a level holds (LevelPlan).</summary>
     public Rng Plan(LevelId id) => _root.Stream($"plan/{id.Cycle}/{id.Depth}/{id.Level}");
-    /// <summary>Which level of a depth its boss stands on.</summary>
-    public Rng BossRoll(int cycle, int depth) => _root.Stream($"boss/{cycle}/{depth}");
     /// <summary>Whether a depth has its second treasure room, and on which level.</summary>
     public Rng TreasureRoll(int cycle, int depth) => _root.Stream($"treasure/{cycle}/{depth}");
     /// <summary>A depth's level templates (LevelPlan.DepthTemplates).</summary>
