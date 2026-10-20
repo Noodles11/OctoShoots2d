@@ -66,8 +66,6 @@ public partial class BlightView : Node3D
         foreach (var r in _roots) r.Node.QueueFree();
         foreach (var r in _ripples) r.Mesh.QueueFree();
         _roots.Clear();
-        foreach (var meter in _meters.Values) meter.Ring.QueueFree();
-        _meters.Clear();
         _ripples.Clear();
         ClearHermits();
         ClearBombs();
@@ -92,7 +90,7 @@ public partial class BlightView : Node3D
         SyncWardens(world, dt, camera);
         SyncLashjaws(world, dt, camera);
         SyncKinLights(world);
-        SyncMeters(world, dt);
+        SyncInnerGlows(world);
         SyncHitGlows(world);
         SyncVines(world);
         StepRipples(dt);
@@ -217,72 +215,30 @@ public partial class BlightView : Node3D
     }
 
     /// <summary>The vines: tubes from the floor at their root rising to her plane, tapering to the tip; a coil wraps her.</summary>
-    // ───────────────────────── corruption meters ─────────────────────────
+    // ───────────────────────── the light from within ─────────────────────────
 
-    /// <summary>A meter on screen: its ring, the gold after-image of what the last shots took off, and its fade.</summary>
-    sealed class Meter
-    {
-        public MeshInstance3D Ring = null!;
-        public float Ghost = 1f, Alpha;
-        public bool Seen;
-    }
-
-    readonly Dictionary<object, Meter> _meters = new();
-    ShaderMaterial? _meterMat;
+    /// <summary>How far her light has worked into a creature (0 untouched → 1 freed): the share of its corruption gone.</summary>
+    static float Inner(CorruptionMeter meter) => meter.Empty ? 1f : 1f - meter.Fraction;
 
     /// <summary>
-    /// The corruption meters (docs/CORRUPTION.md): a ring round every murkling and Blightroot her light has partly
-    /// cleansed, hidden again when full or emptied. The chunk each shot takes off burns gold and drains away.
+    /// No meters (docs/CORRUPTION.md): instead every corrupted creature shines from within as her light works into it,
+    /// its core's colour brighter the less corruption it has left, until it bursts (corruption_orb's inner).
     /// </summary>
-    void SyncMeters(PlaneWorld world, float dt)
+    void SyncInnerGlows(PlaneWorld world)
     {
-        foreach (var meter in _meters.Values) meter.Seen = false;
-        foreach (var m in world.Murklings)
-            if (m.Alive && !m.Budding)
-                ShowMeter(m, m.Corruption, new Vector3(m.Position.X, LevelMap.SwimBand + 0.1f, m.Position.Y), Mathf.Max(m.Prime ? m.Radius * 2.6f : 1.7f * m.Radius / BlightTuning.MurkRadius, 0.8f), dt);
-        foreach (var b in world.Blotters)
-            if (b.Alive && b.Rise <= 0f) ShowMeter(b, b.Corruption, new Vector3(b.Position.X, LevelMap.SwimBand + 1.6f, b.Position.Y), 3.4f, dt);
-        foreach (var l in world.Lashjaws)
-            if (l.Alive) ShowMeter(l, l.Corruption, new Vector3(l.Position.X, JawHeight(l.Position) + 0.1f, l.Position.Y), 1.8f, dt);
-        foreach (var w in world.Inkwardens)
-            if (w.Alive) ShowMeter(w, w.Corruption, new Vector3(w.Position.X, LevelMap.SwimBand + 0.4f, w.Position.Y), 2.4f, dt);
-        foreach (var t in world.Thumpsquirts)
-            if (t.Alive && !t.Airborne) ShowMeter(t, t.Corruption, new Vector3(t.Position.X, LevelMap.SwimBand + 0.6f, t.Position.Y), 2.2f, dt);
-        foreach (var root in world.Blightroots)
-            if (root.Alive) ShowMeter(root, root.Corruption, new Vector3(root.Position.X, SacHeight, root.Position.Y), 2.8f, dt);
-        var gone = new List<object>();
-        foreach (var (key, meter) in _meters)
-            if (!meter.Seen)
-            {
-                meter.Ring.QueueFree();
-                gone.Add(key);
-            }
-        foreach (var key in gone) _meters.Remove(key);
+        for (int i = 0; i < _murks.Count && i < world.Murklings.Count; i++) Shine(_murks[i], Inner(world.Murklings[i].Corruption));
+        // A freed octopus swims off healthy: no light from within.
+        for (int i = 0; i < _roots.Count && i < world.Blightroots.Count; i++)
+            Shine(_roots[i].Node, world.Blightroots[i].Alive ? Inner(world.Blightroots[i].Corruption) : 0f);
+        foreach (var (b, h) in _hermits) Shine(h.Node, Inner(b.Corruption));
+        foreach (var (t, tube) in _tubes) Shine(tube.Node, Inner(t.Corruption));
+        foreach (var (w, view) in _wardens) Shine(view.Node, Inner(w.Corruption));
+        foreach (var (l, jaw) in _jaws) Shine(jaw.Node, Inner(l.Corruption));
     }
 
-    void ShowMeter(object owner, CorruptionMeter corruption, Vector3 at, float size, float dt)
-    {
-        if (!_meters.TryGetValue(owner, out var meter))
-        {
-            _meterMat ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/corruption_ring.gdshader"), RenderPriority = 5 };
-            meter = new Meter { Ring = new MeshInstance3D { Mesh = new QuadMesh { Size = Vector2.One }, MaterialOverride = _meterMat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off } };
-            AddChild(meter.Ring);
-            _meters[owner] = meter;
-        }
-        meter.Seen = true;
-        float fill = corruption.Fraction;
-        // The after-image drains down to the fill (and follows it straight back up as it re-corrupts).
-        meter.Ghost = fill > meter.Ghost ? fill : Mathf.MoveToward(meter.Ghost, fill, dt * 0.9f);
-        meter.Alpha = Mathf.MoveToward(meter.Alpha, corruption.Shown ? 1f : 0f, dt * 6f);
-        meter.Ring.Visible = meter.Alpha > 0.01f;
-        meter.Ring.Position = at;
-        // A small pop on each hit.
-        float pop = 1f + 0.12f * Mathf.Clamp((meter.Ghost - fill) * 4f, 0f, 1f);
-        meter.Ring.Scale = Vector3.One * size * pop;
-        meter.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fill"), fill);
-        meter.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ghost"), meter.Ghost);
-        meter.Ring.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("alpha"), meter.Alpha);
-    }
+    void Shine(Node node, float k) => SetOrb(node, InnerParam, InnerMeta, k);
+
+    static readonly StringName InnerParam = "inner", InnerMeta = "inner_glow";
 
     // ───────────────────────── events ─────────────────────────
 
@@ -480,18 +436,21 @@ public partial class BlightView : Node3D
     }
 
     /// <summary>Sets the hit outline on a creature's corrupted parts (those drawn with corruption_orb), only when it changes.</summary>
-    void Glow(Node node, float k)
+    void Glow(Node node, float k) => SetOrb(node, HitParam, HitMeta, k);
+
+    /// <summary>Sets one of corruption_orb's instance values on every part of a creature drawn with it, only when it changes.</summary>
+    void SetOrb(Node node, StringName param, StringName meta, float k)
     {
         if (node is GeometryInstance3D g && g.MaterialOverride is ShaderMaterial m && m.Shader == _orb.Shader)
         {
-            if (!g.HasMeta(HitMeta) || (float)g.GetMeta(HitMeta) != k)
+            if (!g.HasMeta(meta) || (float)g.GetMeta(meta) != k)
             {
-                g.SetMeta(HitMeta, k);
-                g.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("hit"), k);
+                g.SetMeta(meta, k);
+                g.SetInstanceShaderParameter(param, k);
             }
         }
-        foreach (var child in node.GetChildren()) Glow(child, k);
+        foreach (var child in node.GetChildren()) SetOrb(child, param, meta, k);
     }
 
-    static readonly StringName HitMeta = "hit_glow";
+    static readonly StringName HitParam = "hit", HitMeta = "hit_glow";
 }

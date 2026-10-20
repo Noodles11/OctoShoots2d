@@ -3,7 +3,8 @@
 How Ink Deep's corruption, its enemies and the boss arena are built. The design brief is "Corruption & Combat:
 Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruption.cs` (the field, its tuning and
 `PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, gloomvines, murklings, the arena). The
-presentation is in `src/Game/TopDown/CorruptionView.cs`, `BlightView.cs` and `CleanseMeter.cs`, and in the shaders
+presentation is in `src/Game/TopDown/BlightView.cs`, `CameraRig.cs` (the phase shift), `CorruptionView.cs` (the field's
+texture) and `CleanseMeter.cs`, and in the shaders
 named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed, and ambush
 clearings bud murklings instead. The healthy fish still swim the reef, and the murklings hunt them (see Lesser
 murklings).
@@ -53,7 +54,7 @@ which is why the ground round it is the level's main source of ink. Freeing it b
 - **Its look:** an octopus sitting on the floor, with no eyes.
   - Its mantle rises from the floor to her plane: the target her light drains.
   - Its eight arms lie splayed flat on the ground, thick at the mantle and curling at their tips, twitching weakly.
-  - Three chains of glossy ink links (`ink_chain.gdshader`) pin each arm, arching over it from one little ink well to
+  - Three chains of matte ink links (`ink_chain.gdshader`) pin each arm, arching over it from one little ink well to
     another. Dark droplets drain off its arms into the wells.
   - It wears the Blightroot's blue under the ink, and its hit outline like every corrupted creature.
 - **Freed:** its ink pops off its mantle and the chains snap, their links flying. It turns its own healthy coral,
@@ -105,7 +106,7 @@ Hermit crabs the corruption took over: a small crab under a huge shell of ink, s
 - **Guards:** every ~6 s (less with Menace) there is a 70% chance a murkling buds 2.5–4.5 m from it, up to 2 + Menace
   guards alive (`Murkling.Guarding`).
 - **Looks** (`BlightView.Blotters.cs`):
-  - **The shell:** a round bun of glossy orange-rimmed ink like a bao (or a Bulbasaur's bulb), flat underneath, from
+  - **The shell:** a round bun of matte orange-rimmed ink like a bao (or a Bulbasaur's bulb), flat underneath, from
     just off the floor up past her plane. Its soft pleats swirl up into a pinched knot on top. It bobs and rocks on the
     crab's steps, and ink beads off it.
   - **The crab:** lobster red, far too small for its shell. It pokes out of the shell's front with amber-tipped eye
@@ -119,7 +120,7 @@ Hermit crabs the corruption took over: a small crab under a huge shell of ink, s
 
 ## Thumpsquirts (`Thumpsquirt`, `PlaneThumpsquirts.cs`)
 
-A corrupted sea squirt: an upright tube of glossy ink (1.6 m tall, 0.84 m across) with two siphons glowing a dim
+A corrupted sea squirt: an upright tube of matte ink (1.6 m tall, 0.84 m across) with two siphons glowing a dim
 stolen ember. It stands on the floor where the floor comes near her plane and hangs just under it over deep water.
 
 - **Where:** from Depth 2 (the Sunken Galleon) on: one a level there, 1–2 in Depth 3, 2 from Depth 4, never more than 3.
@@ -146,7 +147,7 @@ stolen ember. It stands on the floor where the floor comes near her plane and ha
 
 ## Inkwardens (`Inkwarden`, `PlaneInkwardens.cs`)
 
-A corrupted sea anemone that shelters its kin as an anemone shelters clownfish: a squat column of glossy ink crowned
+A corrupted sea anemone that shelters its kin as an anemone shelters clownfish: a squat column of matte ink crowned
 with ten slowly writhing tentacles tipped violet, a faint ring of ink on the floor round it marking how far it guards.
 
 - **Where:** from Depth 2 (the Sunken Galleon) one sits beside each Blightroot (3–5 m from it). From Depth 3 on, 1 +
@@ -166,7 +167,7 @@ with ten slowly writhing tentacles tipped violet, a faint ring of ink on the flo
 
 ## Lashjaws (`Lashjaw`, `PlaneLashjaws.cs`)
 
-A corrupted moray lodged in a hole in the reef wall, its tongue a lash of ink: a glossy ink head with one ember eye
+A corrupted moray lodged in a hole in the reef wall, its tongue a lash of ink: a matte ink head with one ember eye
 poking out of the rock at her height; it never moves.
 
 - **Where:** from Depth 3 (the Coral Carnival) on: 1–2 a level there, 2–3 deeper, at most 3. On a true wall (rock
@@ -271,7 +272,7 @@ The reef's fish (DESIGN-TOPDOWN, Reef fish) are what the murklings corrupt.
   into their anemone while one is within 3 m of it.
 - **Turning:** over 0.6 s the fish falters and ink creeps over it from the tail as it shrinks; then it is a lesser
   murkling, with a puff of violet mist.
-- **The lesser murkling:** a small glossy ink bead in the murklings' look, carrying a dim ember in its fish's old colour
+- **The lesser murkling:** a small matte ink bead in the murklings' look, carrying a dim ember in its fish's old colour
   (teal for a chromis, orange for a clownfish, blue for a tang), so it shows what it was. By the fish it was:
 
   | Fish | Radius | Corruption meter | Drain while clinging |
@@ -299,9 +300,11 @@ meter that starts full. Each shot of her light takes its damage (illuminance) of
 meter regrows, at a rate set by the creature's kind and the Menace. Emptied, the creature is cleansed: one strong
 enough shot does it at once, or keep shooting until the meter runs out.
 
-The meter is drawn as a ring round the creature (`corruption_ring.gdshader`), always on top. It fills clockwise from
-the top with ink and a violet edge for what is left, and the chunk the last shots took off burns gold-white as it
-drains away. It is shown only while partly emptied: it fades out when full again, and it is gone once emptied.
+No meter is drawn. Instead the creature **shines from within** as her light works into it (`corruption_orb`'s
+`inner`, `BlightView.SyncInnerGlows`): the less corruption it has left, the brighter its core's colour (else its
+kind's) shines through its skin, spreading from its middle out to its rim and throbbing faster, and the brighter and
+wider its own light (`BlightView.Lights.cs`). Near empty it all but blazes; emptied, it bursts. Regrowing, it dims
+again. A freed octopus swims off without it.
 
 ## Gloomvines (`Gloomvine`)
 
@@ -325,7 +328,7 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
   black pearl shows) and never turns. She opens and
   closes her lid and throws pearls from her opening: rings, walls thrown in a random spread around her facing, the
   helix, and in phase 2 the homing royal pearl. The snap still comes if Clementine is close while she is open.
-- **Her pearls are corruption:** glossy ink orbs. Clementine's light passes through them and cannot clear them.
+- **Her pearls are corruption:** matte ink orbs. Clementine's light passes through them and cannot clear them.
 - **Weak spot:** only the black pearl (0.9 m, `CoreRadius`) can be hurt, and only while she is open (the light flies
   over the raised lid). Shut, or on the shell, shots break harmlessly.
 - **Every boss's rule** (`CLAUDE.md`): a boss holds a corrupted pearl (`PlaneBoss.PearlAt`), the source of its
@@ -342,7 +345,7 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
 
 - **Crust:** the boss carries 5 crust layers, one stripped per 20% of the arena cleansed. Each layer absorbs 17% of a
   bubble's damage. Her ring and wall volleys grow thinner with each layer gone (60% of the full count with no crust).
-  Her pearls' reach grows shorter (65% of full life with no crust). Her crust is drawn as glossy ink lumps that break
+  Her pearls' reach grows shorter (65% of full life with no crust). Her crust is drawn as matte ink lumps that break
   off as layers fall.
 - **Easing:** at the fight's start, her health and pattern density fall by up to 30% with the level cleansed (an
   explorer meets an easier boss).
@@ -399,7 +402,19 @@ Cleared corruption never just vanishes. It evaporates.
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
   out from how fast each cell falls and fades over ~1.2 s. It uploads at most 30 times a second, and only while
-  something changes. The level's floor and its shards read it.
+  something changes. The level's floor, its shards and the phase shift read it.
+- **The phase shift** (`topdown_post.gdshader`, the post pass; `CameraRig`): corrupted ground is seen out of phase,
+  like a misprinted anaglyph: its red slides one way and its cyan the other, up to 10 px at full corruption (from
+  density 0.04, full by 0.5). The split drifts in width and angle over the ground, and a few times a second a band of
+  it jumps sideways (a glitch, never all of it at once). What stands on corrupted ground below her plane splits with
+  it; rock above her plane never does. Nothing is hidden or darkened.
+  - **Her light sets it true:** round her (true within about 1.8 m, out of true again by about 6.8 m) and wherever her
+    light falls (walls keep it from what lies behind them). Her bubbles' light sets the ground under them true as they
+    fly. A dash (3.2 m), a bubble's pop (1.6 m plus three times the bubble), a light burst, a freeing (3.5 m) and a
+    Blightroot's bursting (7 m) each set the ground round them true for a moment, spreading fast and fading over
+    1.6 s.
+  - **Cleansing sets it true for good**, since it follows the field itself.
+  - `--dbg-noshift` shows a level without it.
 - **Ink drip** (`corruption_shards.gdshader`, `CorruptionView`): the corruption's only mark on the floor, as if from
   another dimension: ink dripping upward out of the ground, as fine as plankton (drops 4–8 cm across, about 70%
   opaque). From its own spot on corrupted ground (no current moves the spot) each drop wells up out of the floor and
@@ -415,7 +430,8 @@ Cleared corruption never just vanishes. It evaporates.
   the rest of the level's life as she dives.
 - **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the drops; nothing covers it and it
   never glows. The level below shows its own corruption through the shaft.
-- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, the octopus, throws, the crust) are glossy ink, and
+- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, the octopus, throws, the crust) are matte, rubbery ink,
+  tacky to look at: rough, with a weak broad sheen and a finely dimpled skin, never polished; a soft rim. And
   **each kind has its own base colour** (its skin under the ink and its glowing rim), shared by its projectiles and its
   rings: murklings stay ink-black with a violet rim, each with its core's colour (a murkling's amber, a prime's
   magenta, a lesser one's its fish's); Blightroots blue (the octopus under its ink, its rings and chains too); Blotters orange (their

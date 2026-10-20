@@ -1,6 +1,8 @@
 // Corrupted bodies (docs/CORRUPTION.md): a murkling, a Blightroot's ink sac, a murkling's throw, the boss's crust. A
-// wobbling glossy membrane of darkness with a cold violet rim (or its kind's own colour: skin); inside, a dim stolen
-// ember (ember 0 for none).
+// wobbling membrane of darkness, matte and rubbery, tacky to look at (a soft broad sheen, no polish, a fine dimpled
+// skin), with a soft cold violet rim (or its kind's own colour: skin); inside, a dim stolen ember (ember 0 for none).
+// inner: her light working into it (0 untouched → 1 all but freed): it lights up from within, its core's colour
+// shining through the skin brighter and brighter, flickering faster, until it bursts.
 // swell inflates it (a sac's telegraph); fade dissolves it (a burst). A murkling's throw: pull bends it back away from
 // aim like a drawn slingshot (−1), then lunges it forward (+1); bud swells the piece it throws out of its front.
 // A throw itself: drip draws its back out into the neck it is pinching off from (1 → 0 as it parts).
@@ -24,6 +26,8 @@ instance uniform float bud = 0.0;
 instance uniform float drip = 0.0;
 // Struck by her light (1 at the hit, fading): a short bright outline round the body.
 instance uniform float hit = 0.0;
+// How far her light has worked into it (1 − its corruption left): it shines from within.
+instance uniform float inner = 0.0;
 
 varying vec3 v_dir;
 
@@ -72,15 +76,31 @@ void fragment() {
 	float fres = pow(1.0 - facing, 2.4);
 	vec3 n = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 	float swirl = 0.5 + 0.5 * sin(n.x * 7.0 + n.z * 5.0 + TIME * 1.6 + seed);
-	ALBEDO = vec3(0.008, 0.006, 0.014) + vec3(0.02, 0.005, 0.03) * swirl;
+	ALBEDO = vec3(0.012, 0.01, 0.018) + vec3(0.02, 0.008, 0.026) * swirl;
 	ALBEDO = mix(ALBEDO, skin.rgb * (0.16 + 0.1 * swirl), skin.a);
 	vec3 rim = mix(rim_color, skin.rgb, skin.a);
-	ROUGHNESS = 0.1;
-	SPECULAR = 0.85;
+	// Matte rubber: rough, a weak broad sheen; its skin finely dimpled, as if tacky.
+	vec3 dimple = vec3(hash3(floor(v_dir * 26.0) + seed), hash3(floor(v_dir * 26.0) + seed + 3.1), hash3(floor(v_dir * 26.0) + seed + 7.7)) - 0.5;
+	vec3 fine = vec3(hash3(floor(v_dir * 61.0) + seed + 1.3), hash3(floor(v_dir * 61.0) + seed + 5.9), hash3(floor(v_dir * 61.0) + seed + 9.2)) - 0.5;
+	NORMAL = normalize(NORMAL + (dimple * 0.22 + fine * 0.1) * (1.0 - fres));
+	ROUGHNESS = 0.72;
+	SPECULAR = 0.22;
 	float flicker = 0.7 + 0.3 * sin(TIME * 7.0 + seed * 3.0) * sin(TIME * 4.3 + seed);
 	vec3 glow = ember_tint.a > 0.5 ? ember_tint.rgb : ember_color;
 	// Its rim glows in its colour, brighter for a coloured kind, so it reads in the dark depths.
-	EMISSION = rim * fres * (0.55 + 0.3 * swirl + swell * 0.8) * (1.0 + 1.2 * skin.a) + rim * skin.a * 0.08 + glow * pow(facing, 6.0) * ember * flicker * 1.4;
+	// A soft rim (no hard polished edge).
+	float soft_rim = pow(1.0 - facing, 1.7);
+	EMISSION = rim * soft_rim * (0.32 + 0.15 * swirl + swell * 0.8) * (1.0 + 1.0 * skin.a) + rim * skin.a * 0.06 + glow * pow(facing, 6.0) * ember * flicker * 1.4;
+	// The light from within: its core's colour (else its kind's) shining through the skin, strongest where the skin is
+	// thinnest to the eye (facing) and spreading out to the rim as it nears bursting, flickering faster.
+	if (inner > 0.0) {
+		vec3 core = ember_tint.a > 0.5 ? ember_tint.rgb : skin.a > 0.0 ? skin.rgb : ember_color;
+		float k = inner * inner;
+		float throb = 0.75 + 0.25 * sin(TIME * (5.0 + 20.0 * k) + seed * 3.0);
+		float spread = mix(pow(facing, 3.0), 1.0, k * 0.7);
+		EMISSION += core * (0.15 + 3.2 * k) * spread * throb;
+		ALBEDO = mix(ALBEDO, core * 0.3, k * 0.5);
+	}
 	// Her light's hit: a thin warm-white outline along the silhouette.
 	if (hit > 0.0) EMISSION += vec3(1.0, 0.93, 0.75) * smoothstep(0.45, 0.85, 1.0 - facing) * hit * 4.0;
 }

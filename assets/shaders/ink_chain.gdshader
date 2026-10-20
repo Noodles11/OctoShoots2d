@@ -1,4 +1,4 @@
-// The corruption's chains (docs/CORRUPTION.md): links of glossy ink pinning a Blightroot's octopus to the floor, and the
+// The corruption's chains (docs/CORRUPTION.md): links of matte ink pinning a Blightroot's octopus to the floor, and the
 // two that tear loose to lash at her (the gloomvines). Ink-black with the Blightroot's blue rim; per link (MultiMesh
 // colour): r how far it has dissolved (it falls away in specks), g how taut it is (the rim brightens on the pulse and
 // while coiling her).
@@ -24,7 +24,8 @@ void fragment() {
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	float fres = pow(1.0 - facing, 2.0);
 	ALBEDO = vec3(0.012, 0.01, 0.028);
-	ROUGHNESS = 0.12;
-	SPECULAR = 0.85;
+	// Matte, like the bodies (corruption_orb): no polish.
+	ROUGHNESS = 0.7;
+	SPECULAR = 0.22;
 	EMISSION = rim_color * (fres * (0.7 + 1.4 * v_taut) + 0.05 + 0.25 * v_taut);
 }

@@ -946,6 +946,7 @@ public partial class TopDownMain : Node3D
         {
             _corruptTex = null;
             _level.SetCorruption(null);
+            _camera.SetCorruption(null);
             _corruption.Show(null, null);
             _blight.Show(_world);
             _springs.Show(_world);
@@ -953,6 +954,7 @@ public partial class TopDownMain : Node3D
         }
         _corruptTex = new CorruptionTexture(field);
         _level.SetCorruption(_corruptTex.Texture);
+        _camera.SetCorruption(_corruptTex.Texture);
         _blight.Show(_world);
         _springs.Show(_world);
         // The shards were laid out already if she dived here; otherwise they are laid out now, off the main thread.
@@ -1387,6 +1389,8 @@ public partial class TopDownMain : Node3D
                 {
                     _combat.DashBurst(e.Position);
                     _haptics.Pulse(0.35f, 0.3f, 0.14f);
+                    // Her dash sets the ground true round her for a moment.
+                    _camera.Puff(e.Position, 3.2f);
                 }
                 else if (e.Type == PlaneEventType.PlayerHit)
                 {
@@ -1401,6 +1405,7 @@ public partial class TopDownMain : Node3D
                     _damage.Show(e);
                     // Freed by light: the flash grows with the bubble that did it; a big one rings her bell and lifts
                     // the screen's edges (not with reduced motion).
+                    _camera.Puff(e.Position, 3.5f);
                     if (_combat.Kill(e.Position) >= CombatView.BigKill)
                     {
                         if (!_view.ReducedMotion) _camera.EdgeFlash();
@@ -1413,12 +1418,18 @@ public partial class TopDownMain : Node3D
                     ShotKick(_world.LastVolleyDamage / PlaneCombatTuning.ShotDamage);
                 }
                 else if (e.Type is PlaneEventType.MobHit or PlaneEventType.BossHit) _damage.Show(e);
-                else if (e.Type == PlaneEventType.ShotPopped) _combat.Pop(e.Position, e.Size * 1.7f, e.Direction);
+                else if (e.Type == PlaneEventType.ShotPopped)
+                {
+                    _combat.Pop(e.Position, e.Size * 1.7f, e.Direction);
+                    // The pop's light sets the ground true round it, spreading.
+                    _camera.Puff(e.Position, 1.6f + e.Size * 3f);
+                }
                 else if (e.Type == PlaneEventType.ShotOut) _combat.Extinguish(e.Position, e.Direction);
                 else if (e.Type == PlaneEventType.LightBurst)
                 {
                     _combat.LightBurst(e.Position, e.Size);
                     _camera.Shake(0.12f);
+                    _camera.Puff(e.Position, e.Size * 1.3f);
                 }
                 else if (e.Type == PlaneEventType.ActiveUsed) _combat.ActiveUsed(_world);
                 else if (e.Type == PlaneEventType.ShieldBlocked) _bell.ShieldRipple();
@@ -1490,6 +1501,7 @@ public partial class TopDownMain : Node3D
         Guard("surge", () => _surgeView.Sync(_world, dt));
         Guard("geysers", () => _geysers.Sync(_world, dt, _camera.Camera));
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
+        _camera.TickPuffs(dt);
         _camera.SetLenses(_combat.Lenses, System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--dbg-nolens") >= 0 ? 0 : _combat.LensCount);
         Guard("currents", () => _currents.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
@@ -1972,6 +1984,7 @@ public partial class TopDownMain : Node3D
                 break;
             case PlaneEventType.BlightrootBurst:
                 _camera.Shake(0.35f);
+                _camera.Puff(e.Position, 7f);
                 _sfx.PlayPitched("bell_ring", 0.75f, -8f);
                 Say("A Blightroot starves and bursts");
                 break;

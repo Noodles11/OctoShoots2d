@@ -7,6 +7,9 @@
 //   the lens: the camera looks down.
 //   Her light glows in the water along every view ray, shadowed by the reef (light_field, DESIGN-TOPDOWN §5.3); her bell
 //   and her bubbles throw caustics on the floor.
+//   The phase shift (docs/CORRUPTION.md): corrupted ground is seen out of phase, its red sliding one way and its cyan
+//   the other like a misprinted anaglyph, drifting and now and then glitching in bands. Her light snaps it back into
+//   true where it falls (and her bubbles', and the puffs her dashes and pops blow), and cleansed ground stays true.
 //   A faint refraction wobble, a grade (saturation, cool shadows, sunlit highlights) and a vignette tinted by the
 //   water, all deepening with Menace.
 // A full-screen quad in the transparent pass, drawn first, so Clementine and the other glowing things land on top sharp.
@@ -78,6 +81,16 @@ uniform vec2 world_origin = vec2(0.0);
 uniform float wobble = 1.0;
 /// Verification (--dbg-lightview): 1 shows where the sun reaches (yellow) and her light reaches (orange) on what is drawn.
 uniform int debug_view = 0;
+// The phase shift: the level's corruption field (R density, G the gold of corruption dying; the map's 140 m square
+// from the world's origin), off when the level has none.
+uniform sampler2D corruption_map : filter_linear, repeat_disable;
+uniform float corruption_on = 0.0;
+/// Puffs (x, z, radius, age 0..1): a dash, a pop, a freeing set the ground true round them for a moment.
+uniform vec4 shift_puffs[12];
+uniform int shift_puff_count = 0;
+/// How far apart the channels slide at full corruption (pixels), and how far round her the ground is true (metres).
+uniform float shift_px = 10.0;
+uniform float shift_clear = 4.5;
 
 void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
@@ -109,6 +122,8 @@ float hash12(vec2 p) {
 	p3 += dot(p3, p3.yzx + 33.33);
 	return fract((p3.x + p3.y) * p3.z);
 }
+
+
 
 void fragment() {
 	vec2 uv = SCREEN_UV;
@@ -144,7 +159,40 @@ void fragment() {
 		+ above_blur * smoothstep(0.0, 9.0, above);
 	float peak = open_deep ? 0.0 : smoothstep(peak_from, peak_from + peak_span, h);
 	lod += peak_blur * peak;
-	vec3 col = blurred(suv, lod);
+
+	// The phase shift: how far out of true the ground this pixel shows is (rock above her plane is never corrupted).
+	float shift = 0.0;
+	if (corruption_on > 0.5 && !open_deep && h < 1.0 && world.x >= 0.0 && world.z >= 0.0 && world.x <= 140.0 && world.z <= 140.0) {
+		shift = smoothstep(0.04, 0.5, textureLod(corruption_map, world.xz / 140.0, 0.0).r);
+		if (shift > 0.0) {
+			// Her light sets it true: round her, and wherever her light falls.
+			shift *= smoothstep(shift_clear * 0.4, shift_clear * 1.5, distance(world.xz, player_pos.xz));
+			shift *= 1.0 - 0.9 * her_reach(world);
+			for (int k = 0; k < bubble_count; k++) {
+				vec4 b = bubble_lights[k];
+				vec2 ob = world.xz - b.xy;
+				shift *= 1.0 - clamp(b.w * 2.5, 0.0, 1.0) * exp(-dot(ob, ob) / (b.z * b.z * 1.5));
+			}
+			for (int k = 0; k < shift_puff_count; k++) {
+				vec4 pf = shift_puffs[k];
+				shift *= 1.0 - (1.0 - pf.w) * (1.0 - smoothstep(pf.z * 0.6, pf.z, distance(world.xz, pf.xy)));
+			}
+		}
+	}
+		vec3 col = blurred(suv, lod);
+	if (shift > 0.01) {
+		// Red one way, cyan the other, the split drifting in angle and width over the ground; now and then a band of it
+		// jumps sideways (a glitch, a few times a second, never all of it).
+		float wave = 0.75 + 0.25 * sin(TIME * 1.3 + world.x * 0.4 + world.z * 0.25);
+		vec2 dir = normalize(vec2(1.0, 0.3 * sin(TIME * 0.6 + world.z * 0.2)));
+		float tick = floor(TIME * 9.0);
+		float band = floor(world.z * 1.5 + world.x * 0.2);
+		float glitch = step(0.93, hash12(vec2(tick, band))) * (hash12(vec2(band, tick + 3.1)) - 0.5) * 4.0;
+		vec2 off = (dir * shift_px * wave + vec2(glitch * shift_px, 0.0)) * shift / VIEWPORT_SIZE;
+		vec3 a = blurred(suv + off, lod);
+		vec3 b = blurred(suv - off, lod);
+		col = mix(col, vec3(a.r, b.g, b.b), shift);
+	}
 
 	// Everything is seen through water: reds fade and a turquoise in-scatter rises with the water between the sea
 	// surface and what this pixel shows (rock tops near the surface keep more of their colour).

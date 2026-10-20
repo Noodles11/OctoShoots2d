@@ -123,6 +123,54 @@ public partial class CameraRig : Node3D
 
     readonly float[] _lenses = new float[CombatView.MaxLenses * 4];
 
+    // ───────── The phase shift (docs/CORRUPTION.md): corrupted ground seen out of true, drawn by the post pass ─────────
+
+    const int MaxPuffs = 12;
+    /// <summary>A puff (a dash, a pop, a freeing) spreads to its size and fades over this long (seconds).</summary>
+    const float PuffLife = 1.6f;
+    readonly float[] _puffData = new float[MaxPuffs * 4];
+    readonly List<(Vector2 At, float Size, float Age)> _puffs = new();
+
+    /// <summary>The level's corruption field for the phase shift (null: none; --dbg-noshift: always none).</summary>
+    public void SetCorruption(Texture2D? field)
+    {
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--dbg-noshift") >= 0) field = null;
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("corruption_map"), field is null ? default(Variant) : field);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("corruption_on"), field is null ? 0f : 1f);
+        _puffs.Clear();
+    }
+
+    /// <summary>A puff of light (a dash, a pop, a freeing): the ground within <paramref name="size"/> metres is set true for a moment.</summary>
+    public void Puff(System.Numerics.Vector2 at, float size)
+    {
+        if (_puffs.Count >= MaxPuffs) _puffs.RemoveAt(0);
+        _puffs.Add((new Vector2(at.X, at.Y), size, 0f));
+    }
+
+    /// <summary>Ages the puffs and sends them.</summary>
+    public void TickPuffs(float dt)
+    {
+        for (int i = _puffs.Count - 1; i >= 0; i--)
+        {
+            var (at, size, age) = _puffs[i];
+            age += dt / PuffLife;
+            if (age >= 1f) _puffs.RemoveAt(i);
+            else _puffs[i] = (at, size, age);
+        }
+        for (int i = 0; i < _puffs.Count; i++)
+        {
+            var (at, size, age) = _puffs[i];
+            // It blows out fast and slows (most of its spread in the first third).
+            float spread = 1f - (1f - age) * (1f - age) * (1f - age);
+            _puffData[i * 4] = at.X;
+            _puffData[i * 4 + 1] = at.Y;
+            _puffData[i * 4 + 2] = Mathf.Max(size * (0.35f + 0.65f * spread), 0.2f);
+            _puffData[i * 4 + 3] = age;
+        }
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("shift_puffs"), _puffData);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("shift_puff_count"), _puffs.Count);
+    }
+
     /// <summary>A big-merge kill: the screen's edges lift toward white for 60 ms.</summary>
     public void EdgeFlash() => _edgeFlash = 1f;
     float _edgeFlash;
