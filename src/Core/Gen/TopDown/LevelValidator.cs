@@ -11,7 +11,7 @@ namespace OctoShoots.Core.Gen.TopDown;
 /// </summary>
 public static class LevelValidator
 {
-    public const float MinExitGeodesic = 65f;
+    public const float MinExitGeodesic = 55f;
     /// <summary>The longest spur from the network to a place.</summary>
     public const float MaxSpur = 34f;
 
@@ -53,11 +53,11 @@ public static class LevelValidator
 
         // Arches across corridors.
         var arches = map.Canopies.Where(c => c.Kind == CanopyKind.Arch).ToList();
-        if (arches.Count > 5) return $"{arches.Count} arches (want at most 5)";
+        if (arches.Count > TopDownGenerator.ArchesCap) return $"{arches.Count} arches (want at most {TopDownGenerator.ArchesCap})";
         foreach (var arch in arches)
         {
             float span = arch.HalfLength * 2f;
-            if (span is < 10f or > 20f) return $"an arch spanning {span:0.0} m (want 10–20 m)";
+            if (span < TopDownGenerator.ArchSpanMin || span > TopDownGenerator.ArchSpanMax) return $"an arch spanning {span:0.0} m (want {TopDownGenerator.ArchSpanMin:0}–{TopDownGenerator.ArchSpanMax:0} m)";
             if (!ArchCrossesCorridor(map, arch)) return "an arch does not span its corridor";
         }
 

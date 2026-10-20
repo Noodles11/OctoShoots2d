@@ -7,7 +7,7 @@ using Xunit;
 
 namespace OctoShoots.Core.Tests;
 
-/// <summary>The curse den (DESIGN-TOPDOWN §4.2): a long dark dead-end tunnel, a slow curse, a gamble at the end.</summary>
+/// <summary>The curse den (DESIGN-TOPDOWN §4.2): a long dead-end tunnel, safe going in, a reward at its end, and its curse over the way back.</summary>
 public class CurseDenTests
 {
     static readonly Lazy<LevelMap> Level = new(() => TestLevels.Get(TestLevels.Find(p => p.Curses > 0 && !p.HasBoss)));
@@ -62,34 +62,53 @@ public class CurseDenTests
     }
 
     [Fact]
-    public void InsideTheTunnelTheCurseCorruptsHerSlowly()
+    public void GoingInIsSafeAndTheEndSpringsTheCurseOverTheWayBack()
     {
         var w = World();
         var den = w.Curse!;
         var deep = den.Line[den.Line.Count / 2];
+        // On the way in: no dark, no drain.
         Hold(w, deep, 120);
         Assert.True(w.CurseDepth > 5f);
-        Assert.InRange(100f - w.Player.Hp, CurseTuning.Drain * 2f - 0.2f, CurseTuning.Drain * 2f + 0.2f);
-        // Outside it, nothing.
+        Assert.Equal(-1f, w.CurseDarkDepth);
+        Assert.Equal(100f, w.Player.Hp);
+        // The end: its reward out, the curse sprung with a laugh.
+        Hold(w, den.End, 1);
+        Assert.True(den.Reached && den.Dark);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.CurseLaugh);
+        // On the way back: dark, and draining her.
         float hp = w.Player.Hp;
-        Hold(w, w.Map.Start.Position, 120);
-        Assert.Equal(-1f, w.CurseDepth);
-        Assert.Equal(hp, w.Player.Hp);
+        Hold(w, deep, 120);
+        Assert.True(w.CurseDarkDepth > 5f);
+        Assert.InRange(hp - w.Player.Hp, CurseTuning.Drain * 2f - 0.2f, CurseTuning.Drain * 2f + 0.2f);
+        // Out: the den is done.
+        bool cleared = false;
+        for (int i = 0; i < 4 && !cleared; i++)
+        {
+            Hold(w, w.Map.Start.Position, 1);
+            cleared = w.Events.Any(e => e.Type == PlaneEventType.CurseCleared);
+        }
+        Assert.True(cleared);
+        Assert.True(den.Cleared && !den.Dark);
+        Assert.Equal(-1f, w.CurseDarkDepth);
     }
 
     [Fact]
-    public void NothingAtTheEndButALaugh()
+    public void ClearedItNeverDarkensAgainNorGivesMore()
     {
         var w = World();
-        w.Curse!.Reward = CurseReward.Nothing;
-        bool laughed = false;
-        for (int i = 0; i < 30; i++)
-        {
-            Hold(w, w.Curse.End, 1);
-            laughed |= w.Events.Any(e => e.Type == PlaneEventType.CurseLaugh);
-        }
-        Assert.True(laughed);
-        Assert.DoesNotContain(w.Shells, s => Vector2.Distance(s.Position, w.Curse.End) < 4f);
+        var den = w.Curse!;
+        den.Reward = CurseReward.Fountain;
+        Hold(w, den.End, 60 * 2);
+        Hold(w, w.Map.Start.Position, 5);
+        Assert.True(den.Cleared);
+        int shells = w.Shells.Count + w.Run.Shells;
+        // Back in, all the way to the end: safe, dark-free, and the fountain dry.
+        Hold(w, den.End, 60 * 4);
+        Assert.Equal(-1f, w.CurseDarkDepth);
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.CurseLaugh);
+        Assert.Equal(shells, w.Shells.Count + w.Run.Shells);
+        Assert.Equal(100f - CurseTuning.Drain * 2f, w.Player.Hp, 0);
     }
 
     [Fact]
@@ -105,38 +124,20 @@ public class CurseDenTests
     }
 
     [Fact]
-    public void TheTeleportSendsHerToAPlaceSheHasNotBeen()
+    public void TheEndAlwaysHoldsAReward()
     {
-        var w = World();
-        w.Curse!.Reward = CurseReward.Teleport;
-        Hold(w, w.Curse.End, 1);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.CurseTeleport);
-        var arrived = w.Player.Position;
-        w.Step(default);
-        Assert.True(Vector2.Distance(arrived, w.Curse.End) > 10f);
-        Assert.True(w.Clear(arrived, w.Radius));
-        // Near one of the level's places, never the way down or the start.
-        var near = w.Map.Pois.OrderBy(p => Vector2.Distance(p.Position, arrived)).First();
-        Assert.DoesNotContain(near.Kind, new[] { PoiKind.Exit, PoiKind.Start, PoiKind.CurseDen });
-        Assert.Equal(-1f, w.CurseDepth);
-    }
-
-    [Fact]
-    public void TheRewardsAreRolledInTheirProportions()
-    {
-        int nothing = 0, fountain = 0, other = 0;
+        int pearls = 0, fountains = 0;
         foreach (var id in TestLevels.All(p => p.Curses > 0))
         {
             var w = new PlaneWorld(TestLevels.Get(id), new Tuning());
-            switch (w.Curse!.Reward)
+            if (w.Curse!.Reward == CurseReward.Pearl)
             {
-                case CurseReward.Nothing: nothing++; break;
-                case CurseReward.Fountain: fountain++; break;
-                default: other++; break;
+                pearls++;
+                Assert.Contains(w.Pearls, q => q.Position == w.Curse.End);
             }
+            else fountains++;
         }
-        Assert.True(fountain + nothing > 0);
-        Assert.True(CurseTuning.TeleportChance + CurseTuning.PearlChance + CurseTuning.FountainChance < 1f);
-        Assert.Equal(0.3f, 1f - CurseTuning.TeleportChance - CurseTuning.PearlChance - CurseTuning.FountainChance, 3);
+        Assert.True(pearls + fountains > 0);
+        Assert.Equal(new[] { CurseReward.Fountain, CurseReward.Pearl }, Enum.GetValues<CurseReward>());
     }
 }

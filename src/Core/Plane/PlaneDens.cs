@@ -150,7 +150,8 @@ public sealed partial class PlaneWorld
             if (den.Cleared || den.Members.Any(alive => alive())) continue;
             if (Murklings.Any(m => m.Alive && Vector2.Distance(m.Position, den.At) < den.Radius)) continue;
             den.Cleared = true;
-            field.Cleanse(den.At, den.Radius + DenTuning.Clear, 1f);
+            // Whole: strong enough that even its rim, where a cleansing fades, is left clean.
+            field.Cleanse(den.At, den.Radius + DenTuning.Clear, 3f);
             int shells = DenTuning.Shells + (int)MathF.Round(DenTuning.ShellsPerMenace * Menace) + _blightRng.Int(3) - 1;
             for (int i = 0; i < shells; i++) Shells.Add(new PlaneShell { Position = den.At, Velocity = Fling(2f, 5f) });
             bool orb = _blightRng.NextFloat() < DenTuning.OrbChance;

@@ -997,6 +997,9 @@ public partial class TopDownMain : Node3D
     {
         System.Numerics.Vector2? at = where switch
         {
+            // Under the level's first shortcut tunnel's roof, and at the chamber at its one end ("tunnel-mouth").
+            "tunnel" => _map.Canopies.Where(c => c.Kind == CanopyKind.TunnelRoof).Select(c => (System.Numerics.Vector2?)c.Center).FirstOrDefault(),
+            "tunnel-mouth" => _map.Canopies.Where(c => c.Kind == CanopyKind.TunnelRoof).Select(c => (System.Numerics.Vector2?)_map.Corridors[c.Corridor].Points[0]).FirstOrDefault(),
             "arch" => _map.Canopies.Where(c => c.Kind == CanopyKind.Arch).Select(c => (System.Numerics.Vector2?)c.Center).FirstOrDefault(),
             "cave" => _map.Caves.Select(c => (System.Numerics.Vector2?)(c.Mouth + c.Facing * 5f)).FirstOrDefault(),
             "exit" => _map.Exit.Position + new System.Numerics.Vector2(0f, _map.Exit.Radius + 3f),
@@ -1067,6 +1070,7 @@ public partial class TopDownMain : Node3D
             {
                 "fish" => _world.Fish.OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
                 "boss" => _world.Boss is { } b ? b.Position : null,
+                "tunnel" => _map.Canopies.Where(c => c.Kind == CanopyKind.TunnelRoof).Select(c => (System.Numerics.Vector2?)c.Center).FirstOrDefault(),
                 "blotter" => _world.Blotters.OrderBy(b => System.Numerics.Vector2.Distance(b.Position, from)).Select(b => (System.Numerics.Vector2?)b.Position).FirstOrDefault(),
                 "mob" => _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault(),
                 _ => _world.ReefFish.Where(f => f.Kind.ToString().Equals(_follow, StringComparison.OrdinalIgnoreCase))
@@ -1284,8 +1288,8 @@ public partial class TopDownMain : Node3D
             if (_perf) PerfAdd("sim", simStart, simBytes);
             _recorder.Observe(_world);
             Earned(_achievements.Observe(_world));
-            // Into the curse den's dark: a low drone as it closes round her.
-            bool cursed = _world.CurseDepth > CurseTuning.Inside;
+            // The curse den's dark closing round her: a low drone.
+            bool cursed = _world.CurseDarkDepth > CurseTuning.Inside;
             if (cursed && !_inCurse) _sfx.Play("curse_enter", -4f, 0f);
             _inCurse = cursed;
             // Healing from any source shows as a green number: the HP she gained beyond the hits she took this step.
@@ -1943,7 +1947,7 @@ public partial class TopDownMain : Node3D
         }
     }
 
-    /// <summary>The curse den's moments (DESIGN-TOPDOWN §4.2): its dark closing in, the laugh, the fountain, being sent on.</summary>
+    /// <summary>The curse den's moments (DESIGN-TOPDOWN §4.2): the laugh as its curse is sprung, the fountain, getting out.</summary>
     void CurseEvent(in PlaneEvent e)
     {
         switch (e.Type)
@@ -1954,11 +1958,10 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.FountainSpout:
                 _sfx.PlayAt("spout", new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y), -2f);
                 break;
-            case PlaneEventType.CurseTeleport:
-                // Black at once, so the jump is never seen; the camera is already there when the dark lifts.
-                _dark.Flash();
-                _camera.Track(Focus(1f), 0f, snap: true);
-                _sfx.Play("curse_teleport", -3f, 0f);
+            case PlaneEventType.CurseCleared:
+                // Out of its dark: the den is done.
+                _sfx.PlayPitched("bell_ring", 1.3f, -10f);
+                Say("Out of the curse");
                 break;
         }
     }

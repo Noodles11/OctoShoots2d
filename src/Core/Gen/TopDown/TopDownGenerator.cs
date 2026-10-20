@@ -17,6 +17,18 @@ namespace OctoShoots.Core.Gen.TopDown;
 public static class TopDownGenerator
 {
     public const int MaxAttempts = 100;
+    /// <summary>Arches a level tries for (as many as fit), and the most it may have.</summary>
+    public const int ArchesMin = 2, ArchesMax = 5, ArchesCap = 6;
+    /// <summary>
+    /// Passes, the level's shortcuts (tunnels through the rock): PassesMin–PassesMax a level, each PassMin–PassMax metres
+    /// long, where the way round by water is at least PassSaves times as long.
+    /// </summary>
+    public const int PassesMin = 2, PassesMax = 4;
+    /// <summary>Passes bored past the level's share, as spares: not every one can be roofed (those are filled back in).</summary>
+    const int PassSpares = 3;
+    const float PassMin = 10f, PassMax = 36f, PassSaves = 1.6f;
+    /// <summary>How far an arch spans from footing to footing (metres): over a tunnel, or across a chamber's edge.</summary>
+    public const float ArchSpanMin = 10f, ArchSpanMax = 24f;
     /// <summary>Buried coins and sealed pockets a level holds (the validator checks them).</summary>
     public const int CoinsMin = 4, CoinsMax = 7, PocketsMin = 2, PocketsMax = 4;
 
@@ -112,6 +124,7 @@ public static class TopDownGenerator
         SoftenSlopes(map, Stage("slopes"), strata);
         CutShaft(map, Stage("shaft"));
         ClampHeights(map);
+        RoofShortcuts(map);
         Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed, strata);
         PlacePickups(map, Stage("pickups"));
         PlaceSpawns(map, Stage("spawns"), plan.Menace);
@@ -395,7 +408,8 @@ public static class TopDownGenerator
         // Distance (metres) from every grid point to the nearest open water, and to the nearest roof (an arch's deck,
         // a cave's or an overhang's: the rock under and beside them carries them, so it keeps its height).
         var d = Chamfer(i => map.Heights[i] <= LevelMap.BlockHeight);
-        var roof = Chamfer(i => !float.IsNaN(map.Lid[i]));
+        // (Cave roofs and the shortcut tunnels' roofs alike: a tunnel keeps the rock it was bored through.)
+        var roof = Chamfer(i => !float.IsNaN(map.Lid[i]) || !float.IsNaN(map.Roof[i]));
         uint seed = (uint)(rng.NextU64() >> 32);
         var eased = new bool[N * N];
         for (int y = 0; y < N; y++)
@@ -464,6 +478,235 @@ public static class TopDownGenerator
         return d;
     }
 
+    /// <summary>
+    /// The shortcut tunnels' roofs made whole (<see cref="CleanRoofs"/>: every pass was bored through the rock, which
+    /// stays over it), and laid out as canopy pieces along each, which fade as one when she is near.
+    /// </summary>
+    static void RoofShortcuts(LevelMap map)
+    {
+        const int N = LevelMap.Samples;
+        // Each roof laid over the tunnel's water as the rock now stands (the slopes were softened since it was bored): over
+        // each open cell of it, from the wall on one side across to the wall on the other — their heights, a little
+        // past their edges, met exactly where the water meets the rock, with a gentle arch between — so it follows the
+        // water's own craggy outline and reads as one mass of rock with the walls. Where the water is wider than a roof
+        // can span (into a chamber, a lake), the tunnel is open to the sky: its mouths. Rock keeps its own surface.
+        Array.Fill(map.Roof, float.NaN);
+        foreach (var c in map.Corridors)
+        {
+            if (!c.Roofed || c.Points.Count < 2) continue;
+            var cells = new List<int>();
+            var centre = new Dictionary<int, float>();
+            float span = Bored(c);
+            var pts = c.Points;
+            int x0 = Math.Max(0, (int)(pts.Min(p => p.X) - span)), x1 = Math.Min(N - 1, (int)(pts.Max(p => p.X) + span) + 1);
+            int y0 = Math.Max(0, (int)(pts.Min(p => p.Y) - span)), y1 = Math.Min(N - 1, (int)(pts.Max(p => p.Y) + span) + 1);
+            // How far to the rock from q along d (metres), or −1 past the widest a roof spans.
+            float ToRock(Vector2 q, Vector2 d)
+            {
+                for (float t = 0f; t <= RoofSpan(c) + 1.5f; t += 0.5f)
+                    if (map.HeightAt(q + d * t) >= 0.4f) return t;
+                return -1f;
+            }
+            for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+            {
+                int i = y * N + x;
+                if (!float.IsNaN(map.Lid[i]) || map[x, y] > 0.3f) continue;
+                var q = new Vector2(x, y);
+                var near = NearestPoint(pts, q, out var dir);
+                if (Vector2.Distance(near, q) > span) continue;
+                var side = Geo.Perp(dir);
+                float la = ToRock(q, side), lb = ToRock(q, -side);
+                // The mouth's edge ragged, not cut square: the widest span wavers by a couple of metres along it.
+                float widest = RoofSpan(c) - 1f - 1.5f * TerrainNoise.Fbm(x * 0.4f, y * 0.4f, (uint)map.Seed ^ 0x2F00u, 2);
+                if (la < 0f || lb < 0f || la + lb > widest) continue;
+                float ha = map.HeightAt(q + side * (la + 1.5f)), hb = map.HeightAt(q - side * (lb + 1.5f));
+                float t = lb / MathF.Max(la + lb, 0.01f);
+                map.Roof[i] = MathF.Max(PassRoofLow, MathUtil.Lerp(hb, ha, t) + 0.5f * MathF.Sin(MathF.PI * t));
+                cells.Add(i);
+                centre[i] = MathF.Sin(MathF.PI * t);
+            }
+            var was = cells.ToDictionary(k => k, k => map.Roof[k]);
+            foreach (int k in cells)
+            {
+                float sum = 0f;
+                int n = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                    if (was.TryGetValue(k + dy * N + dx, out float v)) { sum += v; n++; }
+                map.Roof[k] = MathF.Max(PassRoofLow, sum / n);
+            }
+            WearMouths(map, cells, centre);
+        }
+        CleanRoofs(map);
+        // Every shortcut is a tunnel: a pass the rock could not roof (it ran out into water too wide) is filled back in,
+        // and so are the spares past the most a level has (the first bored, through the highest rock, are kept).
+        bool Over(Vector2 p)
+        {
+            int x = (int)MathF.Round(p.X), y = (int)MathF.Round(p.Y);
+            return x >= 0 && y >= 0 && x < N && y < N && !float.IsNaN(map.RoofAt(x, y));
+        }
+        // Roofed in its middle, and somewhere along it for its canopy pieces (laid at its segments' middles).
+        bool Roofed(Corridor c) => Over(c.Points[c.Points.Count / 2])
+            && Enumerable.Range(1, c.Points.Count - 1).Any(i => Over((c.Points[i - 1] + c.Points[i]) * 0.5f));
+        // (Filling one back can take a neighbour's roof with it: again, until none changes.)
+        for (bool again = true; again;)
+        {
+            again = false;
+            int kept = map.Corridors.Count(c => c.Kind == CorridorKind.Pass && Roofed(c));
+            for (int ci = map.Corridors.Count - 1; ci >= 0; ci--)
+            {
+                var c = map.Corridors[ci];
+                if (c.Kind != CorridorKind.Pass || c.Bored is null) continue;
+                bool roofed = Roofed(c);
+                if (!roofed || kept > PassesMax)
+                {
+                    if (roofed) kept--;
+                    foreach (var (i, was) in c.Bored)
+                    {
+                        map.Heights[i] = MathF.Max(map.Heights[i], Math.Min(was, ReefTerrain.HMax));
+                        map.Roof[i] = float.NaN;
+                    }
+                    map.Corridors.RemoveAt(ci);
+                    again = true;
+                    foreach (var canopy in map.Canopies)
+                        if (canopy.Corridor > ci) canopy.Corridor--;
+                }
+            }
+            if (again) CleanRoofs(map);
+        }
+        foreach (var c in map.Corridors) c.Bored = null;
+        // Each tunnel's roof, as canopy pieces along it (they fade as one when she is near).
+        for (int ci = 0; ci < map.Corridors.Count; ci++)
+        {
+            var c = map.Corridors[ci];
+            if (!c.Roofed) continue;
+            for (int i = 1; i < c.Points.Count; i++)
+            {
+                Vector2 a = c.Points[i - 1], b = c.Points[i];
+                var mid = (a + b) * 0.5f;
+                int x = (int)MathF.Round(mid.X), y = (int)MathF.Round(mid.Y);
+                if (x < 0 || y < 0 || x >= N || y >= N || float.IsNaN(map.RoofAt(x, y))) continue;
+                map.Canopies.Add(new Canopy
+                {
+                    Kind = CanopyKind.TunnelRoof,
+                    Center = mid,
+                    Axis = Geo.Normalize(b - a, Vector2.UnitX),
+                    HalfLength = Vector2.Distance(a, b) * 0.5f + 0.5f,
+                    HalfWidth = c.HalfWidth + 1.5f,
+                    Bottom = 1.5f,
+                    Top = map.RoofAt(x, y),
+                    Corridor = ci,
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// A tunnel's mouths worn back as water wears a cave's: from the open water it opens into, the roof recedes
+    /// MouthWear metres, most in its middle (so the mouth is an arch, not a square cut) and by a wavering amount along its
+    /// edge (up to MouthRagged more), its walls' edges untouched.
+    /// </summary>
+    static void WearMouths(LevelMap map, List<int> cells, Dictionary<int, float> centre)
+    {
+        const int N = LevelMap.Samples;
+        const float MouthWear = 1f, MouthArch = 2.5f, MouthRagged = 3f;
+        var roofed = new HashSet<int>(cells.Where(k => !float.IsNaN(map.Roof[k])));
+        // How far in from the open water each roof cell lies (8-way steps over the roof).
+        var depth = new Dictionary<int, float>();
+        var queue = new Queue<int>();
+        foreach (int k in roofed)
+        {
+            int x = k % N, y = k / N;
+            for (int dy = -1; dy <= 1 && !depth.ContainsKey(k); dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+                int j = ny * N + nx;
+                if (roofed.Contains(j) || map.Heights[j] > 0.3f || !float.IsNaN(map.Lid[j])) continue;
+                depth[k] = 1f;
+                queue.Enqueue(k);
+                break;
+            }
+        }
+        while (queue.Count > 0)
+        {
+            int k = queue.Dequeue();
+            int x = k % N, y = k / N;
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                int j = (y + dy) * N + x + dx;
+                if ((dx == 0 && dy == 0) || !roofed.Contains(j)) continue;
+                float d = depth[k] + (dx != 0 && dy != 0 ? 1.41f : 1f);
+                if (depth.TryGetValue(j, out float had) && had <= d) continue;
+                depth[j] = d;
+                queue.Enqueue(j);
+            }
+        }
+        foreach (var (k, d) in depth)
+        {
+            int x = k % N, y = k / N;
+            float wear = MouthWear + MouthArch * centre.GetValueOrDefault(k) + MouthRagged * (0.5f + 0.5f * TerrainNoise.Fbm(x * 0.55f, y * 0.55f, (uint)map.Seed ^ 0x3B10u, 2));
+            if (d <= wear) map.Roof[k] = float.NaN;
+        }
+    }
+
+    /// <summary>A roof's least piece (grid cells): smaller scraps of roof are dropped, never left hanging.</summary>
+    const int RoofPieceMin = 12;
+
+    /// <summary>
+    /// The roofs made whole: a roof cell with fewer than three roofed neighbours goes (twice over, so ragged edges
+    /// round off), then every separate piece under <see cref="RoofPieceMin"/> cells.
+    /// </summary>
+    static void CleanRoofs(LevelMap map)
+    {
+        const int N = LevelMap.Samples;
+        bool Roofed(int i) => !float.IsNaN(map.Roof[i]);
+        for (int pass = 0; pass < 2; pass++)
+        {
+            var drop = new List<int>();
+            for (int y = 1; y < N - 1; y++)
+            for (int x = 1; x < N - 1; x++)
+            {
+                int i = y * N + x;
+                if (!Roofed(i)) continue;
+                int n = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                    if ((dx != 0 || dy != 0) && Roofed(i + dy * N + dx)) n++;
+                if (n < 3) drop.Add(i);
+            }
+            foreach (int i in drop) map.Roof[i] = float.NaN;
+        }
+        var seen = new bool[N * N];
+        for (int start = 0; start < N * N; start++)
+        {
+            if (seen[start] || !Roofed(start)) continue;
+            var piece = new List<int>();
+            var stack = new Stack<int>();
+            stack.Push(start);
+            seen[start] = true;
+            while (stack.Count > 0)
+            {
+                int i = stack.Pop();
+                piece.Add(i);
+                int x = i % N, y = i / N;
+                foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+                    int j = ny * N + nx;
+                    if (seen[j] || !Roofed(j)) continue;
+                    seen[j] = true;
+                    stack.Push(j);
+                }
+            }
+            if (piece.Count < RoofPieceMin) foreach (int i in piece) map.Roof[i] = float.NaN;
+        }
+    }
+
     /// <summary>Every height back inside the prototype's bounds (the shaft's bottom…+14), roofs included.</summary>
     static void ClampHeights(LevelMap map)
     {
@@ -471,6 +714,7 @@ public static class TopDownGenerator
         {
             map.Heights[i] = Math.Clamp(map.Heights[i], LevelMap.ShaftBottom, ReefTerrain.HMax);
             if (!float.IsNaN(map.Lid[i])) map.Lid[i] = Math.Clamp(map.Lid[i], ReefTerrain.HMin, ReefTerrain.HMax);
+            if (!float.IsNaN(map.Roof[i])) map.Roof[i] = Math.Clamp(map.Roof[i], ReefTerrain.HMin, ReefTerrain.HMax);
         }
     }
 
@@ -572,6 +816,93 @@ public static class TopDownGenerator
     /// <summary>A gentle undulation (0–1) for carved floors, so no path, pass or trench bottom is ever flat.</summary>
     static float FloorDip(float x, float y, uint seed) => 0.5f + 0.5f * TerrainNoise.Fbm(x / 16f, y / 16f, seed, 2);
 
+    /// <summary>A pass's line: a gentle curve from a to b (its middle pushed up to a fifth of its length aside), a point a metre.</summary>
+    /// <summary>Whether a pass's middle stretch (its middle half) runs through rock: under it, and either side past what is bored.</summary>
+    static bool InRock(LevelMap map, Corridor pass)
+    {
+        var pts = pass.Points;
+        float side = Bored(pass) + 0.5f;
+        for (int i = pts.Count / 4; i <= pts.Count * 3 / 4; i++)
+        {
+            var n = Geo.Perp(Geo.Normalize(pts[Math.Min(i + 1, pts.Count - 1)] - pts[Math.Max(i - 1, 0)], Vector2.UnitX));
+            if (map.HeightAt(pts[i]) <= LevelMap.BlockHeight + 0.5f
+                || map.HeightAt(pts[i] + n * side) <= LevelMap.BlockHeight + 0.5f
+                || map.HeightAt(pts[i] - n * side) <= LevelMap.BlockHeight + 0.5f) return false;
+        }
+        return true;
+    }
+
+    static List<Vector2> Winding(Rng rng, Vector2 a, Vector2 b)
+    {
+        Vector2 d = b - a;
+        float l = d.Length();
+        Vector2 c = (a + b) * 0.5f + Geo.Perp(d / l) * rng.Range(-0.2f, 0.2f) * l;
+        int n = Math.Max(4, (int)MathF.Ceiling(l));
+        var points = new List<Vector2>(n + 1);
+        for (int i = 0; i <= n; i++)
+        {
+            float t = i / (float)n, u = 1f - t;
+            points.Add(u * u * a + 2f * u * t * c + t * t * b);
+        }
+        return points;
+    }
+
+    /// <summary>
+    /// Pass tunnels' roofs: only where the ridge stood at least PassRoofMin over the swim level (so its mouths, where it
+    /// meets the open water, stay open), and never lower than PassRoofLow over it.
+    /// </summary>
+    const float PassRoofMin = 1.5f, PassRoofLow = 3f;
+    /// <summary>
+    /// The widest water a tunnel's roof spans, wall to wall (metres, give or take 1.5 along it): the tunnel as bored, its
+    /// widest swell and its sloping walls, and a metre over. Wider water (a chamber, a lake) is open to the sky.
+    /// </summary>
+    static float RoofSpan(Corridor c) => 2f * Bored(c) + 1f;
+
+    /// <summary>How far out from its line a pass is bored, at its widest (metres): past it, the rock stands whole.</summary>
+    static float Bored(Corridor c) => c.HalfWidth * 1.25f + PassMargin + PassEdge;
+    /// <summary>A pass is bored narrow: its floor this far past its half width, its walls rising over PassEdge metres.</summary>
+    const float PassMargin = 0.5f, PassEdge = 2f;
+
+    /// <summary>
+    /// A shortcut tunnel (a pass) bored through the rock as water would wear it: along its
+    /// curve, its width breathing (±25%) and its walls rough (a metre of noise), its floor down to the pass floor. Where
+    /// the rock stood over it, the rock as it stood stays over it as its roof (<see cref="LevelMap.Roof"/>); where it
+    /// breaks into open water, its mouths stay open.
+    /// </summary>
+    static void CarvePass(LevelMap map, Corridor pass, Rng rng)
+    {
+        float hw = pass.HalfWidth, phase = rng.Range(0f, 10f);
+        uint seed = (uint)(rng.NextU64() >> 32);
+        var pts = pass.Points;
+        float reach = hw * 1.25f + PassMargin + PassEdge + 1f;
+        int x0 = Math.Max(0, (int)(pts.Min(p => p.X) - reach)), x1 = Math.Min(LevelMap.Size, (int)(pts.Max(p => p.X) + reach) + 1);
+        int y0 = Math.Max(0, (int)(pts.Min(p => p.Y) - reach)), y1 = Math.Min(LevelMap.Size, (int)(pts.Max(p => p.Y) + reach) + 1);
+        var before = new Dictionary<int, float>();
+        pass.Bored = new Dictionary<int, float>();
+        for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+        {
+            var q = new Vector2(x, y);
+            float d = float.MaxValue;
+            int at = 0;
+            for (int i = 1; i < pts.Count; i++)
+            {
+                float di = Geo.SegmentDistance(q, pts[i - 1], pts[i]);
+                if (di < d) { d = di; at = i; }
+            }
+            float half = hw * (1f + 0.25f * MathF.Sin(phase + at * 0.45f)) + TerrainNoise.Fbm(x * 0.35f, y * 0.35f, seed, 2) * 0.5f;
+            float k = 1f - Smooth(half + PassMargin, half + PassMargin + PassEdge, d);
+            if (k <= 0f) continue;
+            float floor = -PassFloor - 1.2f * FloorDip(x, y, (uint)map.Seed ^ 0x7A55u);
+            int i0 = y * LevelMap.Samples + x;
+            float was = map.Heights[i0];
+            map.Heights[i0] = MathF.Min(was, MathUtil.Lerp(was, floor, k));
+            if (map.Heights[i0] < was) pass.Bored.TryAdd(i0, was);
+            if (d < half + 1f && was >= PassRoofMin && float.IsNaN(map.Lid[i0])) before[i0] = was;
+        }
+        foreach (var (i, was) in before) map.Roof[i] = MathF.Max(was, PassRoofLow);
+    }
+
     static void CarveLine(LevelMap map, Vector2 a, Vector2 b, float width)
     {
         float hw = width * 0.5f;
@@ -593,6 +924,7 @@ public static class TopDownGenerator
 
     static string? BuildFeatures(LevelMap map, Rng rng, Dictionary<int, Vector2> spurDirs, WallStrata strata)
     {
+
         // Caves: every special room gets one, carved into the ridge behind its spur.
         for (int pi = 0; pi < map.Pois.Count; pi++)
         {
@@ -664,55 +996,74 @@ public static class TopDownGenerator
             if (poi.Kind == PoiKind.Secret) map.WeakRocks.Add(new WeakRock(cave.Mouth + facing * 1.5f, 2.5f, poi.Cave));
         }
 
-        // Passes: narrow cuts through ridge saddles between two corridors that are close as the fish swims but far apart on the network.
-        var samples = new List<(Vector2 P, int Corridor, float Along)>();
-        for (int c = 0; c < map.Corridors.Count; c++)
+        // Passes, the level's shortcuts: tunnels worn through the rock between two parts of the cave that are close as the
+        // fish swims but far apart by water — from tunnels and from chambers' rims.
+        var samples = new List<Vector2>();
+        foreach (var corridor in map.Corridors)
         {
-            var corridor = map.Corridors[c];
-            if (corridor.Kind != CorridorKind.Main) continue;
-            float along = 0f;
+            if (corridor.Kind is not (CorridorKind.Main or CorridorKind.Side) || corridor.Roofed) continue;
             for (int i = 0; i < corridor.Points.Count; i += 2)
             {
-                if (i > 0) along += Vector2.Distance(corridor.Points[i - 2 >= 0 ? i - 2 : 0], corridor.Points[i]);
                 Vector2 p = corridor.Points[i];
-                if (NearEnds(map, p, 4f)) continue;
-                if (map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 14f)) continue;
-                samples.Add((p, c, along));
+                if (NearEnds(map, p, 0f) || map.Plazas.Any(z => Vector2.Distance(z.Center, p) < z.Radius + 1f)) continue;
+                samples.Add(p);
             }
         }
-        var passCandidates = new List<(Vector2 A, Vector2 B, float Saddle)>();
+        foreach (var chamber in map.Chambers)
+            for (int k = 0; k < 8; k++)
+            {
+                float a = k * MathF.Tau / 8f;
+                var p = chamber.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * MathF.Max(chamber.Radius - 1.5f, 1f);
+                if (map.HeightAt(p) <= LevelMap.BlockHeight && !NearEnds(map, p, 0f)) samples.Add(p);
+            }
+        var passCandidates = new List<(Vector2 A, Vector2 B, float Saddle, float D)>();
         for (int i = 0; i < samples.Count; i++)
         for (int j = i + 1; j < samples.Count; j++)
         {
-            var (a, ca, la) = samples[i];
-            var (b, cb, lb) = samples[j];
+            Vector2 a = samples[i], b = samples[j];
             float d = Vector2.Distance(a, b);
-            if (d is < 14f or > 34f) continue;
-            if (ca == cb && MathF.Abs(la - lb) < d * 2.5f) continue;
+            if (d < PassMin || d > PassMax) continue;
+            // Through the rock: its middle stretch all rock, clear of the caves and the open places.
             float saddle = 0f;
             bool ok = true;
-            for (float s = 0f; s <= d; s += 1f)
+            for (float s = 0f; s <= d && ok; s += 1f)
             {
                 Vector2 q = Vector2.Lerp(a, b, s / d);
-                saddle = MathF.Max(saddle, map.HeightAt(q));
+                float h = map.HeightAt(q);
+                saddle = MathF.Max(saddle, h);
+                // (High enough there to roof it: its middle is a tunnel.)
+                if (s > d * 0.25f && s < d * 0.75f && h < PassRoofMin + 0.5f) ok = false;
                 foreach (var cave in map.Caves)
                     foreach (var (cc, cr) in cave.Chambers)
                         if (Vector2.Distance(q, cc) < cr + 4f) ok = false;
                 foreach (var poi in map.Pois)
                     if (!Poi.IsCaveHosted(poi.Kind) && Vector2.Distance(q, poi.Position) < poi.Radius + 3f) ok = false;
-                if (!ok) break;
             }
-            if (ok && saddle >= 3f) passCandidates.Add((a, b, saddle));
+            if (ok && saddle >= 2.5f) passCandidates.Add((a, b, saddle, d));
         }
-        int passes = 1 + rng.Int(3);
-        foreach (var cand in passCandidates.OrderBy(c => c.Saddle).ThenBy(c => c.A.X).ThenBy(c => c.A.Y))
+        // A real shortcut: the way round by water at least PassSaves times as long (measured from each end, as needed).
+        var fromSample = new Dictionary<Vector2, float[]>();
+        float Water(Vector2 a, Vector2 b)
         {
-            if (map.Corridors.Count(c => c.Kind == CorridorKind.Pass) >= passes) break;
+            if (!fromSample.TryGetValue(a, out var dist)) fromSample[a] = dist = LevelValidator.Distances(map, a);
+            return LevelValidator.DistanceAt(dist, b);
+        }
+        int passes = PassesMin + rng.Int(PassesMax - PassesMin + 1);
+        foreach (var cand in passCandidates.OrderByDescending(c => c.Saddle).ThenBy(c => c.A.X).ThenBy(c => c.A.Y))
+        {
+            if (map.Corridors.Count(c => c.Kind == CorridorKind.Pass) >= passes + PassSpares) break;
             Vector2 mid = (cand.A + cand.B) * 0.5f;
-            if (map.Corridors.Where(c => c.Kind == CorridorKind.Pass).Any(c => Vector2.Distance((c.Points[0] + c.Points[1]) * 0.5f, mid) < 25f)) continue;
-            var pass = new Corridor { Kind = CorridorKind.Pass, Width = rng.Range(3f, 5f), Points = new List<Vector2> { cand.A, cand.B } };
-            CarveLine(map, cand.A, cand.B, pass.Width);
+            if (map.Corridors.Where(c => c.Kind == CorridorKind.Pass).Any(c => Vector2.Distance((c.Points[0] + c.Points[^1]) * 0.5f, mid) < 15f)) continue;
+            if (Water(cand.A, cand.B) < cand.D * PassSaves) continue;
+            // A tunnel worn through the rock: winding a little, its roof the rock as it stood — rock all along its middle
+            // stretch, under it and either side past what is bored (never a channel along the open water).
+            var pass = new Corridor { Kind = CorridorKind.Pass, Width = rng.Range(3f, 5f), Points = Winding(rng, cand.A, cand.B), Roofed = true };
+            for (int bend = 0; bend < 3 && !InRock(map, pass); bend++) pass.Points = Winding(rng, cand.A, cand.B);
+            if (!InRock(map, pass)) continue;
+            CarvePass(map, pass, rng);
             map.Corridors.Add(pass);
+            // The water round has changed: what was measured from before no longer holds.
+            fromSample.Clear();
         }
 
         // Arches: peak pairs flanking a corridor, bridged by a 10–20 m span across it.
@@ -722,38 +1073,38 @@ public static class TopDownGenerator
             for (int c = 0; c < map.Corridors.Count; c++)
             {
                 var corridor = map.Corridors[c];
-                if (corridor.Kind != CorridorKind.Main) continue;
+                // Over the route's tunnels and the side tunnels (not a room's spur, nor a shortcut: that is roofed).
+                if (corridor.Kind is not (CorridorKind.Main or CorridorKind.Side) || corridor.Roofed) continue;
                 for (int i = 2; i + 2 < corridor.Points.Count; i += 2)
                 {
                     Vector2 p = corridor.Points[i];
+                    // Over a tunnel or across a chamber's edge (its footings stand on the walls either side).
                     if (NearEnds(map, p, 4f)) continue;
-                    if (map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 12f)) continue;
                     Vector2 tangent = Geo.Normalize(corridor.Points[i + 2] - corridor.Points[i - 2], Vector2.UnitX);
                     Vector2 nrm = Geo.Perp(tangent);
                     float sa = Footing(map, p, nrm, corridor.HalfWidth, threshold), sb = Footing(map, p, -nrm, corridor.HalfWidth, threshold);
                     if (sa < 0f || sb < 0f) continue;
                     float span = sa + sb;
-                    if (span is < 10f or > 20f) continue;
+                    if (span < ArchSpanMin || span > ArchSpanMax) continue;
                     found.Add((p + nrm * sa, p - nrm * sb, c));
                 }
             }
             return found;
         }
+        // Footings stand where the flank is well above the swim level: on the highest rock first, then lower.
         var archCandidates = new List<(Vector2 A, Vector2 B, int Corridor)>();
-        // Footings stand where the flank is well above the swim level.
-        foreach (float threshold in new[] { 6f, 5f, 4f })
-        {
-            archCandidates = ArchCandidates(threshold);
-            if (archCandidates.Count > 0) break;
-        }
-        // Where no flank stands high enough, a pair of rounded rock shoulders rises either side of a corridor to carry one.
-        if (archCandidates.Count == 0 && RaiseShoulders(map, rng)) archCandidates = ArchCandidates(4f);
-        int arches = 1 + rng.Int(5);
+        // (The walls rise in strata, their first ledge 2.6–4.2 m up: an arch may spring from a ledge.)
+        foreach (float threshold in new[] { 5f, 4f, 3f, 2.5f })
+            foreach (var cand in ArchCandidates(threshold))
+                if (!archCandidates.Any(x => Vector2.Distance((x.A + x.B) * 0.5f, (cand.A + cand.B) * 0.5f) < 4f)) archCandidates.Add(cand);
+        // Where too few flanks stand high enough, a pair of rounded rock shoulders rises either side of a corridor to carry one.
+        if (archCandidates.Count < ArchesMin && RaiseShoulders(map, rng)) archCandidates.AddRange(ArchCandidates(4f));
+        int arches = ArchesMin + rng.Int(ArchesMax - ArchesMin + 1);
         var pool = archCandidates.ToList();
         while (map.Canopies.Count(c => c.Kind == CanopyKind.Arch) < arches && pool.Count > 0)
         {
             var (a, b, c) = pool[rng.Int(pool.Count)];
-            pool.RemoveAll(x => Vector2.Distance((x.A + x.B) * 0.5f, (a + b) * 0.5f) < 20f);
+            pool.RemoveAll(x => Vector2.Distance((x.A + x.B) * 0.5f, (a + b) * 0.5f) < 15f);
             float span = Vector2.Distance(a, b);
             float bottom = rng.Range(5f, 7f);
             map.Canopies.Add(new Canopy
@@ -802,7 +1153,7 @@ public static class TopDownGenerator
     }
 
     /// <summary>Round the start and the way down (and its arena) features keep out.</summary>
-    const float EndsKeep = 20f;
+    const float EndsKeep = 12f;
 
     /// <summary>Within reach of the start or the way down (plus a margin): features keep out.</summary>
     static bool NearEnds(LevelMap map, Vector2 p, float margin) =>

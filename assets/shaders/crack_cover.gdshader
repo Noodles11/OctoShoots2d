@@ -42,7 +42,8 @@ void fragment() {
 	EMISSION = s.emission;
 	NORMAL = normalize((VIEW_MATRIX * vec4(s.normal, 0.0)).xyz);
 	ROUGHNESS = s.rough;
-	SPECULAR = 0.22;
+	// Matte: next to no reflection of the water's light.
+	SPECULAR = 0.06;
 }
 
 void light() {

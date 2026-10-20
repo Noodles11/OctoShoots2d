@@ -20,6 +20,8 @@ public sealed class LevelShape
     public List<Surface> Ground { get; } = new();
     /// <summary>Per cave, its roof (null where the roof is flush with the ground).</summary>
     public List<Surface?> Lids { get; } = new();
+    /// <summary>Per roofed corridor (a shortcut tunnel), by its index, its roof.</summary>
+    public Dictionary<int, Surface> TunnelRoofs { get; } = new();
     public List<FloraItem> Flora { get; } = new();
     public List<Transform3D> Rocks { get; } = new();
     public List<Transform3D> Glows { get; } = new();
@@ -40,6 +42,8 @@ public sealed class LevelShape
         foreach (var sx in spans)
             if (!sx.Inside || !sy.Inside) shape.Ground.Add(LevelView.SkirtSurface(map, sx.A, sy.A, sx.B, sy.B)!);
         foreach (var cave in map.Caves) shape.Lids.Add(LevelView.LidSurface(map, cave));
+        for (int c = 0; c < map.Corridors.Count; c++)
+            if (map.Corridors[c].Roofed && LevelView.TunnelRoofSurface(map, map.Corridors[c]) is { } roof) shape.TunnelRoofs[c] = roof;
         if (!OS.GetCmdlineUserArgs().Contains("--dbg-nodecor")) LevelView.DecorItems(map, shape.Flora, shape.Rocks, shape.Glows);
         return shape;
     }
@@ -78,6 +82,7 @@ public partial class LevelView : Node3D
     bool _below;
     readonly List<(Canopy Canopy, ShaderMaterial Material, float Alpha)> _canopies = new();
     readonly List<ShaderMaterial> _lids = new();
+    readonly Dictionary<int, ShaderMaterial> _tunnelRoofs = new();
     Shader _rock = null!;
 
     /// <summary>Free-standing reef rock in the reef's skin, lumped by <paramref name="lumps"/> metres (reef_rock.gdshader).</summary>
@@ -157,6 +162,13 @@ public partial class LevelView : Node3D
             var lid = Rock(0f);
             _lids.Add(lid);
             if (shape.Lids[i] is { } surface) AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = lid });
+        }
+        _tunnelRoofs.Clear();
+        foreach (var (corridor, surface) in shape.TunnelRoofs)
+        {
+            var roof = Rock(0f);
+            _tunnelRoofs[corridor] = roof;
+            AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = roof });
         }
         foreach (var canopy in map.Canopies) AddCanopy(canopy);
         // A secret's seal: the wall carried on across the way in (the reef's own ground, as high as the rock either side), so
@@ -277,6 +289,9 @@ public partial class LevelView : Node3D
     static float SmoothHeight(LevelMap map, float x, float y) =>
         map.Shaft.Contains(new System.Numerics.Vector2(x, y), 3f) ? map.HeightAt(new System.Numerics.Vector2(x, y)) : SmoothSample((i, j) => map[i, j], x, y);
 
+    /// <summary>A tunnel's roof where there is one, the terrain elsewhere (so its edge meets the ground exactly).</summary>
+    static float SmoothTunnelRoof(LevelMap map, float x, float y) => SmoothSample((i, j) => float.IsNaN(map.RoofAt(i, j)) ? map[i, j] : map.RoofAt(i, j), x, y);
+
     /// <summary>The cave roof where there is one, the terrain elsewhere (so a roof's edge meets the ground exactly).</summary>
     static float SmoothRoof(LevelMap map, float x, float y) => SmoothSample((i, j) => float.IsNaN(map.LidAt(i, j)) ? map[i, j] : map.LidAt(i, j), x, y);
 
@@ -383,6 +398,26 @@ public partial class LevelView : Node3D
         return SurfaceMesh((x, y) => SmoothRoof(map, x, y) + 0.03f, x0, y0, x1, y1, (x, y) => SmoothRoof(map, x, y) > SmoothHeight(map, x, y) + 0.05f);
     }
 
+    /// <summary>
+    /// A shortcut tunnel's roof: the rock carried over it (<see cref="LevelMap.Roof"/>), meeting the ground at its edges,
+    /// lumped like the rest of the reef's rock by its shader. It fades like any canopy while Clementine is near.
+    /// </summary>
+    internal static LevelShape.Surface? TunnelRoofSurface(LevelMap map, Corridor corridor)
+    {
+        float reach = corridor.HalfWidth + 5f;
+        int x0 = Math.Max(0, (int)(corridor.Points.Min(p => p.X) - reach)), x1 = Math.Min(LevelMap.Size, (int)(corridor.Points.Max(p => p.X) + reach) + 1);
+        int y0 = Math.Max(0, (int)(corridor.Points.Min(p => p.Y) - reach)), y1 = Math.Min(LevelMap.Size, (int)(corridor.Points.Max(p => p.Y) + reach) + 1);
+        bool Along(float x, float y)
+        {
+            var q = new System.Numerics.Vector2(x, y);
+            for (int i = 1; i < corridor.Points.Count; i++)
+                if (Geo.SegmentDistance(q, corridor.Points[i - 1], corridor.Points[i]) < reach) return true;
+            return false;
+        }
+        return SurfaceMesh((x, y) => SmoothTunnelRoof(map, x, y) + 0.03f, x0, y0, x1, y1,
+            (x, y) => Along(x, y) && SmoothTunnelRoof(map, x, y) > SmoothHeight(map, x, y) + 0.05f);
+    }
+
     /// <summary>A triangle is kept when any of its corners passes <paramref name="keep"/>.</summary>
     static LevelShape.Surface? SurfaceMesh(Func<float, float, float> height, int x0, int y0, int x1, int y1, Func<float, float, bool>? keep)
     {
@@ -419,11 +454,16 @@ public partial class LevelView : Node3D
 
     void AddCanopy(Canopy c)
     {
-        // A cave's roof is the mountain itself (its lid mesh), not a separate piece.
+        // A cave's roof is the mountain itself (its lid mesh), not a separate piece; a tunnel's, the rock over it.
         if (c.Kind == CanopyKind.CaveRoof)
         {
             int cave = CaveOf(c);
             if (cave >= 0) _canopies.Add((c, _lids[cave], 1f));
+            return;
+        }
+        if (c.Kind == CanopyKind.TunnelRoof)
+        {
+            if (_tunnelRoofs.TryGetValue(c.Corridor, out var roof)) _canopies.Add((c, roof, 1f));
             return;
         }
         var material = Rock(0.35f);
@@ -504,17 +544,18 @@ public partial class LevelView : Node3D
     }
 
     /// <summary>
-    /// The occlusion rule (DESIGN-TOPDOWN §3): any canopy (arch, cave roof, overhang) that stands between Clementine and
-    /// the camera dissolves, and returns once it no longer does. Not only what is straight over her: the camera looks
-    /// down at a slant, so rock a few metres to the camera's side of her hides her too. Her line of sight to the camera
-    /// is followed up through each canopy's height, and a canopy within OcclusionMargin of it fades — early, before her
-    /// bell is under the rock. A cave's roof fades whole.
+    /// The occlusion rule (DESIGN-TOPDOWN §3): she is always seen. Any canopy (arch, cave roof, tunnel roof, overhang)
+    /// that stands over Clementine, or between her and the camera, dissolves, and returns once it no longer does — and
+    /// already as she comes near it: her line of sight to the camera is followed up through each canopy's height, and a
+    /// canopy within OcclusionMargin of it fades, well before her bell is under the rock. A cave's roof, and a tunnel's,
+    /// fade whole.
     /// </summary>
     public void UpdateCanopy(System.Numerics.Vector2 player, float dt, Vector3 camera)
     {
         var her = new Vector3(player.X, LevelMap.SwimBand, player.Y);
         var sight = (camera - her).Normalized();
         var hiddenCaves = new HashSet<int>();
+        var hiddenTunnels = new HashSet<int>();
         var hide = new bool[_canopies.Count];
         for (int i = 0; i < _canopies.Count; i++)
         {
@@ -522,21 +563,26 @@ public partial class LevelView : Node3D
             if (!Blocks(c, her, sight)) continue;
             hide[i] = true;
             if (c.Kind == CanopyKind.CaveRoof && CaveOf(c) is int cave and >= 0) hiddenCaves.Add(cave);
+            if (c.Kind == CanopyKind.TunnelRoof) hiddenTunnels.Add(c.Corridor);
         }
         for (int i = 0; i < _canopies.Count; i++)
         {
             var (c, material, alpha) = _canopies[i];
-            bool gone = hide[i] || (c.Kind == CanopyKind.CaveRoof && hiddenCaves.Contains(CaveOf(c)));
-            // Quick to clear the way, gentle to come back.
-            alpha = Mathf.MoveToward(alpha, gone ? 0.12f : 1f, dt * (gone ? 7f : 3f));
+            bool gone = hide[i] || (c.Kind == CanopyKind.CaveRoof && hiddenCaves.Contains(CaveOf(c)))
+                || (c.Kind == CanopyKind.TunnelRoof && hiddenTunnels.Contains(c.Corridor));
+            // Quick to clear the way, gentle to come back; cleared, all but gone (a faint ghost of the rock).
+            alpha = Mathf.MoveToward(alpha, gone ? Cleared : 1f, dt * (gone ? 7f : 3f));
+            // Verification: --dbg-nocanopy keeps every canopy gone.
+            if (_noCanopy) alpha = 0f;
             // A dithered dissolve: the rock stays opaque, so the depth focus still blurs it like other high rock.
             material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), alpha);
             _canopies[i] = (c, material, alpha);
         }
     }
 
-    /// <summary>How near (metres) her line of sight may pass a canopy's footprint before it fades.</summary>
-    const float OcclusionMargin = 2.2f;
+    /// <summary>How near (metres) her line of sight may pass a canopy's footprint before it fades, and how much of it stays then.</summary>
+    const float OcclusionMargin = 4.5f, Cleared = 0.08f;
+    static readonly bool _noCanopy = OS.GetCmdlineUserArgs().Contains("--dbg-nocanopy");
 
     /// <summary>Whether a canopy stands in (or within OcclusionMargin of) her line of sight to the camera, over its height.</summary>
     static bool Blocks(Canopy c, Vector3 her, Vector3 sight)

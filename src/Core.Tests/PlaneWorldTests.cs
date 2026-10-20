@@ -102,6 +102,8 @@ public class PlaneWorldTests
     {
         // Swim the shortest route to the rift: every step stays in open water and she gets there.
         var w = World();
+        // The rock alone: no pots (she would break them) in a narrow throat.
+        w.Vases.Clear();
         // A route with a body-width margin, as a player would swim it (not grazing every lip).
         var path = LevelValidator.ShortestPath(w.Map, w.Map.Start.Position, w.Map.Exit.Position, clearance: 1f);
         Assert.NotEmpty(path);

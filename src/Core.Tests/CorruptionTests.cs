@@ -197,6 +197,8 @@ public class CorruptionTests
         for (int i = 0; i < 90; i++)
         {
             w.Player.Position = w.Player.PrevPosition = spot;
+            // Only the ring: no murkling the den buds meanwhile clings to her.
+            w.Murklings.Clear();
             if (root.PulseRadius >= 0f && root.PulseRadius > 4f - 2.5f && w.Player.DashInvulnerableTimer <= 0f && w.Player.DashCooldownTimer <= 0f)
                 w.Step(new PlaneInput { Dash = true, Move = Vector2.Zero });
             else w.Step(default);
@@ -218,8 +220,9 @@ public class CorruptionTests
             bool c = field.Density[i] > 0f;
             if (c) corrupt++;
             float d = Vector2.Distance(CellAt(i), focus);
-            if (d < 40f) { nearN++; if (c) nearC++; }
-            else if (d > 90f) { farN++; if (c) farC++; }
+            // (The cave lies in about the middle 60 m of the square, round its route.)
+            if (d < 30f) { nearN++; if (c) nearC++; }
+            else if (d > 55f) { farN++; if (c) farC++; }
         }
         Assert.InRange(corrupt / (float)open, 0.42f, 0.6f);
         // Thicker toward the deep end, but scattered everywhere.
@@ -577,7 +580,10 @@ public class CorruptionTests
         // Struck in the air by her light: a splatter, the ground untouched.
         var shot = new MurkShot { Position = w.Player.Position + dir * 4f, Velocity = -dir * BlightTuning.ThrowSpeed };
         w.MurkShots.Add(shot);
-        float before = field.Total;
+        // The ground along its flight, measured before and after (the rest of the level lives on meanwhile).
+        float Along() => Enumerable.Range(0, CorruptionField.N * CorruptionField.N)
+            .Where(i => Geo.SegmentDistance(CellAt(i), w.Player.Position, w.Player.Position + dir * 6f) < 3f).Sum(i => field.Density[i]);
+        float before = Along();
         w.Step(new PlaneInput { Aim = dir, Fire = true });
         bool burst = false;
         for (int i = 0; i < 30 && !burst; i++)
@@ -587,7 +593,8 @@ public class CorruptionTests
         }
         Assert.True(burst);
         Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.MurkShotLanded);
-        Assert.Equal(before, field.Total, 1);
+        // Nothing stained there (a landed throw's stain adds several; the level's slow regrowth a few hundredths).
+        Assert.True(Along() <= before + 0.5f, $"stained {Along() - before:0.00}");
     }
 
     [Fact]
@@ -748,8 +755,9 @@ public class CorruptionTests
 
         // Its throw: a bigger drop, hitting harder, after a longer bend.
         var her = w.Player.Position;
-        m.Position = her + new Vector2(0f, -11f);
-        Assert.True(w.LineOfSight(m.Position, her));
+        // 11 m off her, wherever there is open water in her sight.
+        m.Position = Enumerable.Range(0, 16).Select(k => her + new Vector2(MathF.Cos(k * MathF.Tau / 16f), MathF.Sin(k * MathF.Tau / 16f)) * 11f)
+            .First(q => w.Clear(q, m.Body) && w.LineOfSight(q, her));
         m.ThrowTimer = 0f;
         MurkShot? shot = null;
         for (int i = 0; i < 120 && shot is null; i++)

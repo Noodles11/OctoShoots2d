@@ -22,14 +22,14 @@
 
 | Topic | Decision |
 |---|---|
-| View | **Top-down, tilted camera ~60°** (Below-style), perspective (not orthographic) for flora/parallax. |
+| View | **True top-down camera** (straight down, north up), perspective (not orthographic) for flora/parallax. |
 | Depth handling | **Plane-locked**: the whole sim runs at one depth band per level; no free vertical movement. |
 | Player | **Clementine**, a one-of-her-kind **absorbent jellyfish** — she absorbs the skills locked inside pearls (§2). |
 | Pearls | **Consumed by the bell** — each pearl adds a permanent glowing pattern to the bell (§2.4, §7). |
 | Shooting | **Bubbles**, mouse-aim (twin-stick optional), ammo visible as orbs under the bell. |
 | Levels | **Seeded caves of 6,000 m² of water (±15%) in a 140×140 m square**, reef-ringed; free swimming inside; one way down — a blue hole, or on a depth's boss level the Crack in the boss arena; caves as special rooms (§4). |
 | Level gen | **Plan → POIs → 3–4 intersecting paths → topographic reef**; the rock around the start and the hole shared with the levels above and below; mountains never on paths; arches over paths; caves & passes in ridges (§4.1, §4.6). |
-| Occlusion | Canopy layer (arch bodies, cave roofs) **blurs out and fades** while Clementine is underneath (§3, §4.5). |
+| Occlusion | Canopy layer (arch bodies, cave roofs, tunnel roofs, overhangs) **fades** as Clementine comes near and while she is underneath: she is always seen (§3, §4.5). |
 | Lighting | **The core visual pillar.** Atmospheric, volumetric, per-depth darkening (§5). |
 | Engine | **Godot 4 / C# retained** — plane-locked rework of the existing stack (§11). |
 | Story | **"Ink Deep" lore inherited** (DESIGN-2D §1): the Leak, the Crack, corrupted-not-killed creatures, the Tank, The Hand. Clementine, the one-of-her-kind absorbent jellyfish, dives after her bloom (§1). |
@@ -267,29 +267,29 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 
 ## 3. Camera & Presentation
 
-- **Tilted top-down, ~55–65°**, perspective projection (narrow FOV ~35°) so tall
-  flora, arches and reef walls parallax softly; keeps Below's "map feeling"
-  without flatness.
+- **True top-down** (`CameraRig.Tilt` 90°: straight down over her), perspective
+  projection (narrow FOV ~35°) so tall flora, arches and reef walls parallax
+  softly round the edges of the view; a map's reading, without flatness.
 - Gentle scroll smoothing; **no camera rotation** (north is always up; the
   minimap and world agree).
 - Screen-space dressing: marine snow drifting *between camera and level*
   (parallax speed reference), faint refraction wobble, vignette that deepens
   with depth, subtle chromatic aberration on hurt.
-- **Overhead occlusion rule.** Arch bodies, cave roofs and overhang ledges render
-  on a **canopy layer** above the gameplay plane. Any canopy that stands between
-  Clementine and the camera **dissolves** (a dithered fade) and stays gone while
-  it does, restoring after: not only what is straight over her, since the camera
-  looks down at a slant and rock a few metres to the camera's side of her hides
-  her too. Her line of sight to the camera is followed up through each canopy's
-  height, and a canopy within 2.2 m of it fades, so it clears before her bell
-  reaches the rock; overlapping canopies all fade, and a cave's roof fades whole.
-  It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
+- **Overhead occlusion rule: she is always seen.** Arch bodies, cave roofs,
+  tunnel roofs and overhang ledges render on a **canopy layer** above the
+  gameplay plane. Any canopy over Clementine, or between her and the camera,
+  **dissolves** (a dithered fade, down to a faint 8% ghost of the rock) and stays
+  gone while it does, restoring after — and it starts **as she comes near**: her
+  line of sight to the camera is followed up through each canopy's height, and a
+  canopy within 4.5 m of it fades, so it has cleared before her bell is under
+  the rock. Overlapping canopies all fade; a cave's roof, and a tunnel's, fade
+  whole. It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
   (`LevelView.UpdateCanopy`). This is what makes the reef read as
   layered and physical rather than painted flat (§4.5, §11).
 - **Camera breaks (only two, ever):** boss-awakening dips (2 s low-angle swell
   toward the boss) and the **Tank transition** — the Crack sucks Clementine down
   through a vertical shaft in a short cutscene (the one time true verticality is
-  shown), then the camera settles back to tilted top-down inside the tank.
+  shown), then the camera settles back to top-down inside the tank.
 
 ---
 
@@ -331,22 +331,29 @@ below (the old stamps are gone): she lands in the start chamber of a cave of
 its own.
 
 **Stage 1 — The cave (`CaveLayout`).**
-- **The main chain:** the start chamber (9–11 m across its radius; 16 m when
-  she arrives from a boss arena) 38 m in from one side, then up to nine
-  chambers (6–10 m) wandering toward the far side, 16–22 m apart, joined by
-  main tunnels 6–9 m wide (gentle Bézier curves), and last the way down's
-  chamber, 38 m in from the far side. Start and way down lie ≥ 56 m apart in a
-  straight line and **≥ 65 m along the water**. The square's water she never
-  reaches becomes mountains.
+- **The main chain — the level is built on its route:** the start chamber
+  (9–11 m across its radius; 16 m when she arrives from a boss arena) 38 m in
+  from one side, then up to nine chambers (6–10 m), 16–22 m apart, zig-zagging
+  toward the far side: each step bends 0.55–0.9 rad off the way to the goal,
+  the other way from the last (four times in five), joined by main tunnels
+  6–9 m wide (gentle Bézier curves); last the way down's chamber, 38 m in from
+  the far side. Start and way down lie ≥ 56 m apart in a straight line. The
+  square's water she never reaches becomes mountains.
 - **The special rooms** (shop, secret, clam room, curse den) are laid next,
   while the rock is whole: each a dead-end branch off the chain, its chamber
   left as rock with rock kept round it (6 m; 8 m for a clam room's deeper
   chambers; 9 m for the curse den's tunnel), its tunnel — the room's spur —
-  stopping at the room's mouth. Stage 4 hollows the cave out behind it.
-- **Side branches:** chambers (5–9 m) off any chamber, 14–21 m out, on side
-  tunnels 5–7 m wide, a quarter of them closing a loop back into the cave
-  with a second tunnel (4.5–6 m). They keep 3 m of rock from every other
-  chamber and tunnel. They grow until the water covers the area rule (first
+  stopping at the room's mouth, 14–21 m out. Stage 4 hollows the cave out
+  behind it.
+- **Shortcuts** are bored once the rock stands: the passes of Stage 4, tunnels
+  through the rock. The way down still lies **≥ 55 m along the water**,
+  shortcuts taken (the route itself runs ~70–80 m).
+- **Side chambers stay round the route, as quick detours:** chambers (5–9 m),
+  11–16 m out, their middles within 24 m of the route; two in three straight
+  off a route chamber, the rest off one of those (never deeper than two), on
+  side tunnels 5–7 m wide. A quarter of them close a loop back into the cave
+  with a second tunnel (4.5–6 m), the route's chambers first, so a loop is a
+  way on too. They keep 3 m of rock from every other chamber and tunnel. They grow until the water covers the area rule (first
   by estimate, then measured, never past its top); where branches no longer
   fit, the chambers swell instead.
 - **Rasterised craggy:** the chambers as blobs whose radius wavers (four low
@@ -417,8 +424,9 @@ its own.
   swim plane lies 8 m below this one), over a rounded lip. No trenches.
 
 **Stage 4 — Arches, caves, passes:**
-- **Arches ×0–5 (where flanks allow; none near the start or the way down):** peak pairs flanking a
-  corridor get arch spans (10–20 m) across the path. Swimming under one triggers the canopy fade (§3). Where
+- **Arches ×2–5 (where flanks allow, at most 6; none near the start or the way down):** pairs of footings
+  flanking a main or side tunnel (the first ground at least 5 m high, else 4, 3 or 2.5 m), 15 m or more apart along
+  the water, get arch spans (10–24 m) across the path. Swimming under one triggers the canopy fade (§3). Where
   no flank stands high enough, a pair of short rock ridges is raised either
   side of a corridor to carry one.
 - **Caves:** small dead-end pockets (×1–2) and larger multi-chamber caves
@@ -431,10 +439,25 @@ its own.
   cave's roof and drawn as intact rock until Clementine swims inside (canopy
   fade); the chambers beneath have a floor 3.5 m under the swim level — the
   only flat ground in a level.
-- **Passes (0–3):** narrow cuts (3–5 m, floor 2.5 m under the swim level) punched
-  through ridge saddles — **shortcuts
-  that braid the network together**, so the routes read as one reef rather
-  than parallel lanes.
+- **Passes — the shortcuts, every one a tunnel (2–4 sought, about one a level
+  where the rock is thick enough):** tunnels (3–5 m) worn through the rock
+  between two parts of the cave 10–36 m apart as the fish swims — tunnels and
+  chambers' rims — where the way round by water is at least 1.6 times as long,
+  their middles 15 m or more apart. Their middle stretch runs through rock: rock
+  under the line at least 2 m high (its saddle 2.5 m or more), and either side of
+  it past what is bored, clear of the caves and the places. They are bored as
+  water wears rock: a gentle curve, the width breathing (±25%), the walls rough,
+  the floor that of the passes (2.5 m under the swim level). **Their roof** is
+  laid once the walls are final: over each metre of the tunnel's water, the rock
+  on either side carried across (its height a little out from the walls, met
+  where the water meets the rock, with a gentle arch between, never under 3 m),
+  as wide as the tunnel was bored and a metre over; wider water (a chamber, a
+  lake) is open to the sky — its mouths. The mouths are worn back from the open
+  water (1 m, 2.5 m more in the middle so the mouth is an arch, and up to 3 m
+  more, wavering along its edge), scraps of roof are dropped, and the slopes
+  under a roof are never softened away. A pass that ends up with no roof over
+  its middle is filled back in: **no shortcut is an open channel**. The roof is
+  drawn as the rock it is and fades whole as a canopy (§3).
 
 **Stage 5 — Reef & decoration from the map:**
 - **The seabed is flat:** once the reef is raised, every floor deeper than
@@ -490,21 +513,23 @@ Running after the checks, it never changes what she can reach.
   the whole secret cave (its chamber, its way in and the seal) as wall, so the charts give it away no more than the
   reef does.
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
-  into the ridge behind its spur, 16–32 m long (about 2.8 m wide, in bending legs of 5–10 m), so finding its end
-  in the dark takes a good few seconds. Black fog seeps out of its mouth into the canyon.
-  - **The dark:** past its mouth a dense black fog closes in over the first 6 m. Only the water within about 1.35–3.9 m
-    of Clementine stays readable — wide enough that both of the tunnel's walls show beside her — with a quarter of the
-    dark still over her, and her own light is faded to about half, so she feels her way along the walls. The minimap fades to black (its corruption bezel stays) and the fog of war learns nothing while she
-    is inside. Leaving, the dark lifts slowly (about 1.5 s).
-  - **The curse:** inside the tunnel it corrupts her at a flat **1.5 HP a second**, like any drain (her dash and a
-    Bubble Shield hold it off; it can take her). A quick trip to the end and back costs about 20 HP.
-  - **At the end** (rolled per level): **65%** a **shell fountain**, a small vent of rock with a pale glow in its
-    throat: once she reaches it, it spouts a shell a second whenever the last one has been taken, for as long as she
-    stays and pays the curse for them. **30%** nothing: a hollow laugh with no one behind it echoes down the
-    tunnel. **4%** a **pearl** (from any pool). **1%** she is **sent on**: the screen goes black, and she is somewhere
-    else when the dark lifts — just outside a place she has not visited yet (never the way down, the boss's arena or
-    the start), or a visited one when none are left.
-  - No creatures live in it.
+  into the ridge behind its spur, 16–32 m long (about 2.8 m wide, in bending legs of 5–10 m), ending in a small end
+  chamber. Black fog seeps out of its mouth into the canyon: the sign of what is inside.
+  - **Going in is safe:** no dark, no curse, all the way to the end.
+  - **The end always rewards her** (rolled per level): **20%** a **pearl** (from any pool), else the **shell fountain**,
+    a small vent of rock with a pale glow in its throat, spouting a shell a second whenever the last one has been
+    taken, for as long as she stays in the den's dark.
+  - **Reaching the end springs the curse:** a hollow laugh with no one behind it echoes down the tunnel, and the dark
+    closes over the whole way back. A dense black fog round her: only the water within about 1.35–3.9 m of Clementine
+    stays readable — wide enough that both of the tunnel's walls show beside her — with a quarter of the dark still
+    over her, and her own light is faded to about half, so she feels her way back along the walls. It is full past
+    the tunnel's first 6 m, thinning over them toward the mouth. The minimap fades to black (its corruption bezel
+    stays) and the fog of war learns nothing while it lasts. While it lies over the tunnel the curse corrupts her at
+    a flat **1.5 HP a second**, like any drain (her dash and a Bubble Shield hold it off; it can take her). Getting
+    straight back out costs about 15–25 HP; every second she stays for the fountain costs more.
+  - **Out of it, the den is done:** the dark lifts slowly (about 1.5 s), with a soft bell. Going in again is safe
+    and dark-free, and it gives nothing more (the fountain is dry; a pearl left behind still lies there).
+  - No creatures live in it. Nothing teleports her.
 - **Landmark light language** inherited: gold (clam rooms), green (shop),
   red (curse), violet (secret, **no beacon** — found, not advertised),
   orange (the Crack); and white (the start), teal (the shell cache), coral (ambushes; warm but not gold, so
@@ -548,14 +573,14 @@ Running after the checks, it never changes what she can reach.
 | Peaks | up to 14 m | occlude and cast shade, never block |
 | The shaft | blue hole 6.5 m; the Crack 14–18 m; floor −9 m | the way down |
 | Level drop | **8 m** swim plane to swim plane | a real dive that still reads through the fog (§4.6) |
-| Arches | ×0–5, span 10–20 m | canopy-fade showcase |
-| Passes | 3–5 m cuts | network braiding |
+| Arches | ×2–5 (at most 6), span 10–24 m | canopy-fade showcase |
+| Passes | 3–5 m tunnels, roofed | the shortcuts |
 | Boss arena | ~30 m disc | room for 2D bullet rings |
 | Cruise speed | **6 m/s** (jet 1.8× for 0.38 s; dash 3.4×, 0.85 s cd) | brisk — dash crosses a corridor in ~0.4 s |
 | Rush time | **~45–60 s** | ~65–90 m route + partial fights |
 | Full clear | **~4–5 min** | ≤ 5 places + every nave's den + caves/shop/secrets |
 
-Rush math: exit ≥ 65 m away by swimming → 12–16 s pure swim at cruise (less
+Rush math: exit ≥ 55 m away by swimming (shortcuts taken) → 12–16 s pure swim at cruise (less
 with jet bursts), plus partial fights and maybe one cave. A depth is 5
 levels: ~4–5 min rushed, ~25 min explored.
 
@@ -567,7 +592,7 @@ levels: ~4–5 min rushed, ~25 min explored.
   start sits right under the hole. Map coordinates need not match, and the rock
   does not either (the old shared stamps are dropped): she lands in the start
   chamber of the level's own cave. Under the hole the level below has a floor
-  (its hole is ≥ 65 m from its start, never in view down the shaft), so she can
+  (its hole is ≥ 55 m from its start, never in view down the shaft), so she can
   never cross two levels at once.
 - **Each level depends only on seeds** (the run seed and its id): any level
   can be generated on its own. Two levels live at once — the
@@ -1066,7 +1091,7 @@ The pivot is mostly **deletion and constraint**:
 | Terrain | **Drive the inherited SDF toolkit from the topographic map** (§4.1): corridors kept under the swim level, ridges raised, the shaft cut, arches/caves/passes booleaned in. Mesh floors, walls, reef rim and the canopy layer only — ceilings are never meshed. Craters/pockets inherit (dig through the floor plane into the beneath-volume). |
 | Canopy fade | New: arch bodies, cave roofs and overhangs render on a separate canopy layer; a blur+fade shader keyed by a player-under-volume test dissolves it while Clementine is underneath and restores it on exit. Cosmetic, camera-locked. |
 | Navigation | 3D flow field → 2D grid flow field (strict simplification). Walkers: floor contour following. |
-| Camera | New rig: tilted perspective, scroll smoothing, the two sanctioned breaks. |
+| Camera | New rig: top-down perspective, scroll smoothing, the two sanctioned breaks. |
 | Player presentation | New: bell soft-body (reuse verlet tooling), pulse propulsion, beneath-bell ammo orbs, pearl-consumption animation, bell pattern composer (motif×color instancing on the bell shader). |
 | Lighting | Re-aim inherited work: god rays cross-view, caustics on floor, pooled point lights (glows), fog by depth. Sun shadow map optional at top depths only. |
 | Water field | 2D version of inherited grid. |
@@ -1124,9 +1149,9 @@ at mist distance (inherited fade rule).
 5. **Secret cave vs reachability:** the secret cave is sealed, but every POI must be flood-fill reachable. Built:
    the heightfield reaches it; the seal is a separate `WeakRock` that blocks swimming and shots until her light on its
    emblem opens it (tested separately).
-6. **Arches on "peaks":** an arch spans 10–20 m and stands on "peak pairs", but peaks are 10–16 m and rise well
-   beyond 5–10 m from a corridor's centre line. Built: footings at the first ground ≥ 6 m high (falling back to
-   5 m, then 4 m), with steeper ridge walls (k = 0.9, a value the doc leaves open). Most levels get 1–2 arches.
+6. **Arches on "peaks":** an arch stands on "peak pairs", but peaks are 10–16 m and rise well beyond 5–10 m from a
+   corridor's centre line. Built: footings at the first ground ≥ 5 m high (falling back to 4, 3 and 2.5 m, the
+   walls' terraces), with steeper ridge walls (k = 0.9, a value the doc leaves open). Levels get about 3 arches.
 7. **Secret guards "trap-heavy (mimics)":** no mimic exists below Depth 3 (Treasure Mimic is a boss). Spawn rows
     are marked as traps with urchin and moray placeholders.
 8. **Ambushers "8–12 m off corridor edges":** at that distance the ground is a ridge wall. Clingers fit, but
@@ -1142,8 +1167,7 @@ at mist distance (inherited fade rule).
   it until their centre lines are **22 m** apart, never into a place it bends around and only gently near the places
   it serves (so spurs stay short).
 - A layout that fails validation retries with the next seeded attempt, up to **100** attempts.
-- **1–3 passes** per level where they fit, chosen at the lowest saddles between corridors 14–34 m apart that are
-  far apart on the network.
+- **Passes** are chosen through the highest rock first (the thickest roof).
 - Boulders and bommies are decoration only, never collision.
 - Ridge walls between the camera and Clementine dissolve in a dithered cutout (a presentation rule for walls;
   the canopy layer has its own fade). A canopy fading over Clementine is drawn unblurred while it fades.
@@ -1397,8 +1421,9 @@ at mist distance (inherited fade rule).
   - **Depth:** water steals red as the floor deepens; the rim wall darkens toward the edge of the world.
   - **Caustics:** on everything facing up, sharp near the surface, fading with depth. They are sunlight, so they
     fall only where the sun reaches; walls throw real shade across them.
-- **Canopy rock.** Arches are stone bridges springing from the ground, and overhangs are lumpy shelves. Canopy pieces
-  (arches, overhangs, cave roofs) dissolve with an ordered dither while she is underneath, staying opaque, so the
+- **Canopy rock.** Arches are stone bridges springing from the ground, overhangs are lumpy shelves, and a tunnel's
+  roof is the rock either side carried over it, in the reef's own skin. Canopy pieces
+  (arches, overhangs, cave roofs, tunnel roofs) dissolve with an ordered dither while she is underneath, staying opaque, so the
   depth focus still blurs them.
 - **Life.** Kept sparse, so the stage never pulls focus from the creatures, pickups and places: the generator's
   grass meadows and bommies, and cosmetic ground cover of seagrass meadows, a few sponge-like coral heads at the

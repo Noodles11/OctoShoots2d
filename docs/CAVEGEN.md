@@ -9,8 +9,8 @@ the game yet. The page `tools/cavegen/index.html` (built by `tools/cavegen/build
 
 - **Area:** reachable water covers **4,000 m², ±15%** (3,400 to 4,600 m²), about 4,150 on average. The 140 m square is only a container, with the 8 m impassable rim.
 - **Start and way down:** the start is a chamber on one side. The way down is the chamber at the end of the main
-  chain, at least **65 m** along the water and **56 m** in a straight line (both chambers 38 m in from their sides of
-  the square). Boss levels end in a round 15 m arena with
+  chain, at least **55 m** along the water (shortcuts taken; the route itself runs ~70–80 m) and **56 m** in a
+  straight line (both chambers 38 m in from their sides of the square). Boss levels end in a round 15 m arena with
   the Crack (an ellipse, 7–9 by 2.5–3.5 m); other levels end in a 6.5 m blue hole.
 - **Places** (`CaveLayout.FromStart` and the rest, which `LevelValidator` checks): exactly one place 30–38 m from the
   start; every other place at least 30 m from the start and the way down and 17 m from the next place (rooms 20 m).
@@ -21,12 +21,16 @@ the game yet. The page `tools/cavegen/index.html` (built by `tools/cavegen/build
 
 ## Algorithm (`cavegen.js`)
 
-1. **Main chain:** a start chamber 26 m in from a random side; chambers every 16–22 m wander toward a goal near the
-   far side (each step blends a random turn of up to ±0.65 rad with the way to the goal); the exit chamber sits at
-   the goal. Main tunnels are 6–9 m wide.
-2. **Branches:** side chambers (5–9 m) off any chamber but the exit, 14–21 m out, kept clear of the others; a quarter
-   also loop back to a near chamber. Branches are added by an area estimate, then measured, until the water reaches
-   6,000 m² without passing 6,900.
+1. **Main chain (the route the level is built on):** a start chamber 38 m in from a random side; chambers every
+   16–22 m zig-zag toward a goal near the far side (each step bends 0.55–0.9 rad off the way to the goal, the other
+   way from the last four times in five); the exit chamber sits at the goal. Main tunnels are 6–9 m wide. The
+   special rooms follow (14–21 m off a chamber). The level's **shortcuts** are bored once the rock stands: tunnels
+   through the rock, roofed by it (TopDownGenerator's passes, DESIGN-TOPDOWN §4.1 Stage 4), the way down kept at
+   least 55 m along the water.
+2. **Branches, close to the route:** side chambers (5–9 m), 11–16 m out, their middles within 24 m of the route, two
+   in three off a route chamber and the rest off one of those (at most two deep), kept clear of the others; a
+   quarter also loop back to a near chamber, the route's first. Branches are added by an area estimate, then measured, until the water reaches
+   4,000 m² without passing 4,600.
 3. **Shape:** every chamber is a blob whose radius wavers by four low harmonics; every tunnel is a curved tube
    (quadratic Bézier) whose width breathes along it. Their signed distance field, roughened by two octaves of
    value noise (1.6 m and 0.6 m), gives the craggy outline; a 1.6 m core keeps each tunnel swimmable. Two
@@ -68,7 +72,7 @@ way down, every planned place placed, about 45 ms a level in Node.
   dead-end chambers left as rock with rock kept round them, their tunnel ending at the room's mouth; the old cave
   carving hollows them out behind it.
 - `LevelMap.Size` is 140. `LevelValidator` checks the area rule (`WaterArea`, 3,400–4,600 m²) instead of the old
-  corridor, plaza, side-canyon, open-share and stamp rules; reachability, spacing, the early place, the 65 m way down,
+  corridor, plaza, side-canyon, open-share and stamp rules; reachability, spacing, the early place, the 55 m way down,
   the shaft, peaks, caves and loot rules stay.
 - The minimap and the Tab map (`TopoMap`, `topo_map.gdshader`, `edges_only`) draw the look above in the shader: the
   heights texture carries the height and the distances into rock and into water, for the hatching band (Voronoi

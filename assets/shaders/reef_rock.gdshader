@@ -36,7 +36,8 @@ void fragment() {
 	EMISSION = s.emission;
 	NORMAL = normalize((VIEW_MATRIX * vec4(s.normal, 0.0)).xyz);
 	ROUGHNESS = s.rough;
-	SPECULAR = 0.22;
+	// Matte: next to no reflection of the water's light.
+	SPECULAR = 0.06;
 }
 
 void light() {
@@ -44,10 +45,10 @@ void light() {
 	// The sun also brings the caustics; other lights (her glow) light the reef plainly.
 	float extra = LIGHT_IS_DIRECTIONAL ? BACKLIGHT.x : 0.0;
 	DIFFUSE_LIGHT += (ndl + extra) * ATTENUATION * LIGHT_COLOR / PI;
-	// Wet rock and sand catch her light (and other near lights) in soft glints.
+	// Her light (and other near lights) leaves only a faint dull sheen on the matte rock and sand.
 	if (!LIGHT_IS_DIRECTIONAL) {
 		vec3 hv = normalize(LIGHT + VIEW);
-		float spec = pow(clamp(dot(NORMAL, hv), 0.0, 1.0), 28.0) * (1.0 - ROUGHNESS) * ndl;
-		SPECULAR_LIGHT += spec * ATTENUATION * LIGHT_COLOR * 0.9;
+		float spec = pow(clamp(dot(NORMAL, hv), 0.0, 1.0), 10.0) * (1.0 - ROUGHNESS) * ndl;
+		SPECULAR_LIGHT += spec * ATTENUATION * LIGHT_COLOR * 0.4;
 	}
 }

@@ -7,8 +7,10 @@ namespace OctoShoots.Core.Gen.TopDown;
 
 /// <summary>
 /// The level's cave (docs/CAVEGEN.md, ported from tools/cavegen/cavegen.js): a chain of chambers from the start to the
-/// way down, side branches and the odd loop, joined by winding tunnels, rasterised as craggy open water on the 1 m grid
-/// and grown until the water she can reach covers the area rule. Special rooms take dead-end chambers left as rock:
+/// way down (the main route), side chambers kept close round it (quick detours, at most two deep) and the odd loop,
+/// joined by winding tunnels, rasterised as craggy open water on the 1 m grid and grown until the water she can reach
+/// covers the area rule. (Its shortcuts are tunnels through the rock, bored once the rock stands: TopDownGenerator's
+/// passes.) Special rooms take dead-end chambers left as rock:
 /// their branch tunnel ends at the room's mouth, and the generator hollows the cave out behind it.
 /// </summary>
 public sealed class CaveLayout
@@ -21,10 +23,17 @@ public sealed class CaveLayout
     public const float Area = 4000f, AreaSlack = 0.15f;
     public const float AreaMin = Area * (1f - AreaSlack), AreaMax = Area * (1f + AreaSlack);
     const float MinPath = LevelValidator.MinExitGeodesic, MinStraight = 56f;
-    static readonly (float Lo, float Hi) StepMain = (16f, 22f), StepBranch = (14f, 21f);
+    /// <summary>How far apart chambers lie: on the route, a quick detour off it, and a special room off it (rooms keep rock round them).</summary>
+    static readonly (float Lo, float Hi) StepMain = (16f, 22f), StepBranch = (11f, 16f), StepRoom = (14f, 21f);
     static readonly (float Lo, float Hi) RadiusMain = (6f, 10f), RadiusBranch = (5f, 9f), RadiusStart = (9f, 11f);
     static readonly (float Lo, float Hi) WidthMain = (6f, 9f), WidthBranch = (5f, 7f), WidthLoop = (4.5f, 6f);
     const float LoopChance = 0.25f, LoopReach = 26f;
+    /// <summary>
+    /// The side chambers stay round the main route: their middles within RouteReach metres of it, at most BranchDepth
+    /// chambers deep (one off the route, one off that), off the route itself RouteParent of the time.
+    /// </summary>
+    const float RouteReach = 24f, RouteParent = 0.65f;
+    const int BranchDepth = 2;
     /// <summary>The craggy edge: two octaves of noise on the outline (metres).</summary>
     const float Crag = 1.6f, CragFine = 0.6f;
     /// <summary>
@@ -56,6 +65,8 @@ public sealed class CaveLayout
         /// <summary>A special room's chamber: left as rock (the cave is hollowed out later), with this much rock kept round it.</summary>
         public bool Room;
         public float Keep;
+        /// <summary>How many chambers off the main route (0 on it).</summary>
+        public int Depth;
     }
 
     public sealed class Tunnel
@@ -174,7 +185,7 @@ public sealed class CaveLayout
         return true;
     }
 
-    /// <summary>The main chain: from the start on one side to the way down near the far side, wandering.</summary>
+    /// <summary>The main chain: from the start on one side to the way down near the far side, zig-zagging.</summary>
     void MainChain(Rng rng, bool boss, bool fromArena)
     {
         int side = rng.Int(4);
@@ -193,21 +204,24 @@ public sealed class CaveLayout
         Start = MakeChamber(rng, Clamp(s, startR), startR, Role.Start);
         Chambers.Add(Start);
         var cur = Start;
-        Vector2 dir = Vector2.Normalize(goal - s);
+        float zig = rng.NextFloat() < 0.5f ? 1f : -1f;
         for (int i = 0; i < 9; i++)
         {
             float toGoal = Vector2.Distance(goal, cur.At);
             if (toGoal < 20f) break;
-            float wobble = rng.Range(-0.65f, 0.65f);
+            // It zig-zags, bending one way then the other (now and then twice the same way), so a shortcut across a bend
+            // clears the chamber it skips and saves real swimming.
+            if (rng.NextFloat() < 0.8f) zig = -zig;
+            // Each bend is taken off the way toward the goal, so the zig-zag stays round the line to it.
+            float wobble = zig * rng.Range(0.55f, 0.9f);
+            Vector2 dir = (goal - cur.At) / toGoal;
             Vector2 next = new(dir.X * MathF.Cos(wobble) - dir.Y * MathF.Sin(wobble), dir.X * MathF.Sin(wobble) + dir.Y * MathF.Cos(wobble));
-            next = Vector2.Normalize(next * 0.55f + (goal - cur.At) / toGoal * 0.45f);
             float step = MathF.Min(Step(rng, StepMain), toGoal - 8f);
             float r = Radius(rng, RadiusMain);
             var chamber = MakeChamber(rng, Clamp(cur.At + next * step, r), r, Role.Main);
             Chambers.Add(chamber);
             Tunnels.Add(MakeTunnel(rng, cur, chamber, Width(rng, WidthMain), CorridorKind.Main));
             cur = chamber;
-            dir = next;
         }
         float er = boss ? 17f : 10.5f;
         Exit = MakeChamber(rng, Clamp(goal, er), er, Role.Exit);
@@ -222,14 +236,18 @@ public sealed class CaveLayout
 
     (Chamber Chamber, List<Tunnel> Tunnels)? Branch(Rng rng)
     {
-        var options = Chambers.Where(c => c.Role != Role.Exit && !c.Room).ToList();
+        // Mostly off the route itself; else off a side chamber not yet at the deepest.
+        bool fromRoute = rng.NextFloat() < RouteParent;
+        var options = Chambers.Where(c => c.Role != Role.Exit && !c.Room && (fromRoute ? c.Depth == 0 : c.Depth > 0 && c.Depth < BranchDepth)).ToList();
+        if (options.Count == 0) options = Chambers.Where(c => c.Role != Role.Exit && !c.Room && c.Depth < BranchDepth).ToList();
         var parent = options[rng.Int(options.Count)];
         float a = rng.Range(0f, MathF.Tau), step = Step(rng, StepBranch), r = Radius(rng, RadiusBranch);
         Vector2 at = parent.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (parent.R + step);
-        if (!InBounds(at, r)) return null;
+        if (!InBounds(at, r) || RouteDistance(at) > RouteReach) return null;
         foreach (var c in Chambers)
             if (Vector2.Distance(c.At, at) < c.R + r + 3f + Keep(c)) return null;
         var chamber = MakeChamber(rng, at, r, Role.Branch);
+        chamber.Depth = parent.Depth + 1;
         if (!ClearRun(parent, chamber, null)) return null;
         foreach (var t in Tunnels)
         {
@@ -240,12 +258,13 @@ public sealed class CaveLayout
         var tunnels = new List<Tunnel> { MakeTunnel(rng, parent, chamber, Width(rng, WidthBranch), CorridorKind.Side) };
         if (rng.NextFloat() < LoopChance * _shape.Loops)
         {
+            // Back into the cave: the route's chambers first (a loop round to the route is a way on, too).
             Chamber? best = null;
             float bd = LoopReach;
             foreach (var o in Chambers)
             {
                 if (o == parent || o.Role == Role.Exit || o.Room) continue;
-                float d = Vector2.Distance(o.At, at) - o.R - r;
+                float d = Vector2.Distance(o.At, at) - o.R - r - (o.Depth == 0 ? 6f : 0f);
                 if (d < bd && ClearRun(chamber, o, parent))
                 {
                     bd = d;
@@ -255,6 +274,18 @@ public sealed class CaveLayout
             if (best is not null) tunnels.Add(MakeTunnel(rng, chamber, best, Width(rng, WidthLoop), CorridorKind.Side));
         }
         return (chamber, tunnels);
+    }
+
+    /// <summary>How far a point lies from the main route (its tunnels' lines), metres.</summary>
+    float RouteDistance(Vector2 p)
+    {
+        float best = float.MaxValue;
+        foreach (var t in Tunnels)
+        {
+            if (t.Kind != CorridorKind.Main) continue;
+            for (int i = 1; i < t.Points.Count; i++) best = MathF.Min(best, Geo.SegmentDistance(p, t.Points[i - 1], t.Points[i]));
+        }
+        return best;
     }
 
     bool Commit((Chamber Chamber, List<Tunnel> Tunnels) added)
@@ -530,7 +561,7 @@ public sealed class CaveLayout
                 var options = Chambers.Where(c => c.Role != Role.Exit && !c.Room).ToList();
                 var parent = options[rng.Int(options.Count)];
                 float a = rng.Range(0f, MathF.Tau);
-                Vector2 at = parent.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (parent.R + Pick(rng, StepBranch));
+                Vector2 at = parent.At + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (parent.R + Pick(rng, StepRoom));
                 if (!InBounds(at, r + keep - 4f) || !Spaced(at, kind, early)) continue;
                 if (Chambers.Any(c => Vector2.Distance(c.At, at) < c.R * 1.2f + r + keep + c.Keep)) continue;
                 if (Tunnels.Any(t => t.Points.Any(p => Vector2.Distance(p, at) < t.Width * 0.65f + r + keep))) continue;

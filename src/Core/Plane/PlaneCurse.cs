@@ -6,24 +6,27 @@ using OctoShoots.Core.Gen.TopDown;
 
 namespace OctoShoots.Core.Plane;
 
-/// <summary>The curse den's numbers (DESIGN-TOPDOWN §4.2): first guesses, tuned in play.</summary>
+/// <summary>
+/// The curse den's numbers (DESIGN-TOPDOWN §4.2): a long, narrow dead-end tunnel, safe on the way in, its reward at the
+/// end; reaching the end springs the curse, and the whole way back out lies in its dark. First guesses, tuned in play.
+/// </summary>
 public static class CurseTuning
 {
-    /// <summary>Inside the tunnel (past its first metre), the curse corrupts her this much a second.</summary>
+    /// <summary>Sprung, the curse corrupts her this much a second while she is in the tunnel (past its first metre).</summary>
     public const float Drain = 1.5f, Inside = 1f;
     /// <summary>She has found the end once she is this close to the end chamber's centre.</summary>
     public const float EndReach = 1.6f;
     /// <summary>The fountain spouts a shell this long after the last one was taken.</summary>
     public const float FountainEvery = 1f, SpoutSpeed = 2.4f;
-    /// <summary>What lies at the end: a teleport, a pearl, a shell fountain; nothing otherwise (30%).</summary>
-    public const float TeleportChance = 0.01f, PearlChance = 0.04f, FountainChance = 0.65f;
+    /// <summary>What lies at the end: a pearl this often, else the shell fountain.</summary>
+    public const float PearlChance = 0.2f;
     /// <summary>A place counts as visited once she comes this close past its edge.</summary>
     public const float VisitReach = 1f;
 }
 
-public enum CurseReward { Nothing, Fountain, Pearl, Teleport }
+public enum CurseReward { Fountain, Pearl }
 
-/// <summary>The level's curse den: its tunnel's line, and what waits at the end.</summary>
+/// <summary>The level's curse den: its tunnel's line, what waits at the end, and how far its curse has gone.</summary>
 public sealed class PlaneCurseDen
 {
     public int Poi;
@@ -32,8 +35,12 @@ public sealed class PlaneCurseDen
     public List<float> At = new();
     public Vector2 End => Line[^1];
     public CurseReward Reward;
-    /// <summary>She has reached the end (the reward is out: the laugh played, the fountain flowing, or she was sent on).</summary>
+    /// <summary>She has reached the end: the reward is out, and the curse sprung.</summary>
     public bool Reached;
+    /// <summary>The curse's dark lies over the tunnel (from reaching the end until she is out of it).</summary>
+    public bool Dark;
+    /// <summary>She is out again: the den is done. It never darkens again, and gives nothing more.</summary>
+    public bool Cleared;
     public float FountainClock;
     public PlaneShell? Spouted;
     public int Spouts;
@@ -45,6 +52,8 @@ public sealed partial class PlaneWorld
     public PlaneCurseDen? Curse { get; private set; }
     /// <summary>How far into the curse den's tunnel she is (metres along it), or −1 outside it.</summary>
     public float CurseDepth { get; private set; } = -1f;
+    /// <summary>How far into its dark she is: her depth in the tunnel while its curse is sprung, else −1.</summary>
+    public float CurseDarkDepth => Curse is { Dark: true } ? CurseDepth : -1f;
     /// <summary>The places she has been to on this level (by index into the map's places).</summary>
     public bool[] Visited { get; private set; } = Array.Empty<bool>();
 
@@ -63,11 +72,7 @@ public sealed partial class PlaneWorld
             den.Line.Add(c);
             den.At.Add(sum);
         }
-        float roll = rng.NextFloat();
-        den.Reward = roll < CurseTuning.TeleportChance ? CurseReward.Teleport
-            : roll < CurseTuning.TeleportChance + CurseTuning.PearlChance ? CurseReward.Pearl
-            : roll < CurseTuning.TeleportChance + CurseTuning.PearlChance + CurseTuning.FountainChance ? CurseReward.Fountain
-            : CurseReward.Nothing;
+        den.Reward = rng.NextFloat() < CurseTuning.PearlChance ? CurseReward.Pearl : CurseReward.Fountain;
         if (den.Reward == CurseReward.Pearl)
         {
             // Any pearl she could be offered.
@@ -87,17 +92,27 @@ public sealed partial class PlaneWorld
         var den = Curse;
         if (den is null) return;
         CurseDepth = DepthIn(den, p.Position);
-        if (CurseDepth > CurseTuning.Inside) Drain(CurseTuning.Drain * Dt, DamageSource.Curse);
+        // Safe on the way in; sprung, the curse drains her all the way back out.
+        if (den.Dark && CurseDepth > CurseTuning.Inside) Drain(CurseTuning.Drain * Dt, DamageSource.Curse);
         if (Defeated) return;
 
         if (!den.Reached && Vector2.Distance(p.Position, den.End) < CurseTuning.EndReach)
         {
+            // The end: its reward out, and the curse sprung with a laugh — the dark closes over the whole way back.
             den.Reached = true;
+            den.Dark = true;
             Events.Add(new PlaneEvent(PlaneEventType.CurseEndReached, den.End, Vector2.Zero, (float)den.Reward));
-            if (den.Reward == CurseReward.Nothing) Events.Add(new PlaneEvent(PlaneEventType.CurseLaugh, den.End, Vector2.Zero));
-            else if (den.Reward == CurseReward.Teleport) Teleport(den);
+            Events.Add(new PlaneEvent(PlaneEventType.CurseLaugh, den.End, Vector2.Zero));
         }
-        if (den.Reward == CurseReward.Fountain && den.Reached && (den.Spouted is null || den.Spouted.Taken))
+        // Out of the tunnel again: the den is done (its dark lifts, and it never springs again).
+        if (den.Dark && CurseDepth < 0f)
+        {
+            den.Dark = false;
+            den.Cleared = true;
+            Events.Add(new PlaneEvent(PlaneEventType.CurseCleared, p.Position, Vector2.Zero));
+        }
+        // The fountain flows while she is still in the den's dark, and is dry once the den is done.
+        if (den.Reward == CurseReward.Fountain && den.Reached && !den.Cleared && (den.Spouted is null || den.Spouted.Taken))
         {
             den.FountainClock += Dt;
             if (den.FountainClock >= CurseTuning.FountainEvery)
@@ -138,30 +153,5 @@ public sealed partial class PlaneWorld
             best = den.At[i - 1] + ab.Length() * t;
         }
         return best;
-    }
-
-    /// <summary>
-    /// Sent on: to a place she has not been to yet (never the way down, the boss or the start), else to one she has,
-    /// else back to the start; just outside it, in open water.
-    /// </summary>
-    void Teleport(PlaneCurseDen den)
-    {
-        var from = Player.Position;
-        var places = Enumerable.Range(0, Map.Pois.Count)
-            .Where(i => i != den.Poi && Map.Pois[i].Kind is not (PoiKind.Exit or PoiKind.Start)).ToList();
-        var fresh = places.Where(i => !Visited[i]).ToList();
-        var pool = fresh.Count > 0 ? fresh : places;
-        var poi = pool.Count > 0 ? Map.Pois[pool[den.Rng.Int(pool.Count)]] : Map.Start;
-        Vector2 to = poi.Cave >= 0 ? Map.Caves[poi.Cave].Mouth + Map.Caves[poi.Cave].Facing * 2.5f : poi.Position;
-        for (int i = 0; i < 24 && !Clear(to, Radius + 0.2f); i++)
-        {
-            float a = i * 2.4f, r = 1f + i * 0.25f;
-            var q = to + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
-            if (Clear(q, Radius + 0.2f)) to = q;
-        }
-        Player.Position = Player.PrevPosition = to;
-        Player.Velocity = Vector2.Zero;
-        CurseDepth = -1f;
-        Events.Add(new PlaneEvent(PlaneEventType.CurseTeleport, to, from - to));
     }
 }

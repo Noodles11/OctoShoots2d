@@ -309,7 +309,7 @@ public class TopDownGenTests
         Assert.InRange(arches.Count, 0, 5);
         foreach (var arch in arches)
         {
-            Assert.InRange(arch.HalfLength * 2f, 10f, 20f);
+            Assert.InRange(arch.HalfLength * 2f, TopDownGenerator.ArchSpanMin, TopDownGenerator.ArchSpanMax);
             Assert.True(LevelValidator.ArchCrossesCorridor(map, arch));
             Assert.True(arch.Bottom > LevelMap.SwimBand + 1f, "arch body must clear the swim band");
             // Both footings stand on raised ground; the corridor under the span is open.

@@ -121,6 +121,7 @@ public static class Mountains
             map.Heights[i] = Math.Clamp(MathF.Max(h[i], LevelMap.SwimBand + 0.6f) + rise + ridge, LevelMap.BlockHeight + 0.4f, ReefTerrain.HMax);
             // Rock where there was water: no roof hangs over it.
             map.Lid[i] = float.NaN;
+            map.Roof[i] = float.NaN;
         }
         return filled;
     }

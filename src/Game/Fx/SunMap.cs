@@ -61,7 +61,7 @@ public static class SunMap
     static byte[] Cast(LevelMap map, Vector3 sunDir)
     {
         int n = LevelMap.Samples;
-        // What overhangs each metre of the reef: a cave roof (its old mountain), or an arch or overhang's span.
+        // What overhangs each metre of the reef: a cave roof (its old mountain), a tunnel's roof, or an arch or overhang's span.
         var roof = new float[n * n];
         var canopyBottom = new float[n * n];
         var canopyTop = new float[n * n];
@@ -69,13 +69,13 @@ public static class SunMap
         for (int x = 0; x < n; x++)
         {
             int i = y * n + x;
-            roof[i] = map.LidAt(x, y);
+            roof[i] = float.IsNaN(map.LidAt(x, y)) ? map.RoofAt(x, y) : map.LidAt(x, y);
             canopyBottom[i] = float.PositiveInfinity;
             canopyTop[i] = float.NegativeInfinity;
         }
         foreach (var c in map.Canopies)
         {
-            if (c.Kind == CanopyKind.CaveRoof) continue;
+            if (c.Kind is CanopyKind.CaveRoof or CanopyKind.TunnelRoof) continue;
             float reach = c.Radius > 0f ? c.Radius : MathF.Sqrt(c.HalfLength * c.HalfLength + c.HalfWidth * c.HalfWidth);
             int x0 = Math.Max(0, (int)(c.Center.X - reach)), x1 = Math.Min(n - 1, (int)(c.Center.X + reach) + 1);
             int y0 = Math.Max(0, (int)(c.Center.Y - reach)), y1 = Math.Min(n - 1, (int)(c.Center.Y + reach) + 1);

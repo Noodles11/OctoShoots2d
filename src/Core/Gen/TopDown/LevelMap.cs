@@ -41,6 +41,10 @@ public sealed class Corridor
     public float Width;
     /// <summary>For spurs: the POI it connects.</summary>
     public int Poi = -1;
+    /// <summary>A shortcut (a pass): a tunnel under the rock, roofed by <see cref="LevelMap.Roof"/>.</summary>
+    public bool Roofed;
+    /// <summary>While the level is built: the rock a pass bored away (grid index → height before), to fill it back if it gets no roof.</summary>
+    internal Dictionary<int, float>? Bored;
 
     public float HalfWidth => Width * 0.5f;
 
@@ -115,7 +119,7 @@ public sealed class CaveSite
     public Vector2 Facing;
 }
 
-public enum CanopyKind { Arch, CaveRoof, Overhang }
+public enum CanopyKind { Arch, CaveRoof, Overhang, TunnelRoof }
 
 /// <summary>
 /// Something solid overhead, on the canopy layer above the swim band (DESIGN-TOPDOWN §3): it fades while
@@ -133,7 +137,7 @@ public sealed class Canopy
     public float Radius;
     public float Bottom;
     public float Top;
-    /// <summary>Arches: the corridor they span.</summary>
+    /// <summary>Arches: the corridor they span; a tunnel's roof: the corridor it roofs (all its pieces fade as one).</summary>
     public int Corridor = -1;
 
     public Vector2 EndA => Center - Axis * HalfLength;
@@ -245,6 +249,14 @@ public sealed class LevelMap
 
     /// <summary>The cave roof's height at a grid point, or NaN where no cave is.</summary>
     public float LidAt(int x, int y) => Lid[y * Samples + x];
+
+    /// <summary>
+    /// The rock over the shortcut tunnels (NaN elsewhere): over a pass, the ridge it was cut through as it stood; over a
+    /// route shortcut, the rock either side carried on over it. Drawn as rock until Clementine is near.
+    /// </summary>
+    public float[] Roof = NewLid();
+
+    public float RoofAt(int x, int y) => Roof[y * Samples + x];
 
     public List<Poi> Pois = new();
     public List<Corridor> Corridors = new();

@@ -5,13 +5,14 @@ using OctoShoots.Core.Plane;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The curse den's dark on screen (DESIGN-TOPDOWN §4.2), under the HUD: black fog that closes in over the tunnel's
-/// first metres, leaving a little faint water round her, and lifts slowly once she is out (or sent on by its teleport).
+/// The curse den's dark on screen (DESIGN-TOPDOWN §4.2), under the HUD: once she has reached the den's end and sprung
+/// its curse, black fog closes in round her, leaving a little faint water, all the way back to the mouth (fading over
+/// the tunnel's last metres there), and lifts slowly once she is out.
 /// <see cref="Amount"/> also fades her light and the minimap.
 /// </summary>
 public partial class CurseDarkness : Control
 {
-    /// <summary>The dark closes in over this many metres past the mouth.</summary>
+    /// <summary>The dark is full this many metres past the mouth, and thins over them toward it.</summary>
     const float Deepens = 6f;
     /// <summary>
     /// Round her (metres): the water stays readable within Inner, black from Outer — wide enough that both of the
@@ -38,12 +39,9 @@ public partial class CurseDarkness : Control
     /// <summary>A new level: no dark.</summary>
     public void Clear() => Amount = 0f;
 
-    /// <summary>Sent on by the curse: the screen goes fully dark at once (hiding the move), then lifts.</summary>
-    public void Flash() => Amount = 1f;
-
     public void Sync(PlaneWorld world, Camera3D camera, Vector3 her, float dt)
     {
-        float target = world.CurseDepth < 0f ? 0f : Mathf.SmoothStep(0f, Deepens, world.CurseDepth);
+        float target = world.CurseDarkDepth < 0f ? 0f : Mathf.SmoothStep(0f, Deepens, world.CurseDarkDepth);
         Amount = Mathf.MoveToward(Amount, target, dt * (target > Amount ? CloseRate : LiftRate));
         Visible = Amount > 0.001f;
         if (!Visible) return;

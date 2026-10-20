@@ -68,8 +68,8 @@ public class DenTests
     [Fact]
     public void ADensBattleOverCleansesItsNaveAndPaysOut()
     {
-        var map = TestLevels.Get(TestLevels.Find(p => !p.HasBoss && p.Id.Level > 1));
-        var w = World(map);
+        // A level with a den of two or more.
+        var w = TestLevels.All(p => !p.HasBoss && p.Id.Level > 1).Select(id => World(TestLevels.Get(id))).First(x => x.Dens.Any(d => d.Members.Count >= 2));
         var den = w.Dens.First(d => d.Members.Count >= 2);
         int shells = w.Shells.Count, orbs = w.Hearts.Count;
         // Half of it freed: not over yet.

@@ -74,7 +74,7 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     SurgeStarted, SurgeEnded, GeyserFizz, GeyserSpray, GeyserEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, GuardiansWoke, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, ThumpWindup, ThumpLeap, ThumpLand, ThumpRoll, ThumpBurst, Warded, WardenFreed, LashWindup, LashOut, LashCatch, LashSwallow, LashBite, LashStun, LashFreed, SealLit, SealOpened, FishStruck, FishTurned, FishFreed,
     MurklingCling, VineCoiled, VineCut, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, DenCleared, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
-    CurseEndReached, CurseLaugh, CurseTeleport, FountainSpout, Cavitation, Necklace, SchoolPoints,
+    CurseEndReached, CurseLaugh, CurseCleared, FountainSpout, Cavitation, Necklace, SchoolPoints,
     ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
     XpGained, LevelUp }
@@ -86,8 +86,7 @@ public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPea
 /// Direction: for ShotPopped, the unit direction from the bubble's centre to where its film gave way. Size: a popped
 /// bubble's radius; an ink blast's radius (InkBlast); the bubbles in a volley (Shot); the damage dealt
 /// or taken (MobHit, MobDefeated, BossHit, PlayerHit); HP healed (ActiveUsed by Whale Song); the reward
-/// (CurseEndReached, as a CurseReward); 0 otherwise. For CurseTeleport, Direction is from where she arrived back to
-/// where she left; for FountainSpout, the way the shell flies. Source: what
+/// (CurseEndReached, as a CurseReward); 0 otherwise. For FountainSpout, Direction is the way the shell flies. Source: what
 /// hurt her (PlayerHit, PlayerDefeated).
 /// </summary>
 public readonly record struct PlaneEvent(PlaneEventType Type, Vector2 Position, Vector2 Direction, float Size = 0f, DamageSource Source = DamageSource.None);

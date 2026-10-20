@@ -192,7 +192,8 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 	sand = mix(sand, sand * mix(vec3(0.72), reef_algae * 1.1, 0.4), apron);
 	c = mix(c, sand, sandK);
 	s.normal = normalize(mix(mix(n, gn, gardenK), nn, sandK));
-	s.rough = mix(mix(0.82, 0.62, gardenK), 0.96, sandK);
+	// Matte all over: rough rock, gardens and sand (no polish).
+	s.rough = mix(mix(0.96, 0.9, gardenK), 0.98, sandK);
 
 	// The impassable reef wall around the square: darker and cooler toward the edge of the world.
 	float edge = min(min(local.x, local.z), min(reef_extent.x - local.x, reef_extent.y - local.z));

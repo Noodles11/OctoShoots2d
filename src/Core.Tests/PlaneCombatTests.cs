@@ -68,6 +68,9 @@ public class PlaneCombatTests
         // The first pufferling with open water toward her and room behind it to back away; the others freed.
         var mob = w.Mobs.FirstOrDefault(m => Roomy(w, m.Position, distance) is not null) ?? w.Mobs[0];
         foreach (var m in w.Mobs.Where(m => m != mob)) m.Hp = 0f;
+        // Nothing to heal her there (a light spring, a light orb), so what she takes is what shows.
+        w.Springs.Clear();
+        w.Hearts.Clear();
         w.Player.Position = w.Player.PrevPosition = Roomy(w, mob.Position, distance) ?? FindOpen(w, mob.Position, distance);
         return (w, mob);
     }

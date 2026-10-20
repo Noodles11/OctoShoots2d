@@ -322,7 +322,7 @@ Everything derived from a single **run seed** (see §10).
 | Shop | 💰 | 2–5 items/pickups, paid with **Sand Dollars** |
 | Boss | 💀 | Arena with **The Crack**. Boss → item + Heart Container; Crack opens down (§5.2) |
 | Secret | ❓ | Bombable; rare items / big pickups |
-| Curse den | ☠ | A dark dead-end tunnel that corrupts her while she is in it; a gamble at its end (DESIGN-TOPDOWN §4.2) |
+| Curse den | ☠ | A dead-end tunnel, safe going in, a reward at its end; reaching it springs a dark curse over the way back (DESIGN-TOPDOWN §4.2) |
 | Sacrifice (Anemone Altar) | ⚱ | Step on spikes for escalating rewards |
 | Challenge (Arena) | ⚔ | Waves of enemies for an item |
 | Shipwreck Archive | 📜 | Scrolls (consumables) |
