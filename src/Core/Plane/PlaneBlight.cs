@@ -207,6 +207,8 @@ public sealed class Gloomvine
 /// <summary>A murkling: a wobbling orb of darkness with a dim stolen ember inside.</summary>
 public sealed class Murkling
 {
+    /// <summary>Shoved by her hits (PlaneKnock): this velocity, easing off.</summary>
+    public Vector2 Knock;
     public Vector2 Position, Velocity;
     /// <summary>
     /// A lesser murkling: the reef fish it was, turned by a murkling's throw (null for a murkling budded from the ink).
@@ -973,6 +975,7 @@ public sealed partial class PlaneWorld
                 float dealt = Ward(m, m.Position, light);
                 bool emptied = dealt > 0f && m.Corruption.Hit(dealt);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, SafeNormalize(shot.Velocity), dealt));
+                Shove(ref m.Knock, shot.Velocity, m.Radius);
                 if (emptied) BurstMurkling(m, ember: true);
                 if (shot.Pierce) shot.Struck = m;
                 else

@@ -10,10 +10,10 @@ namespace OctoShoots.Game.TopDown;
 /// </summary>
 public partial class CameraRig : Node3D
 {
-    /// <summary>Downward tilt from the horizontal: straight down, a true top-down view (north up).</summary>
-    public const float Tilt = 90f;
+    /// <summary>Downward tilt from the horizontal.</summary>
+    public const float Tilt = 60f;
     public const float Fov = 35f;
-    /// <summary>Distance from the followed point (above it); puts ~21 m of ground top to bottom and ~38 m across at 16:9.</summary>
+    /// <summary>Distance from the followed point; puts ~22 m of ground top to bottom and ~33 m across at 16:9.</summary>
     public const float Distance = 34f;
     const float Follow = 6f;
     /// <summary>The zoom setting: 1.5 by default, from 1 (50% farther, more of the reef) to 2 (50% closer).</summary>
@@ -166,7 +166,7 @@ public partial class CameraRig : Node3D
             _focus = _focus.Lerp(aim, 1f - Mathf.Exp(-Follow * dt));
         }
         float tilt = Mathf.DegToRad(Tilt);
-        // North is −Z, up the screen: the camera sits over the focus looking down (at a lesser tilt, south of it).
+        // North is −Z: the camera sits south of the focus, looking north and down.
         Vector3 offset = new Vector3(0f, Mathf.Sin(tilt), Mathf.Cos(tilt)) * _distance * Zoom;
         _shakeTime += dt;
         _shake = Mathf.MoveToward(_shake, 0f, dt * 1.6f);

@@ -251,6 +251,7 @@ public sealed partial class PlaneWorld
         StepBoss();
         StepCombat(input);
         StepCorruption();
+        StepKnocks();
         StrikeBack();
         StepSprings();
         StepFish();

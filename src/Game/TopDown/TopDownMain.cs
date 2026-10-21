@@ -25,7 +25,7 @@ namespace OctoShoots.Game.TopDown;
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
 /// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss,
 /// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --boss-hp=, --paused, --map, --f3, --no-focus,
-/// --capture=dir --frames=a,b.
+/// --capture=dir --frames=a,b, --dbg-say=text (a message banner, a second in).
 /// </summary>
 public partial class TopDownMain : Node3D
 {
@@ -41,6 +41,7 @@ public partial class TopDownMain : Node3D
     PlaneAchievements _achievements = null!;
     AchievementBanner _achievementBanner = null!;
     string? _debugAward;
+    string? _debugSay;
     BossView _boss = null!;
     PufferlingView _puffers = null!;
     ReefFishView _reefFish = null!;
@@ -89,8 +90,6 @@ public partial class TopDownMain : Node3D
     ItemCatalog? _catalog;
     /// <summary>What Clementine carries through the rift (HP, pearls); a new seed or R starts a fresh run.</summary>
     PlaneRun? _run;
-    string _status = "";
-    float _statusTimer;
     Tuning _tuning = null!;
     LevelMap _map = null!;
     PlaneWorld _world = null!;
@@ -312,6 +311,7 @@ public partial class TopDownMain : Node3D
             else if (arg.StartsWith("--dbg-goto=") && int.TryParse(Value("--dbg-goto="), out int gotoLevel)) _dbgGoTo = gotoLevel;
             else if (arg.StartsWith("--curse=") && Enum.TryParse<CurseReward>(Value("--curse="), true, out var reward)) _dbgCurse = reward;
             else if (arg.StartsWith("--award=")) _debugAward = Value("--award=");
+            else if (arg.StartsWith("--dbg-say=")) _debugSay = Value("--dbg-say=");
             else if (arg == "--reset-profile")
             {
                 // Verification: the saved profile's achievements (and so its unlocked pearls) are cleared.
@@ -1218,6 +1218,11 @@ public partial class TopDownMain : Node3D
         SyncHaptics(dt);
         // Banners run on game time: they wait while paused and under a splash.
         if (!Paused && _transition == Transition.None && !_deathSplash) _achievementBanner.Step(dt);
+        if (_debugSay is { } said && _levelTime > 1f)
+        {
+            _debugSay = null;
+            Say(said);
+        }
         if (_debugAward is { } award && _achievementData is not null && _achievementData.TryGet(award, out var shown))
         {
             // Verification: shows the banner (it awards nothing).
@@ -1475,7 +1480,6 @@ public partial class TopDownMain : Node3D
             BeginDeath();
             return;
         }
-        _statusTimer -= dt;
         if (steps == 8) _accumulator = 0;
         float alpha = (float)(_accumulator / PlaneWorld.Dt);
 
@@ -1574,7 +1578,7 @@ public partial class TopDownMain : Node3D
         if (p.Velocity.LengthSquared() > 0.04f) _fullMap.PlayerHeading = p.Velocity;
         int left = _world.Mobs.Count(m => m.Alive);
         _info.Text = $"{_id} · mobs {left}/{_world.Mobs.Count} · pearls {_run!.Items.Count}   attempt {_map.Attempt + 1}   pos {p.Position.X:0.0}, {p.Position.Y:0.0}   " +
-                     $"{Engine.GetFramesPerSecond():0} FPS" + (_statusTimer > 0f ? $"   {_status}" : "") +
+                     $"{Engine.GetFramesPerSecond():0} FPS" +
                      "\nWASD swim · Space dash · hold the mouse or arrows to shoot · Shift over the shaft dives · Tab map · Esc pause · F1 debug menu · F3 debug map · R regenerate";
         Capture();
     }
@@ -1907,11 +1911,8 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>A status line for the F3 debug panel (nothing on the HUD: the game shows no log of messages).</summary>
-    void Say(string text)
-    {
-        _status = text;
-        _statusTimer = 3f;
-    }
+    /// <summary>A message for her: the HUD's banner (HudView.Say).</summary>
+    void Say(string text) => _hud.Say(text);
 
     void TogglePause()
     {

@@ -37,9 +37,8 @@ public partial class BlightView
     readonly List<OmniLight3D> _kinLights = new();
     readonly List<(Vector3 At, Color Color, float Energy, float Range, float Near)> _kinWants = new();
 
-    /// <summary>A creature's light; brighter and wider the further her light has worked into it (<paramref name="inner"/>, 0..1).</summary>
-    void Want(Vector3 at, Color color, float energy, float range, System.Numerics.Vector2 her, float inner = 0f) =>
-        _kinWants.Add((at, color, energy * (1f + 2.5f * inner * inner), range * (1f + 0.4f * inner), (new System.Numerics.Vector2(at.X, at.Z) - her).LengthSquared()));
+    void Want(Vector3 at, Color color, float energy, float range, System.Numerics.Vector2 her) =>
+        _kinWants.Add((at, color, energy, range, (new System.Numerics.Vector2(at.X, at.Z) - her).LengthSquared()));
 
     void SyncKinLights(PlaneWorld world)
     {
@@ -51,23 +50,23 @@ public partial class BlightView
             if (!m.Alive || m.Budding) continue;
             var core = m.Fish is { } fish ? FishEmber(fish.Kind) : m.Prime ? Kin.PrimeCore : Kin.MurklingCore;
             float energy = m.Prime ? 1.3f : m.Lesser ? 0.3f : 0.55f, range = m.Prime ? 7f : m.Lesser ? 1.8f : 3.2f;
-            Want(new Vector3(m.Position.X, y, m.Position.Y), core, energy, range, her, Inner(m.Corruption));
+            Want(new Vector3(m.Position.X, y, m.Position.Y), core, energy, range, her);
         }
         foreach (var s in world.MurkShots)
             if (s.Life > 0f && s.Airborne) Want(new Vector3(s.Position.X, y, s.Position.Y), Kin.MurklingCore, 0.35f, 2.2f, her);
         foreach (var r in world.Blightroots)
-            if (r.Alive) Want(new Vector3(r.Position.X, SacHeight, r.Position.Y), Kin.Blightroot, 1.1f, 6.5f, her, Inner(r.Corruption));
+            if (r.Alive) Want(new Vector3(r.Position.X, SacHeight, r.Position.Y), Kin.Blightroot, 1.1f, 6.5f, her);
         foreach (var b in world.Blotters)
-            if (b.Alive && b.Rise <= 0f) Want(new Vector3(b.Position.X, y + 0.8f, b.Position.Y), Kin.Blotter, 1.1f, 6.5f, her, Inner(b.Corruption));
+            if (b.Alive && b.Rise <= 0f) Want(new Vector3(b.Position.X, y + 0.8f, b.Position.Y), Kin.Blotter, 1.1f, 6.5f, her);
         foreach (var bomb in world.Bombs) Want(new Vector3(bomb.Position.X, y + 1f, bomb.Position.Y), Kin.Blotter, 0.6f, 3f, her);
         foreach (var t in world.Thumpsquirts)
-            if (t.Alive) Want(new Vector3(t.Position.X, y + 0.5f, t.Position.Y), Kin.Thumpsquirt, 0.9f, 5f, her, Inner(t.Corruption));
+            if (t.Alive) Want(new Vector3(t.Position.X, y + 0.5f, t.Position.Y), Kin.Thumpsquirt, 0.9f, 5f, her);
         foreach (var w in world.Inkwardens)
-            if (w.Alive) Want(new Vector3(w.Position.X, y + 0.6f, w.Position.Y), Kin.Inkwarden, 0.9f, 5f, her, Inner(w.Corruption));
+            if (w.Alive) Want(new Vector3(w.Position.X, y + 0.6f, w.Position.Y), Kin.Inkwarden, 0.9f, 5f, her);
         foreach (var l in world.Lashjaws)
         {
             if (!l.Alive) continue;
-            Want(new Vector3(l.Position.X, y, l.Position.Y), Kin.Lashjaw, 0.9f, 5f, her, Inner(l.Corruption));
+            Want(new Vector3(l.Position.X, y, l.Position.Y), Kin.Lashjaw, 0.9f, 5f, her);
             if (l.TongueOut) Want(new Vector3(l.Tip.X, y, l.Tip.Y), Kin.Lashjaw, 0.45f, 2.5f, her);
         }
         _kinWants.Sort((a, b) => a.Near.CompareTo(b.Near));

@@ -90,7 +90,7 @@ public partial class BlightView : Node3D
         SyncWardens(world, dt, camera);
         SyncLashjaws(world, dt, camera);
         SyncKinLights(world);
-        SyncInnerGlows(world);
+        SyncOutlines(world);
         SyncHitGlows(world);
         SyncVines(world);
         StepRipples(dt);
@@ -215,30 +215,30 @@ public partial class BlightView : Node3D
     }
 
     /// <summary>The vines: tubes from the floor at their root rising to her plane, tapering to the tip; a coil wraps her.</summary>
-    // ───────────────────────── the light from within ─────────────────────────
+    // ───────────────────────── her light's outline ─────────────────────────
 
-    /// <summary>How far her light has worked into a creature (0 untouched → 1 freed): the share of its corruption gone.</summary>
-    static float Inner(CorruptionMeter meter) => meter.Empty ? 1f : 1f - meter.Fraction;
+    /// <summary>How far her light has worn a creature down (0 while its corruption is full, or once freed → 1).</summary>
+    static float Worn(CorruptionMeter meter) => meter.Shown ? 1f - meter.Fraction : 0f;
 
     /// <summary>
-    /// No meters (docs/CORRUPTION.md): instead every corrupted creature shines from within as her light works into it,
-    /// its core's colour brighter the less corruption it has left, until it bursts (corruption_orb's inner).
+    /// No meters (docs/CORRUPTION.md): her light's outline stays round every corrupted creature whose corruption is not
+    /// full, the thicker the less it has left (corruption_orb's worn); each hit flashes it (SyncHitGlows).
     /// </summary>
-    void SyncInnerGlows(PlaneWorld world)
+    void SyncOutlines(PlaneWorld world)
     {
-        for (int i = 0; i < _murks.Count && i < world.Murklings.Count; i++) Shine(_murks[i], Inner(world.Murklings[i].Corruption));
-        // A freed octopus swims off healthy: no light from within.
+        for (int i = 0; i < _murks.Count && i < world.Murklings.Count; i++) Outline(_murks[i], Worn(world.Murklings[i].Corruption));
+        // A freed octopus swims off healthy: no outline.
         for (int i = 0; i < _roots.Count && i < world.Blightroots.Count; i++)
-            Shine(_roots[i].Node, world.Blightroots[i].Alive ? Inner(world.Blightroots[i].Corruption) : 0f);
-        foreach (var (b, h) in _hermits) Shine(h.Node, Inner(b.Corruption));
-        foreach (var (t, tube) in _tubes) Shine(tube.Node, Inner(t.Corruption));
-        foreach (var (w, view) in _wardens) Shine(view.Node, Inner(w.Corruption));
-        foreach (var (l, jaw) in _jaws) Shine(jaw.Node, Inner(l.Corruption));
+            Outline(_roots[i].Node, world.Blightroots[i].Alive ? Worn(world.Blightroots[i].Corruption) : 0f);
+        foreach (var (b, h) in _hermits) Outline(h.Node, Worn(b.Corruption));
+        foreach (var (t, tube) in _tubes) Outline(tube.Node, Worn(t.Corruption));
+        foreach (var (w, view) in _wardens) Outline(view.Node, Worn(w.Corruption));
+        foreach (var (l, jaw) in _jaws) Outline(jaw.Node, Worn(l.Corruption));
     }
 
-    void Shine(Node node, float k) => SetOrb(node, InnerParam, InnerMeta, k);
+    void Outline(Node node, float k) => SetOrb(node, WornParam, WornMeta, k);
 
-    static readonly StringName InnerParam = "inner", InnerMeta = "inner_glow";
+    static readonly StringName WornParam = "worn", WornMeta = "worn_outline";
 
     // ───────────────────────── events ─────────────────────────
 

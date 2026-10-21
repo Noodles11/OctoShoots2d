@@ -55,6 +55,8 @@ public enum ThumpState { Idle, Windup, Flight, Landing, Rest, Tipping, Rolling, 
 /// <summary>A Thumpsquirt: a tube of ink that leaps at her and rolls after her.</summary>
 public sealed class Thumpsquirt
 {
+    /// <summary>Shoved by her hits (PlaneKnock): this velocity, easing off.</summary>
+    public Vector2 Knock;
     public Vector2 Position, Velocity;
     public ThumpState State;
     /// <summary>Seconds into the present state.</summary>
@@ -209,6 +211,7 @@ public sealed partial class PlaneWorld
                 float dealt = Ward(t, t.Position, light);
                 bool emptied = dealt > 0f && t.Corruption.Hit(dealt);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, t.Position, SafeNormalize(shot.Velocity), dealt));
+                Shove(ref t.Knock, shot.Velocity, ThumpTuning.Radius);
                 if (emptied) BurstThump(t);
                 if (shot.Pierce) shot.Struck = t;
                 else

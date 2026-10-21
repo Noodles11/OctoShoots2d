@@ -68,6 +68,8 @@ public sealed class CorruptionBomb
 /// <summary>A Blotter: a corrupted hermit crab under a huge shell of ink, creeping toward clean floor and corrupting it.</summary>
 public sealed class Blotter
 {
+    /// <summary>Shoved by her hits (PlaneKnock): this velocity, easing off.</summary>
+    public Vector2 Knock;
     public Vector2 Position, Velocity, Target;
     /// <summary>Where it faces (unit), turning slowly toward its target.</summary>
     public Vector2 Heading = new(1f, 0f);
@@ -264,6 +266,7 @@ public sealed partial class PlaneWorld
                 float dealt = Ward(b, b.Position, light);
                 bool emptied = dealt > 0f && b.Corruption.Hit(dealt);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, b.Position, SafeNormalize(shot.Velocity), dealt));
+                Shove(ref b.Knock, shot.Velocity, BlotterTuning.ShellRadius);
                 if (emptied) BurstBlotter(b, field);
                 if (shot.Pierce) shot.Struck = b;
                 else

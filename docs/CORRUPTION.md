@@ -309,11 +309,17 @@ meter that starts full. Each shot of her light takes its damage (illuminance) of
 meter regrows, at a rate set by the creature's kind and the Menace. Emptied, the creature is cleansed: one strong
 enough shot does it at once, or keep shooting until the meter runs out.
 
-No meter is drawn. Instead the creature **shines from within** as her light works into it (`corruption_orb`'s
-`inner`, `BlightView.SyncInnerGlows`): the less corruption it has left, the brighter its core's colour (else its
-kind's) shines through its skin, spreading from its middle out to its rim and throbbing faster, and the brighter and
-wider its own light (`BlightView.Lights.cs`). Near empty it all but blazes; emptied, it bursts. Regrowing, it dims
-again. A freed octopus swims off without it.
+No meter is drawn. Instead **her light's outline** (the warm-white line round the silhouette that each hit
+flashes) **stays** round the creature for as long as its corruption is not full (`corruption_orb`'s `worn`,
+`BlightView.SyncOutlines`): thin after the first hit, thicker the less corruption it has left, up to about a fifth of
+its radius near empty, and a little brighter. Each hit flashes it brighter for 0.2 s. Regrowing to full, it is gone;
+emptied, the creature bursts. A freed octopus swims off without it.
+
+**Knockback** (`PlaneKnock.cs`): each shot of her light shoves the creature it strikes a little along the shot, the
+smaller the further: 3 m/s for a 0.5 m body, scaled by 0.5 m over its radius (0.25–1.4 times that), easing off
+quickly (about 0.3 m for a murkling, a few centimetres for a Blotter), quick hits adding up to at most 1.5 shoves'
+worth, and times her knockback stat. Rock stops it dead. A clinging, budding or leaping creature is not moved, nor
+the rooted ones (Blightroots, Lashjaws).
 
 ## Gloomvines (`Gloomvine`)
 

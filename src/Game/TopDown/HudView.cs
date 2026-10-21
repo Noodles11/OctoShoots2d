@@ -11,6 +11,8 @@ namespace OctoShoots.Game.TopDown;
 /// picks up flies from where she took it to the counter as a wisp of light on a slight arc, and counts in there with a
 /// pulse, so a pickup is never missed. A pearl's name
 /// and tagline show for a moment when she takes it. Over the shaft, a prompt: Shift to dive, or why she cannot yet.
+/// Messages (<see cref="Say"/>) come as a banner: it slides down out of the header, floats under the clock (under the
+/// boss's bar in a fight) for a while, then eases away up off the top; a queued one follows.
 /// Her health and her active pearl's charge are not here: they are on her bell (BellView, DESIGN-TOPDOWN §2.5).
 /// </summary>
 public partial class HudView : Control
@@ -36,6 +38,71 @@ public partial class HudView : Control
     {
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+    }
+
+    // ───────────────────────── the message banner ─────────────────────────
+
+    /// <summary>The banner's sliding in, its stay (shorter while another waits) and its easing away (seconds).</summary>
+    const float BannerIn = 0.35f, BannerStay = 2.6f, BannerStayQueued = 1.2f, BannerOut = 0.45f;
+    readonly Queue<string> _banners = new();
+    string? _banner;
+    float _bannerAge;
+
+    /// <summary>A message for her: a banner under the clock (queued after the one showing; repeats of it are dropped).</summary>
+    public void Say(string text)
+    {
+        if (text.Length == 0 || text == _banner || _banners.Contains(text)) return;
+        if (_banners.Count >= 3) _banners.Dequeue();
+        _banners.Enqueue(text);
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_banner is null && _banners.Count > 0)
+        {
+            _banner = _banners.Dequeue();
+            _bannerAge = 0f;
+        }
+        if (_banner is null) return;
+        _bannerAge += (float)delta;
+        float stay = _banners.Count > 0 ? BannerStayQueued : BannerStay;
+        if (_bannerAge >= BannerIn + stay + BannerOut) _banner = null;
+        QueueRedraw();
+    }
+
+    /// <summary>The banner: a dark band with a warm line under it, its text centred; it slides from behind the header to under the clock and away up.</summary>
+    void DrawBanner(Font font)
+    {
+        if (_banner is null) return;
+        const int fs = 18;
+        var ts = font.GetStringSize(_banner, HorizontalAlignment.Left, -1, fs);
+        var size = new Vector2(ts.X + 56f, 36f);
+        float rest = Margin + (_bossShown > 0.01f ? 84f : 40f), hidden = -size.Y - 4f;
+        float stay = _banners.Count > 0 ? BannerStayQueued : BannerStay;
+        float y, a;
+        if (_bannerAge < BannerIn)
+        {
+            float t = _bannerAge / BannerIn, e = 1f - Mathf.Pow(1f - t, 3f);
+            y = Mathf.Lerp(hidden, rest, e);
+            a = Mathf.Clamp(t * 2.5f, 0f, 1f);
+        }
+        else if (_bannerAge < BannerIn + stay)
+        {
+            // Floating: a slow bob.
+            y = rest + 1.5f * Mathf.Sin((_bannerAge - BannerIn) * 2.4f);
+            a = 1f;
+        }
+        else
+        {
+            float t = Mathf.Clamp((_bannerAge - BannerIn - stay) / BannerOut, 0f, 1f), e = t * t * t;
+            y = Mathf.Lerp(rest, hidden, e);
+            a = 1f - t * t;
+        }
+        var p = new Vector2((Size.X - size.X) * 0.5f, y);
+        DrawRect(new Rect2(p + new Vector2(0f, 3f), size), new Color(0f, 0f, 0f, 0.25f * a));
+        DrawRect(new Rect2(p, size), new Color(0.03f, 0.05f, 0.08f, 0.78f * a));
+        DrawRect(new Rect2(p + new Vector2(0f, size.Y - 2f), new Vector2(size.X, 2f)), new Color(1f, 0.85f, 0.55f, 0.85f * a));
+        DrawString(font, p + new Vector2((size.X - ts.X) * 0.5f, size.Y * 0.5f + ts.Y * 0.32f), _banner, HorizontalAlignment.Left, -1, fs, new Color(1f, 0.95f, 0.86f, a));
     }
 
     /// <summary>The run's elapsed play time (it stands still while paused), shown at the top centre.</summary>
@@ -154,6 +221,8 @@ public partial class HudView : Control
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
+        // The message banner first: it slides in from behind the clock's header.
+        DrawBanner(font);
         // The bottom-left corner the pearls and shells stack up from.
         var at = new Vector2(Margin, Size.Y - Margin - 4f);
 

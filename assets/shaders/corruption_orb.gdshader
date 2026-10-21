@@ -1,8 +1,8 @@
 // Corrupted bodies (docs/CORRUPTION.md): a murkling, a Blightroot's ink sac, a murkling's throw, the boss's crust. A
 // wobbling membrane of darkness, matte and rubbery, tacky to look at (a soft broad sheen, no polish, a fine dimpled
 // skin), with a soft cold violet rim (or its kind's own colour: skin); inside, a dim stolen ember (ember 0 for none).
-// inner: her light working into it (0 untouched → 1 all but freed): it lights up from within, its core's colour
-// shining through the skin brighter and brighter, flickering faster, until it bursts.
+// worn: her light's outline, kept round it while its corruption is not full (0 none → 1 all but freed), the thicker
+// the less corruption it has left; hit flashes it brighter for a moment as her light strikes.
 // swell inflates it (a sac's telegraph); fade dissolves it (a burst). A murkling's throw: pull bends it back away from
 // aim like a drawn slingshot (−1), then lunges it forward (+1); bud swells the piece it throws out of its front.
 // A throw itself: drip draws its back out into the neck it is pinching off from (1 → 0 as it parts).
@@ -24,10 +24,10 @@ instance uniform vec3 aim = vec3(0.0, 0.0, 1.0);
 instance uniform float pull = 0.0;
 instance uniform float bud = 0.0;
 instance uniform float drip = 0.0;
-// Struck by her light (1 at the hit, fading): a short bright outline round the body.
+// Struck by her light (1 at the hit, fading): the outline flashes bright.
 instance uniform float hit = 0.0;
-// How far her light has worked into it (1 − its corruption left): it shines from within.
-instance uniform float inner = 0.0;
+// How far her light has worn it down (1 − its corruption left; 0 while full): the outline stays, thickening.
+instance uniform float worn = 0.0;
 
 varying vec3 v_dir;
 
@@ -91,16 +91,12 @@ void fragment() {
 	// A soft rim (no hard polished edge).
 	float soft_rim = pow(1.0 - facing, 1.7);
 	EMISSION = rim * soft_rim * (0.32 + 0.15 * swirl + swell * 0.8) * (1.0 + 1.0 * skin.a) + rim * skin.a * 0.06 + glow * pow(facing, 6.0) * ember * flicker * 1.4;
-	// The light from within: its core's colour (else its kind's) shining through the skin, strongest where the skin is
-	// thinnest to the eye (facing) and spreading out to the rim as it nears bursting, flickering faster.
-	if (inner > 0.0) {
-		vec3 core = ember_tint.a > 0.5 ? ember_tint.rgb : skin.a > 0.0 ? skin.rgb : ember_color;
-		float k = inner * inner;
-		float throb = 0.75 + 0.25 * sin(TIME * (5.0 + 20.0 * k) + seed * 3.0);
-		float spread = mix(pow(facing, 3.0), 1.0, k * 0.7);
-		EMISSION += core * (0.15 + 3.2 * k) * spread * throb;
-		ALBEDO = mix(ALBEDO, core * 0.3, k * 0.5);
+	// Her light's outline along the silhouette: thin at first, thicker the less corruption is left (at most about a
+	// fifth of its radius), flashing bright on each hit.
+	if (worn > 0.0 || hit > 0.0) {
+		float edge = mix(0.72, 0.42, clamp(worn, 0.0, 1.0));
+		float line = smoothstep(edge, edge + 0.2, 1.0 - facing);
+		float strength = (worn > 0.0 ? 1.1 + 0.9 * worn : 0.0) + hit * 3.0;
+		EMISSION += vec3(1.0, 0.93, 0.75) * line * strength;
 	}
-	// Her light's hit: a thin warm-white outline along the silhouette.
-	if (hit > 0.0) EMISSION += vec3(1.0, 0.93, 0.75) * smoothstep(0.45, 0.85, 1.0 - facing) * hit * 4.0;
 }

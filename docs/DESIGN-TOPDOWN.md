@@ -22,7 +22,7 @@
 
 | Topic | Decision |
 |---|---|
-| View | **True top-down camera** (straight down, north up), perspective (not orthographic) for flora/parallax. |
+| View | **Top-down, tilted camera ~60°** (Below-style), perspective (not orthographic) for flora/parallax. |
 | Depth handling | **Plane-locked**: the whole sim runs at one depth band per level; no free vertical movement. |
 | Player | **Clementine**, a one-of-her-kind **absorbent jellyfish** — she absorbs the skills locked inside pearls (§2). |
 | Pearls | **Consumed by the bell** — each pearl adds a permanent glowing pattern to the bell (§2.4, §7). |
@@ -267,9 +267,9 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 
 ## 3. Camera & Presentation
 
-- **True top-down** (`CameraRig.Tilt` 90°: straight down over her), perspective
-  projection (narrow FOV ~35°) so tall flora, arches and reef walls parallax
-  softly round the edges of the view; a map's reading, without flatness.
+- **Tilted top-down, ~55–65°** (`CameraRig.Tilt` 60°), perspective projection
+  (narrow FOV ~35°) so tall flora, arches and reef walls parallax softly; keeps
+  Below's "map feeling" without flatness.
 - Gentle scroll smoothing; **no camera rotation** (north is always up; the
   minimap and world agree).
 - Screen-space dressing: marine snow drifting *between camera and level*
@@ -277,7 +277,8 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
   with depth, subtle chromatic aberration on hurt.
 - **Overhead occlusion rule: she is always seen.** Arch bodies, cave roofs,
   tunnel roofs and overhang ledges render on a **canopy layer** above the
-  gameplay plane. Any canopy over Clementine, or between her and the camera,
+  gameplay plane. Any canopy over Clementine, or between her and the camera (it looks
+  down at a slant, so rock a few metres to the camera's side of her hides her too),
   **dissolves** (a dithered fade, down to a faint 8% ghost of the rock) and stays
   gone while it does, restoring after — and it starts **as she comes near**: her
   line of sight to the camera is followed up through each canopy's height, and a
@@ -289,7 +290,7 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 - **Camera breaks (only two, ever):** boss-awakening dips (2 s low-angle swell
   toward the boss) and the **Tank transition** — the Crack sucks Clementine down
   through a vertical shaft in a short cutscene (the one time true verticality is
-  shown), then the camera settles back to top-down inside the tank.
+  shown), then the camera settles back to tilted top-down inside the tank.
 
 ---
 
@@ -1091,7 +1092,7 @@ The pivot is mostly **deletion and constraint**:
 | Terrain | **Drive the inherited SDF toolkit from the topographic map** (§4.1): corridors kept under the swim level, ridges raised, the shaft cut, arches/caves/passes booleaned in. Mesh floors, walls, reef rim and the canopy layer only — ceilings are never meshed. Craters/pockets inherit (dig through the floor plane into the beneath-volume). |
 | Canopy fade | New: arch bodies, cave roofs and overhangs render on a separate canopy layer; a blur+fade shader keyed by a player-under-volume test dissolves it while Clementine is underneath and restores it on exit. Cosmetic, camera-locked. |
 | Navigation | 3D flow field → 2D grid flow field (strict simplification). Walkers: floor contour following. |
-| Camera | New rig: top-down perspective, scroll smoothing, the two sanctioned breaks. |
+| Camera | New rig: tilted perspective, scroll smoothing, the two sanctioned breaks. |
 | Player presentation | New: bell soft-body (reuse verlet tooling), pulse propulsion, beneath-bell ammo orbs, pearl-consumption animation, bell pattern composer (motif×color instancing on the bell shader). |
 | Lighting | Re-aim inherited work: god rays cross-view, caustics on floor, pooled point lights (glows), fog by depth. Sun shadow map optional at top depths only. |
 | Water field | 2D version of inherited grid. |

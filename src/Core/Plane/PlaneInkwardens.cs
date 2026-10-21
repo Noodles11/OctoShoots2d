@@ -34,6 +34,8 @@ public static class WardenTuning
 /// <summary>An Inkwarden: a corrupted anemone guarding the corrupted creatures round it.</summary>
 public sealed class Inkwarden
 {
+    /// <summary>Shoved by her hits (PlaneKnock): this velocity, easing off.</summary>
+    public Vector2 Knock;
     public Vector2 Position, Velocity, Target;
     public bool Alive = true, Roams;
     public float Seed, LookTimer;
@@ -178,6 +180,7 @@ public sealed partial class PlaneWorld
                 float light = HitDamage(shot);
                 bool emptied = w.Corruption.Hit(light);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, SafeNormalize(shot.Velocity), light));
+                Shove(ref w.Knock, shot.Velocity, WardenTuning.Radius);
                 if (emptied) FreeWarden(w);
                 if (shot.Pierce) shot.Struck = w;
                 else

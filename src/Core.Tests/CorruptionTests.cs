@@ -77,6 +77,25 @@ public class CorruptionTests
         new() { Position = at, Line = at, Velocity = Vector2.UnitY * 0.01f, Life = 1f, FromPlayer = true, Damage = damage };
 
     [Fact]
+    public void HerLightShovesWhatItHitsALittleTheSmallerTheFurther()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var m = new Murkling { Position = w.Player.Position + new Vector2(0f, -3f), Bud = 0f };
+        w.Murklings.Add(m);
+        w.Shots.Add(Light(m.Position));
+        w.Step(default);
+        // Shoved along the shot (its velocity points +Y), easing off within half a second.
+        Assert.True(m.Alive);
+        Assert.True(m.Knock.Y > 0.5f && MathF.Abs(m.Knock.X) < 0.01f, $"knock {m.Knock}");
+        for (int i = 0; i < 30; i++) w.Step(default);
+        Assert.True(m.Knock.Length() < 0.1f);
+        // A bigger body is shoved less.
+        Assert.True(w.KnockFor(BlotterTuning.ShellRadius) < w.KnockFor(m.Radius));
+        Assert.True(w.KnockFor(0.05f) <= KnockTuning.Speed * KnockTuning.Most + 1e-4f);
+    }
+
+    [Fact]
     public void ABlightrootTakesAboutThirteenShotsAndReCorruptsQuickly()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
