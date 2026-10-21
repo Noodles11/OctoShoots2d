@@ -23,6 +23,8 @@ public enum Stat
     BubblesPerThrow,
     /// <summary>How fast the held active item recharges (1 = its listed recharge time).</summary>
     ActiveRecharge,
+    /// <summary>How long a bubble hovers where it stopped before it pops (a factor on its own 0.8–1.2 s).</summary>
+    BubbleHover,
 }
 
 public enum StatOp { Add, Mult }
@@ -71,6 +73,8 @@ public sealed class ShotSpec
     public float PoisonChance { get; set; }
     public float CharmChance { get; set; }
     public float SlowChance { get; set; }
+    /// <summary>Seconds added to a slow's length (an extra Stingray Barb).</summary>
+    public float SlowBonus { get; set; }
     public float CritChance { get; set; }
     public float CritMult { get; set; } = 1f;
 
@@ -108,6 +112,7 @@ public sealed class ShotSpec
         PoisonChance = Combine(PoisonChance, o.PoisonChance);
         CharmChance = Combine(CharmChance, o.CharmChance);
         SlowChance = Combine(SlowChance, o.SlowChance);
+        SlowBonus += o.SlowBonus;
         CritChance = Combine(CritChance, o.CritChance);
         CritMult = System.MathF.Max(CritMult, o.CritMult);
         SizeMult *= o.SizeMult;
@@ -195,6 +200,18 @@ public sealed class ItemDef : EffectBundle
 
     /// <summary>Achievement id that adds this item to the pools, or null if always available.</summary>
     public string? Unlock { get; set; }
+
+    /// <summary>
+    /// A unique pearl is absorbed once a run and then leaves the pools. A non-unique one (docs/PEARLS.md) may be
+    /// absorbed again: it stays in the pools at a lower chance (ItemPools.RepeatWeight per copy held).
+    /// </summary>
+    public bool Unique { get; set; } = true;
+
+    /// <summary>
+    /// What each extra copy of a non-unique pearl adds (e.g. one more bounce). Null: an extra copy adds the whole
+    /// pearl again.
+    /// </summary>
+    public EffectBundle? Stack { get; set; }
     public ActiveSpec? Active { get; set; }
 }
 

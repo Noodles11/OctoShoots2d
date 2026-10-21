@@ -1,0 +1,199 @@
+{
+  "templates": [
+    {
+      "id": "hoard",
+      "name": "The Hoard",
+      "summary": "A clam room, a secret and a curse den, guarded by a murkling host led by a prime, with a few wardens.",
+      "weight": 3,
+      "depths": [1, 6],
+      "slots": ["first", "middle"],
+      "places": {
+        "treasureCave": { "required": 1 },
+        "secret": { "required": 1 },
+        "curseDen": { "required": 1 },
+        "shop": { "none": true },
+        "shellCache": { "chance": 0.3 },
+        "ambush": { "none": true }
+      },
+      "layout": { "chamberRadius": 1.0 },
+      "cast": {
+        "blightroot": { "count": [2, 2], "anchors": ["place:treasureCave", "place:secret"] },
+        "inkwarden": { "count": [1, 2], "anchors": ["place:treasureCave"] },
+        "blotter": { "none": true },
+        "thumpsquirt": { "none": true },
+        "lashjaw": { "none": true }
+      },
+      "rules": { "prime": "treasureCave", "guardians": "treasureCave", "budCap": 2 }
+    },
+    {
+      "id": "long_haul",
+      "name": "The Long Haul",
+      "summary": "A shop at the end of long, narrow tunnels with no open fields, patrolled by Thumpsquirts and Blotters.",
+      "weight": 3,
+      "depths": [2, 6],
+      "slots": ["middle", "beforeBoss"],
+      "places": {
+        "shop": { "required": 1 },
+        "shellCache": { "chance": 0.4 },
+        "secret": { "chance": 0.2 },
+        "curseDen": { "none": true },
+        "ambush": { "none": true }
+      },
+      "layout": { "chamberRadius": 0.6, "tunnelWidth": 0.8, "tunnelLength": 1.4, "loops": 0.0 },
+      "cast": {
+        "thumpsquirt": { "count": [2, 3], "anchors": ["tunnels"] },
+        "blotter": { "count": [2, 3], "anchors": ["path"] },
+        "blightroot": { "count": [1, 1], "anchors": ["deadEnds"] },
+        "inkwarden": { "none": true },
+        "lashjaw": { "none": true }
+      },
+      "rules": { "budRate": 0.6 }
+    },
+    {
+      "id": "open_grotto",
+      "name": "The Open Grotto",
+      "summary": "Wide chambers where Lashjaws wait in the walls; an ambush in the middle.",
+      "weight": 3,
+      "depths": [3, 6],
+      "slots": ["first", "middle"],
+      "places": {
+        "ambush": { "required": 1 },
+        "shellCache": { "chance": 0.6 },
+        "secret": { "chance": 0.3 }
+      },
+      "layout": { "chamberRadius": 1.4, "tunnelLength": 0.8, "loops": 1.5 },
+      "cast": {
+        "lashjaw": { "count": [2, 3], "perMenace": 1, "anchors": ["walls"] },
+        "blightroot": { "count": [2, 3], "anchors": ["chambers"] },
+        "blotter": { "count": [0, 1], "anchors": ["chambers"] },
+        "thumpsquirt": { "none": true },
+        "inkwarden": { "none": true }
+      }
+    },
+    {
+      "id": "ink_fields",
+      "name": "The Ink Fields",
+      "summary": "A level drowning in ink: many Blightroots and Blotters spreading it; cleansing it is the whole job.",
+      "weight": 2,
+      "depths": [1, 6],
+      "slots": ["middle"],
+      "places": {
+        "shellCache": { "chance": 0.5 },
+        "curseDen": { "chance": 0.3 },
+        "shop": { "chance": 0.3 },
+        "secret": { "chance": 0.2 },
+        "ambush": { "none": true }
+      },
+      "layout": { "chamberRadius": 1.2 },
+      "cast": {
+        "blightroot": { "count": [4, 5], "anchors": ["spread"] },
+        "blotter": { "count": [3, 4], "anchors": ["chambers"] },
+        "inkwarden": { "count": [0, 1], "anchors": ["chambers"] },
+        "thumpsquirt": { "none": true },
+        "lashjaw": { "none": true }
+      },
+      "rules": { "ink": 0.15, "springs": 2 }
+    },
+    {
+      "id": "warden_garden",
+      "name": "The Warden Garden",
+      "summary": "Inkwardens in clusters, each warding a Thumpsquirt or a Blightroot; break the wards to win the fights.",
+      "weight": 2,
+      "depths": [2, 6],
+      "slots": ["middle", "beforeBoss"],
+      "places": {
+        "secret": { "chance": 0.5 },
+        "shellCache": { "chance": 0.4 }
+      },
+      "cast": {
+        "inkwarden": { "count": [3, 4], "anchors": ["chambers"] },
+        "thumpsquirt": { "count": [2, 2], "anchors": ["chambers"] },
+        "blightroot": { "count": [2, 2], "anchors": ["chambers"] },
+        "blotter": { "none": true },
+        "lashjaw": { "none": true }
+      },
+      "rules": { "wardenFor": "thumpsquirt" }
+    },
+    {
+      "id": "ambush_run",
+      "name": "The Ambush Run",
+      "summary": "Two ambush clearings on the way to a shell cache that lures her in; Lashjaws on the tunnel walls between.",
+      "weight": 2,
+      "depths": [3, 6],
+      "slots": ["middle"],
+      "places": {
+        "ambush": { "required": 2 },
+        "shellCache": { "required": 1 },
+        "secret": { "chance": 0.3 },
+        "shop": { "none": true },
+        "curseDen": { "none": true }
+      },
+      "layout": { "tunnelWidth": 0.9 },
+      "cast": {
+        "lashjaw": { "count": [1, 2], "anchors": ["walls"] },
+        "blightroot": { "count": [1, 2], "anchors": ["path"] },
+        "thumpsquirt": { "none": true },
+        "blotter": { "none": true },
+        "inkwarden": { "none": true }
+      }
+    },
+    {
+      "id": "quiet_reach",
+      "name": "The Quiet Reach",
+      "summary": "A breather: a shop, a light spring and the reef's healthy fish; only a single Blightroot.",
+      "weight": 1,
+      "slotWeights": { "beforeBoss": 4 },
+      "maxPerDepth": 1,
+      "depths": [1, 6],
+      "slots": ["middle", "beforeBoss"],
+      "places": {
+        "shop": { "required": 1 },
+        "treasureCave": { "chance": 0.3 },
+        "shellCache": { "chance": 0.5 },
+        "curseDen": { "none": true },
+        "ambush": { "none": true }
+      },
+      "layout": { "chamberRadius": 1.1, "loops": 1.0 },
+      "cast": {
+        "blightroot": { "count": [1, 1], "anchors": ["deadEnds"] },
+        "blotter": { "none": true },
+        "thumpsquirt": { "none": true },
+        "inkwarden": { "none": true },
+        "lashjaw": { "none": true }
+      },
+      "rules": { "quiet": true, "springs": 1, "fish": 2, "budRate": 0.5 }
+    },
+    {
+      "id": "approach",
+      "name": "The Approach",
+      "summary": "Few creatures on the way to the boss, so the fight is the boss.",
+      "weight": 1,
+      "depths": [1, 6],
+      "slots": ["boss"],
+      "places": {
+        "shop": { "chance": 0.5 },
+        "shellCache": { "chance": 0.3 },
+        "secret": { "none": true },
+        "curseDen": { "none": true },
+        "ambush": { "none": true },
+        "treasureCave": { "none": true }
+      },
+      "cast": {
+        "blightroot": { "count": [1, 2], "anchors": ["path"] },
+        "blotter": { "count": [0, 1], "anchors": ["path"] },
+        "thumpsquirt": { "none": true },
+        "inkwarden": { "none": true },
+        "lashjaw": { "none": true }
+      },
+      "rules": { "quiet": true }
+    },
+    {
+      "id": "default",
+      "name": "",
+      "summary": "The general rules as they are, for variety and as the fallback when no template fits.",
+      "weight": 1,
+      "depths": [1, 6],
+      "slots": ["first", "middle", "beforeBoss", "boss"]
+    }
+  ]
+}

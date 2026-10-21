@@ -7,4 +7,8 @@
     <LangVersion>12</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The level templates: every level of every build is made by the same ones. -->
+    <EmbeddedResource Include="../../data/level_templates.json" LogicalName="OctoShoots.Core.level_templates.json" />
+  </ItemGroup>
 </Project>

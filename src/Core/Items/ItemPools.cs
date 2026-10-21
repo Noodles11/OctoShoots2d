@@ -10,6 +10,13 @@ namespace OctoShoots.Core.Items;
 /// </summary>
 public static class ItemPools
 {
+    /// <summary>A non-unique pearl she already holds is offered at this share of its weight, per copy held.</summary>
+    public const float RepeatWeight = 0.35f;
+
+    /// <summary>A pearl's weight in a draw, given how many copies she holds (0 when it may not be offered again).</summary>
+    public static float WeightFor(ItemDef item, int held) =>
+        held <= 0 ? item.Weight : item.Unique ? 0f : item.Weight * System.MathF.Pow(RepeatWeight, held);
+
     /// <summary>
     /// Picks one item from the pool that is unlocked and not excluded (owned or already offered this run).
     /// Falls back to the treasure pool when the pool is exhausted; returns null when nothing is left.

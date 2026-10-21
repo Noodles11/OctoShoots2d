@@ -139,7 +139,7 @@ Per-depth light budget drives palette, mood, and difficulty readability:
 | 3 Galleon | Amber, dusty | Through wreck holes only | Medium | Lanternfish, loot glints |
 | 4 Carnival | Neon but flickering | None — “stage lights” | Medium | Corrupted neon, bounce pads |
 | 5 Trench | Near zero | None | Large — she is the lantern | Bioluminescent flora specks |
-| 6 Abyss | Black | None | Large, bloom-heavy | Neon outlines + beneath-layer eyes |
+| 6 Abyss | Black | None | Large, bloom-heavy | Neon outlines + distant glowing eyes |
 | 7 Tank | Flat fluorescent LED | None — wrong | Irrelevant — everything is lit | Harsh, shadowless, artificial |
 
 Rules: fog density, saturation falloff and glow reach all scale with Menace. Fog is also a fairness tool — creature shots glow in their own colour with short trails; telegraphs add rim-light flares. Readability never drowns in mood.
@@ -161,46 +161,60 @@ Master rule: warmth belongs to Clementine and to healthy life; artificiality is 
 Clementine, always: body tangerine #FF8C42, glow warm gold #FFC46B, hurt flash magenta #FF3D7F. She is the only hue that never changes with depth.
 Landmark light language (fixed): treasure gold, shop green, curse red, secret violet — no beacon (found, not advertised), the Crack orange, start white, item cache teal (matching the treasure-pool family), ambushes coral #FF7F6B — warm but not gold, so they never read as treasure.
 
-### 6.4 The corruption language (fixed from the bestiary proposal; adopt it)
+### 6.4 The corruption language (fixed)
 
-Corruption is readable at 30 m through mist via three stacked tells:
+Corruption shows as **mutation**: the Leak rewrites bodies from the inside. Nothing is worn and nothing man-made
+appears on a creature. It reads at 30 m through mist via three stacked tells:
 
-1. Tank colours — the real GloFish/dyed-fish palette: electric green #7CFC4D, starfire red #FF4D5E, cosmic blue #4D6BFF, galactic purple #B04DFF, sunburst orange #FF9436, moonrise pink #FF6BCB — in patterns that don’t belong to the species (stripes on a spotted fish, spots on a striped one).
-2. Plastic sheen + warm shimmer — a glossy, manufactured finish and a faint slow warm glow (the Leak) showing through fog, so a threat reads from afar.
-3. A piece of the tank — one aquarium object per species: the ninja’s headband now flutters a price tag; the Spanish Dancer wears blue gravel along its back; the Pufferling has a fish-shop tag clipped to its tail; the Barracuda trails a plastic plant from its jaw; corrupted moon jellies cycle LED colours (healthy jellies are pale and steady); the Sea Urchin has a plastic castle shard in its spines; Crabby wears a bottle cap, decorator-crab style; the Moray’s hole is framed by plastic leaves.
+1. Wrong anatomy — parts that do not belong: extra limbs crowding in, two bodies' worth of parts fused into one, glossy
+   ink sacs swelling along the body (they swell before the attacks that come from them), a shell that keeps growing
+   past the animal, spines grown inward. Never a face: no second mouth, no split head, nothing that glares or grins.
+2. The ink look — glossy, light-drinking black spreading from the mutation sites like a stain under the skin, a cold
+   violet rim, the rest of the body drained toward ash.
+3. The drip — ink droplets welling up from the mutated places and lifting off upward, so the creature carries its own
+   weather; denser where the mutation is thickest.
 
-Healthy twins wear natural colours, carry nothing, are never targets (bubbles pass through, aim assist ignores them, they stay off the minimap). Ratio healthy:corrupted ≈ 2:1 at Depth 1 → 1:1 at Depth 3 → 1:3 at Depth 6.
+How far it has gone follows Menace (§6.6): a touch at Depth 1, most of the body deep down.
+
+Healthy twins wear natural colours, carry no mutation, are never targets (bubbles pass through, aim assist ignores
+them, they stay off the minimap). Ratio healthy:corrupted ≈ 2:1 at Depth 1 → 1:1 at Depth 3 → 1:3 at Depth 6.
 
 ### 6.5 The freeing moment (adopt the proposal)
 
-- Shudder (0.3 s) as tank colours wash out.
-- Poof — a burst of bright bubbles with a soft popping chime; the piece of the tank drops and sinks (gravel scatters, the tag spins away, the bottle cap rolls).
-- True colours flood back; loot drops.
-- It carries on healthy — the fish swims off, jellies drift up, urchin spines lie down, the crab scuttles away, the moray slides home — slowly, and once it is out of the visible screen it is gone. Freed creatures never help Clementine and are never targets. Bosses free the same way at bigger scale, colours flooding back over the whole arena.
-This replaces every death burst. It must read as relief, not victory.
+- Shudder (0.3 s); the corrupted pearl (every boss holds one) bursts into white light and stays where it sat.
+- The mutations melt back into the body with the ink; the drip turns gold, drop by drop.
+- Poof — a burst of bright bubbles with a soft popping chime. True colours flood back; loot drops.
+- It carries on healthy, its true body smaller and whole — the fish swims off, jellies drift up, urchin spines lie
+  down, the crab scuttles away, the moray slides home — slowly, and once it is out of the visible screen it is gone.
+  Freed creatures never help Clementine and are never targets. Bosses free the same way at bigger scale, colours
+  flooding back over the whole arena.
+This replaces every death burst. It must read as relief, not victory. Mutations melt; they never shatter.
 
 ### 6.6 Visual menace ramp (fixed)
 
 Same archetype, re-parameterized per depth: round eyes → glowing slit pupils; smile → teeth (count scales); smooth silhouette → jagged; saturation down; darker body with bright rim light. A Depth-1 gumdrop is a Depth-6 toothy shadow. Behaviour ramps in lockstep (aggression 40→100%, speed ×1.0→1.5, telegraph 0.8→0.35 s and never lower).
 
-### 6.7 The beneath-layer (fixed)
+### 6.7 The floor (fixed)
 
-The floor is translucent water, not ground glass: ~10 m down, a blurred, slow-drifting shadow copy of the next depth — structures as silhouettes, next biome’s creatures as drifting shadows. Escalates with depth until, in Trench and Abyss, the beneath-layer becomes the scenery: giant slow shapes crossing underfoot, eyes opening and closing below. Gameplay tells glow through: sealed pockets shimmer, the Crack backlights both layers, and in the finale the Tank’s LED bleeds down — the inversion tells the story before the cutscene does. Shadow mobs are cosmetic only (determinism preserved).
+The floor is solid seabed: nothing of the depths below shows through it. The way down is the shaft — through it, and only through it, she sees the level below in plain water. Depth is told by the light, the palette and the murk of each depth, and by the dive.
 
 ### 6.8 Typography & logo (▸)
 
-The comic onomatopoeia is retired; comic-cover boss title cards survive (“CLEMENTINE VS QUEEN CLAM”). The type system should be one family in two moods:
+The comic onomatopoeia is retired. Bosses are met in an anime cut-in (“CLEMENTINE VS QUEEN CLAM”, DESIGN-TOPDOWN §6.4): chibi characters with thick soft outlines, flat cel colour and big glossy eyes, panels slamming in on speed lines, reactions drawn as shapes (a sweat-drop, sparkles), never as text. The type system should be one family in two moods:
 
-- Display / title cards / logo: a rounded, buoyant display face with hand-drawn warmth (e.g. Baloo 2 or Fredoka weight 700), letterspaced wide, glowing. Title cards punch in, stand, dissolve — never with onomatopoeia text.
+- Display / title cards / logo: a rounded, buoyant display face with hand-drawn warmth (e.g. Baloo 2 or Fredoka weight 700), letterspaced wide, glowing. Names ride on ribbons and the VS punches in on the seam — never with onomatopoeia text.
 - UI / captions / Sea-pedia: a clean humanist sans (e.g. Nunito or Inter), sentence case, generous line height. Captions are quiet; the light does the shouting.
 - Monospace accents: seed codes (KELP7Q2Z), debug, and the run clock in a tabular monospace — the “instrument” voice.
 - Logo direction: “INK DEEP” in the display face, the I replaced by Clementine’s glowing bell silhouette trailing two tentacles; a hairline crack of orange light running under the wordmark, widening downward. On dark, the wordmark is white; the bell is the only colour.
 
 ### 6.9 Post stack (fixed, restated)
 
-Marine snow between camera and level · faint refraction wobble · vignette deepening with depth · chromatic aberration on hurt only · cool grade · depth-focus blur. God rays rake across the view, never into the lens. Caustics on upward faces, fading with depth.
+Marine snow between camera and level · faint refraction wobble · vignette deepening with depth · a dark violet low-health veil closing in from the edges, radially blurred (DESIGN-TOPDOWN §2.5) · chromatic aberration on hurt only · cool grade · depth-focus blur. God rays rake across the view, never into the lens. Caustics on upward faces, fading with depth.
 
 ## 7. The seven depths as themed acts
+
+Bosses are grown by the boss generator (docs/BOSS-GENERATOR.md) — each run meets its own — except The Hand, the
+Tank's, which is authored. The bosses named below set each depth's tone; they are not fixed rosters.
 
 Each depth is three reefs of one biome (the Tank single), each reef a 150×150 m seeded square ringed by impassable reef wall, each a little meaner (+0.04 menace). HUD reads DEPTH x · REEF y/3.
 
@@ -226,7 +240,7 @@ Near-zero ambient; Clementine’s glow radius is the level design. Bioluminescen
 
 ### Depth 6 — The Abyss · Eyes Below
 
-Black + neon outlines; heavy marine snow; only distant glowing eyes. The beneath-layer is the scenery; currents push along tunnels. Ruthless mobs, minimal telegraphs. Bosses: The Frilled Shark, The Sea Spider, and always last — The Hollow Maw, the tank’s oldest escapee, guarding the pipe grate.
+Black + neon outlines; heavy marine snow; only distant glowing eyes. Currents push along tunnels. Ruthless mobs, minimal telegraphs. Bosses: The Frilled Shark, The Sea Spider, and always last — The Hollow Maw, the tank’s oldest escapee, guarding the pipe grate.
 
 ### Depth 7 — The Tank · Kept
 
@@ -270,9 +284,9 @@ Sparse warm pads in the Shallows thinning to single-instrument drones by the Tre
 Rule one: diegetic first. The HUD exists only where the body can’t carry the information.
 
 - Ammo is diegetic: bubble orbs orbit beneath the bell — no ammo counter.
-- Status is diegetic: rim organs pulse magenta (hurt) / gold (active ready); absorption is a chromatic ripple.
-- HUD: health bar with drain trail (bottom left), run clock (top centre, stops while paused), active slot with recharge bar, shells counter that brightens and swells on pickup, absorbed pearls as dots above the HP bar, circular minimap top-right.
-- Minimap: north-up, fog of war revealed in a 15 m radius that persists; unvisited places show “?” once approached, visited ones as dots in their landmark colour; shop $ and treasure trophy appear when fog lifts. Beneath-layer shadows never appear — the map shows your floor only.
+- Vitals are diegetic (DESIGN-TOPDOWN §2.5): the four gonad rings at the centre of the bell are her health, a quarter each — warm gold, fading ever more transparent (never changing colour) as their quarters go, the last one pulsing slowly when critical; the bell's rim is her active pearl's charge — a light sweeping clockwise from the top, breathing gold when ready, snuffing out counter-clockwise on use. The magenta hurt flash washes the whole bell for a beat; absorption is a chromatic ripple.
+- HUD: run clock (top centre, stops while paused) with where the run stands always beside it ("Depth 1 · Level 2"), shells counter that brightens and swells on pickup (absorbed pearls are on her: small pearls circling her bell), circular minimap top-right whose bezel quietly echoes her health, ringed by a thin gold experience ring (pulsing and glowing outward when a skill point waits), with small percentages under it: her level and experience to the left, her health to the right. No health bar, no active slot.
+- Minimap: north-up, fog of war revealed in a 15 m radius that persists; unvisited places show “?” once approached, visited ones as dots in their landmark colour; shop $ and treasure trophy appear when fog lifts. The map shows your floor only.
 - Tab map: the full chart, crater-accurate, no fog, with legend.
 - Splashes: dark, quiet, typographic. Room-clear splash: time, foes freed, shells collected and spent, pearls found, places visited, damage taken, what she carries. Death splash: how far the run got, and the seed — because a seed is the run’s epitaph and its invitation to a friend.
 - Captions (fixed voice): name, tagline, one line per effect with numbers — “+0.8 damage”, “20% chance to freeze foes for 1.6 s”. No comic onomatopoeia anywhere. Neon event language is light, not text.
@@ -282,7 +296,7 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
 
 - Item taglines: one breath, warm, a little salty, never jokey about the dark. “Found only on moonlit tides.” · “The Galleon’s cook swore by it.” · “Angry and proud of it.” · “Clingy but protective.”
 - Sea-pedia voice: a field guide written by someone who loves these animals. Facts first, feeling in the last sentence. The ink-dash entry is the model: “Jellyfish do not ink. This one does. The Leak changed her — and she kept the change.”
-- Boss title cards: CLEMENTINE VS QUEEN CLAM — punch in, stand 2.5 s, dissolve. Bosses are goofy early, menacing late, and their cards follow the same ramp: big and warm at Depth 1, thin and cold at Depth 6.
+- Boss intros: CLEMENTINE VS QUEEN CLAM — a 5.4 s anime cut-in, skippable. Bosses are goofy early, menacing late, and their intros follow the same ramp: round eyes, smiles and a big warm VS at Depth 1; slit pupils, teeth and a thin cold VS at Depth 6.
 - Names: creatures are species-true (Spanish Dancer, Salp Chain, Giant Clam); bosses are storybook (Old Gus, Queen Clam, The Hollow Maw). The Hand is never named by the game — only by the child: “OW! It stings!”
 - What the game never says: “kill”, “enemy”, “reward for violence”. Foes are freed; rooms are visited; the run ends when she perishes or descends.
 
@@ -294,13 +308,13 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
   - Store short: “A roguelite about what you carry inside.”
   - Trailer card: “The reef wasn’t being watched. It was being kept.”
 - Iconography (three marks, in priority order): ① the glowing bell with one pearl-motif ring; ② the Crack — a hairline of orange light in dark water; ③ the pearl, dissolving into light.
-- Key art: top-down, near-black water; Clementine small and warm at centre, bell bright with motifs; beneath her, through the translucent floor, the faint neon grid of tank gravel — the entire game in one image, spoiler hidden in plain sight.
+- Key art: top-down, near-black water; Clementine small and warm at centre, bell bright with motifs; down the shaft beneath her, the faint neon grid of tank gravel — the entire game in one image, spoiler hidden in plain sight.
 - Store capsule: the bell mark on the Depth-6 black; title in display face; no characters fighting, no enemies — the promise is descent, not combat.
 
 ## 12. Theme tests — run every new idea through these
 
 - The Warmth Test: is Clementine still the warmest light in the scene?
-- The Read-at-Range Test: does a corrupted creature read as corrupted at 30 m through mist — colour, sheen, and the piece of the tank?
+- The Read-at-Range Test: does a corrupted creature read as corrupted at 30 m through mist — wrong anatomy, the ink look, and the drip?
 - The Bell Test: does this item/system show on her body? If it can’t, why not?
 - The Freeing Test: could this moment be mistaken for a kill? Fix it.
 - The Sadness Test: does this feature respect the Menace ramp — quieter, darker, lonelier downward?
@@ -312,8 +326,6 @@ Rule one: diegetic first. The HUD exists only where the body can’t carry the i
 
 ## 13. Theme decisions
 
-- **Beneath-layer interaction:** none for now. The beneath-layer stays cosmetic; no boss reaches up through the
-  floor.
 - **Hub format:** unchanged for now. The title screen stays a menu over the live sea; the free-swim Tide Pool is
   not planned yet.
 - **Freed creatures:** they swim away slowly and disappear once they are out of the visible screen. They never

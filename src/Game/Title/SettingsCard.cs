@@ -4,7 +4,7 @@ using OctoShoots.Game.Settings;
 
 namespace OctoShoots.Game.Title;
 
-/// <summary>Settings (proposal §4.6): the view options that exist today, reduced motion, and the controls (read-only).</summary>
+/// <summary>Settings (proposal §4.6): the view options that exist today, reduced motion, and the controls (rebindable).</summary>
 public partial class SettingsCard : PanelContainer
 {
     readonly ViewOptions _view;
@@ -34,7 +34,7 @@ public partial class SettingsCard : PanelContainer
         var title = TitleStyle.Text("Settings", 40, TitleStyle.Ink, TitleStyle.Display);
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        var close = TitleStyle.Pill("Close  (Esc)", primary: false, size: 15);
+        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
@@ -59,12 +59,26 @@ public partial class SettingsCard : PanelContainer
         };
         box.AddChild(Row("Sunlight", "God rays, caustics and dappled light under the water (0 turns them off).", sun));
 
+        var shadows = Toggle(_view.LightShadows, on =>
+        {
+            _view.LightShadows = on;
+            Save();
+        });
+        box.AddChild(Row("Light shadows", "Clementine's light and the reef's lights cast shadows. Off is lighter on the GPU.", shadows));
+
+        var zoom = ZoomSlider(_view.CameraZoom, v =>
+        {
+            _view.CameraZoom = v;
+            Save();
+        });
+        box.AddChild(Row("Camera zoom", "How close the camera follows Clementine. Also in the pause menu.", zoom));
+
         var shake = Toggle(_view.CameraShake, on =>
         {
             _view.CameraShake = on;
             Save();
         });
-        box.AddChild(Row("Camera shake", "The jolt when a boss lands or slams shut.", shake));
+        box.AddChild(Row("Camera shake", "The jolt when a boss lands or slams shut, or Clementine is hurt.", shake));
 
         var reduced = Toggle(_view.ReducedMotion, on =>
         {
@@ -73,21 +87,31 @@ public partial class SettingsCard : PanelContainer
         });
         box.AddChild(Row("Reduced motion", "Menus and banners cross-fade instead of rising, diving and splashing.", reduced));
 
-        box.AddChild(Heading("Controls"));
-        var keys = new GridContainer { Columns = 2 };
-        keys.AddThemeConstantOverride("h_separation", 40);
-        keys.AddThemeConstantOverride("v_separation", 6);
-        foreach (var (what, key) in new[]
-                 {
-                     ("Swim", "W A S D"), ("Dash", "Space"), ("Aim and shoot", "Mouse (hold) or arrow keys"),
-                     ("Level map", "Tab"), ("Pause", "Esc"),
-                 })
+        var vibration = Toggle(_view.Vibration, on =>
         {
-            keys.AddChild(TitleStyle.Text(what, 16, TitleStyle.InkSoft));
-            keys.AddChild(TitleStyle.Text(key, 16, TitleStyle.Ink, TitleStyle.Mono));
+            _view.Vibration = on;
+            Save();
+        });
+        box.AddChild(Row("Controller vibration", "A buzz when her light strikes, when she is hurt, when she dashes and in a current.", vibration));
+
+        // Once she has passed the tutorial, runs start below it; she may choose to start in it again.
+        if (GameSave.Current.Profile.TutorialPassed)
+        {
+            box.AddChild(Heading("Runs"));
+            var tutorial = Toggle(_view.ReplayTutorial, on =>
+            {
+                _view.ReplayTutorial = on;
+                Save();
+            });
+            box.AddChild(Row("Start in the Shallows", "New runs begin in Depth 0, the Sunlit Shallows, instead of Depth 1.", tutorial));
         }
-        box.AddChild(keys);
-        box.AddChild(TitleStyle.Text("Rebinding comes later.", 14, TitleStyle.InkSoft));
+
+        // Controls: every binding, keyboard and mouse or controller, rebindable (saved at once).
+        box.AddChild(Heading("Controls"));
+        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0f, 220f), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        box.AddChild(scroll);
+        var binder = new ControlsBinder { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scroll.AddChild(binder);
     }
 
     void Save()
@@ -114,6 +138,30 @@ public partial class SettingsCard : PanelContainer
         row.AddChild(control);
         return row;
     }
+
+    /// <summary>The camera-zoom slider with its percentage; shared with the pause menu.</summary>
+    public static Control ZoomSlider(float value, Action<float> changed, Color? text = null)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 12);
+        var slider = new HSlider
+        {
+            MinValue = OctoShoots.Game.TopDown.CameraRig.MinZoom, MaxValue = OctoShoots.Game.TopDown.CameraRig.MaxZoom, Step = 0.05, Value = value,
+            CustomMinimumSize = new Vector2(200f, 24f), SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
+        var label = new Label { Text = Percent(value), CustomMinimumSize = new Vector2(52f, 0f) };
+        label.AddThemeColorOverride("font_color", text ?? TitleStyle.Ink);
+        slider.ValueChanged += v =>
+        {
+            label.Text = Percent((float)v);
+            changed((float)v);
+        };
+        row.AddChild(slider);
+        row.AddChild(label);
+        return row;
+    }
+
+    static string Percent(float zoom) => $"{Mathf.RoundToInt(zoom * 100f)}%";
 
     static CheckButton Toggle(bool on, Action<bool> changed)
     {

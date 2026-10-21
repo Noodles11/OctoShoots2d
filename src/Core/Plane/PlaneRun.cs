@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using OctoShoots.Core.Gen.TopDown;
 using OctoShoots.Core.Items;
 
 namespace OctoShoots.Core.Plane;
@@ -10,11 +12,19 @@ namespace OctoShoots.Core.Plane;
 public sealed class PlaneRun
 {
     /// <summary>
-    /// The pearls ported to the plane so far — the ones that change her shots the most. Treasure rooms hold these.
+    /// The pearls ported to the plane so far (docs/PEARLS.md marks them): treasure rooms, shops and Queen Clam offer
+    /// only these, and only once unlocked (a pearl with an `unlock` waits for its achievement). Passive ones first,
+    /// then the active ones.
     /// </summary>
-    public static readonly string[] ShotPearls =
+    public static readonly string[] PortedPearls =
     {
         "triple_tentacle", "hammerhead", "anglerfish_lure", "swordfish_bill", "mirror_scale", "boomerang_shrimp", "double_helix",
+        "coral_crown", "moon_jelly_heart", "shark_tooth", "pearl_diver", "starfish_arm", "ink_sac", "remora_sucker",
+        "captains_hook", "lantern_pearl", "bubble_coral", "plankton_swarm", "mitosis", "giant_squid_eye",
+        "lucky_sea_glass", "pirates_doubloon",
+        "squid_ink_espresso", "whale_lung", "pufferfish_pout", "cuttlebone", "cannonball", "dolphin_fin", "coral_polyp",
+        "abyssal_glow", "glass_squid", "sea_cucumber", "sardine_run", "pistol_shrimp", "brass_compass",
+        "bubble_shield", "whale_song", "firefly_squid",
     };
 
     public PlaneRun(ItemCatalog? catalog, Tuning tuning)
@@ -32,18 +42,105 @@ public sealed class PlaneRun
     public float Hp { get; set; }
     /// <summary>Small shells, the currency: picked up in places and from every mob, spent in shops.</summary>
     public int Shells { get; set; }
-    public int Room { get; set; } = 1;
+    public LevelId Level { get; set; } = LevelId.First;
 
     public float MaxHp => Loadout.Stats.MaxHp;
+
+    /// <summary>The active pearl she holds (the last one taken; one at a time), used with F.</summary>
+    public ItemDef? Active => Loadout.Active;
+
+    /// <summary>How charged the active pearl is, 0 → 1 (ready). A new one comes charged.</summary>
+    public float ActiveCharge { get; set; } = 1f;
+
+    /// <summary>Experience (DESIGN-TOPDOWN §2.6): toward the next level, the level she is, and the skill points she has not spent yet.</summary>
+    public int Xp { get; set; }
+    public int XpLevel { get; set; } = 1;
+    public int Points { get; set; }
+    /// <summary>Her skill points, spent: how many on each modifier.</summary>
+    public Dictionary<OctoShoots.Core.Items.Stat, int> Skills { get; } = new();
+
+    /// <summary>The experience it takes to reach the next level.</summary>
+    public int XpNeeded => ExperienceTuning.Need(XpLevel);
+
+    /// <summary>Gains experience; every level it reaches is a skill point. Returns how many levels.</summary>
+    public int Gain(int xp)
+    {
+        int levels = 0;
+        Xp += xp;
+        while (Xp >= XpNeeded)
+        {
+            Xp -= XpNeeded;
+            XpLevel++;
+            Points++;
+            levels++;
+        }
+        return levels;
+    }
+
+    /// <summary>Spends a skill point on a modifier (more max HP comes filled).</summary>
+    public bool Spend(OctoShoots.Core.Items.Stat stat)
+    {
+        if (Points <= 0 || !OctoShoots.Core.Plane.Skills.All(Tuning).Any(s => s.Stat == stat)) return false;
+        Points--;
+        Skills[stat] = Skills.GetValueOrDefault(stat) + 1;
+        float max = MaxHp;
+        Rebuild();
+        Hp = System.MathF.Min(Hp + System.MathF.Max(MaxHp - max, 0f), MaxHp);
+        return true;
+    }
 
     public void Add(string itemId)
     {
         Items.Add(itemId);
         Rebuild();
+        if (Active?.Id == itemId) ActiveCharge = 1f;
     }
 
-    void Rebuild() => Loadout = Loadout.Build(Catalog, Items, Tuning);
+    /// <summary>Debug: takes a pearl away again (every copy). Her HP stays within the new maximum.</summary>
+    public bool Remove(string itemId)
+    {
+        if (Items.RemoveAll(id => id == itemId) == 0) return false;
+        Rebuild();
+        Hp = System.MathF.Min(Hp, MaxHp);
+        return true;
+    }
 
-    /// <summary>A pearl a treasure room may hold: a ported one the catalog knows and she does not have yet.</summary>
-    public bool CanOffer(string itemId) => Catalog is not null && Catalog.Contains(itemId) && !Items.Contains(itemId);
+    /// <summary>Rebuilds the loadout after her skill points were set from outside (a resumed save).</summary>
+    public void Refresh() => Rebuild();
+
+    void Rebuild() => Loadout = Loadout.Build(Catalog, Items, Tuning, OctoShoots.Core.Plane.Skills.Mods(Skills, Tuning));
+
+    /// <summary>
+    /// The achievements earned (the profile's, shared: one earned mid-run unlocks its pearl from then on). Locked pearls
+    /// are never offered.
+    /// </summary>
+    public ISet<string> Unlocked { get; set; } = new HashSet<string>();
+
+    /// <summary>
+    /// A pearl a room may hold: a ported one the catalog knows, unlocked, and either not held yet or not unique
+    /// (docs/PEARLS.md).
+    /// </summary>
+    public bool CanOffer(string itemId) => OfferWeight(itemId) > 0f;
+
+    /// <summary>
+    /// Picks one pearl to offer from a list, by offer weight: a pearl she holds a copy of is less likely. (With every
+    /// weight equal it is a plain uniform pick, as before.)
+    /// </summary>
+    public string Pick(IReadOnlyList<string> offer, Rng rng)
+    {
+        var weights = offer.Select(OfferWeight).ToList();
+        if (weights.All(w => w == weights[0])) return offer[rng.Int(offer.Count)];
+        float roll = rng.NextFloat() * weights.Sum();
+        for (int i = 0; i < offer.Count; i++)
+        {
+            roll -= weights[i];
+            if (roll < 0f) return offer[i];
+        }
+        return offer[^1];
+    }
+
+    /// <summary>How likely a pearl is to be offered: its weight, lower for each copy of a non-unique one she holds, 0 if it may not be.</summary>
+    public float OfferWeight(string itemId) =>
+        Catalog is not null && Catalog.TryGet(itemId, out var item) && ItemPools.IsUnlocked(item, Unlocked)
+            ? ItemPools.WeightFor(item, Items.Count(id => id == itemId)) : 0f;
 }

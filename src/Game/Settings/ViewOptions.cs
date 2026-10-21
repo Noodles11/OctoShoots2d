@@ -11,11 +11,32 @@ public sealed class ViewOptions
     /// <summary>Menus and banners cross-fade instead of moving, popping and splashing.</summary>
     [Tune("View")] public bool ReducedMotion = false;
     [Tune("View", 0f, 1f)] public float ShakeAmount = 0.5f;
+    /// <summary>Controller vibration: hits she lands, hits she takes, dashes and water currents.</summary>
+    [Tune("View")] public bool Vibration = true;
+    /// <summary>Camera zoom: 1.5 by default; above it closer, below it farther (CameraRig.MinZoom..MaxZoom, 1–2).</summary>
+    [Tune("View", 1f, 2f)] public float CameraZoom = 1.5f;
     [Tune("View", 10f, 80f)] public float MinimapRange = 32f;
     /// <summary>Frame-rate cap (0 = uncapped). Keeps the GPU cool; vsync caps it further on slower screens.</summary>
     [Tune("View", 0f, 240f)] public int MaxFps = 60;
+    /// <summary>
+    /// The 3D scene renders with at most this many lines' worth of pixels (a 16:9 screen this tall), upscaled with FSR
+    /// to the window; the HUD stays sharp. Keeps big screens cool (0 = always native).
+    /// </summary>
+    [Tune("View", 0f, 2160f)] public int MaxRenderHeight = 1080;
+    /// <summary>
+    /// New runs start in the tutorial (Depth 0) again. Offered only once she has passed it; until then every run starts
+    /// there anyway.
+    /// </summary>
+    public bool ReplayTutorial = false;
     /// <summary>Strength of sunlight under water: god rays, caustics and dappled light (0 turns them off).</summary>
     [Tune("Light", 0f, 2f)] public float SunLight = 1f;
+    /// <summary>
+    /// Her lantern and the reef's lights (springs, clam rooms, the Crack) cast shadows. Off is lighter on the GPU: light
+    /// then reaches through rock as it did, though her glow in the water still stops at the reef (that needs no GPU).
+    /// </summary>
+    [Tune("Light")] public bool LightShadows = true;
+    /// <summary>Whether lights made from now on cast shadows (set from the options when a run starts).</summary>
+    public static bool Shadows = true;
 }
 
 /// <summary>Loads and saves tuning and options as JSON in the user directory.</summary>

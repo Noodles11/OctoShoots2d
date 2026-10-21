@@ -1,0 +1,23 @@
+{
+  // Achievements (docs/ACHIEVEMENTS-PROPOSAL.md, DESIGN-TOPDOWN §8): each unlocks one pearl, which joins the offers
+  // from then on. Earned once per profile; a run on a custom seed never earns one. Checked on load: every pearl exists,
+  // names this achievement as its unlock, and no pearl is unlocked twice.
+  //   tone: the line's flavour on the banner (candy or dark); hint: how to earn it (the pause menu, while unearned).
+  "achievements": [
+    { "id": "big_bubble_energy", "title": "Big Bubble Energy", "tone": "candy", "pearl": "starfish_arm",
+      "line": "Fifteen bubbles walked into a fish. Only the bubbles walked out.",
+      "hint": "Free a foe at full health with one hit of a full bubble (15 merged)." },
+    { "id": "bubble_bath", "title": "Bubble Bath", "tone": "candy", "pearl": "mitosis",
+      "line": "Ten at once. Clementine is no longer a jellyfish. She is a jacuzzi.",
+      "hint": "Throw 10 or more bubbles in one volley." },
+    { "id": "shucked_in_fifteen", "title": "Shucked in Fifteen", "tone": "dark", "pearl": "giant_squid_eye",
+      "line": "She rehearsed a whole second phase. Nobody will ever see it.",
+      "hint": "Free a boss within 15 seconds of it landing." },
+    { "id": "untouchable", "title": "Untouchable", "tone": "dark", "pearl": "lucky_sea_glass",
+      "line": "Not a scratch. Somewhere in the dark, the reef is taking notes.",
+      "hint": "Dive on from a level without taking any damage on it." },
+    { "id": "hermit_hoarder", "title": "Hermit Hoarder", "tone": "dark", "pearl": "pirates_doubloon",
+      "line": "More shells than a hermit crab could live in. The hermit crabs have noticed.",
+      "hint": "Collect 100 shells on one level." }
+  ]
+}

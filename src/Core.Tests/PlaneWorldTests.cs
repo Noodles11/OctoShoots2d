@@ -11,7 +11,7 @@ namespace OctoShoots.Core.Tests;
 /// <summary>Plane-locked movement and heightfield collision (DESIGN-TOPDOWN §2.2, §4.5).</summary>
 public class PlaneWorldTests
 {
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
+    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), new LevelId(1, 2, 3)));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 
@@ -102,11 +102,13 @@ public class PlaneWorldTests
     {
         // Swim the shortest route to the rift: every step stays in open water and she gets there.
         var w = World();
+        // The rock alone: no pots (she would break them) in a narrow throat.
+        w.Vases.Clear();
         // A route with a body-width margin, as a player would swim it (not grazing every lip).
-        var path = LevelValidator.ShortestPath(w.Map, w.Map.Start.Position, w.Map.Rift.Position, clearance: 1f);
+        var path = LevelValidator.ShortestPath(w.Map, w.Map.Start.Position, w.Map.Exit.Position, clearance: 1f);
         Assert.NotEmpty(path);
         int target = 0, progress = 0;
-        for (int tick = 0; tick < 60 * 120 && Vector2.Distance(w.Player.Position, w.Map.Rift.Position) > 3f; tick++)
+        for (int tick = 0; tick < 60 * 120 && Vector2.Distance(w.Player.Position, w.Map.Exit.Position) > 3f; tick++)
         {
             // Steer a couple of cells ahead of the nearest point of the route.
             for (int i = progress; i < Math.Min(path.Count, progress + 12); i++)
@@ -116,15 +118,51 @@ public class PlaneWorldTests
             w.Step(new PlaneInput { Move = to.LengthSquared() > 1e-4f ? Vector2.Normalize(to) : Vector2.Zero });
             Assert.True(w.Clear(w.Player.Position, w.Radius));
         }
-        Assert.True(Vector2.Distance(w.Player.Position, w.Map.Rift.Position) <= 3f, $"she stopped at {w.Player.Position} (waypoint {target}/{path.Count} at {path[target]}, h {w.Map.HeightAt(w.Player.Position):0.00}, start {w.Map.Start.Position}, rift {w.Map.Rift.Position})");
+        Assert.True(Vector2.Distance(w.Player.Position, w.Map.Exit.Position) <= 3f, $"she stopped at {w.Player.Position} (waypoint {target}/{path.Count} at {path[target]}, h {w.Map.HeightAt(w.Player.Position):0.00}, start {w.Map.Start.Position}, rift {w.Map.Exit.Position})");
     }
 
     [Fact]
     public void WeakRockPlugsTheSecretCave()
     {
-        var w = World();
+        // A level with a secret (the tutorial's first always has one).
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Secrets > 0)), new Tuning());
         var rock = w.WeakRocks.First();
         Assert.False(w.Clear(rock.Center, w.Radius));
+    }
+
+    [Fact]
+    public void HerLightOnTheEmblemFillsItAndTheSealCrumbles()
+    {
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Secrets > 0)), new Tuning());
+        var seal = w.Seals.First();
+        Assert.False(w.Clear(seal.Rock.Center, w.Radius));
+        // A shot flying into the emblem from the canyon side: whatever its damage, it counts once.
+        var seen = new System.Collections.Generic.List<PlaneEventType>();
+        void Shoot(Vector2 aimAt, float damage)
+        {
+            var from = aimAt + seal.Facing * 1.2f;
+            w.Shots.Add(new PlaneShot { Position = from, Line = from, Velocity = -seal.Facing * 12f, Life = 1f, FromPlayer = true, Damage = damage, Radius = 0.2f });
+            for (int i = 0; i < 12; i++)
+            {
+                w.Step(default);
+                seen.AddRange(w.Events.Select(e => e.Type));
+            }
+        }
+        // Striking the seal far from its emblem (its back, inside the cave) does nothing.
+        var back = seal.Rock.Center - seal.Facing * (seal.Rock.Radius - 0.2f);
+        w.Shots.Add(new PlaneShot { Position = back - seal.Facing * 1.2f, Line = back, Velocity = seal.Facing * 12f, Life = 1f, FromPlayer = true, Damage = 10f, Radius = 0.2f });
+        for (int i = 0; i < 12; i++) w.Step(default);
+        Assert.Equal(0, seal.Hits);
+        for (int k = 0; k < SealTuning.Hits - 1; k++) Shoot(seal.Emblem, k == 0 ? 500f : 10f);
+        Assert.Equal(SealTuning.Hits - 1, seal.Hits);
+        Assert.False(seal.Open);
+        Assert.Contains(w.SealedCaves, c => c == seal.Rock.Cave);
+        Shoot(seal.Emblem, 10f);
+        Assert.True(seal.Open);
+        Assert.Contains(PlaneEventType.SealOpened, seen);
+        Assert.Equal(SealTuning.Hits, seen.Count(t => t == PlaneEventType.SealLit));
+        Assert.True(w.Clear(seal.Rock.Center, w.Radius), "the way in is open");
+        Assert.DoesNotContain(w.SealedCaves, c => c == seal.Rock.Cave);
     }
 
     [Fact]

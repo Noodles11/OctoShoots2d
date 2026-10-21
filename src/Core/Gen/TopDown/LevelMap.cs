@@ -8,9 +8,12 @@ namespace OctoShoots.Core.Gen.TopDown;
 
 // Map coordinates: X runs east, Y runs south (world X and world Z). North (−Y) is up on screen.
 
-/// <summary>A named place on the level (DESIGN-TOPDOWN §4.1 stage 1).</summary>
-/// <summary>Ambush: an open clearing where, the first time Clementine enters, mobs spawn around her and attack.</summary>
-public enum PoiKind { Start, ItemSpawn, Rift, Shop, Secret, CurseDen, TreasureCave, Ambush }
+/// <summary>
+/// A named place on the level (DESIGN-TOPDOWN §4.1 stage 1). Exit: the way down — a blue hole, or on a boss level the
+/// boss arena with the Crack across its floor. ShellCache: a guarded clearing of shells. Ambush: an open clearing where,
+/// the first time Clementine enters, mobs spawn around her and attack.
+/// </summary>
+public enum PoiKind { Start, ShellCache, Exit, Shop, Secret, CurseDen, TreasureCave, Ambush }
 
 public sealed class Poi
 {
@@ -38,6 +41,10 @@ public sealed class Corridor
     public float Width;
     /// <summary>For spurs: the POI it connects.</summary>
     public int Poi = -1;
+    /// <summary>A shortcut (a pass): a tunnel under the rock, roofed by <see cref="LevelMap.Roof"/>.</summary>
+    public bool Roofed;
+    /// <summary>While the level is built: the rock a pass bored away (grid index → height before), to fill it back if it gets no roof.</summary>
+    internal Dictionary<int, float>? Bored;
 
     public float HalfWidth => Width * 0.5f;
 
@@ -65,23 +72,40 @@ public sealed class Corridor
 /// <summary>An open crossing where two corridors meet (~14 m).</summary>
 public readonly record struct Plaza(Vector2 Center, float Radius);
 
+/// <summary>A chamber of the cave: on the main chain (start to way down), or a dead end (a branch with one tunnel).</summary>
+public readonly record struct CaveChamber(Vector2 At, float Radius, bool Main, bool DeadEnd);
 
-/// <summary>A deep: a canyon cut 4–8 m below 0, 8–14 m wide.</summary>
-public sealed class Trench
+/// <summary>
+/// A nave (DESIGN-TOPDOWN §4.9): a chamber off the main route (a side branch or a dead end), each holding something —
+/// the place in it or opening off it (<paramref name="Poi"/>, an index into the map's places), or else, at -1, a den of
+/// corrupted creatures whose freeing pays out (PlaneDens).
+/// </summary>
+public readonly record struct Nave(Vector2 At, float Radius, int Poi)
 {
-    public List<Vector2> Points = new();
-    public float Width;
-    public float Depth;
+    public bool Den => Poi < 0;
+}
 
-    public float DistanceToCentre(Vector2 p)
+
+/// <summary>
+/// The shaft down to the next level (DESIGN-TOPDOWN §4.6): an ellipse in the exit's floor (a disc for a blue hole, the
+/// Crack's fissure in a boss arena) where the floor gives way and the level below shows through.
+/// </summary>
+public readonly record struct Shaft(Vector2 Center, Vector2 Axis, float HalfLength, float HalfWidth)
+{
+    /// <summary>True inside the ellipse grown by <paramref name="margin"/> metres.</summary>
+    public bool Contains(Vector2 p, float margin = 0f)
     {
-        float best = float.MaxValue;
-        for (int i = 1; i < Points.Count; i++) best = MathF.Min(best, Geo.SegmentDistance(p, Points[i - 1], Points[i]));
-        return best;
+        Vector2 d = p - Center;
+        float a = Vector2.Dot(d, Axis) / (HalfLength + margin), b = Vector2.Dot(d, Geo.Perp(Axis)) / (HalfWidth + margin);
+        return a * a + b * b <= 1f;
     }
 }
 
-public enum CaveKind { Pocket, MultiChamber }
+/// <summary>
+/// Pocket: one chamber. MultiChamber: two or three, deeper ones leading back into the ridge. Tunnel (the curse den): a
+/// long, narrow, winding dead end, its chambers the points along it (each its half-width), the last its end chamber.
+/// </summary>
+public enum CaveKind { Pocket, MultiChamber, Tunnel }
 
 /// <summary>A cave hollowed out inside a mountain: floor under the swim level, roofed by the mountain (<see cref="LevelMap.Lid"/>), opening through its mouth.</summary>
 public sealed class CaveSite
@@ -95,7 +119,7 @@ public sealed class CaveSite
     public Vector2 Facing;
 }
 
-public enum CanopyKind { Arch, CaveRoof, Overhang }
+public enum CanopyKind { Arch, CaveRoof, Overhang, TunnelRoof }
 
 /// <summary>
 /// Something solid overhead, on the canopy layer above the swim band (DESIGN-TOPDOWN §3): it fades while
@@ -113,7 +137,7 @@ public sealed class Canopy
     public float Radius;
     public float Bottom;
     public float Top;
-    /// <summary>Arches: the corridor they span.</summary>
+    /// <summary>Arches: the corridor they span; a tunnel's roof: the corridor it roofs (all its pieces fade as one).</summary>
     public int Corridor = -1;
 
     public Vector2 EndA => Center - Axis * HalfLength;
@@ -137,7 +161,7 @@ public enum DecorKind
     SandChannel, GrassMeadow, Boulder, Bommie,
     SeaRod, SeaFan, TubeSponge,
     CliffCoral, EncrustingCoral, CrownGarden,
-    TrenchSponge, BiolumAccent,
+    BiolumAccent,
 }
 
 /// <summary>Cosmetic reef dressing, chosen by height band (DESIGN-TOPDOWN §4.1 stage 5). Never affects play.</summary>
@@ -169,12 +193,12 @@ public sealed class SpawnEntry
 }
 
 /// <summary>
-/// One generated level (DESIGN-TOPDOWN §4): a 150×150 m heightfield on a 1 m grid plus everything the generator
+/// One generated level (DESIGN-TOPDOWN §4): a 140×140 m heightfield on a 1 m grid plus everything the generator
 /// decided. Produced only by <see cref="TopDownGenerator"/>; the game reads it and never generates or scatters.
 /// </summary>
 public sealed class LevelMap
 {
-    public const int Size = 150;
+    public const int Size = 140;
     public const int Samples = Size + 1;
 
     /// <summary>Where the bell is drawn: floating just above the swim level (0), which every height is measured from.</summary>
@@ -186,12 +210,28 @@ public sealed class LevelMap
     /// <summary>Width of the impassable reef rim around the square.</summary>
     public const float RimWidth = 8f;
 
-    public ulong Seed;
-    public int Depth;
-    public int Reef;
-    public int Attempt;
+    /// <summary>How far below this level the next one lies (swim plane to swim plane, metres).</summary>
+    public const float LevelDrop = 8f;
+    /// <summary>The bottom of the shaft: the next level's seabed.</summary>
+    public const float ShaftBottom = -LevelDrop - 1f;
 
-    /// <summary>Heights in metres at the 151×151 grid points, row-major (index = y * Samples + x).</summary>
+    public ulong Seed;
+    public LevelId Id;
+    public int Cycle => Id.Cycle;
+    public int Depth => Id.Depth;
+    public int Level => Id.Level;
+    public int Attempt;
+    /// <summary>The exit is an arena round the Crack: the boss stands in it, and the Crack opens when she is freed.</summary>
+    public bool HasBoss;
+    /// <summary>The tutorial's open rift: the arena holds no boss, and the Crack stands open from the start.</summary>
+    public bool Rift;
+    public float Menace;
+    public ulong EntryStampSeed, ExitStampSeed;
+    public bool EntryFromArena;
+    /// <summary>Where the floor gives way to the level below.</summary>
+    public Shaft Shaft;
+
+    /// <summary>Heights in metres at the 141×141 grid points, row-major (index = y * Samples + x).</summary>
     public float[] Heights = new float[Samples * Samples];
 
     /// <summary>
@@ -210,10 +250,23 @@ public sealed class LevelMap
     /// <summary>The cave roof's height at a grid point, or NaN where no cave is.</summary>
     public float LidAt(int x, int y) => Lid[y * Samples + x];
 
+    /// <summary>
+    /// The rock over the shortcut tunnels (NaN elsewhere): over a pass, the ridge it was cut through as it stood; over a
+    /// route shortcut, the rock either side carried on over it. Drawn as rock until Clementine is near.
+    /// </summary>
+    public float[] Roof = NewLid();
+
+    public float RoofAt(int x, int y) => Roof[y * Samples + x];
+
     public List<Poi> Pois = new();
     public List<Corridor> Corridors = new();
     public List<Plaza> Plazas = new();
-    public List<Trench> Trenches = new();
+    /// <summary>The cave's open chambers, with their roles (the level templates' anchors read them).</summary>
+    public List<CaveChamber> Chambers = new();
+    /// <summary>The chambers off the main route, each with its place or its den.</summary>
+    public List<Nave> Naves = new();
+    /// <summary>The level's template (null: the general rules alone, as in the tutorial).</summary>
+    public LevelTemplate? Template;
     public List<CaveSite> Caves = new();
     public List<Canopy> Canopies = new();
     public List<WeakRock> WeakRocks = new();
@@ -223,7 +276,7 @@ public sealed class LevelMap
     public List<SpawnEntry> Spawns = new();
 
     public Poi Start => Pois.Find(p => p.Kind == PoiKind.Start)!;
-    public Poi Rift => Pois.Find(p => p.Kind == PoiKind.Rift)!;
+    public Poi Exit => Pois.Find(p => p.Kind == PoiKind.Exit)!;
 
     public float this[int x, int y]
     {
@@ -283,11 +336,21 @@ public sealed class LevelMap
             w.Write(v.X);
             w.Write(v.Y);
         }
-        w.Write(1); // format version
+        w.Write(2); // format version
         w.Write(Seed);
+        w.Write(Cycle);
         w.Write(Depth);
-        w.Write(Reef);
+        w.Write(Level);
         w.Write(Attempt);
+        w.Write(HasBoss);
+        w.Write(Rift);
+        w.Write(Menace);
+        w.Write(EntryStampSeed);
+        w.Write(ExitStampSeed);
+        V(Shaft.Center);
+        V(Shaft.Axis);
+        w.Write(Shaft.HalfLength);
+        w.Write(Shaft.HalfWidth);
         foreach (float h in Heights) w.Write(h);
         foreach (float h in Lid) w.Write(h);
         w.Write(Pois.Count);
@@ -313,14 +376,6 @@ public sealed class LevelMap
         {
             V(p.Center);
             w.Write(p.Radius);
-        }
-        w.Write(Trenches.Count);
-        foreach (var t in Trenches)
-        {
-            w.Write(t.Width);
-            w.Write(t.Depth);
-            w.Write(t.Points.Count);
-            foreach (var p in t.Points) V(p);
         }
         w.Write(Caves.Count);
         foreach (var c in Caves)

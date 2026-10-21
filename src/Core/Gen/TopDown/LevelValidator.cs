@@ -11,66 +11,53 @@ namespace OctoShoots.Core.Gen.TopDown;
 /// </summary>
 public static class LevelValidator
 {
-    public const float MinRiftGeodesic = 130f;
+    public const float MinExitGeodesic = 55f;
+    /// <summary>The longest spur from the network to a place.</summary>
+    public const float MaxSpur = 34f;
 
     /// <summary>Null when the level keeps every rule; otherwise the first one it breaks.</summary>
     public static string? Validate(LevelMap map)
     {
         int Count(PoiKind k) => map.Pois.Count(p => p.Kind == k);
-        if (Count(PoiKind.Start) != 1 || Count(PoiKind.Rift) != 1 || Count(PoiKind.ItemSpawn) != 1) return "missing start, rift or item spawn";
-        if (Count(PoiKind.Shop) != 1 || Count(PoiKind.TreasureCave) != 1) return "missing shop or treasure cave";
-        if (Count(PoiKind.Secret) is < 1 or > 2 || Count(PoiKind.CurseDen) > 1 || Count(PoiKind.Ambush) is < 2 or > 4) return "optional POI counts out of range";
+        if (Count(PoiKind.Start) != 1 || Count(PoiKind.Exit) != 1) return "missing start or exit";
+        if (Count(PoiKind.TreasureCave) > 2 || Count(PoiKind.Shop) > 1 || Count(PoiKind.Secret) > 1 || Count(PoiKind.CurseDen) > 1
+            || Count(PoiKind.ShellCache) > 1 || Count(PoiKind.Ambush) > LevelStocking.MaxAmbushes) return "optional POI counts out of range";
 
         // Scatter rules.
         var start = map.Start;
-        var rift = map.Rift;
-        var others = map.Pois.Where(p => p.Kind is not (PoiKind.Start or PoiKind.Rift)).ToList();
+        var exit = map.Exit;
+        var others = map.Pois.Where(p => p.Kind is not (PoiKind.Start or PoiKind.Exit)).ToList();
+        if (others.Count + (map.HasBoss ? 1 : 0) > LevelStocking.MaxPlaces) return $"{others.Count} places (want at most {LevelStocking.MaxPlaces})";
         for (int i = 0; i < others.Count; i++)
         {
-            if (Vector2.Distance(others[i].Position, rift.Position) < 40f) return $"{others[i].Kind} inside the rift's exclusion zone";
+            if (Vector2.Distance(others[i].Position, exit.Position) < CaveLayout.FromExit) return $"{others[i].Kind} inside the exit's exclusion zone";
+            if (Vector2.Distance(others[i].Position, start.Position) < CaveLayout.FromStart) return $"{others[i].Kind} too close to the start";
             for (int j = i + 1; j < others.Count; j++)
-                if (Vector2.Distance(others[i].Position, others[j].Position) < 25f) return $"{others[i].Kind} and {others[j].Kind} closer than 25 m";
+                if (Vector2.Distance(others[i].Position, others[j].Position) < CaveLayout.Spacing) return $"{others[i].Kind} and {others[j].Kind} closer than {CaveLayout.Spacing:0} m";
         }
-        var early = others.Where(p => Vector2.Distance(p.Position, start.Position) <= 35f).ToList();
-        if (early.Count != 1 || Vector2.Distance(early[0].Position, start.Position) < 20f) return $"{early.Count} POIs in the early band (want exactly one at 20–35 m)";
+        // One place sits early, unless the shell cache (which keeps to the middle of the way) is the level's only place.
+        var early = others.Where(p => p.Early).ToList();
+        if (others.Any(p => p.Kind != PoiKind.ShellCache) && (early.Count != 1 || Vector2.Distance(early[0].Position, start.Position) > CaveLayout.EarlyMax)) return $"{early.Count} early POIs (want exactly one, {CaveLayout.FromStart:0}–{CaveLayout.EarlyMax:0} m from the start)";
 
-        // Path network.
-        var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
-        if (mains.Count is < 3 or > 5) return $"{mains.Count} corridors (want 3–5)";
-        if (mains.Any(c => c.Width is < 6f or > 10f)) return "a corridor width outside 6–10 m";
-        if (map.Plazas.Count is < 2 or > 4) return $"{map.Plazas.Count} plazas (want 2–4)";
-        float sideBySide = LongestParallelRun(map);
-        if (sideBySide > MaxSideBySide) return $"two routes run side by side for {sideBySide:0} m (want ≤ {MaxSideBySide:0} m)";
+        // Tunnels: a room's spur stays short, a pass narrow, and nothing on a tunnel's middle above the swim level.
         foreach (var spur in map.Corridors.Where(c => c.Kind == CorridorKind.Spur))
-            if (spur.Length > 20f) return $"a spur of {spur.Length:0.0} m (want ≤ 20 m)";
-        var passes = map.Corridors.Where(c => c.Kind == CorridorKind.Pass).ToList();
-        if (passes.Count == 0) return "no passes braid the network";
-        if (passes.Any(c => c.Width is < 3f or > 5f)) return "a pass width outside 3–5 m";
-
-        // Nothing above the swim level on a path: water at least a metre deep everywhere on it.
+            if (spur.Length > MaxSpur) return $"a spur of {spur.Length:0.0} m (want ≤ {MaxSpur:0} m)";
+        if (map.Corridors.Any(c => c.Kind == CorridorKind.Pass && c.Width is < 3f or > 5f)) return "a pass width outside 3–5 m";
         string? flat = CheckCorridorFloors(map);
         if (flat is not null) return flat;
 
-        // Topography.
-        float raised = AboveFraction(map);
-        if (raised > MaxAbove) return $"{raised:P0} of the interior above the swim level (want ≤ {MaxAbove:P0})";
-        // The labyrinth: side canyons branch off the routes.
-        int sides = map.Corridors.Count(c => c.Kind == CorridorKind.Side);
-        if (sides < MinSideCanyons) return $"{sides} side canyons (want ≥ {MinSideCanyons})";
-        // The boss arena's rift is the deepest point of the level.
-        if (Vector2.Distance(DeepestPoint(map), map.Rift.Position) > map.Rift.Radius) return "the rift is not the deepest point";
+        // Topography: the shaft is the only deep water (the deepest point of the level lies in it).
+        if (!map.Shaft.Contains(DeepestPoint(map), 1f)) return "the shaft is not the deepest point";
         float peak = InteriorPeak(map);
         if (peak is < 3f or > 14f) return $"highest peak {peak:0.0} m (want 3–14 m)";
-        if (map.Trenches.Count is < 1 or > 3) return $"{map.Trenches.Count} trenches (want 1–3)";
-        if (map.Trenches.Any(t => t.Width is < 8f or > 14f || t.Depth is < 3f or > 7f)) return "a trench outside 8–14 m wide or 3–7 m deep";
 
         // Arches across corridors.
         var arches = map.Canopies.Where(c => c.Kind == CanopyKind.Arch).ToList();
-        if (arches.Count is < 1 or > 5) return $"{arches.Count} arches (want 1–5)";
+        if (arches.Count > TopDownGenerator.ArchesCap) return $"{arches.Count} arches (want at most {TopDownGenerator.ArchesCap})";
         foreach (var arch in arches)
         {
             float span = arch.HalfLength * 2f;
-            if (span is < 10f or > 20f) return $"an arch spanning {span:0.0} m (want 10–20 m)";
+            if (span < TopDownGenerator.ArchSpanMin || span > TopDownGenerator.ArchSpanMax) return $"an arch spanning {span:0.0} m (want {TopDownGenerator.ArchSpanMin:0}–{TopDownGenerator.ArchSpanMax:0} m)";
             if (!ArchCrossesCorridor(map, arch)) return "an arch does not span its corridor";
         }
 
@@ -80,28 +67,34 @@ public static class LevelValidator
         {
             if (!CaveMouthOpens(map, caves[i])) return $"the {map.Pois[caves[i].Poi].Kind} cave's mouth faces rock";
             for (int j = i + 1; j < caves.Count; j++)
-                if (Vector2.Distance(map.Pois[caves[i].Poi].Position, map.Pois[caves[j].Poi].Position) < 30f) return "two caves closer than 30 m";
+                if (Vector2.Distance(map.Pois[caves[i].Poi].Position, map.Pois[caves[j].Poi].Position) < 25f) return "two caves closer than 25 m";
         }
 
         // Loot under the floor.
-        if (map.Pockets.Count is < 4 or > 6) return $"{map.Pockets.Count} sealed pockets (want 4–6)";
-        if (map.Coins.Count is < 8 or > 12) return $"{map.Coins.Count} buried coins (want 8–12)";
+        if (map.Pockets.Count < TopDownGenerator.PocketsMin || map.Pockets.Count > TopDownGenerator.PocketsMax)
+            return $"{map.Pockets.Count} sealed pockets (want {TopDownGenerator.PocketsMin}–{TopDownGenerator.PocketsMax})";
+        if (map.Coins.Count < TopDownGenerator.CoinsMin || map.Coins.Count > TopDownGenerator.CoinsMax)
+            return $"{map.Coins.Count} buried coins (want {TopDownGenerator.CoinsMin}–{TopDownGenerator.CoinsMax})";
 
-        // Reachability and the rift's distance.
+        // Reachability and the exit's distance.
         var dist = Distances(map, start.Position);
         foreach (var poi in map.Pois)
             if (float.IsPositiveInfinity(DistanceAt(dist, poi.Position))) return $"the {poi.Kind} cannot be reached from the start";
-        float swim = OpenFraction(map);
-        if (swim < MinOpen) return $"only {swim:P0} of the level is free-swimming water (want ≥ {MinOpen:P0})";
-        float geodesic = DistanceAt(dist, rift.Position);
-        if (geodesic < MinRiftGeodesic) return $"the rift is only {geodesic:0} m from the start (want ≥ {MinRiftGeodesic:0} m)";
+        // The playable area: the water she can reach.
+        int area = WaterArea(map);
+        if (area is < (int)AreaMin or > (int)AreaMax) return $"{area} m² of water to swim (want {AreaMin:0}–{AreaMax:0} m²)";
+        float geodesic = DistanceAt(dist, exit.Position);
+        if (geodesic < MinExitGeodesic) return $"the exit is only {geodesic:0} m from the start (want ≥ {MinExitGeodesic:0} m)";
         return null;
     }
 
     /// <summary>Water under a path is at least this deep.</summary>
     public const float PathClearance = 1f;
 
-    /// <summary>Samples across every corridor: the seabed lies at least <see cref="PathClearance"/> below the swim level.</summary>
+    /// <summary>How far either side of a tunnel's centre line its floor is checked (its walls are craggy past that).</summary>
+    public const float PathCore = 0.6f;
+
+    /// <summary>Samples along every tunnel's middle: the seabed lies at least <see cref="PathClearance"/> below the swim level.</summary>
     public static string? CheckCorridorFloors(LevelMap map)
     {
         foreach (var c in map.Corridors)
@@ -110,9 +103,9 @@ public static class LevelValidator
             {
                 Vector2 tangent = Geo.Normalize(c.Points[Math.Min(i + 1, c.Points.Count - 1)] - c.Points[Math.Max(i - 1, 0)], Vector2.UnitX);
                 Vector2 nrm = Geo.Perp(tangent);
-                for (float k = -0.95f; k <= 0.951f; k += 0.19f)
+                for (float k = -1f; k <= 1.01f; k += 0.5f)
                 {
-                    Vector2 p = c.Points[i] + nrm * (k * c.HalfWidth);
+                    Vector2 p = c.Points[i] + nrm * (k * MathF.Min(PathCore, c.HalfWidth));
                     if (!InSquare(p)) continue;
                     float h = map.HeightAt(p);
                     if (h > -PathClearance) return $"a {c.Kind} corridor rises to {h:0.00} m at ({p.X:0.0}, {p.Y:0.0})";
@@ -122,72 +115,38 @@ public static class LevelValidator
         return null;
     }
 
-    /// <summary>Share of the square inside the rim that is free-swimming water reachable from the start.</summary>
-    public static float OpenFraction(LevelMap map)
-    {
-        var dist = Distances(map, map.Start.Position);
-        int margin = (int)MathF.Ceiling(LevelMap.RimWidth);
-        int open = 0, total = 0;
-        for (int y = margin; y < N - 1 - margin; y++)
-        for (int x = margin; x < N - 1 - margin; x++)
-        {
-            total++;
-            if (float.IsFinite(dist[y * N + x])) open++;
-        }
-        return open / (float)total;
-    }
+    /// <summary>The playable area rule (docs/CAVEGEN.md): reachable water between these (m²).</summary>
+    public const float AreaMin = CaveLayout.AreaMin, AreaMax = CaveLayout.AreaMax;
 
-    /// <summary>Two routes closer than this (centre lines) leave no ridge between them: they read as one wide lane.</summary>
-    public const float SideBySideGap = 16f;
-    /// <summary>How long two routes may run that close away from where they meet.</summary>
-    public const float MaxSideBySide = 30f;
-
-    /// <summary>
-    /// The longest stretch (metres) of any main corridor that runs alongside another, its centre line within
-    /// <paramref name="near"/> of the other's, away from where they meet (start, rift, plazas).
-    /// </summary>
-    public static float LongestParallelRun(LevelMap map, float near = SideBySideGap)
+    /// <summary>The playable area: grid points under the swim level joined (4-way) to the start's, in m².</summary>
+    public static int WaterArea(LevelMap map)
     {
-        var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
-        float worst = 0f;
-        foreach (var c in mains)
+        const int S = LevelMap.Samples;
+        var (sx, sy) = ((int)MathF.Round(map.Start.Position.X), (int)MathF.Round(map.Start.Position.Y));
+        var seen = new bool[S * S];
+        var stack = new Stack<int>();
+        if (map[sx, sy] > LevelMap.BlockHeight) return 0;
+        stack.Push(sy * S + sx);
+        seen[sy * S + sx] = true;
+        int area = 0;
+        while (stack.Count > 0)
         {
-            float run = 0f;
-            for (int i = 1; i < c.Points.Count; i++)
+            int i = stack.Pop(), x = i % S, y = i / S;
+            area++;
+            foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
             {
-                var p = c.Points[i];
-                bool meeting = Vector2.Distance(p, map.Start.Position) < 24f || Vector2.Distance(p, map.Rift.Position) < 26f
-                    || map.Plazas.Any(z => Vector2.Distance(z.Center, p) < 18f);
-                bool beside = !meeting && mains.Any(o => o != c && o.DistanceToCentre(p) < near);
-                run = beside ? run + Vector2.Distance(c.Points[i - 1], p) : 0f;
-                worst = MathF.Max(worst, run);
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= S || ny >= S) continue;
+                int j = ny * S + nx;
+                if (seen[j] || map[nx, ny] > LevelMap.BlockHeight) continue;
+                seen[j] = true;
+                stack.Push(j);
             }
         }
-        return worst;
+        return area;
     }
 
     static bool InSquare(Vector2 p) => p.X >= 0f && p.Y >= 0f && p.X <= LevelMap.Size && p.Y <= LevelMap.Size;
-
-    /// <summary>The highest ground inside the rim.</summary>
-    public const int MinSideCanyons = 4;
-    /// <summary>At least this share of the interior is water reachable from the start.</summary>
-    public const float MinOpen = 0.5f;
-
-    /// <summary>At most this share of the interior (inside the rim) stands above the swim level.</summary>
-    public const float MaxAbove = 0.4f;
-
-    /// <summary>Share of the interior (inside the rim) whose terrain stands above the swim level.</summary>
-    public static float AboveFraction(LevelMap map)
-    {
-        int lo = (int)LevelMap.RimWidth, hi = LevelMap.Size - lo, above = 0, total = 0;
-        for (int y = lo; y <= hi; y++)
-        for (int x = lo; x <= hi; x++)
-        {
-            total++;
-            if (map[x, y] > LevelMap.BlockHeight) above++;
-        }
-        return above / (float)total;
-    }
 
     /// <summary>The lowest grid point inside the rim.</summary>
     public static Vector2 DeepestPoint(LevelMap map)
@@ -205,6 +164,7 @@ public static class LevelValidator
         return at;
     }
 
+    /// <summary>The highest ground inside the rim.</summary>
     public static float InteriorPeak(LevelMap map)
     {
         float best = float.MinValue;

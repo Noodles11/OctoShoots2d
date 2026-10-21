@@ -45,6 +45,7 @@ public sealed class StatBlock
         s[Stat.BubbleRegrow] = 1f;
         s[Stat.BubblesPerThrow] = 1f;
         s[Stat.ActiveRecharge] = 1f;
+        s[Stat.BubbleHover] = 1f;
         return s;
     }
 
@@ -68,6 +69,7 @@ public sealed class StatBlock
         this[Stat.BubbleRegrow] = Math.Clamp(this[Stat.BubbleRegrow], 0.25f, 4f);
         this[Stat.BubblesPerThrow] = MathF.Round(Math.Clamp(this[Stat.BubblesPerThrow], 1f, 6f));
         this[Stat.ActiveRecharge] = Math.Clamp(this[Stat.ActiveRecharge], 0.25f, 4f);
+        this[Stat.BubbleHover] = Math.Clamp(this[Stat.BubbleHover], 0.25f, 4f);
     }
 }
 
@@ -90,23 +92,37 @@ public sealed class Loadout
     public HashSet<string> Synergies { get; } = new();
     public HashSet<string> Transformations { get; } = new();
     public ItemDef? Active { get; private init; }
+    /// <summary>How many copies of each pearl she holds.</summary>
+    public Dictionary<string, int> Copies { get; } = new();
+
+    public int Count(string itemId) => Copies.GetValueOrDefault(itemId);
 
     public bool Has(string synergyOrTransformation) =>
         Synergies.Contains(synergyOrTransformation) || Transformations.Contains(synergyOrTransformation);
 
-    public static Loadout Empty(Tuning tuning)
+    public static Loadout Empty(Tuning tuning, IEnumerable<StatMod>? extra = null)
     {
         var stats = StatBlock.Base(tuning);
-        stats.Apply(Array.Empty<StatMod>());
+        stats.Apply(extra ?? Array.Empty<StatMod>());
         return new Loadout { Stats = stats };
     }
 
-    public static Loadout Build(ItemCatalog? catalog, IReadOnlyList<string> itemIds, Tuning tuning)
+    /// <summary>The pearls' loadout, with any further stat changes (her skill points) added among the pearls' own.</summary>
+    public static Loadout Build(ItemCatalog? catalog, IReadOnlyList<string> itemIds, Tuning tuning, IEnumerable<StatMod>? extra = null)
     {
-        if (catalog is null || itemIds.Count == 0) return Empty(tuning);
+        if (catalog is null || itemIds.Count == 0) return Empty(tuning, extra);
 
         var owned = itemIds.Where(catalog.Contains).Select(id => catalog[id]).ToList();
-        var bundles = new List<EffectBundle>(owned);
+        // Each pearl once; an extra copy of a non-unique one adds its Stack (or the whole pearl again), and an extra
+        // copy of a unique one (never offered, but a debug grant or an old save could hold one) adds nothing.
+        var bundles = new List<EffectBundle>();
+        var copies = new Dictionary<string, int>();
+        foreach (var item in owned)
+        {
+            int n = copies[item.Id] = copies.GetValueOrDefault(item.Id) + 1;
+            if (n == 1) bundles.Add(item);
+            else if (!item.Unique) bundles.Add(item.Stack ?? item);
+        }
 
         var ownedIds = owned.Select(i => i.Id).ToHashSet();
         var synergies = catalog.Synergies.Where(s => s.Requires.All(ownedIds.Contains)).ToList();
@@ -117,7 +133,7 @@ public sealed class Loadout
         bundles.AddRange(transformations);
 
         var stats = StatBlock.Base(tuning);
-        stats.Apply(bundles.SelectMany(b => b.Stats));
+        stats.Apply(bundles.SelectMany(b => b.Stats).Concat(extra ?? Array.Empty<StatMod>()));
 
         var shot = new ShotSpec();
         foreach (var b in bundles)
@@ -136,6 +152,7 @@ public sealed class Loadout
             foreach (var f in b.Flags) loadout.Flags.Add(f);
         }
         foreach (var s in synergies) loadout.Synergies.Add(s.Id);
+        foreach (var (id, n) in copies) loadout.Copies[id] = n;
         foreach (var t in transformations) loadout.Transformations.Add(t.Id);
         return loadout;
     }

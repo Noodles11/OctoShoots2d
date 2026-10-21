@@ -1,17 +1,22 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using OctoShoots.Core.Gen.TopDown;
+using OctoShoots.Core.Items;
 using OctoShoots.Core.Plane;
 using OctoShoots.Core.Run;
 using Xunit;
 
 namespace OctoShoots.Core.Tests;
 
-/// <summary>Placeholder plane combat: Clementine's shots, the shooting-dot mob, its spawns, and the rift's gateway.</summary>
+/// <summary>Plane combat: Clementine's shots, the pufferlings (corrupted and healthy), their spawns, and the dive down the hole.</summary>
 public class PlaneCombatTests
 {
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
+    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), new LevelId(1, 2, 3)));
+    /// <summary>A level on the general rules with an ambush (a template may forbid them).</summary>
+    static readonly Lazy<LevelMap> WithAmbush = new(() => TestLevels.Get(TestLevels.Find(p => TestLevels.General(p) && p.Ambushes > 0 && !p.HasBoss && p.Id.Depth > LevelPlan.Tutorial)));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 
@@ -19,7 +24,7 @@ public class PlaneCombatTests
     public void EveryLevelHasMobSpawnsClearOfTheStart()
     {
         var w = World();
-        Assert.InRange(w.Mobs.Count, 1, PlaneCombatTuning.MaxMobs);
+        Assert.InRange(w.Mobs.Count, 1, (int)(PlaneCombatTuning.MaxMobs * (1f + 0.4f * w.Menace)));
         foreach (var m in w.Mobs)
         {
             Assert.True(Vector2.Distance(m.Position, w.Map.Start.Position) >= PlaneCombatTuning.MobStartClearance);
@@ -45,55 +50,235 @@ public class PlaneCombatTests
             w.Step(new PlaneInput { Aim = aim.LengthSquared() > 1e-4f ? Vector2.Normalize(aim) : Vector2.UnitX, Fire = true });
             defeated = w.Events.Any(e => e.Type == PlaneEventType.MobDefeated);
         }
-        Assert.True(defeated, "three shots should defeat a mob");
+        Assert.True(defeated, "six shots should defeat a mob");
         Assert.False(mob.Alive);
+        // Freed: a healthy pufferling where it was, which swims off.
+        var freed = Assert.Single(w.Fish, f => f.Freed);
+        Assert.True(Vector2.Distance(freed.Position, mob.Position) < 1.5f);
         // Long after, it is still down.
         for (int i = 0; i < 60 * 30; i++) w.Step(default);
         Assert.False(mob.Alive);
         Assert.Equal(1, w.Mobs.Count(m => !m.Alive));
     }
 
-    [Fact]
-    public void AMobNoticesHerFollowsAndShoots()
+    /// <summary>A pufferling alone with her, the others freed: she waits this far from it, in plain sight.</summary>
+    static (PlaneWorld W, PlaneMob Mob) Alone(float distance)
     {
         var w = World();
-        var mob = w.Mobs[0];
-        var start = mob.Position;
-        w.Player.Position = w.Player.PrevPosition = FindOpen(w, mob.Position, 10f);
-        bool hit = false;
-        for (int i = 0; i < 60 * 8; i++)
+        // The first pufferling with open water toward her and room behind it to back away; the others freed.
+        var mob = w.Mobs.FirstOrDefault(m => Roomy(w, m.Position, distance) is not null) ?? w.Mobs[0];
+        foreach (var m in w.Mobs.Where(m => m != mob)) m.Hp = 0f;
+        // Nothing to heal her there (a light spring, a light orb), so what she takes is what shows.
+        w.Springs.Clear();
+        w.Hearts.Clear();
+        w.Player.Position = w.Player.PrevPosition = Roomy(w, mob.Position, distance) ?? FindOpen(w, mob.Position, distance);
+        return (w, mob);
+    }
+
+    /// <summary>Her spot this far from a mob, in its sight, with open water round the mob and a 1.6 m-wide channel 4 m behind it; null when none.</summary>
+    static Vector2? Roomy(PlaneWorld w, Vector2 from, float distance)
+    {
+        for (int i = 0; i < 64; i++)
         {
-            w.Step(default);
-            hit |= w.Events.Any(e => e.Type == PlaneEventType.PlayerHit);
+            var dir = new Vector2(MathF.Cos(i * MathF.Tau / 64f), MathF.Sin(i * MathF.Tau / 64f));
+            var p = from + dir * distance;
+            // Open water all round it too, so a ring of needles flies clear.
+            bool ring = Enumerable.Range(0, 8).All(k => w.Clear(from + new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)) * 2.5f, 0.6f));
+            if (ring && w.Clear(p, w.Radius + 0.3f) && w.LineOfSight(from, p) && Enumerable.Range(1, 4).All(k => w.Clear(from - dir * k, 1.6f))) return p;
         }
-        Assert.True(mob.Aggro);
-        Assert.True(Vector2.Distance(mob.Position, w.Player.Position) < Vector2.Distance(start, w.Player.Position), "it closes in");
-        Assert.True(hit || w.Player.Hp < PlaneCombatTuning.PlayerMaxHp, "its shots reach her");
+        return null;
     }
 
     [Fact]
-    public void AMobFarAwayStaysPut()
+    public void APufferlingFacesHerBlowsUpAndFiresEightNeedlesInARing()
+    {
+        var (w, mob) = Alone(6f);
+        // No pots in the way (they stop needles).
+        w.Vases.Clear();
+        int swellAt = -1, firedAt = -1;
+        List<PlaneShot> needles = new();
+        for (int i = 0; i < 60 * 6 && firedAt < 0; i++)
+        {
+            w.Player.Hp = PlaneCombatTuning.PlayerMaxHp;
+            int before = w.Shots.Count;
+            w.Step(default);
+            if (swellAt < 0 && w.Events.Any(e => e.Type == PlaneEventType.PufferSwells)) swellAt = i;
+            if (w.Events.Any(e => e.Type == PlaneEventType.NeedlesFired))
+            {
+                firedAt = i;
+                needles = w.Shots.Where(s => s.Needle).ToList();
+            }
+        }
+        Assert.True(mob.Aggro);
+        Assert.True(swellAt >= 0 && firedAt > swellAt, "it blows up, then fires");
+        // The telegraph: 0.8 s at Depth 1 (never under 0.45 s); fully blown up when it fires.
+        Assert.InRange((firedAt - swellAt) * PlaneWorld.Dt, 0.75f, 0.85f);
+        Assert.Equal(1f, mob.Inflate, 3);
+        Assert.Equal(0f, mob.Spines);
+        // Eight, evenly round it, a little faster than her bubbles are thrown.
+        Assert.Equal(PufferlingTuning.Needles, needles.Count);
+        var angles = needles.Select(n => MathF.Atan2(n.Velocity.Y, n.Velocity.X)).OrderBy(a => a).ToList();
+        for (int k = 1; k < angles.Count; k++) Assert.Equal(MathF.Tau / 8f, angles[k] - angles[k - 1], 3);
+        Assert.All(needles, n => Assert.True(n.Velocity.Length() >= PufferlingTuning.NeedleSpeed));
+    }
+
+    [Fact]
+    public void AfterFiringItBacksAwayShrinksAndRegrowsItsSpines()
+    {
+        var (w, mob) = Alone(6f);
+        for (int i = 0; i < 60 * 6 && !w.Events.Any(e => e.Type == PlaneEventType.NeedlesFired); i++)
+        {
+            w.Player.Hp = PlaneCombatTuning.PlayerMaxHp;
+            w.Step(default);
+        }
+        float near = Vector2.Distance(mob.Position, w.Player.Position);
+        for (int i = 0; i < (int)((PufferlingTuning.RoundSeconds + PufferlingTuning.Cooldown - 0.2f) * 60f); i++)
+        {
+            w.Player.Hp = PlaneCombatTuning.PlayerMaxHp;
+            w.Step(default);
+        }
+        Assert.Equal(PufferState.Cooldown, mob.State);
+        Assert.True(Vector2.Distance(mob.Position, w.Player.Position) > near + 1.5f, "it backs away");
+        Assert.Equal(0f, mob.Inflate, 3);
+        Assert.Equal(1f, mob.Spines, 3);
+    }
+
+    [Fact]
+    public void EachRingOfNeedlesIsTurnedAtRandom()
+    {
+        var (w, mob) = Alone(6f);
+        var turns = new List<float>();
+        for (int i = 0; i < 60 * 20 && turns.Count < 3; i++)
+        {
+            w.Player.Hp = PlaneCombatTuning.PlayerMaxHp;
+            w.Step(default);
+            foreach (var e in w.Events.Where(e => e.Type == PlaneEventType.NeedlesFired)) turns.Add(MathF.Atan2(e.Direction.Y, e.Direction.X));
+        }
+        Assert.Equal(3, turns.Count);
+        Assert.True(turns.Distinct().Count() == 3, "never the same ring twice in a row");
+    }
+
+    [Fact]
+    public void OutOfReachItDriftsCloser()
+    {
+        var (w, mob) = Alone(PufferlingTuning.NoticeRange - 0.5f);
+        float start = Vector2.Distance(mob.Position, w.Player.Position);
+        for (int i = 0; i < 60; i++) w.Step(default);
+        Assert.True(mob.Aggro);
+        Assert.True(Vector2.Distance(mob.Position, w.Player.Position) < start - 0.4f, "it drifts toward her");
+    }
+
+    [Fact]
+    public void NeedlesPopBubblesAndFlyOn()
+    {
+        var w = World();
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        var at = FindOpen(w, w.Player.Position, 4f);
+        var needle = new PlaneShot { Position = at, Velocity = Vector2.UnitX * PufferlingTuning.NeedleSpeed, Life = 1f, Needle = true, Radius = PufferlingTuning.NeedleRadius };
+        var bubble = new PlaneShot { Position = at + Vector2.UnitX * 0.3f, Line = at, Velocity = Vector2.Zero, Speed0 = 0.1f, Range = 11f, Life = 3f, FromPlayer = true, Damage = 10f };
+        w.Shots.Add(needle);
+        w.Shots.Add(bubble);
+        w.Step(default);
+        Assert.True(bubble.Life <= 0f, "the bubble is popped");
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.ShotPopped);
+        Assert.True(needle.Life > 0f, "the needle flies on");
+    }
+
+    [Fact]
+    public void BlownUpItsSpinesHurtOnTouch()
+    {
+        var (w, mob) = Alone(6f);
+        mob.State = PufferState.Round;
+        mob.Inflate = 1f;
+        w.Player.Position = w.Player.PrevPosition = mob.Position + new Vector2(mob.Radius + 0.2f, 0f);
+        float hp = w.Player.Hp;
+        w.Step(default);
+        Assert.Equal(hp - PufferlingTuning.SpineDamage, w.Player.Hp);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.PlayerHit && e.Source == DamageSource.PufferSpines);
+    }
+
+    [Fact]
+    public void AFarPufferlingWandersAboutItsHome()
     {
         var w = World();
         var far = w.Mobs.OrderByDescending(m => Vector2.Distance(m.Position, w.Player.Position)).First();
-        var at = far.Position;
-        for (int i = 0; i < 120; i++) w.Step(default);
+        var home = far.Home;
+        float moved = 0f;
+        var last = far.Position;
+        for (int i = 0; i < 60 * 20; i++)
+        {
+            w.Step(default);
+            moved += Vector2.Distance(last, far.Position);
+            last = far.Position;
+        }
         Assert.False(far.Aggro);
-        Assert.True(Vector2.Distance(far.Position, at) < 0.01f);
+        Assert.True(moved > 2f, "it swims about");
+        Assert.True(Vector2.Distance(far.Position, home) < PufferlingTuning.HomeRange + 2f, "near its home");
     }
 
     [Fact]
-    public void TheGatewayInTheRiftLeadsOn()
+    public void HealthyPufferlingsSwimAboutAndAreNeverTargets()
     {
         var w = World();
-        w.Player.Position = w.Player.PrevPosition = w.GatewayPosition;
+        Assert.InRange(w.Fish.Count, PufferlingTuning.HealthyMin, PufferlingTuning.HealthyMax);
+        Assert.All(w.Fish, f => Assert.False(f.Freed));
+        var fish = w.Fish[0];
+        var bubble = new PlaneShot { Position = fish.Position, Line = fish.Position, Velocity = Vector2.UnitX * 5f, Speed0 = 5f, Range = 11f, Life = 3f, FromPlayer = true, Damage = 10f };
+        w.Shots.Add(bubble);
+        w.Step(default);
+        Assert.True(bubble.Life > 0f, "her bubbles pass through them");
+        var at = fish.Position;
+        for (int i = 0; i < 60 * 10; i++) w.Step(default);
+        Assert.Contains(w.Fish, f => Vector2.Distance(f.Position, at) > 0.5f);
+    }
+
+    [Fact]
+    public void AFreedPufferlingSwimsOffAndIsGoneOutOfSight()
+    {
+        var (w, mob) = Alone(6f);
+        mob.Hp = 1f;
+        w.Shots.Add(new PlaneShot { Position = mob.Position, Line = mob.Position, Velocity = Vector2.UnitX, Speed0 = 1f, Range = 11f, Life = 3f, FromPlayer = true, Damage = 10f });
+        w.Step(default);
+        var freed = Assert.Single(w.Fish, f => f.Freed);
+        // She swims far away: once it is off her screen it is gone.
+        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
+        for (int i = 0; i < 60 * 2 && w.Fish.Contains(freed); i++) w.Step(default);
+        if (Vector2.Distance(freed.Position, w.Player.Position) > PufferlingTuning.FreedGone) Assert.DoesNotContain(freed, w.Fish);
+    }
+
+    [Fact]
+    public void SheDivesOnlyWhenOverTheHoleAndAsked()
+    {
+        var w = World();
         foreach (var m in w.Mobs) m.Hp = 0f;
-        // Shut while Queen Clam guards it, open once she is freed.
+        Assert.True(w.ExitOpen, "a level without a boss has its hole open");
+        // Away from the hole, the dive does nothing.
+        w.Step(new PlaneInput { Dive = true });
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.Dived);
+        w.Player.Position = w.Player.PrevPosition = w.Map.Exit.Position;
+        Assert.True(w.OverShaft);
         w.Step(default);
-        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.GatewayEntered);
-        w.GatewayOpen = true;
-        w.Step(default);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.GatewayEntered);
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.Dived);
+        w.Step(new PlaneInput { Dive = true });
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.Dived);
+    }
+
+    [Fact]
+    public void NoDivingInTheMiddleOfABattle()
+    {
+        var w = World();
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        w.Player.Position = w.Player.PrevPosition = w.Map.Exit.Position;
+        // A creature that has noticed her, close by: she cannot leave.
+        w.Mobs.Add(new PlaneMob { Position = w.Map.Exit.Position + new Vector2(6f, 0f), Home = w.Map.Exit.Position, Aggro = true, State = PufferState.Face, FireTimer = 99f, Rng = new Rng(1) });
+        Assert.True(w.InBattle);
+        w.Step(new PlaneInput { Dive = true });
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.Dived);
+        // Once it is freed she may go.
+        w.Mobs[^1].Hp = 0f;
+        Assert.False(w.InBattle);
+        w.Step(new PlaneInput { Dive = true });
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.Dived);
     }
 
     [Fact]
@@ -102,7 +287,7 @@ public class PlaneCombatTests
         var w = World();
         w.Player.Hp = 5f;
         var at = w.Player.Position;
-        w.Shots.Add(new PlaneShot { Position = at, Velocity = Vector2.Zero, Life = 1f });
+        w.Shots.Add(new PlaneShot { Position = at, Velocity = Vector2.Zero, Life = 1f, Needle = true });
         w.Step(default);
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.PlayerDefeated);
         Assert.True(w.Defeated);
@@ -116,7 +301,7 @@ public class PlaneCombatTests
     [Fact]
     public void AnAmbushSpringsOnceAroundHer()
     {
-        var w = World();
+        var w = new PlaneWorld(WithAmbush.Value, new Tuning());
         var ambush = w.Ambushes.First();
         int before = w.Mobs.Count;
         w.Player.Position = w.Player.PrevPosition = ambush.Center;
@@ -141,7 +326,7 @@ public class PlaneCombatTests
     }
 
     [Fact]
-    public void BubblesSlowToAStopAndPop()
+    public void HerLightFliesAtFullSpeedAndGoesOutAtTheEndOfItsRange()
     {
         var w = World();
         foreach (var m in w.Mobs) m.Hp = 0f;
@@ -159,23 +344,21 @@ public class PlaneCombatTests
         w.Step(new PlaneInput { Aim = best, Fire = true });
         var bubble = w.Shots.Single(s => s.FromPlayer);
         float first = bubble.Velocity.Length();
-        float lastSpeed = first;
-        bool popped = false;
-        for (int i = 0; i < 400 && !popped; i++)
+        bool gone = false, popped = false;
+        for (int i = 0; i < 400 && !gone; i++)
         {
             w.Step(new PlaneInput { Aim = best });
-            popped = w.Events.Any(e => e.Type == PlaneEventType.ShotPopped);
-            if (!popped)
-            {
-                float v = bubble.Velocity.Length();
-                Assert.True(v <= lastSpeed + 1e-3f, "it only ever slows down");
-                lastSpeed = v;
-            }
+            popped |= w.Events.Any(e => e.Type == PlaneEventType.ShotPopped);
+            gone = !w.Shots.Contains(bubble);
+            if (!gone) Assert.Equal(first, bubble.Velocity.Length(), 2);
         }
-        Assert.True(popped, "it pops");
-        Assert.DoesNotContain(w.Shots, s => s == bubble);
-        if (bestRun >= PlaneCombatTuning.BubbleRange + 1f)
-            Assert.InRange(bubble.Traveled, PlaneCombatTuning.BubbleRange * 0.9f, PlaneCombatTuning.BubbleRange + 0.5f);
+        Assert.True(gone);
+        if (bestRun >= PlaneCombatTuning.BubbleRange + 2f)
+        {
+            // Out like a match at its range: no burst.
+            Assert.False(popped);
+            Assert.InRange(bubble.Traveled, PlaneCombatTuning.BubbleRange - 0.1f, PlaneCombatTuning.BubbleRange + 0.6f);
+        }
     }
 
     static PlaneShot Bubble(Vector2 at, int volley, float life = 3f) => new()
@@ -184,10 +367,41 @@ public class PlaneCombatTests
         FromPlayer = true, Damage = 10f, Volley = volley,
     };
 
+    static readonly Lazy<ItemCatalog> Catalog = new(() =>
+        ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
+
+    /// <summary>A world where she carries Bubble Coral: her bubbles merge.</summary>
+    static PlaneWorld MergingWorld()
+    {
+        var run = new PlaneRun(Catalog.Value, new Tuning());
+        run.Add("bubble_coral");
+        return new PlaneWorld(Shared.Value, new Tuning(), run);
+    }
+
+    [Fact]
+    public void TouchingBubblesBounceApartWithoutMerging()
+    {
+        var w = World();
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        var at = w.Player.Position;
+        var a = Bubble(at, 1);
+        var b = Bubble(at + new Vector2(0.2f, 0f), 2);
+        b.Velocity = -Vector2.UnitX;
+        w.Shots.Add(a);
+        w.Shots.Add(b);
+        w.Step(default);
+        Assert.Equal(2, w.Shots.Count);
+        Assert.All(w.Shots, s => Assert.Equal(1, s.Bubbles));
+        Assert.All(w.Shots, s => Assert.Equal(10f, s.Damage));
+        // Pushed apart, and turned back from each other.
+        Assert.True(Vector2.Distance(a.Position, b.Position) >= a.Radius + b.Radius - 1e-3f);
+        Assert.True(a.Velocity.X < 0f && b.Velocity.X > 0f, $"{a.Velocity} {b.Velocity}");
+    }
+
     [Fact]
     public void TouchingBubblesMergeOneByOneGrowingAndAddingDamage()
     {
-        var w = World();
+        var w = MergingWorld();
         foreach (var m in w.Mobs) m.Hp = 0f;
         var at = w.Player.Position;
         w.Shots.Add(Bubble(at, 1, life: 2f));
@@ -210,7 +424,7 @@ public class PlaneCombatTests
     [Fact]
     public void AFullBubbleStillMergesButStopsGrowing()
     {
-        var w = World();
+        var w = MergingWorld();
         foreach (var m in w.Mobs) m.Hp = 0f;
         var at = w.Player.Position;
         var full = Bubble(at, 1, life: 1f);
@@ -241,7 +455,7 @@ public class PlaneCombatTests
     [Fact]
     public void BubblesOfOneVolleyDoNotMerge()
     {
-        var w = World();
+        var w = MergingWorld();
         foreach (var m in w.Mobs) m.Hp = 0f;
         var at = w.Player.Position;
         w.Shots.Add(Bubble(at, 1));
@@ -251,23 +465,67 @@ public class PlaneCombatTests
     }
 
     [Fact]
-    public void AStoppedBubbleRestsAMomentBeforePopping()
+    public void ASpentShotGoesOutWithoutBurstingOrCleansing()
     {
         var w = World();
         foreach (var m in w.Mobs) m.Hp = 0f;
         var bubble = Bubble(w.Player.Position, 1);
         bubble.Traveled = bubble.Range;
         w.Shots.Add(bubble);
-        var at = bubble.Position;
-        int frames = 0;
-        while (w.Shots.Contains(bubble) && frames < 120)
+        w.Step(default);
+        Assert.DoesNotContain(bubble, w.Shots);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.ShotOut);
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.ShotPopped);
+    }
+
+    [Fact]
+    public void EachBubbleRollsItsOwnHoverScaledByTheStat()
+    {
+        var plain = World();
+        var run = new PlaneRun(Catalog.Value, new Tuning());
+        run.Add("bubble_coral");
+        var coral = new PlaneWorld(Shared.Value, new Tuning(), run);
+        var hovers = new System.Collections.Generic.List<float>();
+        var longer = new System.Collections.Generic.List<float>();
+        for (int i = 0; i < 12; i++)
         {
-            w.Step(default);
-            frames++;
-            if (w.Shots.Contains(bubble)) Assert.Equal(at, bubble.Position);
+            foreach (var (w, into) in new[] { (plain, hovers), (coral, longer) })
+            {
+                w.Shots.Clear();
+                w.Player.ShotTimer = 0f;
+                w.Step(new PlaneInput { Aim = Vector2.UnitX, Fire = true });
+                into.Add(w.Shots.Single(s => s.FromPlayer).Hover);
+            }
         }
-        Assert.InRange(frames * PlaneWorld.Dt, PlaneCombatTuning.BubbleRest - 0.02f, PlaneCombatTuning.BubbleRest + 0.05f);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.ShotPopped);
+        Assert.All(hovers, h => Assert.InRange(h, PlaneCombatTuning.BubbleHoverMin, PlaneCombatTuning.BubbleHoverMax));
+        Assert.True(hovers.Distinct().Count() > 6, "each bubble its own");
+        Assert.All(longer, h => Assert.InRange(h, PlaneCombatTuning.BubbleHoverMin * 1.5f, PlaneCombatTuning.BubbleHoverMax * 1.5f));
+    }
+
+    [Fact]
+    public void BubblesBumpingIntoEachOtherSometimesPop()
+    {
+        // Many head-on meetings: some pairs survive (bouncing), some lose a bubble; a pop tears open where they met.
+        int pops = 0, meetings = 0;
+        var w = World();
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        var at = w.Player.Position;
+        for (int i = 0; i < 60; i++)
+        {
+            w.Shots.Clear();
+            var a = Bubble(at, 1000 + 2 * i);
+            var b = Bubble(at + new Vector2(0.2f, 0f), 1001 + 2 * i);
+            b.Velocity = -Vector2.UnitX;
+            w.Shots.Add(a);
+            w.Shots.Add(b);
+            w.Step(default);
+            meetings++;
+            var popped = w.Events.Where(e => e.Type == PlaneEventType.ShotPopped).ToList();
+            pops += popped.Count;
+            foreach (var e in popped) Assert.True(MathF.Abs(e.Direction.X) > 0.9f, "it tears open on the side it was struck");
+        }
+        float share = pops / (2f * meetings);
+        Assert.InRange(share, 0.2f, 0.6f);
     }
 
     [Fact]
@@ -311,5 +569,77 @@ public class PlaneCombatTests
             if (w.Clear(p, w.Radius + 0.3f) && w.LineOfSight(from, p)) return p;
         }
         return from + Vector2.UnitX * 2f;
+    }
+
+    /// <summary>The longest open line from her start (so shots fly free).</summary>
+    static Vector2 OpenAim(PlaneWorld w)
+    {
+        var from = w.Player.Position;
+        Vector2 best = Vector2.UnitX;
+        float bestRun = 0f;
+        for (int i = 0; i < 32; i++)
+        {
+            var d = new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f));
+            float run = 0f;
+            while (run < 20f && w.Map.IsOpen(from + d * run)) run += 0.5f;
+            if (run > bestRun) { bestRun = run; best = d; }
+        }
+        return best;
+    }
+
+    [Fact]
+    public void WithBubbleCoralHerLightSlowsHoversAndThenGoesOut()
+    {
+        var w = MergingWorld();
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        var aim = OpenAim(w);
+        w.Step(new PlaneInput { Aim = aim, Fire = true });
+        var shot = w.Shots.Single(s => s.FromPlayer);
+        Assert.True(shot.Lingers);
+        float last = shot.Velocity.Length(), slowest = last, hovered = 0f;
+        bool gone = false;
+        for (int i = 0; i < 400 && !gone; i++)
+        {
+            w.Step(new PlaneInput { Aim = aim });
+            gone = !w.Shots.Contains(shot);
+            if (gone) break;
+            float v = shot.Velocity.Length();
+            Assert.True(v <= last + 1e-3f, "it only slows");
+            last = v;
+            slowest = MathF.Min(slowest, v);
+            if (v < PlaneCombatTuning.BubbleStop) hovered += PlaneWorld.Dt;
+        }
+        Assert.True(gone, "it goes out in the end");
+        Assert.True(slowest < PlaneCombatTuning.BubbleStop, $"it slowed to {slowest}");
+        Assert.True(hovered >= PlaneCombatTuning.BubbleHoverMin * 1.5f - 0.05f, $"it hovered {hovered:0.00} s");
+    }
+
+    [Fact]
+    public void WithBubbleCoralVolleysCatchUpAndMergeAndWithoutItTheyDoNot()
+    {
+        foreach (bool coral in new[] { true, false })
+        {
+            var w = coral ? MergingWorld() : World();
+            foreach (var m in w.Mobs) m.Hp = 0f;
+            var aim = OpenAim(w);
+            int most = 0;
+            float slowest = float.MaxValue;
+            for (int i = 0; i < 180; i++)
+            {
+                w.Player.Hp = 100f;
+                w.Step(new PlaneInput { Aim = aim, Fire = true });
+                foreach (var s in w.Shots.Where(s => s.FromPlayer))
+                {
+                    most = Math.Max(most, s.Bubbles);
+                    slowest = MathF.Min(slowest, s.Velocity.Length());
+                }
+            }
+            if (coral) Assert.True(most >= 3, $"merged up to {most}");
+            else
+            {
+                Assert.Equal(1, most);
+                Assert.True(slowest >= PlaneCombatTuning.ShotSpeed - 0.01f, "plain light never slows");
+            }
+        }
     }
 }

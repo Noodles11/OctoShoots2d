@@ -62,8 +62,7 @@ public partial class DebugMapOverlay : Control
             var col = c.Kind switch { CorridorKind.Main => new Color(0.6f, 0.45f, 0.2f, 0.9f), CorridorKind.Spur => new Color(0.5f, 0.5f, 0.5f, 0.9f), _ => new Color(0.9f, 0.3f, 0.9f, 0.9f) };
             for (int i = 1; i < c.Points.Count; i++) DrawLine(P(c.Points[i - 1]), P(c.Points[i]), col, 1.5f);
         }
-        foreach (var t in map.Trenches)
-            for (int i = 1; i < t.Points.Count; i++) DrawLine(P(t.Points[i - 1]), P(t.Points[i]), new Color(0.3f, 0.6f, 1f, 0.7f), 1f);
+        DrawCircle(P(map.Shaft.Center), map.Shaft.HalfLength * Scale, new Color(0.3f, 0.6f, 1f, 0.6f));
         foreach (var z in map.Plazas) DrawArc(P(z.Center), z.Radius * Scale, 0f, Mathf.Tau, 32, new Color(1f, 1f, 1f, 0.8f), 1.5f);
         foreach (var c in map.Canopies)
         {
@@ -98,7 +97,7 @@ public partial class DebugMapOverlay : Control
 
         var font = ThemeDB.FallbackFont;
         string legend = $"F3 map · seed {map.Seed:X} attempt {map.Attempt + 1} · {map.Corridors.Count(c => c.Kind == CorridorKind.Main)} corridors · {map.Plazas.Count} plazas · " +
-                        $"{map.Canopies.Count(c => c.Kind == CanopyKind.Arch)} arches · {map.Caves.Count} caves · {map.Trenches.Count} trenches · {map.Spawns.Count} spawn rows";
+                        $"{map.Canopies.Count(c => c.Kind == CanopyKind.Arch)} arches · {map.Caves.Count} caves · {(map.HasBoss ? "boss" : "blue hole")} · {map.Spawns.Count} spawn rows";
         DrawString(font, o + new Vector2(0f, -12f), legend, HorizontalAlignment.Left, -1, 14, Colors.White);
     }
 }

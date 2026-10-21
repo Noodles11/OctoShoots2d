@@ -16,11 +16,19 @@ public class PlaneBossTests
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
         ItemCatalog.FromJson(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "items.json"))));
 
-    static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), 1, 1));
+    /// <summary>The seed's first boss level (level 4 or 5 of the first depth).</summary>
+    static readonly Lazy<LevelMap> Shared = new(() =>
+    {
+        var seed = SeedCode.Parse("KELP7Q2Z");
+        return TopDownGenerator.Generate(new RunStreams(seed), new LevelId(1, 2, LevelPlan.BossLevel(seed, 1, 2)));
+    });
 
-    static PlaneWorld World() => new(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
+    /// <summary>Queen Clam (the reference roll), so these tests pin her fight.</summary>
+    static readonly PlaneOptions Queen = new() { Corruption = false, Pufferlings = true, Vases = true, Boss = OctoShoots.Core.Bosses.BossGenerator.QueenClam(1UL, 1, 1) };
 
-    /// <summary>Puts her inside the arena, 7 m south of the rift.</summary>
+    static PlaneWorld World() => new(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Queen);
+
+    /// <summary>Puts her inside the arena, 7 m south of the Crack's middle.</summary>
     static void Enter(PlaneWorld w)
     {
         var at = w.ArenaCenter + new Vector2(0f, 7f);
@@ -38,10 +46,10 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void TheGatewayIsShutUntilSheIsFreed()
+    public void TheCrackIsShutUntilSheIsFreed()
     {
         var w = World();
-        Assert.False(w.GatewayOpen);
+        Assert.False(w.ExitOpen);
         Assert.Equal(BossStage.Waiting, w.Boss!.Stage);
     }
 
@@ -54,7 +62,7 @@ public class PlaneBossTests
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.ArenaSealed);
         Assert.True(w.ArenaSealed);
         int ticks = StepUntil(w, PlaneEventType.BossLanded);
-        float intro = PlaneBossTuning.BannerSeconds + PlaneBossTuning.DissolveSeconds + PlaneBossTuning.DropDelay + PlaneBossTuning.ShadowSeconds;
+        float intro = PlaneBossTuning.DropDelay + PlaneBossTuning.ShadowSeconds;
         Assert.InRange(ticks * PlaneWorld.Dt, intro - 0.05f, intro + 0.05f);
         Assert.Equal(BossStage.Fight, w.Boss!.Stage);
     }
@@ -127,7 +135,7 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void HerPearlsFlyInARingWithAGapAndABubblePopsOne()
+    public void HerPearlsFlyInARingWithAGapAndHerLightCannotClearThem()
     {
         var w = Landed();
         Assert.True(StepUntil(w, PlaneEventType.BossVolley) > 0);
@@ -139,8 +147,9 @@ public class PlaneBossTests
         var bubble = BubbleAt(pearl.Position + pearl.Velocity * PlaneWorld.Dt);
         w.Shots.Add(bubble);
         w.Step(default);
-        Assert.DoesNotContain(pearl, w.Shots);
-        Assert.DoesNotContain(bubble, w.Shots);
+        // Corruption: her light passes through it, and it flies on.
+        Assert.Contains(pearl, w.Shots);
+        Assert.Contains(bubble, w.Shots);
     }
 
     [Fact]
@@ -158,8 +167,8 @@ public class PlaneBossTests
         // The next opening brings the royal pearl and the helix.
         Assert.True(StepUntil(w, PlaneEventType.BossVolley) > 0);
         Assert.Contains(w.Shots, s => s.Royal);
-        for (int i = 0; i < 60 * 2 && boss.Act != ClamAct.Helix; i++) w.Step(default);
-        Assert.Equal(ClamAct.Helix, boss.Act);
+        for (int i = 0; i < 60 * 2 && boss.Act != BossAct.Helix; i++) w.Step(default);
+        Assert.Equal(BossAct.Helix, boss.Act);
     }
 
     [Fact]
@@ -177,10 +186,12 @@ public class PlaneBossTests
         Assert.DoesNotContain(w.Shots, s => s.BossPearl);
         Assert.True(StepUntil(w, PlaneEventType.BossFreed, 60) > 0);
         Assert.False(w.ArenaSealed);
-        Assert.True(w.GatewayOpen);
+        Assert.True(w.ExitOpen);
         Assert.Equal(pearlsBefore + 1, w.Pearls.Count);
-        Assert.Contains(w.Pearls[^1].ItemId, PlaneRun.ShotPearls);
-        Assert.True(Vector2.Distance(w.Pearls[^1].Position, w.GatewayPosition) > PlaneCombatTuning.GatewayRadius + 1f);
+        Assert.Contains(w.Pearls[^1].ItemId, PlaneRun.PortedPearls);
+        // Her own pearl, cleansed, is the reward: left exactly where it sat in her, as she leaps away.
+        Assert.Equal(w.ArenaCenter, w.Pearls[^1].Position);
+        Assert.True(w.Pearls[^1].Placed);
         Assert.Equal(1, w.Stats.BossesFreed);
     }
 

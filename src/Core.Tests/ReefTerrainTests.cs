@@ -21,7 +21,8 @@ public class ReefTerrainTests
     [MemberData(nameof(Reference))]
     public void TheSameSeedTextGivesThePrototypesHeights(string seed, float[] expected)
     {
-        const int n = LevelMap.Samples;
+        // The prototype's own grid (a level is smaller now; the terrain is sampled the same way).
+        const int n = ReefTerrain.Cells + 1;
         var h = new float[n * n];
         ReefTerrain.Generate(h, n, seed);
         for (int i = 0; i < Cells.Length; i++)
