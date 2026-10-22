@@ -90,6 +90,10 @@ public partial class CombatView : Node3D
         AddChild(_trails);
         _fireworks = new FxParticles(1024, additive: true);
         AddChild(_fireworks);
+        _afterimages = new FxParticles(1536, additive: true);
+        AddChild(_afterimages);
+        _wake = new FxParticles(400, additive: false, FxParticles.Bubble());
+        AddChild(_wake);
         _theirShot = Glow(new Color(1f, 0.25f, 0.3f));
         var orb = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader");
         _clamPearl = new ShaderMaterial { Shader = orb };
@@ -490,6 +494,11 @@ void fragment() {
     ShaderMaterial _sparkMat = null!;
     LightTrails _trails = null!;
     FxParticles _fireworks = null!;
+    /// <summary>The light her shots shed as they fly (afterimage bursts), and Pistol Shrimp's cavitation bubbles in their wake.</summary>
+    FxParticles _afterimages = null!, _wake = null!;
+    /// <summary>Per shot: when it next sheds a burst of light, and how many bounces it had left (a bounce glints).</summary>
+    Dictionary<PlaneShot, (float Next, int Bounces)> _shed = new(), _shedNext = new();
+    readonly RandomNumberGenerator _rng = new();
 
     const float BlastSeconds = 0.65f;
 
@@ -698,6 +707,79 @@ void fragment() {
         _fireworks.Emit(p, on * 0.5f + Vector3.Up * 0.6f, 0.9f, 0.1f, 0.35f, new Color(0.5f, 0.45f, 0.4f, 0.25f), new Color(0.3f, 0.3f, 0.32f, 0f), drag: 1.5f, buoyancy: 0.3f);
     }
 
+    /// <summary>A shot's afterlight, from its pearls (LightTrails.Style).</summary>
+    static LightTrails.Style TrailStyle(PlaneShot shot)
+    {
+        float jag = 1f, life = 1f, width = 1f;
+        // A lance: straight, long, thin. A lure's wisp: softer and lingering. A fuse: crackling wide.
+        if (shot.Pierce) { jag *= 0.35f; life *= 1.7f; width *= 0.75f; }
+        if (shot.Homing) { jag *= 0.8f; life *= 1.25f; width *= 0.9f; }
+        if (shot.Explosive) { jag *= 1.6f; width *= 1.15f; }
+        if (shot.Boomerang) life *= 1.3f;
+        if (shot.Charged > 0.25f) { width *= 1.4f; life *= 1.2f; }
+        // Starfish Arm: as wide as it has grown.
+        if (shot.Grow) width *= Mathf.Clamp(shot.Radius / Mathf.Max(shot.BaseRadius, 0.01f), 1f, 2.5f);
+        return new LightTrails.Style(jag, life, width, twin: shot.Wave);
+    }
+
+    /// <summary>
+    /// A shot of her light sheds light as it flies: every so often (never on a beat) a burst of motes breaks off it and
+    /// drifts back, cooling from white-gold to ember as it fades, a ghost of the shot left glowing where it was; now
+    /// and then a bigger burst. Its pearls change what it sheds: a lure's wisps float up (Anglerfish Lure), a fuse fizzes
+    /// sparks to the sides (Starburst Gland), cavitation leaves a string of bubbles (Pistol Shrimp), a bounce glints
+    /// (Mirror Scale).
+    /// </summary>
+    void Shed(PlaneShot shot, Vector3 at, Vector3 heading, float speed, float mote, float warmth, float light)
+    {
+        var back = speed > 1e-3f ? -heading / speed : Vector3.Zero;
+        var side = new Vector3(-back.Z, 0f, back.X);
+        var hot = new Color(1.6f, 1.45f, 1.1f);
+        var gold = HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth) * 1.25f;
+        var ember = new Color(1f, 0.4f, 0.1f, 0f);
+        float k = Mathf.Clamp(light, 0.3f, 1.3f);
+        bool first = !_shed.TryGetValue(shot, out var was);
+        float next = first ? _time + _rng.RandfRange(0f, 0.05f) : was.Next;
+        if (_time >= next)
+        {
+            bool big = _rng.Randf() < 0.2f;
+            int n = (big ? _rng.RandiRange(6, 9) : _rng.RandiRange(2, 4)) + (shot.Charged > 0.25f ? 3 : 0) + Mathf.Min(shot.Bubbles - 1, 4);
+            for (int i = 0; i < n; i++)
+            {
+                var off = new Vector3(_rng.RandfRange(-1f, 1f), _rng.RandfRange(-0.3f, 0.6f), _rng.RandfRange(-1f, 1f)) * mote * 0.35f;
+                var v = back * speed * _rng.RandfRange(0.04f, 0.14f) + new Vector3(_rng.RandfRange(-1f, 1f), _rng.RandfRange(-0.2f, 0.8f), _rng.RandfRange(-1f, 1f)) * (big ? 1.6f : 0.8f);
+                float life = _rng.RandfRange(0.22f, 0.48f) * (big ? 1.3f : 1f);
+                float size = _rng.RandfRange(0.08f, 0.18f) * (0.8f + 0.4f * k);
+                _afterimages.Emit(at + off, v, life, size, size * 0.15f, i % 3 == 0 ? hot : gold, ember, drag: 3f, buoyancy: shot.Homing ? 0.9f : 0.15f);
+            }
+            // The afterimage: a ghost of the shot where it was, fading fast.
+            _afterimages.Emit(at, Vector3.Zero, 0.2f + (big ? 0.1f : 0f), mote * 0.7f, mote * 0.45f, gold with { A = 0.85f * k }, gold with { A = 0f }, drag: 0f);
+            next = _time + _rng.RandfRange(0.045f, 0.13f) * (shot.Explosive ? 0.6f : 1f);
+        }
+        // A lure's wisp: a slow curl of warm motes rising off it.
+        if (shot.Homing && _rng.Randf() < 0.35f)
+            _afterimages.Emit(at, back * 0.4f + Vector3.Up * 0.6f + side * _rng.RandfRange(-0.4f, 0.4f), _rng.RandfRange(0.4f, 0.7f), 0.07f, 0.02f, gold, ember, drag: 1.5f, buoyancy: 0.8f);
+        // A fuse: sparks fizzing out to its sides.
+        if (shot.Explosive && _rng.Randf() < 0.6f)
+            _afterimages.Emit(at, side * (_rng.Randf() < 0.5f ? -1f : 1f) * _rng.RandfRange(2f, 3.5f) + back + Vector3.Up * _rng.RandfRange(0.2f, 1f), _rng.RandfRange(0.12f, 0.22f), 0.05f, 0.01f, hot, ember, drag: 5f);
+        // Cavitation: a string of small bubbles torn open behind it.
+        if (shot.Cavitation && _rng.Randf() < 0.5f)
+            BubbleFx.Rise(_wake, at + back * mote * 0.5f + new Vector3(_rng.RandfRange(-0.1f, 0.1f), 0f, _rng.RandfRange(-0.1f, 0.1f)),
+                back * 0.6f + new Vector3(_rng.RandfRange(-0.3f, 0.3f), _rng.RandfRange(0.4f, 1.2f), _rng.RandfRange(-0.3f, 0.3f)), _rng.RandfRange(0.04f, 0.09f), new Color(0.95f, 1f, 1f, 1f));
+        // A bounce: a glint off the wall it struck, a flash and a spray of sparks.
+        if (!first && shot.BouncesLeft < was.Bounces)
+        {
+            _afterimages.Emit(at, Vector3.Zero, 0.12f, mote * 2.2f, mote * 0.6f, hot, gold with { A = 0f }, drag: 0f);
+            for (int i = 0; i < 8; i++)
+            {
+                var d = _afterimages.RandDir();
+                d.Y = Mathf.Abs(d.Y) * 0.5f;
+                _afterimages.Emit(at, d * _rng.RandfRange(2f, 4f), _rng.RandfRange(0.15f, 0.3f), 0.06f, 0.01f, hot, ember, drag: 4f);
+            }
+            AddBloom(shot.Position, 1.2f, 0.35f, 1.6f);
+        }
+        _shedNext[shot] = (next, shot.BouncesLeft);
+    }
+
     /// <summary>A dash: a small burst of her light where she pushed off (a small firework and a bloom on the water).</summary>
     public void DashBurst(System.Numerics.Vector2 at)
     {
@@ -818,7 +900,9 @@ void fragment() {
                 // the gathered light, bigger and brighter. Its lightning afterlight is drawn by the trails.
                 bool charged = shot.Charged > 0.25f;
                 float seed = (System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(shot) & 1023) * 0.0137f;
-                float mote = Mathf.Min(0.45f * (1f + 0.1f * (shot.Bubbles - 1)), 1.3f) * (charged ? 1.5f : 1f);
+                float mote = Mathf.Min(0.58f * (1f + 0.1f * (shot.Bubbles - 1)), 1.5f) * (charged ? 1.5f : 1f)
+                    // Room for its pearls' marks: the dividing cell (Mitosis), the star (Starfish Arm).
+                    * (shot.Split || shot.Grow ? 1.6f : 1f);
                 _shots[i].Mesh = _spark;
                 _shots[i].Scale = Vector3.One * mote;
                 _shots[i].MaterialOverride = _sparkMat;
@@ -851,7 +935,18 @@ void fragment() {
                 // A full one burns white: a small star.
                 _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), Mathf.Max(light, 0.35f * shot.Dim) * (shot.Bubbles >= PlaneCombatTuning.BubbleCap ? 1.25f : 1f));
                 _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), warmth);
-                _trails.Feed(shot, _shots[i].Position, warmth, Mathf.Clamp(light * 1.4f, 0.35f, 1.2f) * (shot.Explosive ? 1.25f : 1f));
+                // Its pearls, seen in it: a lance (Swordfish Bill), two cores (Mitosis), a five-point star (Starfish
+                // Arm), a whirl (Boomerang Shrimp), a ring of nacre (Pearl Diver's charge).
+                var heading = new Vector3(shot.Velocity.X, 0f, shot.Velocity.Y);
+                float speed = heading.Length();
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("motion"), new Vector4(speed > 1e-3f ? heading.X / speed : 1f, 0f, speed > 1e-3f ? heading.Z / speed : 0f, shot.Pierce ? 1.6f : 0f));
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("twin"), shot.Split ? 1f : 0f);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("points"), shot.Grow ? 5f : 4f);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("spin"), shot.Boomerang ? 9f : 1f);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("pearl"), Mathf.Clamp((shot.Charged - 0.25f) / 0.75f, 0f, 1f));
+                float strength = Mathf.Clamp(light * 1.4f, 0.35f, 1.2f) * (shot.Explosive ? 1.25f : 1f);
+                _trails.Feed(shot, _shots[i].Position, warmth, strength, TrailStyle(shot));
+                Shed(shot, _shots[i].Position, heading, speed, mote, warmth, light);
 
                 // Its glow in the water: a fixed-size disc, stronger (never wider) as it merges.
                 float k = Mathf.Clamp(light / MaxLight, 0f, 1.5f);
@@ -898,7 +993,14 @@ void fragment() {
             }
         SyncLights(world, dt);
         _trails.Her = new Vector3(world.Player.Position.X, LevelMap.SwimBand, world.Player.Position.Y);
-        _trails.Step(dt, _time);
+        _trails.Step(dt, _time, GetViewport().GetCamera3D());
+        (_shed, _shedNext) = (_shedNext, _shed);
+        _shedNext.Clear();
+        if (GetViewport().GetCamera3D() is { } cam)
+        {
+            _afterimages.Tick(dt, cam.GlobalBasis);
+            _wake.Tick(dt, cam.GlobalBasis);
+        }
         if (GetViewport().GetCamera3D() is { } camera) _fireworks.Tick(dt, camera.GlobalBasis);
 
         // Popping bubbles: the tear opens from the struck point and sweeps the film away; droplets break off the rim

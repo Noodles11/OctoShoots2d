@@ -11,7 +11,7 @@ the game yet. The page `tools/cavegen/index.html` (built by `tools/cavegen/build
 - **Start and way down:** the start is a chamber on one side. The way down is the chamber at the end of the main
   chain, at least **55 m** along the water (shortcuts taken; the route itself runs ~70–80 m) and **56 m** in a
   straight line (both chambers 38 m in from their sides of the square). Boss levels end in a round 15 m arena with
-  the Crack (an ellipse, 7–9 by 2.5–3.5 m); other levels end in a 6.5 m blue hole.
+  the Crack (an ellipse, 7–9 by 2.5–3.5 m); other levels end in a blue hole: the exit chamber sloping down from its walls to its middle, where she dives.
 - **Places** (`CaveLayout.FromStart` and the rest, which `LevelValidator` checks): exactly one place 30–38 m from the
   start; every other place at least 30 m from the start and the way down and 17 m from the next place (rooms 20 m).
   Open places take a side chamber first, so the naves hold them (DESIGN-TOPDOWN §4.9). Rooms (shop,

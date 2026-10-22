@@ -26,7 +26,11 @@ public partial class SurgeView : Node3D
     /// <summary>Where it touches the seabed the bubbles well up over this radius plus its ray's width.</summary>
     const float TouchRadius = 1f;
 
-    readonly ImmediateMesh _mesh = new();
+    readonly ImmediateMesh _mesh = new(), _crackle = new();
+    ShaderMaterial _stroke = null!;
+    /// <summary>The lightning crackling round each ray: how many strands, how far out they reach (shares of the ray's glow), how often they re-strike.</summary>
+    const int CrackleStrands = 2;
+    const float CrackleReach = 1.1f, CrackleStrikes = 12f;
     ShaderMaterial _beam = null!, _glow = null!;
     readonly List<MeshInstance3D> _glows = new();
     OmniLight3D _tip = null!;
@@ -44,6 +48,8 @@ public partial class SurgeView : Node3D
         _beam = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_surge.gdshader") };
         _glow = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_shot.gdshader") };
         AddChild(new MeshInstance3D { Mesh = _mesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 16384f });
+        _stroke = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_stroke.gdshader"), RenderPriority = 1 };
+        AddChild(new MeshInstance3D { Mesh = _crackle, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 16384f });
         var quad = new QuadMesh { Size = Vector2.One };
         for (int i = 0; i < MaxGlows; i++)
         {
@@ -68,6 +74,7 @@ public partial class SurgeView : Node3D
         _time += dt;
         _map = world.Map;
         _mesh.ClearSurfaces();
+        _crackle.ClearSurfaces();
         if (GetViewport().GetCamera3D() is { } camera)
         {
             _bubbles.Tick(dt, camera.GlobalBasis);
@@ -101,6 +108,13 @@ public partial class SurgeView : Node3D
             if (!fan || ray.Fork) Ray(ray, ray.Fork ? bright * 0.7f : bright, surge.Helix, dips: !ray.Blocked && !ray.Loop);
         if (_vertices == 0) Quad(Vector3.Zero, Vector3.Zero, Vector3.Zero, Vector3.Zero, 0f, 0f, 0f, 0f, 0f, 0f);
         _mesh.SurfaceEnd();
+        // Lightning crackles round every ray (a cone's along its middle and its edges).
+        _crackle.SurfaceBegin(Mesh.PrimitiveType.Triangles, _stroke);
+        _crackleVerts = 0;
+        foreach (var ray in surge.Rays)
+            if (!fan || ray.Fork || ray == middle || ray == main[0] || ray == main[^1]) Crackle(ray, bright * (ray.Fork ? 0.6f : 1f));
+        if (_crackleVerts == 0) for (int z = 0; z < 3; z++) StrokeVertex(Vector3.Zero, Colors.Black, 0f, 0f, 0f, 0f);
+        _crackle.SurfaceEnd();
 
         // Where it comes down on the seabed it boils the water there: a loop's far end, a ray that struck nothing, a
         // cone's far edge — bubbles well up and rise to the surface.
@@ -141,6 +155,81 @@ public partial class SurgeView : Node3D
         _tip.Visible = true;
         _tip.Position = new Vector3(tip.X, (grounded ? Floor(tip) : LevelMap.SwimBand) + 0.6f, tip.Y);
         _tip.LightEnergy = 1.6f * bright;
+    }
+
+    int _crackleVerts;
+
+    /// <summary>
+    /// Lightning crackling round a ray: CrackleStrands thin jagged bolts running along it, each thrown out to one side
+    /// and back as far as the ray's glow and a little past, re-struck CrackleStrikes times a second, painted as her
+    /// strikes are (light_stroke: a broken white core on a ragged body; no wash, the beam is its own).
+    /// </summary>
+    void Crackle(SurgeRay ray, float bright)
+    {
+        Sample(ray.Points);
+        if (_samples.Count < 3) return;
+        int strike = (int)(_time * CrackleStrikes);
+        var color = HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), 0.3f);
+        for (int strand = 0; strand < CrackleStrands; strand++)
+        {
+            int seed = strand * 7919 + strike * 104729 + (int)(ray.Points[0].X * 13f);
+            float along = 0f;
+            bool started = false;
+            Vector3 last = Vector3.Zero, lastSide = Vector3.Zero;
+            for (int i = 0; i < _samples.Count; i += 2)
+            {
+                var (p, d, s) = _samples[i];
+                var n = new System.Numerics.Vector2(-d.Y, d.X);
+                float reach = ray.WidthAt(s) * Spill * CrackleReach;
+                // Wandering out to its side and back (a slow sway every metre or so, smoothly), jagged on top of it.
+                float u = s / 1.3f;
+                int k0 = (int)Mathf.Floor(u);
+                float f = u - k0;
+                f = f * f * (3f - 2f * f);
+                float sway = Mathf.Lerp(Hash(seed + k0 * 31), Hash(seed + (k0 + 1) * 31), f);
+                float off = (0.75f * sway + 0.3f * Hash(seed + i * 57)) * reach * (strand == 0 ? 1f : -1f) * Mathf.SmoothStep(0f, 0.6f, s);
+                if (!float.IsFinite(off)) off = 0f;
+                var at = p + n * off;
+                var c = new Vector3(at.X, LevelMap.SwimBand + 0.02f, at.Y);
+                if (!float.IsFinite(c.X) || !float.IsFinite(c.Z)) continue;
+                float w = 0.07f * (0.6f + 0.4f * Mathf.Abs(Hash(seed + i * 17)));
+                var side = new Vector3(n.X, 0f, n.Y) * w;
+                if (started)
+                {
+                    float seg = c.DistanceTo(last);
+                    float fade = bright * (0.55f + 0.45f * Mathf.Abs(Hash(seed + 5))) * Mathf.SmoothStep(0f, 0.5f, s);
+                    var col = color with { A = fade };
+                    for (int pass = 1; pass <= 2; pass++)
+                    {
+                        float k = pass == 1 ? 1f : 0.35f;
+                        Vector3 l0 = last - lastSide * k, r0 = last + lastSide * k, l1 = c - side * k, r1 = c + side * k;
+                        StrokeVertex(l0, col, 0f, along, pass, seed); StrokeVertex(r0, col, 1f, along, pass, seed); StrokeVertex(r1, col, 1f, along + seg, pass, seed);
+                        StrokeVertex(l0, col, 0f, along, pass, seed); StrokeVertex(r1, col, 1f, along + seg, pass, seed); StrokeVertex(l1, col, 0f, along + seg, pass, seed);
+                    }
+                    along += seg;
+                }
+                started = true;
+                last = c;
+                lastSide = side;
+            }
+        }
+    }
+
+    void StrokeVertex(Vector3 p, Color c, float u, float s, float pass, float seed)
+    {
+        _crackle.SurfaceSetColor(c);
+        _crackle.SurfaceSetUV(new Vector2(u, s));
+        _crackle.SurfaceSetUV2(new Vector2(pass, (Mathf.Abs((int)seed) % 997) * 0.37f));
+        _crackle.SurfaceAddVertex(p);
+        _crackleVerts++;
+    }
+
+    /// <summary>A stable -1..1 for a number.</summary>
+    static float Hash(int id)
+    {
+        uint h = (uint)(id * 374761393);
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return ((h ^ (h >> 16)) & 0xFFFF) / 32767.5f - 1f;
     }
 
     /// <summary>One ray as a ribbon (or, with Double Helix, a faint core and two strands spiralling round it).</summary>

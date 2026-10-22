@@ -41,7 +41,19 @@ public static class TopDownGenerator
     /// <summary>The boss arena: a ~30 m disc with the Crack across its middle.</summary>
     const float ArenaRadius = 15f;
     /// <summary>A blue hole's shaft, inside its clearing.</summary>
-    const float ShaftRadius = 6.5f;
+    /// <summary>
+    /// The exit's chamber, sunk (SinkExitChamber): its floor sloping down from its walls to the shaft's floor in its
+    /// middle, where she can dive (within DiveRadius), its tunnels easing in over ExitMouth metres past its radius
+    /// (ExitChamber, if it has none).
+    /// </summary>
+    const float DiveRadius = 3f, ExitMouth = 4f, ExitChamber = 10.5f;
+    /// <summary>
+    /// The bowl's floor in its middle: BowlLift over the shaft's floor (the level below's seabed, which would otherwise
+    /// show through it in patches before the dive opens it), the last MiddleDip of it a faint dip in the very middle.
+    /// </summary>
+    const float BowlLift = 0.8f, MiddleDip = 0.6f;
+    /// <summary>The exit bowl's slope starts this far inside the rock (metres): its walls drop on into it.</summary>
+    const float WallRunsOn = 1.5f;
     const float ClearingRadius = 6f;       // open POIs (item spawn, ninja nests)
     const float PocketRadius = 6f;
     const float ChamberRadius = 6.5f;
@@ -94,6 +106,15 @@ public static class TopDownGenerator
             {
                 // Water she can never reach becomes mountains (after the checks: it never changes what she can reach).
                 int raised = Mountains.Fill(map);
+                // No kelp rooted in what is rock now.
+                foreach (var bed in map.Kelp)
+                    for (int k = bed.Roots.Count - 1; k >= 0; k--)
+                        if (map.HeightAt(bed.Roots[k]) > LevelMap.BlockHeight - 0.2f)
+                        {
+                            bed.Roots.RemoveAt(k);
+                            bed.Lengths.RemoveAt(k);
+                        }
+                map.Kelp.RemoveAll(bed => bed.Roots.Count < KelpLeast);
                 log?.Invoke($"Top-down level {id}: {raised} unreachable points raised into mountains");
                 return map;
             }
@@ -126,6 +147,7 @@ public static class TopDownGenerator
         ClampHeights(map);
         RoofShortcuts(map);
         Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed, strata);
+        PlaceKelp(map, Stage("kelp"));
         PlacePickups(map, Stage("pickups"));
         PlaceSpawns(map, Stage("spawns"), plan.Menace);
         return null;
@@ -732,7 +754,11 @@ public static class TopDownGenerator
             float angle = rng.Range(0f, MathF.PI);
             shaft = new Shaft(exit, new Vector2(MathF.Cos(angle), MathF.Sin(angle)), rng.Range(7f, 9f), rng.Range(2.5f, 3.5f));
         }
-        else shaft = new Shaft(exit, Vector2.UnitX, ShaftRadius, ShaftRadius);
+        else
+        {
+            SinkExitChamber(map);
+            return;
+        }
         map.Shaft = shaft;
         // The lip rounds over into a sheer drop: full depth a metre and a half inside the rim, so the rim is smooth
         // rather than stepped cell by cell.
@@ -746,6 +772,90 @@ public static class TopDownGenerator
             float w = 1f - Smooth(-1.5f, 0.3f, beyond);
             if (w > 0f) map[x, y] = MathUtil.Lerp(map[x, y], LevelMap.ShaftBottom, w);
         }
+    }
+
+    /// <summary>
+    /// The way down on an ordinary level: the exit's whole chamber sinks. Its floor slopes down from every wall round
+    /// it — the deeper the further from the rock, so the hollow follows the chamber's own craggy outline, not a circle —
+    /// to just over the shaft's floor in its middle, where the chamber is widest. Its tunnels' mouths ease into the slope. The exit
+    /// is moved to that middle, and only within DiveRadius of it can she dive.
+    /// </summary>
+    static void SinkExitChamber(LevelMap map)
+    {
+        const int N = LevelMap.Samples;
+        var exit = map.Exit.Position;
+        float room = map.Chambers.Count > 0 ? map.Chambers.OrderBy(c => Vector2.Distance(c.At, exit)).First().Radius : ExitChamber;
+        // How far each point of the water is from the rock round it.
+        var toRock = Chamfer(i => map.Heights[i] > 0f);
+        // The chamber: the water within its radius (and a few metres more, for its craggy edge), its tunnels fading out.
+        float reach = room + ExitMouth;
+        int x0 = Math.Max(0, (int)(exit.X - reach)), x1 = Math.Min(N - 1, (int)(exit.X + reach) + 1);
+        int y0 = Math.Max(0, (int)(exit.Y - reach)), y1 = Math.Min(N - 1, (int)(exit.Y + reach) + 1);
+        float widest = 0f;
+        Vector2 middle = exit;
+        for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+        {
+            int i = y * N + x;
+            float d = toRock[i];
+            // Its middle: as far from the rock as the chamber gets (the nearer the exit, of ties).
+            if (map.Heights[i] <= 0f && Vector2.Distance(new Vector2(x, y), exit) <= room
+                && (d > widest + 0.01f || (MathF.Abs(d - widest) <= 0.01f && Vector2.Distance(new Vector2(x, y), exit) < Vector2.Distance(middle, exit))))
+            {
+                widest = d;
+                middle = new Vector2(x, y);
+            }
+        }
+        widest = MathF.Max(widest, 2f);
+        var sunk = new List<int>();
+        for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+        {
+            int i = y * N + x;
+            if (map.Heights[i] > 0f) continue;
+            var q = new Vector2(x, y);
+            float inside = 1f - Smooth(room - 1f, room + ExitMouth, Vector2.Distance(q, exit));
+            if (inside <= 0f) continue;
+            // Down from the walls, levelling off toward the middle: the walls go on down into it (the slope starts
+            // WallRunsOn metres inside the rock), so no shelf of shallow sand rings it at their feet.
+            float t = MathUtil.Clamp01((toRock[i] + WallRunsOn) / (widest + WallRunsOn));
+            float slope = 1f - (1f - t) * (1f - t);
+            float floor = MathUtil.Lerp(map.Heights[i], LevelMap.ShaftBottom + BowlLift + MiddleDip, slope * inside);
+            map.Heights[i] = MathF.Min(map.Heights[i], floor);
+            sunk.Add(i);
+        }
+        // Smoothed over the water (the distances step in eighths of a turn: no facets), the walls left as they stand.
+        for (int pass = 0; pass < 3; pass++)
+        {
+            var was = sunk.ToDictionary(k => k, k => map.Heights[k]);
+            foreach (int k in sunk)
+            {
+                float sum = 0f;
+                int n = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int j = k + dy * N + dx;
+                    float h = was.TryGetValue(j, out float v) ? v : map.Heights[j];
+                    if (h > 0f) continue;
+                    sum += h;
+                    n++;
+                }
+                map.Heights[k] = MathF.Min(0f, sum / n);
+            }
+        }
+        // The very middle the deepest point of the level: a last, faint dip (too shallow to show).
+        foreach (int k in sunk)
+        {
+            float dip = 1f - Smooth(0f, DiveRadius - 0.5f, Vector2.Distance(new Vector2(k % N, k / N), middle));
+            if (dip > 0f) map.Heights[k] = MathF.Min(map.Heights[k], LevelMap.ShaftBottom + BowlLift + MiddleDip * (1f - dip));
+        }
+        map.Shaft = new Shaft(middle, Vector2.UnitX, DiveRadius, DiveRadius);
+        map.Exit.Position = middle;
+        // The tunnels that ended at the exit end in its middle now (inside the same chamber).
+        foreach (var c in map.Corridors)
+            for (int k = 0; k < c.Points.Count; k++)
+                if (c.Points[k] == exit) c.Points[k] = middle;
     }
 
     /// <summary>A minimum with a rounded crease (no flat clamp where the two meet).</summary>
@@ -1365,6 +1475,50 @@ public static class TopDownGenerator
     }
 
     // ───────────────────────── stage 5: reef & decoration ─────────────────────────
+
+    /// <summary>
+    /// Kelp beds: KelpBedsMin–KelpBedsMax a level (KelpDepthMin–KelpDepthMax in the Kelp depth, Depth 2), each a blob
+    /// KelpRadiusMin–KelpRadiusMax metres across with a wavering edge, its strands rooted about KelpSpacing apart on the
+    /// open floor (thinning toward the edge), each KelpLengthMin–KelpLengthMax long — standing, they reach up past her
+    /// plane, so she swims among them and some pass over her. On open water (at least KelpClear metres to the rock at
+    /// the middle), kept off the start, the way down and the places, and KelpApart metres apart.
+    /// </summary>
+    static void PlaceKelp(LevelMap map, Rng rng)
+    {
+        const int N = LevelMap.Samples;
+        int beds = map.Id.Depth == 2 ? KelpDepthMin + rng.Int(KelpDepthMax - KelpDepthMin + 1) : KelpBedsMin + rng.Int(KelpBedsMax - KelpBedsMin + 1);
+        var toRock = Chamfer(i => map.Heights[i] > LevelMap.BlockHeight - 0.2f);
+        uint seed = (uint)(rng.NextU64() >> 32);
+        for (int tries = 0; tries < 600 && map.Kelp.Count < beds; tries++)
+        {
+            var c = new Vector2(rng.Range(LevelMap.RimWidth + 4f, LevelMap.Size - LevelMap.RimWidth - 4f), rng.Range(LevelMap.RimWidth + 4f, LevelMap.Size - LevelMap.RimWidth - 4f));
+            int ci = (int)MathF.Round(c.Y) * N + (int)MathF.Round(c.X);
+            if (toRock[ci] < KelpClear || map.HeightAt(c) > LevelMap.BlockHeight - 0.5f) continue;
+            float r = rng.Range(KelpRadiusMin, KelpRadiusMax);
+            if (Vector2.Distance(c, map.Start.Position) < map.Start.Radius + r + 3f) continue;
+            if (Vector2.Distance(c, map.Exit.Position) < map.Exit.Radius + r + 5f || map.Shaft.Contains(c, r + 4f)) continue;
+            if (map.Pois.Any(p => p.Kind is not (PoiKind.Start or PoiKind.Exit) && Vector2.Distance(c, p.Position) < p.Radius + r + 2f)) continue;
+            if (map.Kelp.Any(k => Vector2.Distance(k.Center, c) < k.Radius + r + KelpApart)) continue;
+            var bed = new KelpBed { Center = c, Radius = r };
+            for (float y = -r; y <= r; y += KelpSpacing)
+            for (float x = -r; x <= r; x += KelpSpacing)
+            {
+                var p = c + new Vector2(x + rng.Range(-0.45f, 0.45f) * KelpSpacing, y + rng.Range(-0.45f, 0.45f) * KelpSpacing);
+                // A wavering outline, thinning toward it.
+                float edge = r * (0.8f + 0.3f * TerrainNoise.Fbm(p.X * 0.22f, p.Y * 0.22f, seed, 2));
+                float d = Vector2.Distance(p, c) / MathF.Max(edge, 0.5f);
+                if (d > 1f || rng.NextFloat() > 1f - 0.65f * d * d) continue;
+                // Rooted on the floor, never in the rock.
+                if (map.HeightAt(p) > LevelMap.BlockHeight - 0.3f || map.Shaft.Contains(p, 2f)) continue;
+                bed.Roots.Add(p);
+                bed.Lengths.Add(rng.Range(KelpLengthMin, KelpLengthMax));
+            }
+            if (bed.Roots.Count >= KelpLeast) map.Kelp.Add(bed);
+        }
+    }
+
+    public const int KelpBedsMin = 2, KelpBedsMax = 4, KelpDepthMin = 5, KelpDepthMax = 7, KelpLeast = 12;
+    public const float KelpRadiusMin = 3f, KelpRadiusMax = 5.5f, KelpSpacing = 0.55f, KelpLengthMin = 3.2f, KelpLengthMax = 4.6f, KelpClear = 2.5f, KelpApart = 10f;
 
     static void Decorate(LevelMap map, Rng rng, uint seed, WallStrata strata)
     {

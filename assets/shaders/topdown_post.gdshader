@@ -66,6 +66,11 @@ uniform int bubble_count = 0;
 /// Her bubbles in flight as lenses (CombatView.Lenses): x, height, z (world) and radius.
 uniform vec4 lenses[12];
 uniform int lens_count = 0;
+/// Swells in the water where she set off, turned or dashed (WaterSwells): x, z (world), age 0 → 1, strength; and the
+/// way she was going (x, z). A faint spreading ring of refraction at her plane, strongest behind her.
+uniform vec4 swells[6];
+uniform vec4 swell_dirs[6];
+uniform int swell_count = 0;
 // Her light and the warm tint of her glow (HerColor.cs, data/clementine_color.cfg).
 global uniform vec3 her_light;
 global uniform vec3 her_warm;
@@ -139,6 +144,34 @@ void fragment() {
 	// Refraction: the picture swims very slightly, more for what lies deeper.
 	vec2 wob = vec2(sin(uv.y * 38.0 + TIME * 1.3 + uv.x * 9.0), cos(uv.x * 31.0 + TIME * 1.1 - uv.y * 7.0));
 	vec2 suv = uv + wob * wobble * (0.0006 + 0.0012 * smoothstep(0.0, 6.0, below));
+	// Her swells: where this pixel's ray crosses her plane, a soft ring spreading from where she pushed off bends the
+	// picture outward a touch and thickens the water a shade — a brief shift in its density, no surface ripple.
+	float swell_density = 0.0;
+	if (swell_count > 0) {
+		vec4 vm = INV_PROJECTION_MATRIX * vec4(uv * 2.0 - 1.0, 0.5, 1.0);
+		vec3 ray = normalize((INV_VIEW_MATRIX * vec4(vm.xyz / vm.w, 0.0)).xyz);
+		vec3 cam = INV_VIEW_MATRIX[3].xyz;
+		vec3 sp = cam + ray * ((swim_level + 0.4 - cam.y) / min(ray.y, -1e-3));
+		vec2 bend = vec2(0.0);
+		for (int i = 0; i < swell_count; i++) {
+			vec4 s = swells[i];
+			vec2 d = sp.xz - s.xy;
+			float r = length(d);
+			vec2 out_dir = d / max(r, 1e-3);
+			float age = s.z;
+			// Out to about 2.6 m, quick at first, easing; widening as it goes; fading out.
+			float front = mix(0.25, 2.6, 1.0 - (1.0 - age) * (1.0 - age));
+			float width = 0.35 + 0.55 * age;
+			float band = exp(-pow((r - front) / width, 2.0));
+			// Strongest behind her (the water she pushed), still there ahead of her.
+			float behind = 0.45 + 0.55 * max(0.0, dot(out_dir, -swell_dirs[i].xy));
+			float k = s.w * band * behind * (1.0 - age) * (1.0 - age);
+			bend += out_dir * k;
+			swell_density += k;
+		}
+		// Map axes to the screen: east is right, south (+z) is down.
+		suv += bend * 0.004 * wobble;
+	}
 
 	float lod = below_blur * (below > 0.0 ? 0.55 + 0.45 * smoothstep(0.0, 10.0, below) : 0.0) * smoothstep(0.0, 0.8, below)
 		+ above_blur * smoothstep(0.0, 9.0, above);
@@ -164,6 +197,8 @@ void fragment() {
 	// Tall tops take on the water's blue (the shallow turquoise toward the depth's own deep water).
 	vec3 haze = mix(reef_water_shallow, reef_water_deep, 0.45) * 1.05;
 	col = mix(col, haze, peak * peak_blue);
+	// Her swells thicken the water a shade where they pass.
+	col = mix(col, reef_water_deep, clamp(swell_density, 0.0, 1.0) * 0.05);
 
 	// Her glow lands on the floor (DESIGN-TOPDOWN §5): in daylight bioluminescence reads not as brightness but as a
 	// warm tint on what is near, and as shadow contrast. A broad warm pool (her_glow.w metres, showing on pale sand

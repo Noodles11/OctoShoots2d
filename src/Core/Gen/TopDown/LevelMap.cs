@@ -169,6 +169,19 @@ public readonly record struct DecorSpot(DecorKind Kind, Vector2 Position, float 
 
 public readonly record struct SealedPocket(Vector2 Position, float Radius);
 
+/// <summary>
+/// A kelp bed (DESIGN-TOPDOWN §4.1 stage 5): a dense patch of tall seaweed rooted on the open floor, its strands' roots
+/// and lengths (metres). Cosmetic in the sim (it neither blocks nor slows); the view sways it in the water everything
+/// stirs, and it can hide what swims in it.
+/// </summary>
+public sealed class KelpBed
+{
+    public Vector2 Center;
+    public float Radius;
+    public List<Vector2> Roots = new();
+    public List<float> Lengths = new();
+}
+
 public readonly record struct BuriedCoins(Vector2 Position, int Amount);
 
 public enum SpawnRole { Den, Ambush, Patrol, Guardian }
@@ -271,6 +284,8 @@ public sealed class LevelMap
     public List<Canopy> Canopies = new();
     public List<WeakRock> WeakRocks = new();
     public List<DecorSpot> Decor = new();
+    /// <summary>Kelp beds: dense patches of tall seaweed.</summary>
+    public List<KelpBed> Kelp = new();
     public List<SealedPocket> Pockets = new();
     public List<BuriedCoins> Coins = new();
     public List<SpawnEntry> Spawns = new();
@@ -419,6 +434,18 @@ public sealed class LevelMap
             w.Write(d.Height);
             w.Write(d.Scale);
             w.Write(d.Yaw);
+        }
+        w.Write(Kelp.Count);
+        foreach (var k in Kelp)
+        {
+            V(k.Center);
+            w.Write(k.Radius);
+            w.Write(k.Roots.Count);
+            for (int i = 0; i < k.Roots.Count; i++)
+            {
+                V(k.Roots[i]);
+                w.Write(k.Lengths[i]);
+            }
         }
         w.Write(Pockets.Count);
         foreach (var p in Pockets)

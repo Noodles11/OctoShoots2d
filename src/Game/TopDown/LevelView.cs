@@ -283,11 +283,12 @@ public partial class LevelView : Node3D
 
     /// <summary>
     /// The terrain as a smooth surface: bicubic (Catmull-Rom) through the height samples, so it still passes through
-    /// every grid point the simulation collides against, but without creases between them. Around the shaft it is
-    /// plain bilinear: its walls drop sheer, without the bicubic's ripples.
+    /// every grid point the simulation collides against, but without creases between them. Around the Crack it is
+    /// plain bilinear: its walls drop sheer, without the bicubic's ripples. (A blue hole's bowl slopes smoothly, and is
+    /// smooth all through: no seam rings it.)
     /// </summary>
     static float SmoothHeight(LevelMap map, float x, float y) =>
-        map.Shaft.Contains(new System.Numerics.Vector2(x, y), 3f) ? map.HeightAt(new System.Numerics.Vector2(x, y)) : SmoothSample((i, j) => map[i, j], x, y);
+        map.HasBoss && map.Shaft.Contains(new System.Numerics.Vector2(x, y), 3f) ? map.HeightAt(new System.Numerics.Vector2(x, y)) : SmoothSample((i, j) => map[i, j], x, y);
 
     /// <summary>A tunnel's roof where there is one, the terrain elsewhere (so its edge meets the ground exactly).</summary>
     static float SmoothTunnelRoof(LevelMap map, float x, float y) => SmoothSample((i, j) => float.IsNaN(map.RoofAt(i, j)) ? map[i, j] : map.RoofAt(i, j), x, y);

@@ -3,8 +3,8 @@
 // separately meet seamlessly. Colours come from the depth's look (reef_* globals, set by ReefLook, linear).
 //
 //   Seabed (flat, under the swim level): rippled sand whose crests catch the sun, shell grit, soft drifts of algae.
-//   Reef walls: limestone with strata and dark crevices, crusted with lilac and pink coralline algae, turf on ledges.
-//   Reef tops: coral gardens, a mosaic of rounded heads in the depth's coral colours with polyp dots.
+//   Reef walls, ledges and tops: limestone with strata and dark crevices, crusted with lilac and pink coralline algae,
+//   turf on ledges — one rock all the way up.
 //   Light: sharp moving caustics on everything facing up, fading with depth; red light absorbed as the water deepens.
 //   The Crack: an orange glow breathing up from the deepest fissure (reef_crack: x, z, radius, strength).
 
@@ -128,42 +128,6 @@ vec3 rs_rock(vec3 w, vec3 n) {
 	return c;
 }
 
-// A coral garden on the reef tops: rounded heads of many corals, each lit like a small dome, with its own texture
-// (brain coral meanders, polyp-dotted mounds, ridged plates, soft fuzz) and dark seams between them.
-vec3 rs_garden(vec3 w, inout vec3 n) {
-	vec2 to_seed;
-	vec2 q = w.xz * 1.9 + vec2(rs_fbm(w * 0.7), rs_fbm(w * 0.7 + 5.0)) * 1.1;
-	vec3 cell = rs_cells_to(q, to_seed);
-	// Colonies: neighbouring heads tend to share a colour (a slow field picks it, the cell nudges it).
-	float id = fract(rs_fbm(w * 0.2 + 2.0) * 1.8 + cell.z * 0.3);
-	vec3 c = id < 0.3 ? reef_coral : id < 0.5 ? reef_coral2 : id < 0.62 ? reef_butter : id < 0.8 ? reef_algae : reef_sponge;
-	float r = clamp(cell.x / 0.62, 0.0, 1.0);
-	// The dome: the normal leans away from the head's centre.
-	n = normalize(n + vec3(-to_seed.x, 0.0, -to_seed.y) * 0.9 * r);
-	vec2 lp = -to_seed * 9.0;
-	float kind = fract(cell.z * 7.31);
-	if (kind < 0.3) {
-		// Brain coral: meandering valleys.
-		float m = sin(lp.x * 1.3 + 2.2 * sin(lp.y * 0.9 + cell.z * 9.0)) * sin(lp.y * 1.2 - 1.8 * sin(lp.x * 0.8));
-		c *= 0.78 + 0.32 * smoothstep(-0.2, 0.4, m);
-	} else if (kind < 0.55) {
-		// Polyps: bright cups all over the mound.
-		vec3 pc = rs_cells(lp * 1.4);
-		c = mix(c * 0.85, c * 1.3 + 0.03, 1.0 - smoothstep(0.08, 0.2, pc.x));
-	} else if (kind < 0.75) {
-		// A plate: ridges radiating from its middle.
-		float ang = atan(to_seed.y, to_seed.x);
-		c *= 0.82 + 0.25 * (0.5 + 0.5 * sin(ang * 22.0));
-	} else {
-		// Soft coral fuzz.
-		c *= 0.86 + 0.24 * rs_noise(vec3(lp * 2.5, cell.z * 30.0));
-	}
-	c *= 1.05 - 0.35 * r * r;
-	float seam = 1.0 - smoothstep(0.015, 0.07, cell.y);
-	c = mix(c, reef_murk * 0.3, seam * 0.8);
-	return c;
-}
-
 // local: the point in its level's own coordinates (level_frame.gdshaderinc); patterns are drawn at its absolute
 // position, so a level looks the same wherever it is placed. px: how many metres one pixel spans here (from the
 // caller's derivatives), to keep fine patterns from aliasing.
@@ -174,26 +138,20 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 	// Height relative to the swim level (0): the seabed lies at about -1, the walls rise above 0.
 	float h = local.y;
 
-	// Sand on the flat seabed (and a little way up the foot of the walls); gardens on flat tops; rock elsewhere.
+	// Sand on the flat seabed (and a little way up the foot of the walls); rock everywhere else, tops and shelves too.
 	// The weights come first, and each look is worked out only where it shows (most pixels need just one): the
 	// three noise stacks are the reef's main cost on a big screen.
 	float sandK = smoothstep(0.72, 0.92, up) * (1.0 - smoothstep(-0.4, 0.5 + rs_noise(w * 0.3) * 0.8, h));
-	// Gardens only where the rock is nearly flat (under ~25°): the walls' leaning faces stay rock.
-	float gardenK = smoothstep(0.84, 0.95, up) * smoothstep(1.2, 2.6, h);
-	if (gardenK > 0.0 && sandK < 0.999) gardenK *= smoothstep(0.3, 0.5, rs_fbm(w * 0.18 + 7.0));
-	else gardenK = 0.0;
 	vec3 nn = n;
 	vec3 sand = sandK > 0.001 ? rs_sand(w, nn, px) : vec3(0.0);
-	vec3 rock = (1.0 - gardenK) * (1.0 - sandK) > 0.001 ? rs_rock(w, n) : vec3(0.0);
-	vec3 gn = n;
-	vec3 garden = gardenK * (1.0 - sandK) > 0.001 ? rs_garden(w, gn) : vec3(0.0);
-	vec3 c = mix(rock, garden, gardenK);
-	float apron = (1.0 - smoothstep(0.8, 0.97, up)) * sandK;
+	vec3 c = sandK < 0.999 ? rs_rock(w, n) : vec3(0.0);
+	// The shaded apron at the walls' feet, on the seabed only: down a blue hole's long slope it would draw a ring.
+	float apron = (1.0 - smoothstep(0.8, 0.97, up)) * sandK * smoothstep(-3.0, -1.8, h);
 	sand = mix(sand, sand * mix(vec3(0.72), reef_algae * 1.1, 0.4), apron);
 	c = mix(c, sand, sandK);
-	s.normal = normalize(mix(mix(n, gn, gardenK), nn, sandK));
-	// Matte all over: rough rock, gardens and sand (no polish).
-	s.rough = mix(mix(0.96, 0.9, gardenK), 0.98, sandK);
+	s.normal = normalize(mix(n, nn, sandK));
+	// Matte all over: rough rock and sand (no polish).
+	s.rough = mix(0.96, 0.98, sandK);
 
 	// The impassable reef wall around the square: darker and cooler toward the edge of the world.
 	float edge = min(min(local.x, local.z), min(reef_extent.x - local.x, reef_extent.y - local.z));

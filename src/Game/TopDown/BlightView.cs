@@ -240,6 +240,55 @@ public partial class BlightView : Node3D
 
     static readonly StringName WornParam = "worn", WornMeta = "worn_outline";
 
+    // ───────────────────────── ink off a hit ─────────────────────────
+
+    /// <summary>
+    /// Her light strikes a corrupted body: a few drops of its ink flick off the side the shot hit — back toward her and
+    /// out to the sides, up a little, then sinking as they slow in the water (heavier than it, tacky). A creature freed
+    /// throws a few more. The body's size sets where its skin is.
+    /// </summary>
+    public void InkSplash(PlaneWorld world, System.Numerics.Vector2 at, System.Numerics.Vector2 dir, bool freed)
+    {
+        float radius = BodyRadius(world, at, out float height);
+        var back = new Vector3(-dir.X, 0f, -dir.Y).Normalized();
+        var side = new Vector3(-back.Z, 0f, back.X);
+        var hit = new Vector3(at.X, height, at.Y) + back * radius * 0.85f;
+        int drops = freed ? 10 : 5 + (int)_droplets.RandRange(0f, 2.99f);
+        for (int i = 0; i < drops; i++)
+        {
+            // Off the skin: mostly back the way the shot came, fanning out to the sides, and up.
+            float fan = _droplets.RandRange(-1f, 1f);
+            // Out past the glow of her shot bursting there, before they slow and sink.
+            var v = (back * _droplets.RandRange(2.4f, 4f) + side * fan * 2.4f + Vector3.Up * _droplets.RandRange(0.8f, 2f)) * (freed ? 1.25f : 1f);
+            float size = _droplets.RandRange(0.14f, 0.24f);
+            _droplets.Emit(hit + back * 0.15f + side * fan * radius * 0.25f, v, _droplets.RandRange(0.6f, 0.9f), size, size * 0.4f,
+                InkDrop, InkDropFade, drag: 2.6f, buoyancy: -2.4f);
+        }
+    }
+
+    /// <summary>A drop of the ink: dark violet with the sheen of the creatures' own rims (it reads on dark ground too), thinning to their glow.</summary>
+    static readonly Color InkDrop = new(0.2f, 0.1f, 0.34f, 1f), InkDropFade = new(0.5f, 0.32f, 0.85f, 0f);
+
+    /// <summary>The radius and height of the corrupted body nearest <paramref name="at"/> (where its hit was; the shove may have moved it since).</summary>
+    static float BodyRadius(PlaneWorld world, System.Numerics.Vector2 at, out float height)
+    {
+        float best = 2f, radius = 0.5f, h = LevelMap.SwimBand;
+        void Try(System.Numerics.Vector2 p, float r, float y)
+        {
+            float d = System.Numerics.Vector2.Distance(p, at);
+            if (d >= best) return;
+            (best, radius, h) = (d, r, y);
+        }
+        foreach (var m in world.Murklings) Try(m.Position, m.Radius, LevelMap.SwimBand);
+        foreach (var b in world.Blotters) Try(b.Position, BlotterTuning.ShellRadius * 0.8f, LevelMap.SwimBand + 1f);
+        foreach (var w in world.Inkwardens) Try(w.Position, WardenTuning.Radius, LevelMap.SwimBand + 0.4f);
+        foreach (var t in world.Thumpsquirts) Try(t.Position, ThumpTuning.Radius, LevelMap.SwimBand + 0.4f);
+        foreach (var l in world.Lashjaws) Try(l.Position, 0.6f, LevelMap.SwimBand);
+        foreach (var r in world.Blightroots) Try(r.Position, 0.9f, SacHeight);
+        height = h;
+        return radius;
+    }
+
     // ───────────────────────── events ─────────────────────────
 
     /// <summary>The war's moments: a bud's ripple, a murkling bursting (and its ember blooming), a sac drinking a bubble.</summary>

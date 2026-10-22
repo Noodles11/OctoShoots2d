@@ -123,6 +123,24 @@ public partial class CameraRig : Node3D
 
     readonly float[] _lenses = new float[CombatView.MaxLenses * 4];
 
+    /// <summary>The swells in the water round her (WaterSwells): where, how old and strong, and the way she was going.</summary>
+    public void SetSwells(OctoShoots.Game.Fx.WaterSwells swells)
+    {
+        for (int i = 0; i < swells.Count; i++)
+        {
+            for (int c = 0; c < 4; c++)
+            {
+                _swells[i * 4 + c] = swells.Rings[i][c];
+                _swellDirs[i * 4 + c] = swells.Dirs[i][c];
+            }
+        }
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("swells"), _swells);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("swell_dirs"), _swellDirs);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("swell_count"), swells.Count);
+    }
+
+    readonly float[] _swells = new float[OctoShoots.Game.Fx.WaterSwells.Max * 4], _swellDirs = new float[OctoShoots.Game.Fx.WaterSwells.Max * 4];
+
     /// <summary>A big-merge kill: the screen's edges lift toward white for 60 ms.</summary>
     public void EdgeFlash() => _edgeFlash = 1f;
     float _edgeFlash;

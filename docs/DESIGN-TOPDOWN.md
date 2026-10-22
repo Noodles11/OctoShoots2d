@@ -286,7 +286,13 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
   the rock. Overlapping canopies all fade; a cave's roof, and a tunnel's, fade
   whole. It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
   (`LevelView.UpdateCanopy`). This is what makes the reef read as
-  layered and physical rather than painted flat (§4.5, §11).
+  layered and physical rather than painted flat (§4.5, §11). The one thing that
+  may pass over her is kelp (Stage 5): blades between her and the camera cover
+  her as they sway across, by design — only those, only near her. While one
+  does, a thin warm-white outline (the light of the line her hits draw round a
+  corrupted creature) shows round her bell over everything, so she is never
+  lost in it; it comes in quickly and lingers a moment after
+  (`clementine_outline`, `KelpView.Covers`).
 - **Camera breaks (only two, ever):** boss-awakening dips (2 s low-angle swell
   toward the boss) and the **Tank transition** — the Crack sucks Clementine down
   through a vertical shaft in a short cutscene (the one time true verticality is
@@ -385,8 +391,12 @@ its own.
   over the cap they are dropped in the order ambushes, curse den, secret,
   shell cache (clam rooms stay). The tutorial (Depth 0, §8) sets its places
   rather than rolling them.
-- **The way down:** on most levels a **blue hole** (a 6.5 m shaft) in a
-  10.5 m chamber; on the depth's boss level the **boss arena**, a round level
+- **The way down:** on most levels a **blue hole**: its whole 10.5 m chamber
+  sinks, the floor sloping down from every wall round it (the further from the
+  rock, the deeper, so the hollow follows the chamber's own craggy outline, not
+  a circle; its tunnels ease into the slope) to just over the level below's
+  seabed in its middle, where the chamber is widest. She can dive only there,
+  within 3 m of the middle; on the depth's boss level the **boss arena**, a round level
   chamber ~34 m across with **the Crack** across its middle, a fissure
   14–18 m long.
 - The cave's records: its tunnels are the level's corridors (main, side, and
@@ -461,6 +471,23 @@ its own.
   drawn as the rock it is and fades whole as a canopy (§3).
 
 **Stage 5 — Reef & decoration from the map:**
+- **Kelp beds** (`LevelMap.Kelp`; drawn and moved by `KelpView`): 2–4 a level
+  (5–7 in the Kelp depth), each a blob 3–5.5 m across with a wavering edge, its
+  strands rooted about 0.55 m apart on the open floor (thinning to the edge),
+  each 3.2–4.6 m long, so standing they reach well past her plane: she swims
+  among them, some pass over her, and they hide what swims in them. On open
+  water, off the start, the way down and the places, 10 m apart. The sim never
+  reads them (they neither block nor slow). Every strand is a thick blade — a
+  thin stipe, widest two thirds up, a rounded tip, ruffled margins, a pale
+  midrib — on a verlet chain of 10 points: buoyant (the tip most), held to its
+  length, too stiff to fold on itself, dragged by the water round it, pushed
+  aside by bodies swimming through it, kept out of the floor. The water is the
+  reef's slow swell (a steady drift the beds lean into, swelling along and
+  across it, each strand out of step and more at its tip, so it wobbles), what
+  every swimmer stirs (she, the creatures, the fish, her shots: they drag the
+  water along behind them and push it out to their sides, the faster the
+  wider), her swells (a push out from where she set off, turned or dashed) and
+  a current surge through its canyon. Only beds within 24 m of her move.
 - **The seabed is flat:** once the reef is raised, every floor deeper than
   **−1.2** is lifted to it, so no hollows or rolling
   floor draw the eye; only the walls' feet slope. The shaft and the rift's
@@ -572,7 +599,7 @@ Running after the checks, it never changes what she can reach.
 | Tunnels | main 6–9 m, side 4.5–7 m, craggy | rush speed; nothing blocks |
 | Chambers | 5–10 m radius | natural fight arenas |
 | Peaks | up to 14 m | occlude and cast shade, never block |
-| The shaft | blue hole 6.5 m; the Crack 14–18 m; floor −9 m | the way down |
+| The way down | blue hole: the exit chamber sloping to −8.2 m, dive within 3 m of its middle; the Crack 14–18 m, floor −9 m | the way down |
 | Level drop | **8 m** swim plane to swim plane | a real dive that still reads through the fog (§4.6) |
 | Arches | ×2–5 (at most 6), span 10–24 m | canopy-fade showcase |
 | Passes | 3–5 m tunnels, roofed | the shortcuts |
@@ -587,8 +614,9 @@ levels: ~4–5 min rushed, ~25 min explored.
 
 ### 4.6 The way down — holes and the dive
 - **One way down per level:** a blue hole, or the Crack on the boss level
-  (Stage 1). Over it the floor gives way to a shaft; through it she sees the
-  level below, through plain water (nothing marks what lies there).
+  (Stage 1). A blue hole is its sunken chamber's deep middle; the Crack a shaft
+  in the arena floor. As she dives, the level opens there onto the level below,
+  through plain water (nothing marks what lies there).
 - **The level below lies 8 m down** (swim plane to swim plane), moved so its
   start sits right under the hole. Map coordinates need not match, and the rock
   does not either (the old shared stamps are dropped): she lands in the start
@@ -739,10 +767,13 @@ Deterministic and cheap: the same level always schedules the same events.
     reef fish (§12.2), every shot (her bubbles, needles, Queen Clam's pearls), shells, hearts, loose
     pearls, ink clouds — the swimmers sliding along rock as they go. Shop stands
     and Queen Clam hold fast.
-  - **Seen beyond it:** pale streaks of moving water race down the canyon and
-    spill up to 5 m past its walls, where the current is only cosmetic. They
-    appear as the surge builds (the warning), race at full strength, and thin
-    out as it eases off.
+  - **Seen beyond it:** the moving water seen as her own swells are: strips of
+    denser water, each a long soft lens (3–5 m by 0.4–1 m, at her plane) that
+    magnifies what lies under it across its width — most in its middle, not at
+    all at its soft edges and ends, a faint bright line where it bends hardest —
+    race down the canyon and spill up to 5 m past its walls, where the current
+    is only cosmetic (`CurrentView`). They appear as the surge builds (the
+    warning), race at full strength, and thin out as it eases off.
 - **Bubble geysers** (`PlaneGeysers.cs`, `GeyserView`): each level has 2–4 small vents in the seabed (on open floor,
   18 m from the start, clear of the way down, the places and the light spring, 14 m apart), seeded. Each sprays on its
   own clock (from its own `geysers` stream, so the surges' schedule is untouched): the first spray 6–25 s into the
@@ -805,7 +836,7 @@ and 0.45; their look's Menace at most 0.6).
 
 ### 5.2 Living water (cosmetic, inherited §11.4 rules)
 Low-res 2D velocity field on the plane; drives bubbles, marine snow, kelp/fan
-sway, ink clouds, current streaks. Bosses and dashes inject swirls. Cosmetic
+sway, ink clouds, current strips. Bosses and dashes inject swirls. Cosmetic
 stream only — never touches gameplay physics. Quality presets inherited.
 
 ### 5.3 Light transport (`light_field.gdshaderinc`, `HorizonMap`, `SunMap`)
@@ -822,6 +853,14 @@ exactly and cheaply, and the water glows where light passes through it.
   (out to its reach), the running steepest slope of the terrain (its height over the light ÷ the distance). A point is
   lit exactly when its own slope from the light clears that; one texture lookup (`her_vis`), soft at the edge. Redone
   when she moves (a quarter of a millisecond).
+- **The water she pushes** (`WaterSwells`, the post pass's swells): when she sets off from near still, turns
+  sharply at speed (over about 57° from the way she was holding; long curves never count) or dashes, the water
+  shifts for a moment — no surface ripple, a brief change in its density: a faint ring of refraction at her plane
+  spreading about 2.6 m from where she pushed off over 0.7 s, strongest behind her, the water a shade thicker where
+  it passes. At most six at once, one every 0.28 s; off with reduced motion.
+- **Ink off a hit** (`BlightView.InkSplash`): where her shot strikes a corrupted body, 5–7 drops of its ink (10 for
+  one freed) flick off the struck side — back toward her and fanning out, up a little — then slow and sink,
+  violet-sheened so they read on dark ground.
 - **Her glow in the water**: the water her light passes through scatters it toward the eye, integrated along every
   pixel's view ray. For a point light that integral has a closed form, (I / h)·(θb − θa) with h the ray's closest
   approach and θ the angle seen from the light; 10 samples spaced evenly in that angle (equiangular sampling, jittered
@@ -1271,8 +1310,10 @@ at mist distance (inherited fade rule).
     summed four times a second (a creature it frees shows at once). A pot breaks once 18 of it has landed. It has no
     knockback and sends no surge back to her. Its tip and every impact steadily clear the ground's corruption round
     them (1 m plus its width, 2.25 density a second); the rest of its line does not. A ribbon of
-    white-hot light in her glow, pulses racing outward along it, a glow at her mouth and every impact; it lights the
-    swim layer along its way. Where it strikes nothing, its last 1.6 m bend down to the seabed and the water there
+    white-hot light in her glow, pulses racing outward along it, laid like paint (its edge wandering and tearing,
+    bristle streaks flowing outward along it; a cone a dry-brushed sheet), two strands of lightning crackling round it
+    (thrown out to its sides and back, re-struck 12 times a second, painted as her strikes are), a glow at her mouth
+    and every impact; it lights the swim layer along its way. Where it strikes nothing, its last 1.6 m bend down to the seabed and the water there
     boils: bubbles well up over 1 m plus its width and rise to the surface (as a geyser's do), with a fizz of froth at
     the touch; a cone's whole far edge comes down and bubbles along it. Her other pearls shape it:
     - shot size widens it (×0.11 m half-width, times her size stat and the pearls' size); **Starfish Arm** widens it
@@ -1391,7 +1432,7 @@ at mist distance (inherited fade rule).
   - **Settings:** frame-rate cap, sunlight, camera shake, reduced motion; the controls, read-only.
   - **Keeping the GPU cool on big screens:** the 3D scene renders with at most a 1080p screen's worth of pixels
     (view option MaxRenderHeight, 0 = native) and FSR upscales it to the window; the HUD draws at full size. The
-    reef's skin works out only the looks a pixel shows (sand, rock or coral garden), not all three. Measured on a
+    reef's skin works out only the looks a pixel shows (sand or rock), not both. Measured on a
     3840-wide window: about 12–25 ms of GPU a frame before, 3–5 ms after.
   - **Motion.** Sub-screens are pearl cards that surface from the bottom right and dive away, and starting a run
     fades into the loading splash.
@@ -1417,8 +1458,7 @@ at mist distance (inherited fade rule).
     and a shaded apron at the feet of walls.
   - **Walls:** limestone with strata and dark crevices, crusted with lilac and pink coralline algae, with turf on
     ledges.
-  - **Tops:** coral gardens of domed heads in colonies (brain, polyp, plate and soft textures), only where the rock
-    is nearly flat (under about 25°): the walls' leaning faces stay rock.
+  - **Tops and shelves:** the same rock as the walls, all the way up (no coral mosaic).
   - **Depth:** water steals red as the floor deepens; the rim wall darkens toward the edge of the world.
   - **Caustics:** on everything facing up, sharp near the surface, fading with depth. They are sunlight, so they
     fall only where the sun reaches; walls throw real shade across them.

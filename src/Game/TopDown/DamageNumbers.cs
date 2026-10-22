@@ -14,7 +14,7 @@ namespace OctoShoots.Game.TopDown;
 /// </summary>
 public partial class DamageNumbers : Node3D
 {
-    const float Life = 0.9f, Rise = 1.6f, Height = 1.4f;
+    const float Life = 0.9f, Rise = 1.5f, Height = 1.4f, Pop = 1.3f;
 
     /// <summary>Light: her shots, and her corruption cleansed. A bright gold on a dark outline.</summary>
     static readonly Color Light = new(1f, 0.9f, 0.5f);
@@ -76,10 +76,10 @@ public partial class DamageNumbers : Node3D
     /// <summary>The camera's right and up (numbers are laid out across its view), or null with no camera.</summary>
     (Vector3 Right, Vector3 Up)? View() => GetViewport().GetCamera3D() is { } cam ? (cam.GlobalBasis.X, cam.GlobalBasis.Y) : null;
 
-    /// <summary>A number's half size across the view (metres): its text at its pixel size and scale.</summary>
+    /// <summary>A number's half size across the view (metres): its text at its pixel size, room left for its pop.</summary>
     static Vector2 Extent(Label3D label)
     {
-        float h = label.FontSize * label.PixelSize * label.Scale.Y;
+        float h = label.FontSize * label.PixelSize * Pop;
         return new Vector2(h * 0.32f * label.Text.Length + h * 0.15f, h * 0.42f);
     }
 
@@ -116,9 +116,9 @@ public partial class DamageNumbers : Node3D
                 continue;
             }
             float t = age / Life;
-            // A quick pop, then an eased rise and a late fade.
-            label.Position += new Vector3(drift, Rise * (1f - t) * 1.8f, 0f) * dt;
-            float pop = t < 0.12f ? 1f + 0.5f * (1f - t / 0.12f) : 1f;
+            // A quick pop, then a steady rise (all at one speed, so none catches up with the one above it) and a late fade.
+            label.Position += new Vector3(drift * (1f - t), Rise, 0f) * dt;
+            float pop = t < 0.12f ? 1f + (Pop - 1f) * (1f - t / 0.12f) : 1f;
             label.Scale = Vector3.One * pop;
             float alpha = t < 0.6f ? 1f : 1f - (t - 0.6f) / 0.4f;
             label.Modulate = label.Modulate with { A = alpha };

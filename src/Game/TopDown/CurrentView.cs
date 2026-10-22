@@ -6,18 +6,20 @@ using OctoShoots.Core.Plane;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// Current surges on screen (DESIGN-TOPDOWN §4.7): pale streaks of moving water rushing down the canyon the surge runs
-/// through, over its channel and spilling a little past its walls (where it is only seen, not felt). They appear as
-/// the surge builds, race at full strength, and thin out as it eases off — the warning before it bites.
+/// Current surges on screen (DESIGN-TOPDOWN §4.7): the moving water seen as she sees her own swells — strips of
+/// denser water, each a long soft lens that magnifies what lies under it across its width (the picture bends most at
+/// its middle, not at all at its edges, with a faint bright line where it bends hardest), racing down the canyon the
+/// surge runs through, over its channel and spilling a little past its walls (where it is only seen, not felt). They
+/// appear as the surge builds, race at full strength, and thin out as it eases off — the warning before it bites.
 /// </summary>
 public partial class CurrentView : Node3D
 {
-    const int Streaks = 240;
-    const float StreakLength = 1.6f, StreakWidth = 0.07f;
+    const int Streaks = 70;
+    const float StreakLength = 4f, StreakWidth = 0.7f;
 
     sealed class Streak
     {
-        public float S, Side, Height, Life, Age, Pace;
+        public float S, Side, Height, Life, Age, Pace, Size;
     }
 
     MultiMesh _mesh = null!;
@@ -33,13 +35,29 @@ public partial class CurrentView : Node3D
         var shader = new Shader
         {
             Code = @"shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_disabled, shadows_disabled;
+uniform sampler2D screen : hint_screen_texture, filter_linear_mipmap;
 void fragment() {
-	// Bright in the middle of its length, fading to nothing at both ends and at the edges.
-	float along = sin(UV.x * 3.14159);
-	float across = 1.0 - abs(UV.y * 2.0 - 1.0);
-	ALBEDO = COLOR.rgb;
-	ALPHA = COLOR.a * along * along * across;
+	// A strip of denser water: a soft lens across its width. Its mask: nothing at its edges and its ends.
+	float u = UV.x, v = UV.y * 2.0 - 1.0;
+	float along = smoothstep(0.0, 0.3, u) * smoothstep(1.0, 0.7, u);
+	float across = 1.0 - v * v;
+	float mask = along * across * COLOR.a;
+	// Across, in screen pixels: how far this pixel is from the strip's middle line, and which way that is.
+	vec2 g = vec2(dFdx(UV.y), dFdy(UV.y));
+	float gl = max(length(g), 1e-5);
+	vec2 n = g / gl;
+	float from_mid = (UV.y - 0.5) / gl;
+	// Magnified: sampling nearer the middle line (up to 1.25x at the middle), so the picture under it swells.
+	float mag = 0.2 * mask;
+	vec2 px = 1.0 / VIEWPORT_SIZE;
+	vec2 suv = SCREEN_UV - n * from_mid * mag * px;
+	vec3 seen = textureLod(screen, suv, 0.0).rgb;
+	// Where it bends hardest (part way to its edges), a faint bright line; the water a shade cooler inside it.
+	float rim = smoothstep(0.35, 0.7, abs(v)) * (1.0 - smoothstep(0.7, 1.0, abs(v)));
+	seen = mix(seen, seen * vec3(0.94, 1.0, 1.04), 0.6) + COLOR.rgb * rim * 0.06;
+	ALBEDO = seen;
+	ALPHA = clamp(mask * 1.6, 0.0, 1.0);
 }",
         };
         _mesh = new MultiMesh
@@ -89,12 +107,12 @@ void fragment() {
             var side = new System.Numerics.Vector2(-dir.Y, dir.X);
             var p = at + side * st.Side;
             var flat = new Vector3(dir.X, 0f, dir.Y) * (_surge.Reverse ? -1f : 1f);
-            var basis = new Basis(flat * StreakLength * (0.6f + 0.6f * strength), Vector3.Up, new Vector3(-flat.Z, 0f, flat.X) * StreakWidth);
+            var basis = new Basis(flat * StreakLength * st.Size * (0.6f + 0.6f * strength), Vector3.Up, new Vector3(-flat.Z, 0f, flat.X) * StreakWidth * st.Size);
             _mesh.SetInstanceTransform(i, new Transform3D(basis, new Vector3(p.X, LevelMap.SwimBand + st.Height, p.Y)));
             // Fades in and out over its own life; dimmer where the flow is only seen, past the canyon's walls.
             float life = Mathf.Sin(Mathf.Pi * Mathf.Clamp(st.Age / st.Life, 0f, 1f));
             float inside = Mathf.Abs(st.Side) <= reach - ReefDirectorTuning.CosmeticReach ? 1f : 0.45f;
-            _mesh.SetInstanceColor(i, new Color(0.78f, 0.95f, 1f, 0.42f * strength * life * inside));
+            _mesh.SetInstanceColor(i, new Color(0.78f, 0.95f, 1f, strength * life * inside));
         }
     }
 
@@ -123,9 +141,10 @@ void fragment() {
     {
         st.S = _rng.RandfRange(0f, total);
         st.Side = _rng.RandfRange(-reach, reach);
-        st.Height = _rng.RandfRange(-0.6f, 1.6f);
+        st.Height = _rng.RandfRange(0f, 0.8f);
         st.Life = _rng.RandfRange(0.8f, 1.8f);
         st.Pace = _rng.RandfRange(1.4f, 2.2f);
+        st.Size = _rng.RandfRange(0.6f, 1.4f);
         st.Age = 0f;
     }
 

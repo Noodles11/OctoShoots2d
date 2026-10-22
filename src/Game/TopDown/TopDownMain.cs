@@ -23,7 +23,7 @@ namespace OctoShoots.Game.TopDown;
 /// screen (RunLaunch); run directly with verification flags, it starts a run on its own and saves nothing.
 /// WASD swims (north is up), Space dashes, Shift dives (InputSetup), the mouse aims, F1 opens the debug menu (any
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
-/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss,
+/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|kelp|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss,
 /// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --boss-hp=, --paused, --map, --f3, --no-focus,
 /// --capture=dir --frames=a,b, --dbg-say=text (a message banner, a second in).
 /// </summary>
@@ -35,6 +35,7 @@ public partial class TopDownMain : Node3D
     LevelId _id = LevelId.First;
     CombatView _combat = null!;
     CurrentView _currents = null!;
+    KelpView _kelp = null!;
     VaseView _vases = null!;
     /// <summary>Achievements: their data, what earns them on this run, and the banner that announces them (§8).</summary>
     AchievementCatalog? _achievementData;
@@ -42,6 +43,8 @@ public partial class TopDownMain : Node3D
     AchievementBanner _achievementBanner = null!;
     string? _debugAward;
     string? _debugSay;
+    /// <summary>Verification (`--dbg-steer=x,y`): she swims that way (map axes) the whole time.</summary>
+    Vector2? _dbgSteer;
     BossView _boss = null!;
     PufferlingView _puffers = null!;
     ReefFishView _reefFish = null!;
@@ -157,6 +160,7 @@ public partial class TopDownMain : Node3D
     // The corruption (docs/CORRUPTION.md): its shards and creatures, the live texture, and the shards being laid out.
     CorruptionView _corruption = null!;
     BlightView _blight = null!;
+    readonly OctoShoots.Game.Fx.WaterSwells _swells = new();
     SpringView _springs = null!;
     InkVapour _vapour = null!;
     /// <summary>Her health last frame: a rise is corruption cleared, which steams off her.</summary>
@@ -224,6 +228,8 @@ public partial class TopDownMain : Node3D
         AddChild(_combat);
         _currents = new CurrentView();
         AddChild(_currents);
+        _kelp = new KelpView();
+        AddChild(_kelp);
         _vases = new VaseView();
         AddChild(_vases);
         _boss = new BossView();
@@ -312,6 +318,9 @@ public partial class TopDownMain : Node3D
             else if (arg.StartsWith("--curse=") && Enum.TryParse<CurseReward>(Value("--curse="), true, out var reward)) _dbgCurse = reward;
             else if (arg.StartsWith("--award=")) _debugAward = Value("--award=");
             else if (arg.StartsWith("--dbg-say=")) _debugSay = Value("--dbg-say=");
+            else if (arg.StartsWith("--dbg-steer=") && Value("--dbg-steer=").Split(',') is { Length: 2 } steer
+                && float.TryParse(steer[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float sx) && float.TryParse(steer[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float sy))
+                _dbgSteer = new Vector2(sx, sy).Normalized();
             else if (arg == "--reset-profile")
             {
                 // Verification: the saved profile's achievements (and so its unlocked pearls) are cleared.
@@ -843,6 +852,8 @@ public partial class TopDownMain : Node3D
         SaveRun();
         _combat.Show(_world, _catalog, fresh);
         _currents.Clear();
+        _swells.Clear();
+        _kelp.Build(map, ReefLook.For(map.Id.Depth));
         _vases.Show(_world);
         _puffers.Show(_world);
         _reefFish.Show(_world);
@@ -1004,6 +1015,10 @@ public partial class TopDownMain : Node3D
             "cave" => _map.Caves.Select(c => (System.Numerics.Vector2?)(c.Mouth + c.Facing * 5f)).FirstOrDefault(),
             "exit" => _map.Exit.Position + new System.Numerics.Vector2(0f, _map.Exit.Radius + 3f),
             "hole" => _map.Exit.Position,
+            // Just west of the biggest kelp bed (with --dbg-steer=1,0 she swims straight through it).
+            "kelp-west" => _map.Kelp.OrderByDescending(k => k.Roots.Count).Select(k => (System.Numerics.Vector2?)(k.Center - new System.Numerics.Vector2(k.Radius + 2f, 0f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // In the biggest kelp bed, a little in from its edge.
+            "kelp" => _map.Kelp.OrderByDescending(k => k.Roots.Count).Select(k => (System.Numerics.Vector2?)(k.Center + new System.Numerics.Vector2(k.Radius * 0.5f, 0f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // Just outside Queen Clam's arena, in water that leads in.
             "boss" => Enumerable.Range(0, 24).Select(i => i * Mathf.Tau / 24f)
                 .Select(a => (System.Numerics.Vector2?)(_map.Exit.Position + new System.Numerics.Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (_map.Exit.Radius + 2.5f)))
@@ -1333,6 +1348,8 @@ public partial class TopDownMain : Node3D
                     || e.Type == PlaneEventType.VineCut)
                 {
                     _combat.Surge(e.Position - e.Direction * 0.4f);
+                    // Ink flicks off a corrupted body where her light struck it.
+                    if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated && e.Direction != default) _blight.InkSplash(_world, e.Position, e.Direction, e.Type == PlaneEventType.MobDefeated);
                     // A tap for a hit landed, a firmer one for a creature freed.
                     if (e.Type == PlaneEventType.MobDefeated) _haptics.Pulse(0.4f, 0.25f, 0.16f);
                     else ShotKick(e.Size / PlaneCombatTuning.ShotDamage);
@@ -1501,6 +1518,16 @@ public partial class TopDownMain : Node3D
         Guard("geysers", () => _geysers.Sync(_world, dt, _camera.Camera));
         _camera.SetBubbleLights(_combat.Lights, _combat.LightCount);
         _camera.SetLenses(_combat.Lenses, System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--dbg-nolens") >= 0 ? 0 : _combat.LensCount);
+        // The water she pushes against as she sets off, turns or dashes.
+        {
+            var pl = _world.Player;
+            // Where she is in the world (the level is drawn off its map's origin), so the post pass finds it.
+            _swells.Watch(new Vector2(_bell.GlobalPosition.X, _bell.GlobalPosition.Z), new Vector2(pl.Velocity.X, pl.Velocity.Y), pl.DashTimer > 0f, dt);
+            _camera.SetSwells(_swells);
+        }
+        Guard("kelp", () => _kelp.Sync(_world, dt, _bell.GlobalPosition, _swells, _camera.Camera));
+        // Behind a blade, she wears a thin outline.
+        _bell.Covered = _kelp.Covers(_bell.GlobalPosition, _camera.Camera);
         Guard("currents", () => _currents.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
         Guard("pufferlings", () => _puffers.Sync(_world, dt));
@@ -2284,6 +2311,11 @@ public partial class TopDownMain : Node3D
     PlaneInput ReadInput()
     {
         var input = new PlaneInput();
+        if (_dbgSteer is { } steerTo)
+        {
+            input.Move = new System.Numerics.Vector2(steerTo.X, steerTo.Y);
+            return input;
+        }
         if (_autopilot && _route.Count > 0)
         {
             // Follow the route a couple of cells ahead of the nearest point on it.

@@ -35,7 +35,10 @@ public partial class BellView : Node3D
     }
 
     Node3D _body = null!;
-    ShaderMaterial _bellMaterial = null!, _strandMaterial = null!;
+    ShaderMaterial _bellMaterial = null!, _strandMaterial = null!, _outlineMaterial = null!;
+    /// <summary>Whether something is drawn over her now (kelp in front of her): a thin outline then shows round her bell.</summary>
+    public bool Covered { get; set; }
+    float _outline;
     ImmediateMesh _strandMesh = null!;
     OmniLight3D _light = null!;
     /// <summary>How much of her light gets through (1 all; the curse den's dark fades it).</summary>
@@ -113,7 +116,11 @@ public partial class BellView : Node3D
         _body = new Node3D();
         AddChild(_body);
         _bellMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clementine_bell.gdshader"), RenderPriority = 2 };
-        _body.AddChild(new MeshInstance3D { Mesh = BakeBell(), MaterialOverride = _bellMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        var bell = BakeBell();
+        _body.AddChild(new MeshInstance3D { Mesh = bell, MaterialOverride = _bellMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        // Her outline when something covers her: over everything, the kelp over her included (it draws at 3).
+        _outlineMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clementine_outline.gdshader"), RenderPriority = 5 };
+        _body.AddChild(new MeshInstance3D { Mesh = bell, MaterialOverride = _outlineMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
 
         _strandMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/clementine_trail.gdshader"), RenderPriority = 1 };
         _strandMesh = new ImmediateMesh();
@@ -304,6 +311,10 @@ public partial class BellView : Node3D
         if (DiveTurn > 0f) _body.Basis = new Basis(Vector3.Right, -DiveTurn * Mathf.Pi * 0.85f) * _body.Basis;
 
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pulse"), _pulse);
+        // Covered, the outline comes quickly; uncovered, it lingers a moment.
+        _outline = Mathf.MoveToward(_outline, Covered ? 1f : 0f, h * (Covered ? 8f : 3f));
+        _outlineMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pulse"), _pulse);
+        _outlineMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("shown"), _outline * _outline * (3f - 2f * _outline));
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("wave"), _phase < 0.55f ? _phase / 0.55f : 1.3f);
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("hurt"), _hurt);
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ink"), _inkGhost);

@@ -159,16 +159,69 @@ public class TopDownGenTests
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public void TheShaftIsTheOnlyDeepWater(string seed)
+    public void OnlyTheWayDownIsDeepWater(string seed)
     {
         foreach (var map in new[] { Map(seed), Map(seed, BossLevel(seed)) })
         {
             Assert.True(map.Shaft.Contains(LevelValidator.DeepestPoint(map), 1f));
-            Assert.True(map.HeightAt(map.Shaft.Center) <= LevelMap.ShaftBottom + 0.01f);
+            // The Crack's floor is the level below's seabed; an exit chamber's bowl stops just over it.
+            Assert.True(map.HeightAt(map.Shaft.Center) <= LevelMap.ShaftBottom + (map.HasBoss ? 0.01f : 1f));
             Assert.True(map.Shaft.Contains(map.Exit.Position));
+            // The Crack drops sheer from the arena; an ordinary exit's whole chamber slopes down to its dive zone.
+            float room = map.HasBoss ? 1.5f : map.Chambers.OrderBy(c => Vector2.Distance(c.At, map.Exit.Position)).First().Radius + 4.5f;
             for (int y = 0; y <= LevelMap.Size; y++)
             for (int x = 0; x <= LevelMap.Size; x++)
-                if (!map.Shaft.Contains(new Vector2(x, y), 1.5f)) Assert.True(map[x, y] > -4.5f, $"deep water at ({x}, {y}): {map[x, y]:0.0} m");
+            {
+                var p = new Vector2(x, y);
+                bool way = map.HasBoss ? map.Shaft.Contains(p, room) : Vector2.Distance(p, map.Exit.Position) < room + map.Shaft.HalfLength;
+                if (!way) Assert.True(map[x, y] > -4.5f, $"deep water at ({x}, {y}): {map[x, y]:0.0} m");
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void KelpGrowsInDenseBedsOnTheOpenFloorAwayFromThePlaces(string seed)
+    {
+        var map = Map(seed);
+        Assert.InRange(map.Kelp.Count, 1, TopDownGenerator.KelpDepthMax);
+        foreach (var bed in map.Kelp)
+        {
+            Assert.True(bed.Roots.Count >= TopDownGenerator.KelpLeast);
+            Assert.Equal(bed.Roots.Count, bed.Lengths.Count);
+            // Dense: about a strand to every half square metre of it.
+            Assert.True(bed.Roots.Count >= 0.5f * MathF.PI * bed.Radius * bed.Radius * 0.6f, $"{bed.Roots.Count} strands in a {bed.Radius:0.0} m bed");
+            foreach (var (root, i) in bed.Roots.Select((r, i) => (r, i)))
+            {
+                Assert.True(map.HeightAt(root) <= LevelMap.BlockHeight - 0.2f, "rooted in the rock");
+                Assert.InRange(bed.Lengths[i], TopDownGenerator.KelpLengthMin, TopDownGenerator.KelpLengthMax);
+            }
+            Assert.True(Vector2.Distance(bed.Center, map.Start.Position) > map.Start.Radius + bed.Radius);
+            Assert.True(Vector2.Distance(bed.Center, map.Exit.Position) > map.Exit.Radius + bed.Radius);
+            Assert.All(map.Pois.Where(p => p.Kind is not (PoiKind.Start or PoiKind.Exit)), p => Assert.True(Vector2.Distance(bed.Center, p.Position) > p.Radius + bed.Radius));
+            Assert.All(map.Kelp.Where(o => o != bed), o => Assert.True(Vector2.Distance(o.Center, bed.Center) >= o.Radius + bed.Radius + TopDownGenerator.KelpApart - 0.01f));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public void TheExitChamberSlopesDownFromItsWallsToASmallDiveZone(string seed)
+    {
+        var map = Map(seed);
+        Assert.False(map.HasBoss);
+        Assert.True(map.Shaft.HalfLength <= 3f, $"dive zone {map.Shaft.HalfLength:0.0} m");
+        // Going down from the walls: halfway out from the middle the floor is already well under the seabed, and it
+        // keeps sinking toward the middle.
+        var c = map.Shaft.Center;
+        for (int i = 0; i < 16; i++)
+        {
+            var dir = new Vector2(MathF.Cos(i * MathF.Tau / 16f), MathF.Sin(i * MathF.Tau / 16f));
+            float wall = 0f;
+            while (wall < 20f && map.HeightAt(c + dir * (wall + 0.5f)) <= 0f) wall += 0.5f;
+            if (wall < 4f) continue;
+            float half = map.HeightAt(c + dir * wall * 0.5f), quarter = map.HeightAt(c + dir * wall * 0.25f);
+            Assert.True(half < -2f, $"halfway to the wall {half:0.0} m");
+            Assert.True(quarter <= half + 0.05f, "it sinks toward the middle");
         }
     }
 
