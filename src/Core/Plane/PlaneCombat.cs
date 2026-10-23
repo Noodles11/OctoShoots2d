@@ -392,7 +392,7 @@ public sealed partial class PlaneWorld
         for (float s = 0.5f; s < d; s += 0.5f)
         {
             var q = Vector2.Lerp(a, b, s / d);
-            if (!Map.IsOpen(q) || _rocks.Any(r => Vector2.Distance(q, r.Center) < r.Radius)) return false;
+            if (!Map.IsOpen(q) || _rocks.Any(r => r.Contains(q))) return false;
         }
         return true;
     }
@@ -505,7 +505,7 @@ public sealed partial class PlaneWorld
                         if (bubble.FromPlayer && bubble.Life > 0f && Geo.SegmentDistance(bubble.Position, was, shot.Position) < bubble.Radius + shot.Radius)
                             Pop(bubble, was - bubble.Position);
                 // Rock and pots stop shots, and so does the sealed arena's wall.
-                if (!Map.IsOpen(shot.Position) || _rocks.Any(r => Vector2.Distance(shot.Position, r.Center) < r.Radius) || VaseAt(shot.Position, shot.Radius) is not null || CrossesRim(was, shot.Position)) shot.Life = 0f;
+                if (!Map.IsOpen(shot.Position) || _rocks.Any(r => r.Contains(shot.Position)) || VaseAt(shot.Position, shot.Radius) is not null || CrossesRim(was, shot.Position)) shot.Life = 0f;
             }
             if (shot.Life <= 0f) continue;
             if (shot.FromPlayer)
@@ -1058,10 +1058,10 @@ public sealed partial class PlaneWorld
             return;
         }
         bool rim = CrossesRim(shot.Line, next);
-        if (rim || !Map.IsOpen(next) || _rocks.Any(r => Vector2.Distance(next, r.Center) < r.Radius))
+        if (rim || !Map.IsOpen(next) || _rocks.Any(r => r.Contains(next)))
         {
             // Her light striking a secret's seal lights its emblem (once a bubble, whatever it carries).
-            if (!rim && !shot.SealStruck && _rocks.Any(r => Vector2.Distance(next, r.Center) < r.Radius))
+            if (!rim && !shot.SealStruck && _rocks.Any(r => r.Contains(next)))
             {
                 shot.SealStruck = true;
                 StrikeSeal(next);

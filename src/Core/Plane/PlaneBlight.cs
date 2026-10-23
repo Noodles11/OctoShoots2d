@@ -7,7 +7,7 @@ using OctoShoots.Core.Items;
 
 namespace OctoShoots.Core.Plane;
 
-/// <summary>Blightroots, gloomvines and murklings (docs/CORRUPTION.md). Provisional numbers.</summary>
+/// <summary>Blightroots and murklings (docs/CORRUPTION.md). Provisional numbers.</summary>
 public static class BlightTuning
 {
     // Blightroot: the source of corruption in its reach.
@@ -39,14 +39,14 @@ public static class BlightTuning
     public const int Base = 3, Max = 6;
     public const float PerMenace = 1.5f;
 
-    // Gloomvines: rooted at Blightroots, they creep at a lingering Clementine.
-    public const int VinesPer = 2;
-    public const float Segment = 0.4f, Rest = 2.6f, Creep = 0.8f, Regrow2 = 0.4f, MaxLength = Reach * 1.3f;
-    /// <summary>She lingers when slower than LingerSpeed for Linger seconds.</summary>
-    public const float Linger = 0.6f, LingerSpeed = 1f;
-    /// <summary>A tip within CoilReach of her coils: rooted CoilSeconds, drinking her light; it then lets go and draws back.</summary>
-    public const float CoilReach = 0.7f, CoilSeconds = 1.2f, CoilDrain = 5f, Retract = 2f;
-    public const float DissolveSeconds = 0.9f;
+    /// <summary>
+    /// Its hammer: when she comes within HammerReach of it, it rears back away from her (HammerWindup, its aim following
+    /// her), then swings its head down at her like a hammer (HammerStrike): if she is still within HammerHit of it and in
+    /// front of it as it lands, it corrupts her (HammerDamage, more with Menace) and knocks her away at HammerKnock m/s. It
+    /// swings again HammerCooldown after it has recovered (HammerRecover), and never while it gathers a pulse.
+    /// </summary>
+    public const float HammerReach = 4.2f, HammerHit = 4.6f, HammerWindup = 0.5f, HammerStrike = 0.14f, HammerRecover = 0.55f, HammerCooldown = 1.2f;
+    public const float HammerDamage = 10f, HammerDamagePerMenace = 3f, HammerKnock = 9f;
 
     // Murklings: orbs of darkness budding from the corruption.
     public const float MurkRadius = 0.45f, MurkSpeed = 2.6f, MurkSpeedPerMenace = 0.4f, Sense = 14f;
@@ -178,6 +178,9 @@ public sealed class Blightroot
     public int PulseId;
     /// <summary>The sac's inflation for the telegraph, 0..1.</summary>
     public float Inflate;
+    /// <summary>Its hammer: seconds into a swing (negative: none), the way it swings (at her), and how long until it may swing again.</summary>
+    public float Swing = -1f, SwingCooldown;
+    public Vector2 SwingDir;
 
     /// <summary>The burst's cleansing wave radius (negative: not bursting).</summary>
     public float BurstRadius = -1f;
@@ -188,20 +191,6 @@ public sealed class Blightroot
     public bool WasGuarded;
     /// <summary>Where its guardians bud round (its level template may set a place it guards; else itself).</summary>
     public Vector2? GuardAt;
-}
-
-/// <summary>A gloomvine: a thick ink vine rooted at a Blightroot, as points from the root to its tip.</summary>
-public sealed class Gloomvine
-{
-    public Blightroot Root = null!;
-    public List<Vector2> Points = new();
-    public Vector2 RestDir;
-    public float Curl;
-    public bool Coiling;
-    public float CoilTime;
-    /// <summary>Its root died: it dissolves over DissolveSeconds (counting up).</summary>
-    public float Dissolving = -1f;
-    public float Length => Points.Count < 2 ? 0f : (Points.Count - 1) * BlightTuning.Segment;
 }
 
 /// <summary>A murkling: a wobbling orb of darkness with a dim stolen ember inside.</summary>
@@ -293,7 +282,6 @@ public sealed partial class PlaneWorld
     /// <summary>The corruption field (null when the corruption is off).</summary>
     public CorruptionField? Corruption { get; private set; }
     public List<Blightroot> Blightroots { get; } = new();
-    public List<Gloomvine> Vines { get; } = new();
     public List<Murkling> Murklings { get; } = new();
     public List<MurkShot> MurkShots { get; } = new();
     public List<CorruptArea> Areas { get; } = new();
@@ -380,7 +368,7 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>A Blightroot at a spot: its area of ground, its meter, its two gloomvines resting curled.</summary>
+    /// <summary>A Blightroot at a spot: its area of ground, its meter.</summary>
     Blightroot AddBlightroot(Vector2 at, CorruptionField field)
     {
         var root = new Blightroot { Position = at, PulseTimer = _blightRng.Range(1.5f, BlightTuning.PulseEvery) };
@@ -391,14 +379,6 @@ public sealed partial class PlaneWorld
         root.Corruption.Max = root.Corruption.Value = BlightTuning.RootCorruption * (1f + BlightTuning.MeterPerMenace * Menace);
         root.CellDistance = area.Cells.Select(i => Vector2.Distance(CorruptionField.CellCentre(i % CorruptionField.N, i / CorruptionField.N), at)).ToArray();
         Blightroots.Add(root);
-        for (int v = 0; v < BlightTuning.VinesPer; v++)
-        {
-            float a = MathF.Tau * v / BlightTuning.VinesPer + _blightRng.Range(-0.6f, 0.6f);
-            var vine = new Gloomvine { Root = root, RestDir = new Vector2(MathF.Cos(a), MathF.Sin(a)), Curl = _blightRng.Range(-1.2f, 1.2f) };
-            vine.Points.Add(at);
-            Vines.Add(vine);
-            while (vine.Length < BlightTuning.Rest && Extend(vine, Rested(vine))) { }
-        }
         return root;
     }
 
@@ -412,7 +392,7 @@ public sealed partial class PlaneWorld
 
     int BudCap => BlightTuning.CapBase + (int)(Menace * BlightTuning.CapPerMenace) + BudCapBonus;
 
-    /// <summary>The war's turn, after combat: her light, pops, Blightroots, vines, murklings, the arena.</summary>
+    /// <summary>The war's turn, after combat: her light, pops, Blightroots, murklings, the arena.</summary>
     void StepCorruption()
     {
         var field = Corruption;
@@ -427,7 +407,6 @@ public sealed partial class PlaneWorld
             field.Cleanse(at, MathF.Min(CorruptionTuning.PopRadius + CorruptionTuning.PopPerBubble * bubbles, CorruptionTuning.PopMax), CorruptionTuning.PopStrength * dim);
 
         StepBlightroots(field);
-        StepVines(field);
         StepBlotters(field);
         StepThumpsquirts(field);
         StepInkwardens();
@@ -534,7 +513,7 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>One of her bubbles popped: its light cleanses (and cuts vines) after combat.</summary>
+    /// <summary>One of her bubbles popped: its light cleanses after combat.</summary>
     void LightReleased(PlaneShot shot)
     {
         if (Corruption is null || !shot.FromPlayer) return;
@@ -562,9 +541,6 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, dealt));
             if (emptied) BurstMurkling(m, ember: true);
         }
-        foreach (var vine in Vines)
-            if (vine.Coiling) LetGo(vine);
-        Player.RootTimer = 0f;
     }
 
     // ───────────────────────── Blightroots ─────────────────────────
@@ -610,16 +586,11 @@ public sealed partial class PlaneWorld
             }
             if (root.Corruption.Empty)
             {
-                // Cleansed: it shrivels and bursts into motes, a wave of cleansing runs through its reach; its vines dissolve.
+                // Cleansed: it shrivels and bursts into motes, a wave of cleansing runs through its reach.
                 root.Alive = false;
                 root.BurstRadius = 0f;
                 root.PulseRadius = -1f;
                 Stats.MobsDefeated++;
-                foreach (var vine in Vines.Where(v => v.Root == root))
-                {
-                    if (vine.Coiling) LetGo(vine);
-                    vine.Dissolving = 0f;
-                }
                 Events.Add(new PlaneEvent(PlaneEventType.BlightrootBurst, root.Position, Vector2.Zero, BlightTuning.Reach));
                 continue;
             }
@@ -667,7 +638,49 @@ public sealed partial class PlaneWorld
                 }
                 if (r1 >= BlightTuning.Reach) root.PulseRadius = -1f;
             }
+            StepHammer(root);
+        }
+    }
 
+    /// <summary>
+    /// A Blightroot's hammer (BlightTuning.HammerReach and the rest): she comes too close, it rears back (its aim following
+    /// her), swings its head down at her and, if she is still in reach and in front of it as it lands, it corrupts her and
+    /// knocks her away; it recovers, then waits before it may swing again. Never while it gathers a pulse.
+    /// </summary>
+    void StepHammer(Blightroot root)
+    {
+        var p = Player;
+        if (root.SwingCooldown > 0f) root.SwingCooldown -= Dt;
+        var to = p.Position - root.Position;
+        float her = to.Length();
+        if (root.Swing < 0f)
+        {
+            if (root.SwingCooldown > 0f || root.Inflate > 0f || Defeated || her > BlightTuning.HammerReach) return;
+            root.Swing = 0f;
+            root.SwingDir = SafeNormalize(to);
+            Events.Add(new PlaneEvent(PlaneEventType.BlightrootSwing, root.Position, root.SwingDir));
+            return;
+        }
+        float was = root.Swing;
+        root.Swing += Dt;
+        // Rearing back, it keeps her in its aim.
+        if (root.Swing < BlightTuning.HammerWindup && her > 1e-3f) root.SwingDir = to / her;
+        float lands = BlightTuning.HammerWindup + BlightTuning.HammerStrike;
+        if (was < lands && root.Swing >= lands)
+        {
+            bool inFront = her < 1e-3f || Vector2.Dot(to / her, root.SwingDir) > 0.3f;
+            bool on = her <= BlightTuning.HammerHit + Radius && inFront;
+            // Where it comes down: on her, else as far as it reaches her way.
+            var at = on ? p.Position : root.Position + root.SwingDir * MathF.Min(MathF.Max(her, 1f), BlightTuning.HammerHit);
+            Events.Add(new PlaneEvent(PlaneEventType.BlightrootSlam, at, root.SwingDir, on ? 1f : 0f));
+            if (on
+                && HurtPlayer(BlightTuning.HammerDamage + BlightTuning.HammerDamagePerMenace * Menace, root.SwingDir, DamageSource.Blightroot))
+                p.Velocity += root.SwingDir * BlightTuning.HammerKnock;
+        }
+        if (root.Swing >= lands + BlightTuning.HammerRecover)
+        {
+            root.Swing = -1f;
+            root.SwingCooldown = BlightTuning.HammerCooldown;
         }
     }
 
@@ -679,102 +692,6 @@ public sealed partial class PlaneWorld
         shot.Dim *= keep;
         shot.Damage *= keep;
         if (shot.Dim < 0.12f) Pop(shot);
-    }
-
-    // ───────────────────────── gloomvines ─────────────────────────
-
-    /// <summary>The way a resting vine grows: out from its root, curling.</summary>
-    static Vector2 Rested(Gloomvine vine)
-    {
-        float a = MathF.Atan2(vine.RestDir.Y, vine.RestDir.X) + vine.Curl * vine.Length / BlightTuning.Rest;
-        return new Vector2(MathF.Cos(a), MathF.Sin(a));
-    }
-
-    /// <summary>One segment more toward dir (false where rock is in the way).</summary>
-    bool Extend(Gloomvine vine, Vector2 dir)
-    {
-        var tip = vine.Points[^1];
-        var next = tip + SafeNormalize(dir) * BlightTuning.Segment;
-        if (!Map.IsOpen(next) || vine.Length + BlightTuning.Segment > BlightTuning.MaxLength) return false;
-        vine.Points.Add(next);
-        return true;
-    }
-
-    void LetGo(Gloomvine vine)
-    {
-        vine.Coiling = false;
-        vine.CoilTime = 0f;
-        int drop = (int)(BlightTuning.Retract / BlightTuning.Segment);
-        int keep = Math.Max(1, vine.Points.Count - drop);
-        vine.Points.RemoveRange(keep, vine.Points.Count - keep);
-    }
-
-    void StepVines(CorruptionField field)
-    {
-        var p = Player;
-        _linger = p.Velocity.Length() < BlightTuning.LingerSpeed ? _linger + Dt : 0f;
-        p.RootTimer = MathF.Max(0f, p.RootTimer - Dt);
-        for (int i = Vines.Count - 1; i >= 0; i--)
-        {
-            var vine = Vines[i];
-            if (vine.Dissolving >= 0f)
-            {
-                vine.Dissolving += Dt;
-                if (vine.Dissolving >= BlightTuning.DissolveSeconds) Vines.RemoveAt(i);
-                continue;
-            }
-            // Cut by a pop: everything past the cut dissolves.
-            foreach (var (at, bubbles, _) in _pops)
-            {
-                float r = MathF.Min(CorruptionTuning.PopRadius + CorruptionTuning.PopPerBubble * bubbles, CorruptionTuning.PopMax) * 0.6f;
-                int cut = vine.Points.FindIndex(1, q => Vector2.Distance(q, at) < r);
-                if (cut < 0) continue;
-                if (vine.Coiling) LetGo(vine);
-                if (cut < vine.Points.Count) vine.Points.RemoveRange(cut, vine.Points.Count - cut);
-                Events.Add(new PlaneEvent(PlaneEventType.VineCut, at, Vector2.Zero));
-            }
-            var tip = vine.Points[^1];
-            if (vine.Coiling)
-            {
-                // Coiled: she is held while it drinks her light, then it lets go.
-                vine.CoilTime += Dt;
-                p.RootTimer = MathF.Max(p.RootTimer, Dt * 2f);
-                Drain(BlightTuning.CoilDrain * Dt, DamageSource.Gloomvine);
-                vine.Points[^1] = Vector2.Lerp(tip, p.Position, 0.3f);
-                if (vine.CoilTime >= BlightTuning.CoilSeconds) LetGo(vine);
-                continue;
-            }
-            bool reachable = Vector2.Distance(vine.Root.Position, p.Position) <= BlightTuning.MaxLength + 1f;
-            if (_linger >= BlightTuning.Linger && reachable)
-            {
-                // She lingers: the tip creeps toward her, slower than she ever swims.
-                var to = p.Position - tip;
-                float step = BlightTuning.Creep * Dt;
-                if (to.Length() > 0.05f)
-                {
-                    var moved = tip + SafeNormalize(to) * step;
-                    // A sealed arena keeps vines out.
-                    if (Map.IsOpen(moved) && !CrossesRim(tip, moved))
-                    {
-                        if (vine.Points.Count >= 2 && Vector2.Distance(vine.Points[^2], moved) >= BlightTuning.Segment)
-                        {
-                            if (vine.Length + BlightTuning.Segment <= BlightTuning.MaxLength) vine.Points.Add(moved);
-                        }
-                        else if (vine.Points.Count >= 2) vine.Points[^1] = moved;
-                        else vine.Points.Add(moved);
-                    }
-                }
-            }
-            else if (vine.Length < BlightTuning.Rest && field.At(vine.Root.Position) > 0.3f && Tick % (int)(BlightTuning.Segment / BlightTuning.Regrow2 / Dt) == 0)
-                Extend(vine, Rested(vine));
-
-            if (Vector2.Distance(vine.Points[^1], p.Position) < BlightTuning.CoilReach + Radius && p.DashTimer <= 0f && p.DashInvulnerableTimer <= 0f && p.ShieldTimer <= 0f && !Defeated)
-            {
-                vine.Coiling = true;
-                vine.CoilTime = 0f;
-                Events.Add(new PlaneEvent(PlaneEventType.VineCoiled, p.Position, Vector2.Zero));
-            }
-        }
     }
 
     // ───────────────────────── murklings ─────────────────────────

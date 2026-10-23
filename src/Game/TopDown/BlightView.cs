@@ -7,9 +7,9 @@ using OctoShoots.Game.Fx;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The corruption's creatures and works on screen (docs/CORRUPTION.md), presentation only: Blightroots (a blackened
-/// captive octopus chained to the floor, BlightView.Octopus.cs; its ring of ink), gloomvines (its chains torn loose,
-/// rising from the floor to her plane, coiling round her), murklings (wobbling dark orbs with a stolen ember, budding from the floor) and their throws. Everything
+/// The corruption's creatures and works on screen (docs/CORRUPTION.md), presentation only: Blightroots (a pole of ink
+/// with a pulsing head, swaying like a boxing pole and hammering her, BlightView.Octopus.cs; its ring of ink), murklings
+/// (liquid drops of ink with a stolen ember, budding from the floor, BlightView.Murklings.cs) and their throws. Everything
 /// corrupted shares one look: ink-black, light-drinking, slightly glossy, with a cold violet rim. Every one of them,
 /// freed, pops like a water balloon: the ink it was made of showers out glowing in its colour and evaporates
 /// (InkVapour.Pop), never a flash of light.
@@ -18,7 +18,8 @@ public partial class BlightView : Node3D
 {
     static readonly Color Gold = new(1.25f, 0.85f, 0.38f);
     static readonly Color Ink = new(0.02f, 0.012f, 0.035f);
-    const float SacHeight = LevelMap.SwimBand + 0.15f;
+    /// <summary>A Blightroot's head: raised high on its pole over her plane (it stands tall, as kelp does).</summary>
+    const float SacHeight = LevelMap.SwimBand + 1.9f;
 
     sealed class Ripple
     {
@@ -31,6 +32,8 @@ public partial class BlightView : Node3D
     readonly List<MeshInstance3D> _murks = new(), _throws = new();
     readonly List<Ripple> _ripples = new();
     ShaderMaterial _orb = null!, _sacMat = null!, _ring = null!;
+    /// <summary>The swells in the water (WaterSwells): a Blightroot's head coming down shoves the water out in rings.</summary>
+    public OctoShoots.Game.Fx.WaterSwells? Swells { get; set; }
     readonly SphereMesh _sphere = new() { Radius = 1f, Height = 2f, RadialSegments = 24, Rings = 12 };
     readonly QuadMesh _quad = new() { Size = new Vector2(2f, 2f), Orientation = PlaneMesh.OrientationEnum.Y };
     FxParticles _motes = null!, _droplets = null!;
@@ -49,7 +52,6 @@ public partial class BlightView : Node3D
         _sacMat = new ShaderMaterial { Shader = _orb.Shader };
         _sacMat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.9f, 0.25f, 0.55f));
         _ring = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_ring.gdshader"), RenderPriority = 1 };
-        ReadyChains();
         _motes = new FxParticles(768, additive: true);
         AddChild(_motes);
         _droplets = new FxParticles(512, additive: false);
@@ -72,6 +74,7 @@ public partial class BlightView : Node3D
         ClearThumps();
         ClearWardens();
         ClearLashjaws();
+        ClearMurkBodies();
         _motes.Clear();
         _droplets.Clear();
         foreach (var root in world.Blightroots) _roots.Add(MakeRoot(root));
@@ -80,8 +83,9 @@ public partial class BlightView : Node3D
     public void Sync(PlaneWorld world, float dt, Camera3D? camera)
     {
         _time += dt;
+        UnFlinch();
         SyncRoots(world, dt);
-        SyncMurklings(world);
+        SyncMurklings(world, dt);
         SyncHermits(world, dt);
         SyncRunaways(world, dt, camera);
         SyncBombs(world);
@@ -92,9 +96,11 @@ public partial class BlightView : Node3D
         SyncKinLights(world);
         SyncOutlines(world);
         SyncHitGlows(world);
-        SyncVines(world);
         StepRipples(dt);
         StepGathers(dt);
+        StepChunks(dt);
+        ForgetBodies();
+        FlinchAll(world);
         if (camera is not null)
         {
             _motes.Tick(dt, camera.GlobalBasis);
@@ -102,11 +108,11 @@ public partial class BlightView : Node3D
         }
     }
 
-    void SyncMurklings(PlaneWorld world)
+    void SyncMurklings(PlaneWorld world, float dt)
     {
         while (_murks.Count < world.Murklings.Count)
         {
-            var m = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            var m = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
             AddChild(m);
             _murks.Add(m);
         }
@@ -116,6 +122,10 @@ public partial class BlightView : Node3D
             view.Visible = i < world.Murklings.Count;
             if (!view.Visible) continue;
             var m = world.Murklings[i];
+            // Its own liquid body (BlightView.Murklings): its material carries its shape and its holes.
+            var body = BodyOf(m);
+            view.MaterialOverride = body.Material;
+            StepBody(m, body, dt);
             float y = LevelMap.SwimBand + 0.08f * Mathf.Sin(_time * 2.3f + m.Seed);
             float scale = m.Radius;
             // A lesser one carries a dim ember in its fish's old colour, so it shows what it was.
@@ -176,13 +186,12 @@ public partial class BlightView : Node3D
             view.Scale = Vector3.One * scale;
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), m.Seed);
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), ember);
-            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 1.2f);
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f);
         }
 
         while (_throws.Count < world.MurkShots.Count)
         {
-            var t = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            var t = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
             t.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
             t.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.5f);
             // It flies along its local −Z (Basis.LookingAt): its neck trails behind.
@@ -207,7 +216,8 @@ public partial class BlightView : Node3D
             // flying drop.
             float age = BlightTuning.ThrowLife - s.Life;
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("drip"), 1f - Mathf.SmoothStep(0f, 0.12f, age));
-            float jiggle = 1f + 0.3f * Mathf.Exp(-9f * age) * Mathf.Sin(30f * age);
+            // Pinched off, it rings as a drop does, and keeps a slow wobble as it flies.
+            float jiggle = 1f + 0.3f * Mathf.Exp(-9f * age) * Mathf.Sin(30f * age) + 0.07f * Mathf.Sin(14f * age + i * 1.3f);
             view.Scale = new Vector3(s.Radius * 1.2f / Mathf.Sqrt(jiggle), s.Radius * 1.2f / Mathf.Sqrt(jiggle), s.Radius * 2.2f * jiggle);
             if (((int)(_time * 60f) + i) % 3 == 0)
                 _droplets.Emit(view.Position, Vector3.Up * 0.2f, 0.35f, 0.16f, 0.04f, new Color(0.03f, 0.01f, 0.06f, 0.7f), new Color(0.05f, 0.02f, 0.1f, 0f), drag: 1f);
@@ -251,6 +261,25 @@ public partial class BlightView : Node3D
     {
         float radius = BodyRadius(world, at, out float height);
         var back = new Vector3(-dir.X, 0f, -dir.Y).Normalized();
+        // A murkling is torn: a dent, a hole, chunks ripped away (BlightView.Murklings).
+        Murkling? torn = null;
+        float nearest = 2f;
+        foreach (var mk in world.Murklings)
+        {
+            float d = System.Numerics.Vector2.Distance(mk.Position, at);
+            if (mk.Alive && d < nearest) (torn, nearest) = (mk, d);
+        }
+        if (torn is not null && !freed)
+            TearMurkling(torn, back, Mathf.Clamp(torn.Corruption.LastHit / Mathf.Max(torn.Corruption.Max, 1f), 0.05f, 1f),
+                new Vector3(torn.Position.X, LevelMap.SwimBand, torn.Position.Y), torn.Radius);
+        // A Blightroot's head is torn the same way.
+        if (torn is null && !freed)
+            foreach (var root in world.Blightroots)
+                if (root.Alive && System.Numerics.Vector2.Distance(root.Position, at) < 1.6f)
+                {
+                    TearRoot(root, back, Mathf.Clamp(root.Corruption.LastHit / Mathf.Max(root.Corruption.Max, 1f), 0.05f, 1f));
+                    break;
+                }
         var side = new Vector3(-back.Z, 0f, back.X);
         var hit = new Vector3(at.X, height, at.Y) + back * radius * 0.85f;
         int drops = freed ? 10 : 5 + (int)_droplets.RandRange(0f, 2.99f);
@@ -506,7 +535,7 @@ public partial class BlightView : Node3D
     /// <summary>Sets one of corruption_orb's instance values on every part of a creature drawn with it, only when it changes.</summary>
     void SetOrb(Node node, StringName param, StringName meta, float k)
     {
-        if (node is GeometryInstance3D g && g.MaterialOverride is ShaderMaterial m && m.Shader == _orb.Shader)
+        if (node is GeometryInstance3D g && g.MaterialOverride is ShaderMaterial m && (m.Shader == _orb.Shader || m.Shader == _murkShader || m.Shader == _murkOverShader))
         {
             if (!g.HasMeta(meta) || (float)g.GetMeta(meta) != k)
             {

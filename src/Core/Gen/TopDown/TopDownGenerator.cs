@@ -138,7 +138,7 @@ public static class TopDownGenerator
         string? cave = LayCave(map, Stage("cave"), plan, spurDirs, out var open);
         if (cave is not null) return cave;
         var strata = new WallStrata(Stage("strata"));
-        RaiseCaveWalls(map, open, terrainText, Stage("topo"), strata);
+        var tops = RaiseCaveWalls(map, open, terrainText, Stage("topo"), strata);
         string? features = BuildFeatures(map, Stage("features"), spurDirs, strata);
         if (features is not null) return features;
         FlattenSeabed(map);
@@ -146,10 +146,13 @@ public static class TopDownGenerator
         CutShaft(map, Stage("shaft"));
         ClampHeights(map);
         RoofShortcuts(map);
+        PlaceSeals(map, plan, Stage("seals"));
+        SealWalls(map, tops, strata);
         Decorate(map, Stage("cosmetic" + cosmeticSalt), noiseSeed, strata);
         PlaceKelp(map, Stage("kelp"));
         PlacePickups(map, Stage("pickups"));
         PlaceSpawns(map, Stage("spawns"), plan.Menace);
+        ClearSeals(map);
         return null;
     }
 
@@ -259,12 +262,23 @@ public static class TopDownGenerator
     /// the rock is terraced into the level's strata (<see cref="WallStrata.Terrace"/>). Only rock is shaped: the water
     /// is exactly the cave's. The impassable rim rises out of it with the same brush.
     /// </summary>
-    static void RaiseCaveWalls(LevelMap map, bool[] open, string terrainText, Rng rng, WallStrata strata)
+    static float[] RaiseCaveWalls(LevelMap map, bool[] open, string terrainText, Rng rng, WallStrata strata)
     {
         const int N = LevelMap.Samples;
         var tops = new float[N * N];
         ReefTerrain.Generate(tops, N, terrainText);
         uint dipSeed = (uint)(rng.NextU64() >> 32);
+        WallProfile(map, open, tops, strata, dipSeed, map.Heights);
+        return tops;
+    }
+
+    /// <summary>
+    /// The walls as raised round some open water (RaiseCaveWalls): its floor, and the rock rising from the water's edge
+    /// to its warped, terraced top, the rim rising to the edge of the world. Written into heights.
+    /// </summary>
+    static void WallProfile(LevelMap map, bool[] open, float[] tops, WallStrata strata, uint dipSeed, float[] heights)
+    {
+        const int N = LevelMap.Samples;
         var toWater = CaveLayout.Chamfer(open, true);
         var rift = map.Exit;
         // The raw profile first: the floor, and the rock rising from the water's edge to its warped top.
@@ -297,8 +311,188 @@ public static class TopDownGenerator
             float e = MathF.Min(MathF.Min(x, y), MathF.Min(Size - x, Size - y));
             float w = ReefTerrain.Falloff(e / (Rim + 1f));
             if (w > 0f) h += w * (ReefTerrain.HMax - h);
-            map.Heights[i] = h;
+            heights[i] = h;
         }
+    }
+
+    /// <summary>A sealed wall's half thickness (metres either side of its middle, along its passage), and how far past the passage's half width it reaches across.</summary>
+    public const float SealThick = 3.2f, SealPast = 1.5f;
+
+    /// <summary>
+    /// Sealed walls on the way into the boss's arena (every passage into it: a sword is carved on them) and, as a level's
+    /// template asks, across side tunnels (an X). Each stands across its passage outside its place, facing the way it is
+    /// met from. (A secret room's seal is laid with its cave.)
+    /// </summary>
+    static void PlaceSeals(LevelMap map, LevelPlan plan, Rng rng)
+    {
+        if (map.HasBoss && !map.Rift)
+        {
+            // Every way into the arena: rays out from its middle, each to the rock (its wall); a run of rays that meet no
+            // rock within ArenaOut past its rim is a way in. A wall across each, from the rock on one side of it to the
+            // rock on the other, its inner face on that line, facing out.
+            const int Rays = 240;
+            const float ArenaOut = 12f;
+            var arena = map.Exit;
+            float limit = arena.Radius + ArenaOut;
+            var wall = new float[Rays];
+            for (int k = 0; k < Rays; k++)
+            {
+                float a = k * MathF.Tau / Rays;
+                var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                wall[k] = float.PositiveInfinity;
+                for (float d = arena.Radius * 0.5f; d <= limit; d += 0.4f)
+                    if (map.HeightAt(arena.Position + dir * d) >= WallFoot - 0.2f) { wall[k] = d; break; }
+            }
+            // Start the sweep on a ray that meets rock (if none does, there is no arena to shut).
+            int first = Array.FindIndex(wall, w => !float.IsPositiveInfinity(w));
+            if (first >= 0)
+                for (int n = 0; n < Rays; n++)
+                {
+                    int k = (first + n) % Rays;
+                    if (!float.IsPositiveInfinity(wall[k]) || float.IsPositiveInfinity(wall[(k - 1 + Rays) % Rays])) continue;
+                    // k opens a run (its ray escapes, the one before meets rock): find where it ends.
+                    int last = k;
+                    while (float.IsPositiveInfinity(wall[(last + 1) % Rays]) && (last + 1) % Rays != k) last = (last + 1) % Rays;
+                    int before = (k - 1 + Rays) % Rays, after = (last + 1) % Rays;
+                    Vector2 Dir(int q) => new(MathF.Cos(q * MathF.Tau / Rays), MathF.Sin(q * MathF.Tau / Rays));
+                    var m0 = arena.Position + Dir(before) * wall[before];
+                    var m1 = arena.Position + Dir(after) * wall[after];
+                    var mid = (m0 + m1) * 0.5f;
+                    var acrossDir = Geo.Normalize(m1 - m0, Vector2.UnitX);
+                    var facing = new Vector2(-acrossDir.Y, acrossDir.X);
+                    if (Vector2.Dot(facing, mid - arena.Position) < 0f) facing = -facing;
+                    float half = Vector2.Distance(m0, m1) * 0.5f;
+                    map.WeakRocks.Add(new WeakRock(mid + facing * SealThick, half + SealPast, -1, facing, SealThick, SealKind.Boss));
+                    n += (last - k + Rays) % Rays;
+                }
+        }
+        int paths = plan.Template?.Rules.PathSeals ?? 0;
+        var sides = map.Corridors.Where(c => c.Kind == CorridorKind.Side && !c.Roofed && c.Points.Count >= 6).ToList();
+        for (int n = 0; n < paths && sides.Count > 0; n++)
+        {
+            var c = sides[rng.Int(sides.Count)];
+            sides.Remove(c);
+            int k = c.Points.Count / 2;
+            var p = c.Points[k];
+            if (NearEnds(map, p, 4f) || map.WeakRocks.Any(r => Vector2.Distance(r.Center, p) < 12f)) continue;
+            AddSeal(map, p, Geo.Normalize(c.Points[k - 1] - c.Points[k + 1], Vector2.UnitY), c.HalfWidth, SealKind.Path);
+        }
+    }
+
+    static void AddSeal(LevelMap map, Vector2 at, Vector2 facing, float halfWidth, SealKind kind) =>
+        map.WeakRocks.Add(new WeakRock(at, halfWidth + SealPast, -1, facing, SealThick, kind));
+
+    /// <summary>
+    /// The terrain each sealed wall stands as (LevelMap.Sealed): the walls raised once more as if its slab of passage
+    /// were rock — its edges ragged along the passage — and only what that adds to them, laid on the finished terrain.
+    /// So it is the reef wall itself, carried on across the passage, its faces as steep and terraced as the walls round
+    /// it, and it meets them without a seam (where nothing changed, nothing is added).
+    /// </summary>
+    static void SealWalls(LevelMap map, float[] tops, WallStrata strata)
+    {
+        if (map.WeakRocks.Count == 0) return;
+        const int N = LevelMap.Samples;
+        var open = new bool[N * N];
+        for (int i = 0; i < open.Length; i++) open[i] = map.Heights[i] < WallFoot - 0.2f;
+        var closed = (bool[])open.Clone();
+        foreach (var rock in map.WeakRocks) Close(rock, closed, false);
+        // Its faces ragged, as rock is (never cut square); a gate's sides too.
+        void Close(WeakRock rock, bool[] closed, bool gated)
+        {
+            var facing = rock.Thick > 0f ? rock.Facing : rock.Cave >= 0 && rock.Cave < map.Caves.Count ? map.Caves[rock.Cave].Facing : Vector2.UnitY;
+            float thick = rock.Thick > 0f ? rock.Thick : rock.Radius;
+            int r = (int)(rock.Radius + thick) + 3;
+            for (int y = Math.Max(0, (int)rock.Center.Y - r); y <= Math.Min(N - 1, (int)rock.Center.Y + r); y++)
+            for (int x = Math.Max(0, (int)rock.Center.X - r); x <= Math.Min(N - 1, (int)rock.Center.X + r); x++)
+            {
+                var d = new Vector2(x, y) - rock.Center;
+                float along = Vector2.Dot(d, facing), across = d.X * -facing.Y + d.Y * facing.X;
+                float edge = thick * (1f + 0.3f * TerrainNoise.Fbm(across * 0.45f, rock.Center.X * 0.1f, (uint)map.Seed ^ 0x5EA1u, 2));
+                float gate = rock.Gate + 0.35f * TerrainNoise.Fbm(along * 0.6f, across * 0.1f + rock.Center.Y * 0.1f, (uint)map.Seed ^ 0x6A7Eu, 2);
+                if (MathF.Abs(along) < edge && MathF.Abs(across) < rock.Radius && !(gated && MathF.Abs(across) < gate)) closed[y * N + x] = false;
+            }
+        }
+        // The way into the boss's arena must be shut: where its walls leave the arena open from the start (round an end of
+        // one), they are widened until none does.
+        for (int tries = 0; tries < 4 && map.HasBoss && Reaches(closed, map.Start.Position, map.Exit.Position); tries++)
+        {
+            for (int k = 0; k < map.WeakRocks.Count; k++)
+                if (map.WeakRocks[k].Kind == SealKind.Boss) map.WeakRocks[k] = map.WeakRocks[k] with { Radius = map.WeakRocks[k].Radius + 2f };
+            closed = (bool[])open.Clone();
+            foreach (var rock in map.WeakRocks) Close(rock, closed, false);
+        }
+        // What the long ones leave standing once their gates are open.
+        var gates = (bool[])open.Clone();
+        bool anyGate = false;
+        foreach (var rock in map.WeakRocks)
+            if (rock.Gate < rock.Radius)
+            {
+                Close(rock, gates, true);
+                anyGate = true;
+            }
+        var was = new float[N * N];
+        var now = new float[N * N];
+        WallProfile(map, open, tops, strata, 0u, was);
+        WallProfile(map, closed, tops, strata, 0u, now);
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+        {
+            int i = y * N + x;
+            float add = now[i] - was[i];
+            if (add <= 0.03f) continue;
+            var p = new Vector2(x, y);
+            if (!map.WeakRocks.Any(w => Vector2.Distance(p, w.Center) < w.Radius + (w.Thick > 0f ? w.Thick : w.Radius) + 10f)) continue;
+            map.Sealed[i] = MathF.Min(map.Heights[i] + add, ReefTerrain.HMax);
+        }
+        if (!anyGate) return;
+        WallProfile(map, gates, tops, strata, 0u, now);
+        for (int i = 0; i < N * N; i++)
+        {
+            float add = now[i] - was[i];
+            if (add > 0.03f && !float.IsNaN(map.Sealed[i])) map.SealedOpen[i] = MathF.Min(map.Heights[i] + add, map.Sealed[i]);
+        }
+    }
+
+    /// <summary>Whether open water joins a to b (4-way, on the grid).</summary>
+    static bool Reaches(bool[] open, Vector2 a, Vector2 b)
+    {
+        const int N = LevelMap.Samples;
+        int from = (int)MathF.Round(a.Y) * N + (int)MathF.Round(a.X), to = (int)MathF.Round(b.Y) * N + (int)MathF.Round(b.X);
+        if (!open[from] || !open[to]) return false;
+        var seen = new bool[N * N];
+        var queue = new Queue<int>();
+        queue.Enqueue(from);
+        seen[from] = true;
+        while (queue.Count > 0)
+        {
+            int i = queue.Dequeue();
+            if (i == to) return true;
+            int x = i % N, y = i / N;
+            foreach (int j in new[] { x > 0 ? i - 1 : -1, x < N - 1 ? i + 1 : -1, y > 0 ? i - N : -1, y < N - 1 ? i + N : -1 })
+                if (j >= 0 && open[j] && !seen[j])
+                {
+                    seen[j] = true;
+                    queue.Enqueue(j);
+                }
+        }
+        return false;
+    }
+
+    /// <summary>Nothing is left inside a sealed wall: what was placed in its slab of passage (spawns, coins, pockets, kelp) goes.</summary>
+    static void ClearSeals(LevelMap map)
+    {
+        bool In(Vector2 p) => map.WeakRocks.Any(w => w.Contains(p, 1.2f));
+        map.Spawns.RemoveAll(sp => In(sp.Position));
+        map.Coins.RemoveAll(c => In(c.Position));
+        map.Pockets.RemoveAll(pk => In(pk.Position));
+        map.Decor.RemoveAll(d => In(d.Position));
+        foreach (var bed in map.Kelp)
+            for (int k = bed.Roots.Count - 1; k >= 0; k--)
+                if (In(bed.Roots[k]))
+                {
+                    bed.Roots.RemoveAt(k);
+                    bed.Lengths.RemoveAt(k);
+                }
     }
 
     /// <summary>A grid field's bilinear value at a point (clamped to the square).</summary>
@@ -1103,7 +1297,7 @@ public static class TopDownGenerator
                 CarveLine(map, cave.Chambers[i - 1].Center, cave.Chambers[i].Center, 4f);
             poi.Cave = map.Caves.Count;
             map.Caves.Add(cave);
-            if (poi.Kind == PoiKind.Secret) map.WeakRocks.Add(new WeakRock(cave.Mouth + facing * 1.5f, 2.5f, poi.Cave));
+            if (poi.Kind == PoiKind.Secret) map.WeakRocks.Add(new WeakRock(cave.Mouth + facing * 1.5f, 2.5f + SealPast, poi.Cave, facing, SealThick, SealKind.Secret));
         }
 
         // Passes, the level's shortcuts: tunnels worn through the rock between two parts of the cave that are close as the

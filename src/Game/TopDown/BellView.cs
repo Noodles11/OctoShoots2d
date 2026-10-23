@@ -319,8 +319,8 @@ public partial class BellView : Node3D
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("hurt"), _hurt);
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ink"), _inkGhost);
         _reserve = Mathf.Min(1f, _reserve + Rekindle * h);
-        // Clinging murklings drink her glow (each a little), and a coiling gloomvine makes it flicker; never dark.
-        float drunk = 1f - 0.1f * world.Clingers - 0.03f * world.LesserClingers - (world.Player.RootTimer > 0f ? 0.08f * (0.5f + 0.5f * Mathf.Sin(_time * 30f)) : 0f);
+        // Clinging murklings drink her glow (each a little); never dark.
+        float drunk = 1f - 0.1f * world.Clingers - 0.03f * world.LesserClingers;
         _breath = Mathf.Lerp(_breath, (0.85f + 0.15f * _reserve) * Mathf.Max(drunk, 0.65f), 1f - Mathf.Exp(-8f * h));
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("breath"), _breath);
         SyncVitals(world, h);

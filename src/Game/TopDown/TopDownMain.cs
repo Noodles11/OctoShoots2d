@@ -250,7 +250,7 @@ public partial class TopDownMain : Node3D
         AddChild(_geysers);
         _corruption = new CorruptionView();
         AddChild(_corruption);
-        _blight = new BlightView();
+        _blight = new BlightView { Swells = _swells };
         AddChild(_blight);
         _springs = new SpringView();
         AddChild(_springs);
@@ -496,6 +496,8 @@ public partial class TopDownMain : Node3D
 
     void BuildUi()
     {
+        // The view bent slightly toward its edges, over the whole 3D picture, under everything drawn on the screen.
+        AddChild(new OctoShoots.Game.Fx.Fisheye());
         // The curse den's dark: over the reef, under the HUD.
         var darkLayer = new CanvasLayer { Layer = 1 };
         AddChild(darkLayer);
@@ -1033,11 +1035,15 @@ public partial class TopDownMain : Node3D
             // Beside the level's first bubble geyser.
             "geyser" => _world.Director.Geysers.Count > 0 ? _world.Director.Geysers[0] + new System.Numerics.Vector2(0f, 3f) : null,
             // Out in front of a secret room's sealed way in.
-            "secret" => _map.WeakRocks.Select(r => (System.Numerics.Vector2?)(r.Center + _map.Caves[r.Cave].Facing * 5f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            "secret" => _map.WeakRocks.Where(r => r.Kind == SealKind.Secret).Select(r => (System.Numerics.Vector2?)(r.Center + LevelView.SealFacing(_map, r) * (r.Thick + 5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // In front of the first sealed wall of any kind (the boss's, on a boss level).
+            "seal" => _map.WeakRocks.OrderByDescending(r => r.Kind).Select(r => (System.Numerics.Vector2?)(r.Center + LevelView.SealFacing(_map, r) * (r.Thick + 5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres off the level's first Thumpsquirt.
             // A few metres off the level's first Inkwarden.
             // In front of the level's first Lashjaw, in its reach.
             // A few metres south of the first Blightroot, in sight of it.
+            // In a Blightroot's hammer reach (its swing comes at her).
+            "root-near" => _world.Blightroots.SelectMany(r => Enumerable.Range(0, 16).Select(k => (System.Numerics.Vector2?)(r.Position + new System.Numerics.Vector2(MathF.Cos(k * 0.39f), MathF.Sin(k * 0.39f)) * 2.2f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "root" => _world.Blightroots.Select(r => (System.Numerics.Vector2?)(r.Position + new System.Numerics.Vector2(0f, 6f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "lashjaw" => _world.Lashjaws.Select(l => (System.Numerics.Vector2?)(l.Position + l.Facing * 6f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "warden" => _world.Inkwardens.Select(w => (System.Numerics.Vector2?)(w.Position + new System.Numerics.Vector2(0f, 7f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1076,7 +1082,8 @@ public partial class TopDownMain : Node3D
     Vector3 Focus(float alpha)
     {
         var p = System.Numerics.Vector2.Lerp(_world.Player.PrevPosition, _world.Player.Position, alpha);
-        // Verification: `--dbg-follow=mob|fish|blotter` keeps the camera on the nearest pufferling (or Blotter) instead, and
+        // Verification: `--dbg-follow=mob|fish|blotter|murkling` keeps the camera on the nearest pufferling (or Blotter, or
+        // murkling) instead, and
         // `--dbg-follow=clownfish|bluetang|chromis` on the nearest reef fish of that kind.
         if (_follow is not null)
         {
@@ -1086,6 +1093,8 @@ public partial class TopDownMain : Node3D
                 "fish" => _world.Fish.OrderBy(f => System.Numerics.Vector2.Distance(f.Position, from)).Select(f => (System.Numerics.Vector2?)f.Position).FirstOrDefault(),
                 "boss" => _world.Boss is { } b ? b.Position : null,
                 "tunnel" => _map.Canopies.Where(c => c.Kind == CanopyKind.TunnelRoof).Select(c => (System.Numerics.Vector2?)c.Center).FirstOrDefault(),
+                "root" => _world.Blightroots.OrderBy(r => System.Numerics.Vector2.Distance(r.Position, from)).Select(r => (System.Numerics.Vector2?)r.Position).FirstOrDefault(),
+                "murkling" => _world.Murklings.Where(m => m.Alive && !m.Budding).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault(),
                 "blotter" => _world.Blotters.OrderBy(b => System.Numerics.Vector2.Distance(b.Position, from)).Select(b => (System.Numerics.Vector2?)b.Position).FirstOrDefault(),
                 "mob" => _world.Mobs.Where(m => m.Alive).OrderBy(m => System.Numerics.Vector2.Distance(m.Position, from)).Select(m => (System.Numerics.Vector2?)m.Position).FirstOrDefault(),
                 _ => _world.ReefFish.Where(f => f.Kind.ToString().Equals(_follow, StringComparison.OrdinalIgnoreCase))
@@ -1344,10 +1353,11 @@ public partial class TopDownMain : Node3D
                     _sfx.PlayPitched("synergy", 1.25f, -6f);
                 }
                 // Her light struck something: a power surge arcs back to her (hits by a shot carry its direction).
-                if ((e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
-                    || e.Type == PlaneEventType.VineCut)
+                if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
                 {
                     _combat.Surge(e.Position - e.Direction * 0.4f);
+                    // Struck: the screen shakes a little, more for a harder hit.
+                    if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated) _camera.Shake(Mathf.Clamp(0.08f + 0.006f * e.Size, 0.08f, 0.22f));
                     // Ink flicks off a corrupted body where her light struck it.
                     if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated && e.Direction != default) _blight.InkSplash(_world, e.Position, e.Direction, e.Type == PlaneEventType.MobDefeated);
                     // A tap for a hit landed, a firmer one for a creature freed.
@@ -1402,7 +1412,7 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.ShellCollected)
                 {
                     // It flies from where she took it to the counter.
-                    _hud.CollectShell(_camera.Camera.UnprojectPosition(new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y)));
+                    _hud.CollectShell(OctoShoots.Game.Fx.Fisheye.Shown(_camera.Camera.UnprojectPosition(new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y)), GetViewport().GetVisibleRect().Size));
                 }
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
                 else if (e.Type == PlaneEventType.AmbushSprung) Say("Ambush!");
@@ -1527,7 +1537,7 @@ public partial class TopDownMain : Node3D
         }
         Guard("kelp", () => _kelp.Sync(_world, dt, _bell.GlobalPosition, _swells, _camera.Camera));
         // Behind a blade, she wears a thin outline.
-        _bell.Covered = _kelp.Covers(_bell.GlobalPosition, _camera.Camera);
+        _bell.Covered = _kelp.Covers(_bell.GlobalPosition, _camera.Camera) || _blight.Covers(_bell.GlobalPosition, _camera.Camera);
         Guard("currents", () => _currents.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
         Guard("pufferlings", () => _puffers.Sync(_world, dt));
@@ -1536,7 +1546,9 @@ public partial class TopDownMain : Node3D
         _damage.Tick(dt);
         Guard("boss", () => _boss.Sync(_world, dt));
         Guard("clam rooms", () => _clamRooms.Sync(_world, dt));
-        Guard("seals", () => _seals.Sync(_world, dt));
+        Guard("seals", () => _seals.Sync(_world, dt, _camera.Camera));
+        // A sealed wall grinding down into the sand: the ground shakes as long as it goes.
+        if (_seals.Sliding) _camera.Shake(0.22f);
         if (_dbgSeal > 0 && _world.Time >= 1f)
         {
             int from = _world.Events.Count;
@@ -2025,8 +2037,14 @@ public partial class TopDownMain : Node3D
                 }
                 else _sfx.PlayPitched("pop", 0.6f, -6f);
                 break;
-            case PlaneEventType.VineCoiled:
-                _camera.Shake(0.22f);
+            case PlaneEventType.BlightrootSwing:
+                // A Blightroot rears back to swing at her: a creak of its pole.
+                _sfx.PlayPitched("pop", 0.55f, -10f);
+                break;
+            case PlaneEventType.BlightrootSlam:
+                // Its head comes down like a hammer: a deep thud and a jolt (the water it shoves: BlightView.Octopus).
+                _sfx.PlayPitched("pop", 0.35f, -4f);
+                _camera.Shake(e.Size > 0f ? 0.4f : 0.25f);
                 break;
             case PlaneEventType.CrustBroken:
                 _camera.Shake(0.3f);
@@ -2104,9 +2122,9 @@ public partial class TopDownMain : Node3D
                 _sfx.PlayPitched("bell_ring", 1.3f + 0.7f * e.Size, -12f);
                 break;
             case PlaneEventType.SealOpened:
-                // The wall comes down; the charts show the way in.
-                _level.Crumble(e.Position);
-                _camera.Shake(0.4f);
+                // The wall slides down into the sand; the charts show the way in.
+                _level.Slide(e.Position);
+                _camera.Shake(0.45f);
                 _haptics.Pulse(0.7f, 0.5f, 0.45f);
                 _sfx.PlayPitched("pop", 0.35f, -2f);
                 _sfx.PlayPitched("bell_ring", 0.9f, -6f);
@@ -2496,7 +2514,10 @@ public partial class TopDownMain : Node3D
         var aim = _padAim.LengthSquared() > 1e-6f ? System.Numerics.Vector2.Normalize(_padAim) : _world.Player.Aim;
         if (aim.LengthSquared() < 1e-6f) aim = -System.Numerics.Vector2.UnitY;
         var at = new Vector3(her.X, LevelMap.SwimBand, her.Y);
-        Vector2 from = cam.UnprojectPosition(at), toward = cam.UnprojectPosition(at + new Vector3(aim.X, 0f, aim.Y)) - from;
+        var view = GetViewport().GetVisibleRect().Size;
+        // Where the world is shown (through the fisheye).
+        Vector2 Shown(Vector3 p) => OctoShoots.Game.Fx.Fisheye.Shown(cam.UnprojectPosition(p), view);
+        Vector2 from = Shown(at), toward = Shown(at + new Vector3(aim.X, 0f, aim.Y)) - from;
         if (toward.LengthSquared() > 1e-6f)
         {
             float k = dt > 0f ? 1f - Mathf.Exp(-20f * dt) : 1f;
@@ -2504,7 +2525,7 @@ public partial class TopDownMain : Node3D
         }
         // Its distance is where her light goes out: as far as the stick is pushed (PadReach), kept on the screen.
         float world = PadReach();
-        float reach = (cam.UnprojectPosition(at + new Vector3(aim.X, 0f, aim.Y) * world) - from).Length();
+        float reach = (Shown(at + new Vector3(aim.X, 0f, aim.Y) * world) - from).Length();
         var size = GetViewport().GetVisibleRect().Size;
         _cursorReach = dt > 0f ? Mathf.Lerp(_cursorReach, reach, 1f - Mathf.Exp(-18f * dt)) : reach;
         var place = from + _cursorDir * _cursorReach;
@@ -2541,7 +2562,8 @@ public partial class TopDownMain : Node3D
     System.Numerics.Vector2 MouseOnBand()
     {
         var cam = _camera.Camera;
-        Vector2 mouse = GetViewport().GetMousePosition();
+        // What is shown under the pointer lies, undistorted, at the fisheye's source of it.
+        Vector2 mouse = OctoShoots.Game.Fx.Fisheye.Source(GetViewport().GetMousePosition(), GetViewport().GetVisibleRect().Size);
         Vector3 origin = cam.ProjectRayOrigin(mouse), dir = cam.ProjectRayNormal(mouse);
         if (Mathf.Abs(dir.Y) < 1e-4f) return _world.Player.Position;
         Vector3 hit = origin + dir * ((LevelMap.SwimBand - origin.Y) / dir.Y);

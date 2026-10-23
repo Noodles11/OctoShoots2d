@@ -131,6 +131,37 @@ public class PlaneWorldTests
     }
 
     [Fact]
+    public void ALongSealedWallOpensOnlyAGateInItsMiddle()
+    {
+        var map = TestLevels.All(p => p.HasBoss).Select(TestLevels.Get).First(m => m.WeakRocks.Any(r => r.Gate < r.Radius));
+        var w = new PlaneWorld(map, new Tuning());
+        var seal = w.Seals.First(s => s.Rock.Gate < s.Rock.Radius);
+        var rock = seal.Rock;
+        for (int k = 0; k < 60 && !seal.Open; k++) w.DebugStrikeSeal();
+        Assert.True(seal.Open);
+        // Its gate is open; either side of it the wall still stands.
+        Assert.True(w.Clear(rock.Center, 0.4f));
+        Assert.False(w.Clear(rock.Center + rock.Across * (rock.Radius - 0.6f), 0.4f));
+        Assert.False(w.Clear(rock.Center - rock.Across * (rock.Radius - 0.6f), 0.4f));
+    }
+
+    [Fact]
+    public void ASealsLightDrainsWhenHerHitsStopComing()
+    {
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Secrets > 0)), new Tuning());
+        var seal = w.Seals.First();
+        for (int k = 0; k < 3; k++) w.DebugStrikeSeal();
+        Assert.Equal(3, seal.Hits);
+        // Held a moment, then drained away.
+        for (int i = 0; i < (int)(SealTuning.Hold * 60f) - 5; i++) w.Step(default);
+        Assert.Equal(3, seal.Hits);
+        for (int i = 0; i < 120; i++) w.Step(default);
+        Assert.Equal(0, seal.Hits);
+        Assert.False(seal.Open);
+        Assert.False(w.Clear(seal.Rock.Center, w.Radius));
+    }
+
+    [Fact]
     public void HerLightOnTheEmblemFillsItAndTheSealCrumbles()
     {
         var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Secrets > 0)), new Tuning());

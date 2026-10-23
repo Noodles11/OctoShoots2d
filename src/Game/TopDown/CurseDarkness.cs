@@ -48,9 +48,11 @@ public partial class CurseDarkness : Control
         // Over the whole screen, whatever its size now.
         Position = Vector2.Zero;
         Size = GetViewportRect().Size;
-        var at = camera.UnprojectPosition(her);
+        // Where she is shown (through the fisheye).
+        var view = GetViewportRect().Size;
+        var at = OctoShoots.Game.Fx.Fisheye.Shown(camera.UnprojectPosition(her), view);
         // Her metres in pixels, along the screen's width (the camera looks almost straight down).
-        float metre = (camera.UnprojectPosition(her + camera.GlobalBasis.X) - at).Length();
+        float metre = (OctoShoots.Game.Fx.Fisheye.Shown(camera.UnprojectPosition(her + camera.GlobalBasis.X), view) - at).Length();
         _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("darkness"), Amount);
         _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("size"), Size);
         _material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("centre"), at);

@@ -103,7 +103,7 @@ public partial class ReefFishView : Node3D
             _poses.Add(new Pose { Group = g, Slot = counts[g]++, Time = f.Id * 0.73f });
         }
         for (int g = 0; g < counts.Count; g++)
-            _groups.Add(new Group { Mesh = Add(_bodies[(int)kinds[g]], _materials[(int)kinds[g]], counts[g], shadow: false) });
+            _groups.Add(new Group { Mesh = Add(_bodies[(int)kinds[g]], _materials[(int)kinds[g]], counts[g], shadow: true) });
 
         _hostTops.Clear();
         for (int i = 0; i < world.Anemones.Count; i++)

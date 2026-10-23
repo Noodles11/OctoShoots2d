@@ -53,7 +53,7 @@ public partial class BossView : Node3D
             Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 32, Rings = 16 },
             MaterialOverride = _blackPearl,
             Scale = Vector3.One * PlaneBossTuning.CoreRadius * 0.55f,
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.On,
         };
         _pearl.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.05f);
         _pearl.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.1f);
@@ -153,7 +153,7 @@ public partial class BossView : Node3D
                 MaterialOverride = _crustMat,
                 Position = at,
                 Scale = new Vector3(size / Mathf.Max(undo.X, 0.01f), size * 0.55f / Mathf.Max(undo.Y, 0.01f), size / Mathf.Max(undo.Z, 0.01f)),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.On,
             };
             mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.06f);
             mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.15f);

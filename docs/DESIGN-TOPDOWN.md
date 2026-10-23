@@ -244,7 +244,7 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
   light's reach). Experience, level, points and the spent points are saved
   with the run.
 - **The level-up** waits until she is out of the fight: no battle on, no
-  corrupted creature within 12 m, no vine coiling her, no hit taken, for
+  corrupted creature within 12 m, no hit taken, for
   1.5 s, and not while she absorbs a pearl. Reaching a level mid-fight says
   so ("Level 3! Your skill point waits until the fight is over"). Then:
   1. The game stops and the clock with it. She still moves in place: only the
@@ -275,6 +275,10 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
 - Screen-space dressing: marine snow drifting *between camera and level*
   (parallax speed reference), faint refraction wobble, vignette that deepens
   with depth, subtle chromatic aberration on hurt.
+- **A slight fisheye** (`Fisheye`, `fisheye.gdshader`): over the finished 3D view (Clementine and her light included),
+  under the HUD, the picture bends toward the screen's edges as through a dome port — barely in the middle, more toward
+  the rim (quartic), its corners staying the corners. Aiming with the mouse and the HUD's markers over the world go
+  through the same sums (`Fisheye.Source`, `Fisheye.Shown`).
 - **Overhead occlusion rule: she is always seen.** Arch bodies, cave roofs,
   tunnel roofs and overhang ledges render on a **canopy layer** above the
   gameplay plane. Any canopy over Clementine, or between her and the camera (it looks
@@ -286,13 +290,14 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
   the rock. Overlapping canopies all fade; a cave's roof, and a tunnel's, fade
   whole. It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
   (`LevelView.UpdateCanopy`). This is what makes the reef read as
-  layered and physical rather than painted flat (§4.5, §11). The one thing that
-  may pass over her is kelp (Stage 5): blades between her and the camera cover
-  her as they sway across, by design — only those, only near her. While one
+  layered and physical rather than painted flat (§4.5, §11). What may pass over
+  her is what really stands tall between her and the camera: kelp (Stage 5) and
+  a Blightroot's pole and head (CORRUPTION.md), drawn over her by one rule
+  (`over_her.gdshaderinc`) — only those, only near her. While one
   does, a thin warm-white outline (the light of the line her hits draw round a
   corrupted creature) shows round her bell over everything, so she is never
   lost in it; it comes in quickly and lingers a moment after
-  (`clementine_outline`, `KelpView.Covers`).
+  (`clementine_outline`, `KelpView.Covers`, `BlightView.Covers`).
 - **Camera breaks (only two, ever):** boss-awakening dips (2 s low-angle swell
   toward the boss) and the **Tank transition** — the Crack sucks Clementine down
   through a vertical shaft in a short cutscene (the one time true verticality is
@@ -531,15 +536,28 @@ Running after the checks, it never changes what she can reach.
 ### 4.2 Special places (caves, inherited from DESIGN-3D §6.4)
 - Clam room, **Barnaby's shop** (safe water, inherited §24), curse den,
   **secret cave** (sealed, see below), Mermaid's Grotto portal after bosses.
-- **Secret rooms are sealed** (`PlaneSeals.cs`, `SealView`, `seal_emblem.gdshader`): the way in is closed by a stretch of
-  ordinary wall: the reef's own ground carried across the gap, as high as the rock either side and running into it,
-  its canyon face rising from the floor as steeply as the walls do, so nothing tells it apart. On its canyon face an **X is carved**, faintly (a shallow shade in the stone, easy to miss). Each of her
-  shots that strikes the seal within 1.8 m of the X fills it a sixth with her light (from the crossing out along both
-  strokes; damage does not matter, a merged or bouncing bubble counts once), with a flash and a chime rising as it
-  fills. Filled after 6, the wall crumbles: it shudders and sinks into the floor, chunks of rock tumble out and settle, silt
-  rolls out of the way in, with a shake and a rumble; the way in is open. Until then the minimap and the Tab map draw
-  the whole secret cave (its chamber, its way in and the seal) as wall, so the charts give it away no more than the
-  reef does.
+- **Sealed walls** (`WeakRock`, `PlaneSeals.cs`, `SealView`, `seal_emblem.gdshader`): a stretch of reef wall across a
+  passage, a slab 3.2 m either side of its middle along the passage and across all of it, its faces ragged. It is the
+  wall itself: the generator raises the walls once more as if that slab of passage were rock and lays only what that
+  adds on the finished terrain (`LevelMap.Sealed`), so it is as steep and terraced as the walls round it and meets them
+  without a seam; drawn in the reef's own ground. Nothing else tells it apart but **its carving**, on the face it is met
+  from:
+  - **an X**, faint (a shallow shade in the stone, easy to miss), on a **secret room's way in** and on **side tunnels**
+    a level's template seals (its `pathSeals` rule);
+  - **a sword**, on **every way into the boss's arena** (each opening in its rim found by rays out from its middle, a
+    wall across it from the rock on one side to the rock on the other), its crimson smouldering faintly in the groove.
+  Each of her shots that strikes the wall within 2.2 m of its carving fills it with her light (a sixth of an X, an
+  eighth of the sword; damage does not matter, a merged or bouncing bubble counts once), from its heart outward (the
+  X's crossing, the sword's guard), with a flash and a chime rising as it fills. **The hits must come one after
+  another:** 1.4 s after the last, the light drains, a hit's worth every 0.3 s. Filled, **the wall slides down into the
+  sand** over 2.2 s: a jolt as it gives, a moment's strain, then down, slow to start, easing as it beds in, shuddering
+  as it grinds; the carving sinks and glows out with it; silt is pushed up and rolls out all along its feet where it
+  meets the seabed, chips of rock are flicked out, and the screen shakes as long as it goes. The way is open. **A long
+  wall** (over 4.7 m either side of its middle) opens only **a gate** in its middle, 3.2 m either side, its sides
+  ragged; the rest of it stays standing, as wall and to her, the terrain it leaves raised the same seamless way
+  (`LevelMap.SealedOpen`). Until a
+  secret's wall is opened the minimap and the Tab map draw the whole secret cave (its chamber, its way in and the wall)
+  as wall, so the charts give it away no more than the reef does.
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
   into the ridge behind its spur, 16–32 m long (about 2.8 m wide, in bending legs of 5–10 m), ending in a small end
   chamber. Black fog seeps out of its mouth into the canyon: the sign of what is inside.
@@ -858,6 +876,10 @@ exactly and cheaply, and the water glows where light passes through it.
   shifts for a moment — no surface ripple, a brief change in its density: a faint ring of refraction at her plane
   spreading about 2.6 m from where she pushed off over 0.7 s, strongest behind her, the water a shade thicker where
   it passes. At most six at once, one every 0.28 s; off with reduced motion.
+- **A flinch and a jolt on every hit** (`BlightView.Flinch`, `CameraRig.Shake`): a corrupted creature her light
+  strikes contracts for a moment (by 10–30%, more for a harder hit) and rebounds past its size as it settles, within
+  0.3 s; the screen shakes a little with each hit (more for a harder one, never much; off with the camera-shake
+  setting).
 - **Ink off a hit** (`BlightView.InkSplash`): where her shot strikes a corrupted body, 5–7 drops of its ink (10 for
   one freed) flick off the struck side — back toward her and fanning out, up a little — then slow and sink,
   violet-sheened so they read on dark ground.
@@ -880,6 +902,13 @@ exactly and cheaply, and the water glows where light passes through it.
 - **Glints**: wet rock and sand catch her light and the reef's other lights in soft specular glints.
 - **The reef's other lights** cast shadows too: a light spring's, a clam room's inner light and the Crack's
   (dual-paraboloid, cheaper than hers). Her bubbles' small lights do not.
+- **What throws a shadow** (from the sun and from every shadowed light): every solid body — all the creatures (murklings
+  and their chunks, the Blightroot's pole, head and rootlets and its octopus arms, blotters, inkwardens, lashjaws,
+  thumpsquirts, pufferlings, the reef fish, the bosses' pearl and crust, thrown ink), the reef's boulders, kelp, flora,
+  vases and their shards, and the shells she collects. What is light or water casts none: her own bell and strands,
+  glows, rings and halos, particles and trails, decals, mud clouds, the light springs' columns and the jellies' see-through
+  bodies; nor do the copies drawn over her, so nothing is shadowed twice. Under the steep sun a creature's shadow
+  lies close beneath it; round her lantern in the deep, shadows stretch away from her across the floor.
 - **Cost** (RTX 3090, 1600×900): about 0.4 ms of GPU per frame over the old look, and a quarter of a millisecond of CPU
   for the horizon map. The **Light shadows** option (Settings) turns the light shadows off on weaker GPUs; her glow in
   the water still stops at the reef, since that comes from the horizon map, not the GPU's shadows.
@@ -1187,7 +1216,7 @@ at mist distance (inherited fade rule).
    special room gets its own cave (clam room multi-chamber, the curse den a tunnel, shop and secrets pockets), so a
    level can have 3 pockets and 5 caves.
 5. **Secret cave vs reachability:** the secret cave is sealed, but every POI must be flood-fill reachable. Built:
-   the heightfield reaches it; the seal is a separate `WeakRock` that blocks swimming and shots until her light on its
+   the heightfield reaches it; the seal is a separate `WeakRock` (a slab) that blocks swimming and shots until her light on its
    emblem opens it (tested separately).
 6. **Arches on "peaks":** an arch stands on "peak pairs", but peaks are 10–16 m and rise well beyond 5–10 m from a
    corridor's centre line. Built: footings at the first ground ≥ 5 m high (falling back to 4, 3 and 2.5 m, the

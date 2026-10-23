@@ -111,7 +111,7 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(PlaneEventType.XpGained, Player.Position, Vector2.Zero, gained));
             for (int i = 0; i < levels; i++) Events.Add(new PlaneEvent(PlaneEventType.LevelUp, Player.Position, Vector2.Zero, Run.XpLevel));
         }
-        bool quiet = !hurt && !InBattle && !CreatureNear() && !Vines.Any(v => v.Coiling);
+        bool quiet = !hurt && !InBattle && !CreatureNear();
         _calmFor = quiet ? _calmFor + Dt : 0f;
     }
 

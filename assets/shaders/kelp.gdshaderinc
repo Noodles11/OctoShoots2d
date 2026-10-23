@@ -2,8 +2,8 @@
 // view's physics each frame. Vertex colour: r a per-strand seed, g its brightness, a how far along it (0 root → 1 tip).
 // UV: x across the blade (0 → 1), y along it in metres. Darker and browner at the stipe, paler toward the tip, a pale
 // midrib, ruffled margins and soft bands; the light comes through it (a leaf in the water), caustics play on it.
-// OVER (kelp_over.gdshader): the same blades drawn again after Clementine, only where they pass over her (near her and
-// nearer the camera than her bell), so a blade between her and the camera covers her as it should.
+// OVER (kelp_over.gdshader): the same blades drawn again after Clementine, only where they pass over her
+// (over_her.gdshaderinc), so a blade between her and the camera covers her as it should.
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
 #include "res://assets/shaders/level_frame.gdshaderinc"
@@ -11,10 +11,7 @@
 uniform vec3 base_col : source_color = vec3(0.2, 0.3, 0.15);
 uniform vec3 tip_col : source_color = vec3(0.55, 0.7, 0.3);
 #ifdef OVER
-/// Her bell (world) and how far round it the blades are drawn over her.
-uniform vec3 her_pos = vec3(0.0);
-uniform float over_radius = 2.6;
-global uniform vec3 reef_water_deep;
+#include "res://assets/shaders/over_her.gdshaderinc"
 #endif
 
 varying vec3 world_pos;
@@ -50,14 +47,10 @@ void fragment() {
 	BACKLIGHT = col * 0.3;
 	EMISSION = col * (sun_light + 0.03);
 #ifdef OVER
-	// Only over her: near her, and nearer the camera than her bell (a blade behind her stays behind her). (Drawn after
-	// the water's pass, so tinted by hand to match it.)
-	float near = 1.0 - smoothstep(over_radius - 0.9, over_radius, distance(world_pos.xz, her_pos.xz));
-	float her_depth = -(VIEW_MATRIX * vec4(her_pos, 1.0)).z;
-	float in_front = smoothstep(0.05, 0.35, her_depth - (-VERTEX.z));
-	ALPHA = near * in_front;
+	// Only over her (over_her.gdshaderinc).
+	ALPHA = over_her(world_pos, VERTEX.z, VIEW_MATRIX);
 	if (ALPHA < 0.01) discard;
-	ALBEDO = mix(ALBEDO * vec3(0.72, 0.92, 1.03), reef_water_deep * 0.7, 0.12);
+	ALBEDO = over_haze(ALBEDO, 0.12);
 	EMISSION = mix(EMISSION * vec3(0.72, 0.92, 1.03), vec3(0.0), 0.12);
 #endif
 }

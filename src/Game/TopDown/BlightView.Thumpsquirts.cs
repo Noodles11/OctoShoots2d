@@ -151,7 +151,7 @@ public partial class BlightView
         var siphons = new MeshInstance3D[2];
         for (int i = 0; i < siphons.Length; i++)
         {
-            siphons[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.11f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            siphons[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.11f, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
             siphons[i].SetInstanceShaderParameter(SN.Of("seed"), t.Seed + i * 7f);
             siphons[i].SetInstanceShaderParameter(SN.Of("wobble"), 0.4f);
             siphons[i].SetInstanceShaderParameter(SN.Of("ember_tint"), Kin.Tint(Kin.Thumpsquirt));
@@ -196,7 +196,7 @@ public partial class BlightView
             MaterialOverride = _paleSquirt,
             Position = new Vector3(at.X, floor + 0.4f, at.Y),
             Scale = new Vector3(0.26f, 0.4f, 0.26f),
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.On,
         };
         AddChild(squirt);
         _freedSquirts.Add(squirt);

@@ -1148,7 +1148,7 @@ void fragment() {
         // Shells: a pooled mesh each, turning slowly and bobbing a little on the swim band.
         while (_shells.Count < world.Shells.Count)
         {
-            var m = new MeshInstance3D { Mesh = ShellMesh(), MaterialOverride = _shell, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            var m = new MeshInstance3D { Mesh = ShellMesh(), MaterialOverride = _shell, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
             AddChild(m);
             _shells.Add(m);
         }

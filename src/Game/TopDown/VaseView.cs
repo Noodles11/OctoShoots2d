@@ -107,7 +107,7 @@ public partial class VaseView : Node3D
                 Position = new Vector3(at.X, pot.Floor, at.Y) + outward * pot.Vase.Radius * 0.8f + Vector3.Up * y,
                 Scale = Vector3.One * _rng.RandfRange(0.7f, 1.4f) * (pot.Vase.Radius / 0.45f),
                 Rotation = new Vector3(_rng.RandfRange(0f, Mathf.Tau), a, _rng.RandfRange(0f, Mathf.Tau)),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.On,
             };
             AddChild(mesh);
             _shards.Add(new Shard

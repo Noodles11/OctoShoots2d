@@ -77,7 +77,7 @@ public partial class KelpView : Node3D
     {
         _material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/kelp.gdshader") };
         _overMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/kelp_over.gdshader"), RenderPriority = 3 };
-        _under = new MeshInstance3D { Mesh = _mesh, MaterialOverride = _material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        _under = new MeshInstance3D { Mesh = _mesh, MaterialOverride = _material, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
         _over = new MeshInstance3D { Mesh = _mesh, MaterialOverride = _overMaterial, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(_under);
         AddChild(_over);
@@ -212,12 +212,11 @@ public partial class KelpView : Node3D
                     if (new Vector2(m.At.X, m.At.Z).DistanceTo(root) < reachOf + m.Radius + Stir + StirPerSpeed * m.Velocity.Length()) _local.Add(m);
                 _swellHere = false;
                 for (int i = 0; i < swells.Count && !_swellHere; i++)
-                    _swellHere = new Vector2(swells.Rings[i].X, swells.Rings[i].Y).DistanceTo(root) < reachOf + 4f;
+                    _swellHere = new Vector2(swells.Rings[i].X, swells.Rings[i].Y).DistanceTo(root) < reachOf + 4f + 3f * swells.Dirs[i].Z;
                 for (int step = 0; step < Steps; step++) Step(st, h, surge, swells);
             }
         }
         Draw(camera);
-        _overMaterial.SetShaderParameter(SN.Of("her_pos"), bell);
     }
 
     /// <summary>
@@ -376,8 +375,9 @@ public partial class KelpView : Node3D
             float r = d.Length();
             if (r < 1e-3f) continue;
             float age = s.Z;
-            float front = Mathf.Lerp(0.25f, 2.6f, 1f - (1f - age) * (1f - age));
-            float width = 0.35f + 0.55f * age;
+            float reach = swells.Dirs[i].Z > 0f ? swells.Dirs[i].Z : 1f;
+            float front = Mathf.Lerp(0.25f, 2.6f * reach, 1f - (1f - age) * (1f - age));
+            float width = (0.35f + 0.55f * age) * Mathf.Sqrt(reach);
             float band = Mathf.Exp(-Mathf.Pow((r - front) / width, 2f));
             float k = s.W * band * (1f - age) * (1f - age) * 2.5f;
             w += new Vector3(d.X / r, 0f, d.Y / r) * k;

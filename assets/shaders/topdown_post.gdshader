@@ -67,7 +67,8 @@ uniform int bubble_count = 0;
 uniform vec4 lenses[12];
 uniform int lens_count = 0;
 /// Swells in the water where she set off, turned or dashed (WaterSwells): x, z (world), age 0 → 1, strength; and the
-/// way she was going (x, z). A faint spreading ring of refraction at her plane, strongest behind her.
+/// way she was going (x, z; none for a ring) and its reach (a share of 2.6 m; 0 for 1). A faint spreading ring of
+/// refraction at her plane, strongest behind her.
 uniform vec4 swells[6];
 uniform vec4 swell_dirs[6];
 uniform int swell_count = 0;
@@ -159,12 +160,13 @@ void fragment() {
 			float r = length(d);
 			vec2 out_dir = d / max(r, 1e-3);
 			float age = s.z;
-			// Out to about 2.6 m, quick at first, easing; widening as it goes; fading out.
-			float front = mix(0.25, 2.6, 1.0 - (1.0 - age) * (1.0 - age));
-			float width = 0.35 + 0.55 * age;
+			// Out to about 2.6 m (times its reach, z), quick at first, easing; widening as it goes; fading out.
+			float reach = swell_dirs[i].z > 0.0 ? swell_dirs[i].z : 1.0;
+			float front = mix(0.25, 2.6 * reach, 1.0 - (1.0 - age) * (1.0 - age));
+			float width = (0.35 + 0.55 * age) * sqrt(reach);
 			float band = exp(-pow((r - front) / width, 2.0));
-			// Strongest behind her (the water she pushed), still there ahead of her.
-			float behind = 0.45 + 0.55 * max(0.0, dot(out_dir, -swell_dirs[i].xy));
+			// Strongest behind her (the water she pushed), still there ahead of her; a ring with no way, even.
+			float behind = dot(swell_dirs[i].xy, swell_dirs[i].xy) > 0.25 ? 0.45 + 0.55 * max(0.0, dot(out_dir, -swell_dirs[i].xy)) : 1.0;
 			float k = s.w * band * behind * (1.0 - age) * (1.0 - age);
 			bend += out_dir * k;
 			swell_density += k;

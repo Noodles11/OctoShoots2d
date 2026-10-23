@@ -70,6 +70,8 @@ public sealed class TemplateRules
     public CastKind? WardenFor { get; set; }
     /// <summary>No ambush springs and no Blotter is born all level.</summary>
     public bool Quiet { get; set; }
+    /// <summary>Side tunnels sealed by a wall with an X (opened as a secret's is).</summary>
+    public int PathSeals { get; set; }
 }
 
 /// <summary>

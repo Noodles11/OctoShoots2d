@@ -2,7 +2,7 @@
 
 How Ink Deep's corruption, its enemies and the boss arena are built. The design brief is "Corruption & Combat:
 Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruption.cs` (the field, its tuning and
-`PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, gloomvines, murklings, the arena). The
+`PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, murklings, the arena). The
 presentation is in `src/Game/TopDown/BlightView.cs`, `CorruptionView.cs` (the field's
 texture) and `CleanseMeter.cs`, and in the shaders
 named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed, and ambush
@@ -48,18 +48,27 @@ murklings).
 
 ## Blightroot (`Blightroot`)
 
-A captive octopus (`BlightView.Octopus.cs`): the corruption has chained its arms to the seabed and drains its ink,
-which is why the ground round it is the level's main source of ink. Freeing it breaks the chains and it escapes.
+An octopus the corruption has drawn up into a pole of ink (`BlightView.Octopus.cs`), draining its ink into the
+ground round it, which is why that ground is the level's main source of ink. Freed, it becomes itself again and swims
+away.
 
-- **Its look:** an octopus sitting on the floor, with no eyes.
-  - Its mantle rises from the floor to her plane: the target her light drains.
-  - Its eight arms lie splayed flat on the ground, thick at the mantle and curling at their tips, twitching weakly.
-  - Three chains of matte ink links (`ink_chain.gdshader`) pin each arm, arching over it from one little ink well to
-    another. Dark droplets drain off its arms into the wells.
+- **Its look** (all of it painted as the murklings are, its ink brushed in flowing strokes with ragged dry-brushed
+  rims in its blue; no eyes):
+  - A pole of ink (`ink_stalk.gdshader`) standing from a splay of rootlets on the sand up to its head, swaying, knotted
+    here and there, its strokes running up it.
+  - Its head, raised high on the pole (1.9 m over her plane: it stands tall, as kelp does): the target her light drains.
+    Standing between her and the camera, its head and pole are drawn over her where they cover her, by kelp's rule
+    (`over_her.gdshaderinc`, `murkling_over`, `ink_stalk_over`), and she wears her outline meanwhile. A liquid body (as a murkling's,
+    `murkling.gdshader`): it breathes, swells on the pulse, sways on its pole, and shrinks as her light drains it. Her
+    hits tear it as they tear a murkling: a deep dent that rings back, ragged holes (its inner blue light showing
+    through) that close as its meter refills, chunks of ink ripped away. Ink runs down its pole into the sand.
   - It wears the Blightroot's blue under the ink, and its hit outline like every corrupted creature.
-- **Freed:** its ink pops off its mantle and the chains snap, their links flying. It turns its own healthy coral,
-  gathers its arms up round itself, pushes off the floor and jets up and away to the north, its arms trailing, with a
-  trail of clean bubbles. It is gone in 2.6 s.
+- **Freed** (smoothly, over 1.5 s, then away): its ink bursts off its head; the pole runs away from the top down into
+  drips and the rootlets draw back into the sand; its head takes its own healthy coral, rounds out whole and draws out
+  into a mantle while eight arms grow out under it, hanging, then curling. Then it swims away from her, rising, in
+  strokes of its arms (each a contraction, arms closing back and the mantle squeezed, that drives it on, then a glide
+  as they flare), leaning its mantle into its way, a trail of clean bubbles behind it. It fades out 4.6 s after it was
+  freed.
 - **Its guardians:** while it has been struck by her light within the last 3 s, its area's murklings wake to guard
   it. Its area buds every 5 s ÷ (1 + 1.5 × Menace) (5 s in the early depths, 2 s by the Tank), each bud 4–7 m round
   it (at least 5 m from her, drinking its ink as any bud does). Its cap rises by 1 + round(2 × Menace), and it buds
@@ -72,10 +81,24 @@ which is why the ground round it is the level's main source of ink. Freeing it b
 - **Shot down:** its corruption meter (see "Corruption meters" below) is 125 × (1 + 0.2 × Menace), so it takes 13
   default shots on its 0.9 m mantle in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with
   Menace) once 0.5 s pass without a hit. Emptied, it is freed (above; its ink pops, see evaporation below). A wave of
-  cleansing runs through its whole reach in 0.7 s and its vines dissolve. Cleansing the ground round it no
-  longer harms it.
-- **The pulse:** every 4 s its mantle swells for 0.8 s (the telegraph), its chains pulling taut and its arms
-  flinching, then a ring of ink runs out at 10 m/s. The ring
+  cleansing runs through its whole reach in 0.7 s. Cleansing the ground round it no longer harms it.
+- **A boxing pole** (`BlightView.Octopus`): its foot held fast in the sand, its pole leans on a spring and rings back
+  upright. Her hits push it back, away from the shot, each as hard as it struck (a push of 1.4 + 6 × the hit's share
+  of its meter); a run of them pushes it further, never past 0.45 rad.
+- **Its hammer** (`PlaneBlight.StepHammer`, `BlightView.Octopus`): when she comes within 4.2 m it rears back away from
+  her for 0.5 s, its pole drawing up to 1.3 times its height, its aim following her; then its head comes down at her
+  in 0.14 s, ever faster as a hammer falls, its pole drawn out as far as it needs to reach. If she is still within
+  4.6 m and in front of it as it lands, it lands on top of her (drawn over her, as above), corrupts her
+  for 10 + 3 × Menace and knocks her away at 9 m/s; else it strikes the sand as far as it reaches her way. Where it
+  lands: its liquid head flattens on the blow and rings back, 16–22 drops of it are torn off and flung out round it
+  (slowed hard by the water, sinking a little), 3–5 chunks of it are ripped away, and the water is shoved out in two
+  rings of refraction (the swells' distortion, `WaterSwells.AddRing`: a quick wide one and a closer one); a thud and
+  a jolt of the screen. It rests on what it struck for 0.1 s, then rises back slowly through the water over 0.55 s
+  and waits 1.2 s before it may swing again. A dash as it comes down takes nothing. It never swings while it gathers
+  a pulse.
+- **The pulse:** every 4 s it gathers for 0.8 s (the telegraph): its head swells, a swell of ink climbing its pole into
+  it, and it stretches up a little; then it squashes all the way down to the sand in 0.07 s as a ring of ink runs out
+  at 10 m/s, and springs back up. The ring
   stains cleansed ground back to 0.35 and snuffs out each of her shots it crosses. Passing over her, it corrupts her
   for 6 + 2 × Menace (once per ring). Dashing through it takes nothing.
 
@@ -212,6 +235,19 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 
 ## Murklings (`Murkling`)
 
+- **Its body is liquid** (`BlightView.Murklings`, `murkling.gdshader`; lesser ones and primes alike): a drop of ink adrift
+  like mercury in no gravity. Twelve points round it each stand out of round or in on a spring back to round (its
+  surface tension), lightly damped so it rings, pulled toward their neighbours (a dent spreads and smooths), its
+  volume kept (what one takes in, the rest push out). The ink lags it: speeding up, its trailing side bulges and its
+  front flattens; stopping, it sloshes on; fast, it draws out along its way; still, the water stirs it gently. It is
+  painted as her light is: its ink brushed in flowing bands, a ragged dry-brushed violet stroke for its rim, a torn
+  silhouette, one soft dab of sheen.
+- **Her hits tear it** (`TearMurkling`): the struck side dents deep and rebounds past round; a ragged hole opens there,
+  wider for a stronger hit (about 0.25 rad for a plain shot, up to about 0.7 for one that takes all of it; at most
+  six, the nearest widened past that), its lip glowing with the ember, its dark inside showing through with the ember
+  deep in it; and chunks of its ink are ripped away (1 + 5 × the hit's share of its meter): wobbling blobs flung off
+  the struck side that drag to a stop, sink, shed drops and break into a few. **The holes close as its corruption grows
+  back:** they hold while its meter waits (its delay), shrink as it refills, and are gone when it is full.
 - **Budding:** each living Blightroot's area buds one from dense ground (≥ 0.6), at least 5 m from her, every
   15 s / (1 + 0.6 × Menace), while the level holds ink enough for it. The bud takes 0.8 s. **It is made of ink:**
   over the bud it drinks 3.6 (about a 1.2 m disc of thick ink, the nearest first and further out where it is thin),
@@ -228,11 +264,12 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   anemone is safe. Once she is within 14 m it turns to her as above.
 - **Attack:** a black orb, a piece of itself, thrown when she is within 9 m and in sight, for 7 damage (its radius
   0.1 m). **The telegraph is a slingshot** (0.55 s ÷ (1 + 0.3 × Menace)): it bends back away from its aim into a
-  C, its middle hauled back and its tips left reaching toward her, trembling and shivering with the effort, its aim
-  following her as it draws; it crawls at a quarter of its pace meanwhile. For the last 0.12 s its aim is locked and it
+  C, its middle hauled back and its tips left reaching toward her, trembling and shivering with the effort, its
+  liquid body sloshing back away from its aim with the strain, its aim following her as it draws; it crawls at a quarter of its pace meanwhile. For the last 0.12 s its aim is locked and it
   snaps forward through the opposite arc, the piece swelling out of its front on a narrowing neck. The drop parts
   from it like a drop leaving a surface (its back drawn into a neck that thins and snaps, then a wobble into its
-  flying drop) and the murkling springs back to round with a wobble. It flies at 10 + 1.5 × Menace m/s
+  flying drop, which keeps a slow wobble as it flies) and the murkling, its front flung out at the snap, recoils and
+  rings back to round. It flies at 10 + 1.5 × Menace m/s
   and is thrown every ~2.4 s / (1 + 0.25 × Menace). A throw that flies 9 m without hitting anything falls: it sinks
   to the sand over 0.45 s (harmless now, under her plane) and lands with a small splat, staining 0.9 m of the floor
   toward 0.7 density (never in safe places). Struck in the air by her light (a shot or Firefly Squid's surge), it
@@ -321,17 +358,6 @@ quickly (about 0.3 m for a murkling, a few centimetres for a Blotter), quick hit
 worth, and times her knockback stat. Rock stops it dead. A clinging, budding or leaping creature is not moved, nor
 the rooted ones (Blightroots, Lashjaws).
 
-## Gloomvines (`Gloomvine`)
-
-- Two per Blightroot: two of its chains torn loose from their wells, drawn as the same ink links, thicker. They rest
-  as 2.6 m curls, rising from the floor toward her plane; their rim brightens while one coils her.
-- When she lingers (under 1 m/s for 0.6 s) within reach, the tip creeps toward her at 0.8 m/s, up to 11.7 m long.
-  This only punishes standing still.
-- **Coil:** a tip that reaches her holds her for 1.2 s, draining 5 HP/s. A dash frees her. It then lets go and draws
-  back 2 m.
-- **Cutting:** a popping bubble cuts the vine where it meets it, and everything past the cut is gone. Vines regrow at
-  0.4 m/s while the ground at their root is still corrupted.
-
 ## Queen Clam (the Depth 1 boss)
 
 Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no face.
@@ -353,7 +379,7 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
   shudder she leaps 6.5 m aside in one arc (0.7 s) and lies there wide open. Her cleansed pearl is the reward: it
   stays exactly where it sat in her (over the Crack's middle) as she leaps away from under it, ready to take.
 - **The arena is hers alone during the fight:** sealing it sets every murkling (clinging ones too) and Blotter inside
-  down just outside. Murklings never bud in it. Murklings, Blotters and vines cannot cross the sealed rim, murkling
+  down just outside. Murklings never bud in it. Murklings and Blotters cannot cross the sealed rim, murkling
   throws stop at it, and a Blotter's bomb bound inside lands just outside.
 
 ## The arena: condensation
@@ -435,11 +461,12 @@ Cleared corruption never just vanishes. It evaporates.
   the rest of the level's life as she dives.
 - **The floor** (`reef_surface.gdshaderinc`): the ground keeps its own colour under the drops; nothing covers it and it
   never glows. The level below shows its own corruption through the shaft.
-- **Corrupted bodies** (`corruption_orb.gdshader`: murklings, the octopus, throws, the crust) are matte, rubbery ink,
+- **Corrupted bodies** (`corruption_orb.gdshader`: throws, the crust, the other kinds; murklings and the Blightroot are
+  `murkling.gdshader`, painted, the same matte ink) are matte, rubbery ink,
   tacky to look at: rough, with a weak broad sheen and a finely dimpled skin, never polished; a soft rim. And
   **each kind has its own base colour** (its skin under the ink and its glowing rim), shared by its projectiles and its
   rings: murklings stay ink-black with a violet rim, each with its core's colour (a murkling's amber, a prime's
-  magenta, a lesser one's its fish's); Blightroots blue (the octopus under its ink, its rings and chains too); Blotters orange (their
+  magenta, a lesser one's its fish's); Blightroots blue (its pole and head under the ink, its rings too); Blotters orange (their
   bombs and landing marks too); Thumpsquirts acid green (their landing rings and marks too); Inkwardens violet (their
   tethers too); Lashjaws crimson (their tongues too).
 - **Their light** (`BlightView.Lights.cs`): each casts a little light in its core's or base colour (murklings and
@@ -448,13 +475,11 @@ Cleared corruption never just vanishes. It evaporates.
   own lantern.
 - Other shaders:
   - `ink_ring.gdshader`: pulses, buds, bursts.
-  - `ink_chain.gdshader`: the chains' links (one MultiMesh for all of them), ink-black with a blue rim that
-    brightens as they pull taut, falling away in specks as a vine dissolves.
 - **HUD** (`CleanseMeter`): the level cleansed, with the 50% and 75% tipping points marked. On boss levels it also
   shows the arena, with the Crack's 60% mark and the crust as pips.
 - **Maps:** they show neither the corruption nor any corrupted creature; only the light springs, of its works.
 
 ## Not yet
 
-- Gloomvines and the arena's crust lumps have no sounds of their own; the war's sounds reuse the existing set.
+- The arena's crust lumps have no sounds of their own; the war's sounds reuse the existing set.
 - Murklings stay out of the Sea-pedia, which lists pearls and creatures from `SeaPediaCard.Creatures` only.

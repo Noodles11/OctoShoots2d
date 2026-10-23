@@ -192,6 +192,80 @@ public class CorruptionTests
     }
 
     [Fact]
+    public void ABlightrootHammersHerWhenSheComesTooCloseUnlessSheDashesOrKeepsAway()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var root = w.Blightroots[0];
+        // Only its hammer: no pulse (of any root) and no murkling budding meanwhile.
+        foreach (var r in w.Blightroots) r.PulseTimer = 1000f;
+        // Out of its reach: it never swings.
+        var far = Enumerable.Range(0, 64).Select(i => root.Position + new Vector2(MathF.Cos(i * 0.4f), MathF.Sin(i * 0.4f)) * (BlightTuning.HammerReach + 1.5f)).First(q => w.Clear(q, 0.6f));
+        for (int i = 0; i < 120; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = far;
+            w.Murklings.Clear();
+            w.Step(default);
+        }
+        Assert.True(root.Swing < 0f);
+        Assert.Equal(w.Run.MaxHp, w.Player.Hp);
+        // Too close: it rears back, then its head comes down on her and knocks her away.
+        var near = Enumerable.Range(0, 64).Select(i => root.Position + new Vector2(MathF.Cos(i * 0.4f), MathF.Sin(i * 0.4f)) * 1.8f).First(q => w.Clear(q, 0.6f));
+        w.Player.Position = w.Player.PrevPosition = near;
+        w.Step(default);
+        Assert.True(root.Swing >= 0f);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.BlightrootSwing);
+        bool slammed = false, knocked = false;
+        for (int i = 0; i < 60 && !slammed; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = near;
+            w.Murklings.Clear();
+            w.Step(default);
+            slammed = w.Events.Any(e => e.Type == PlaneEventType.BlightrootSlam);
+            knocked = System.Numerics.Vector2.Dot(w.Player.Velocity, root.SwingDir) > 3f;
+        }
+        Assert.True(slammed);
+        Assert.True(w.Player.Hp < w.Run.MaxHp);
+        Assert.True(knocked, "knocked away from it");
+        // It waits before it swings again; then, dashing as its head comes down, she takes nothing.
+        for (int i = 0; i < 200 && !(root.Swing >= 0f); i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = near;
+            w.Player.Velocity = System.Numerics.Vector2.Zero;
+            w.Murklings.Clear();
+            w.Step(default);
+        }
+        Assert.True(root.Swing >= 0f);
+        float hp = w.Player.Hp = w.Run.MaxHp;
+        w.Player.HurtTimer = 0f;
+        bool dashed = false;
+        for (int i = 0; i < 60; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = near;
+            bool dash = !dashed && root.Swing > BlightTuning.HammerWindup - 0.1f;
+            dashed |= dash;
+            w.Murklings.Clear();
+            w.Step(new PlaneInput { Dash = dash });
+            if (w.Events.Any(e => e.Type == PlaneEventType.BlightrootSlam)) break;
+        }
+        Assert.Equal(hp, w.Player.Hp);
+    }
+
+    [Fact]
+    public void ABlightrootNeverSwingsWhileItGathersAPulse()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var root = w.Blightroots[0];
+        root.PulseTimer = BlightTuning.Telegraph * 0.5f;
+        var near = Enumerable.Range(0, 64).Select(i => root.Position + new Vector2(MathF.Cos(i * 0.4f), MathF.Sin(i * 0.4f)) * 1.8f).First(q => w.Clear(q, 0.6f));
+        w.Player.Position = w.Player.PrevPosition = near;
+        w.Step(default);
+        Assert.True(root.Inflate > 0f);
+        Assert.True(root.Swing < 0f);
+    }
+
+    [Fact]
     public void ABlightrootPulseCorruptsHerUnlessSheDashesThroughIt()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
@@ -1059,6 +1133,5 @@ public class CorruptionTests
         w.Murklings.Clear();
         w.Blotters.Clear();
         w.Bombs.Clear();
-        foreach (var vine in w.Vines) vine.Points.RemoveRange(1, vine.Points.Count - 1);
     }
 }

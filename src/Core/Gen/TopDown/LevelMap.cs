@@ -153,8 +153,56 @@ public sealed class Canopy
     }
 }
 
-/// <summary>Weak rock plugging a secret cave's mouth: blocks swimming until an ink bomb breaks it.</summary>
-public readonly record struct WeakRock(Vector2 Center, float Radius, int Cave);
+/// <summary>What a sealed wall hides, and so what is carved on it: a secret room or a way on (an X), the boss (a sword).</summary>
+public enum SealKind { Secret, Path, Boss }
+
+/// <summary>
+/// A sealed wall (DESIGN-TOPDOWN §4.2): a slab of reef wall across a passage — a secret room's way in, a tunnel, the
+/// way into the boss's arena — Thick metres either side of Center along Facing (out toward the side it is met from),
+/// Radius metres either side across it. It blocks swimming and shots until her light fills its carving
+/// (PlaneSeals); then it slides down into the sand. The terrain it stands as is LevelMap.Sealed. (Thick 0: a disc of
+/// Radius, as older seals were.)
+/// </summary>
+public readonly record struct WeakRock(Vector2 Center, float Radius, int Cave, Vector2 Facing = default, float Thick = 0f, SealKind Kind = SealKind.Secret)
+{
+    /// <summary>Whether a point (padded by a body's radius) is inside the wall.</summary>
+    public bool Contains(Vector2 p, float pad = 0f)
+    {
+        if (Thick <= 0f) return Vector2.Distance(p, Center) < Radius + pad;
+        var d = p - Center;
+        float along = Vector2.Dot(d, Facing), across = d.X * -Facing.Y + d.Y * Facing.X;
+        return MathF.Abs(along) < Thick + pad && MathF.Abs(across) < Radius + pad;
+    }
+
+    /// <summary>
+    /// A wall longer than this (Radius over GateHalf + GateMore) opens only a gate in its middle, GateHalf metres either
+    /// side; the rest of it stays standing.
+    /// </summary>
+    public const float GateHalf = 3.2f, GateMore = 1.5f;
+
+    /// <summary>Its gate's half width (it opens only there), or its whole width when it is short.</summary>
+    public float Gate => Thick > 0f && Radius > GateHalf + GateMore ? GateHalf : Radius;
+
+    /// <summary>Across it, the unit way (its Radius runs either side along this).</summary>
+    public Vector2 Across => new(-Facing.Y, Facing.X);
+
+    /// <summary>What of it still stands once it has opened: the wall either side of its gate (none when it opens whole).</summary>
+    public IEnumerable<WeakRock> Remains()
+    {
+        if (Gate >= Radius) yield break;
+        float half = (Radius - Gate) * 0.5f, mid = Gate + half;
+        yield return this with { Center = Center + Across * mid, Radius = half };
+        yield return this with { Center = Center - Across * mid, Radius = half };
+    }
+
+    /// <summary>Into the wall from a point by it (its face's inward normal).</summary>
+    public Vector2 Inward(Vector2 p)
+    {
+        if (Thick > 0f) return Vector2.Dot(p - Center, Facing) >= 0f ? -Facing : Facing;
+        var d = Center - p;
+        return d.LengthSquared() > 1e-8f ? Vector2.Normalize(d) : Vector2.UnitX;
+    }
+}
 
 public enum DecorKind
 {
@@ -283,6 +331,12 @@ public sealed class LevelMap
     public List<CaveSite> Caves = new();
     public List<Canopy> Canopies = new();
     public List<WeakRock> WeakRocks = new();
+    /// <summary>The terrain the sealed walls stand as (NaN where no wall stands): the walls raised as if their slab of passage were rock.</summary>
+    public float[] Sealed = NewLid();
+    /// <summary>The terrain a long sealed wall leaves standing once its gate has opened (NaN where none stands).</summary>
+    public float[] SealedOpen = NewLid();
+    public float SealedOpenAt(int x, int y) => SealedOpen[y * Samples + x];
+    public float SealedAt(int x, int y) => Sealed[y * Samples + x];
     public List<DecorSpot> Decor = new();
     /// <summary>Kelp beds: dense patches of tall seaweed.</summary>
     public List<KelpBed> Kelp = new();
@@ -368,6 +422,8 @@ public sealed class LevelMap
         w.Write(Shaft.HalfWidth);
         foreach (float h in Heights) w.Write(h);
         foreach (float h in Lid) w.Write(h);
+        foreach (float h in Sealed) w.Write(h);
+        foreach (float h in SealedOpen) w.Write(h);
         w.Write(Pois.Count);
         foreach (var p in Pois)
         {
@@ -425,6 +481,9 @@ public sealed class LevelMap
             V(r.Center);
             w.Write(r.Radius);
             w.Write(r.Cave);
+            V(r.Facing);
+            w.Write(r.Thick);
+            w.Write((int)r.Kind);
         }
         w.Write(Decor.Count);
         foreach (var d in Decor)

@@ -15,7 +15,7 @@ public sealed class WaterSwells
 
     /// <summary>Per swell: x, z (world), age (0 → 1), strength (0..1).</summary>
     public Vector4[] Rings { get; } = new Vector4[Max];
-    /// <summary>Per swell: the way she was going (x, z, unit), so the swell is strongest behind her.</summary>
+    /// <summary>Per swell: the way she was going (x, y = world z; unit, or none for a ring), and its reach (z: a share of 2.6 m, 0 for 1).</summary>
     public Vector4[] Dirs { get; } = new Vector4[Max];
     public int Count { get; private set; }
 
@@ -28,6 +28,18 @@ public sealed class WaterSwells
         dir = dir.LengthSquared() > 1e-6f ? dir.Normalized() : Vector2.Zero;
         Rings[i] = new Vector4(at.X, at.Y, 0f, Mathf.Clamp(strength, 0f, 1f));
         Dirs[i] = new Vector4(dir.X, dir.Y, 0f, 0f);
+        _age[i] = 0f;
+    }
+
+    /// <summary>
+    /// A ring of the water shoved outward (a heavy blow: a Blightroot's head coming down): even all round, out to
+    /// reach × 2.6 m, as strong as strength (up to 2).
+    /// </summary>
+    public void AddRing(Vector2 at, float strength, float reach)
+    {
+        int i = Count < Max ? Count++ : Oldest();
+        Rings[i] = new Vector4(at.X, at.Y, 0f, Mathf.Clamp(strength, 0f, 2f));
+        Dirs[i] = new Vector4(0f, 0f, reach, 0f);
         _age[i] = 0f;
     }
 

@@ -95,42 +95,43 @@ public partial class LevelView : Node3D
         return m;
     }
     FloraViews _flora = null!;
-    readonly List<(System.Numerics.Vector2 At, MeshInstance3D Wall, float Height)> _seals = new();
+    readonly List<(System.Numerics.Vector2 At, MeshInstance3D Wall, MeshInstance3D? Remains, float Height)> _seals = new();
 
-    /// <summary>A secret's seal crumbles: its stretch of wall shudders, then sinks away into rubble; chunks of it tumble out.</summary>
-    public void Crumble(System.Numerics.Vector2 at)
+    /// <summary>A sealed wall's slide down into the sand: how long it takes, and how far down it has gone at t (0..1 of its height).</summary>
+    public const float SlideSeconds = 2.2f;
+
+    /// <summary>
+    /// The slide's curve: a jolt as it gives (a few centimetres), a moment's strain, then down — slow to start, as heavy rock
+    /// is, steady, easing as it beds into the sand.
+    /// </summary>
+    public static float SlideAt(float t)
+    {
+        t = Mathf.Clamp(t, 0f, 1f);
+        if (t < 0.08f) return 0.015f * Mathf.Sin(t / 0.08f * Mathf.Pi);
+        float u = (t - 0.08f) / 0.92f;
+        return u * u * (3f - 2f * u);
+    }
+
+    /// <summary>
+    /// A sealed wall slides down into the sand: its stretch of wall shudders as it gives, then sinks out of sight. A long
+    /// one opens only its gate: what stands either side of it (its remains) is there at once, and the wall sinks behind it,
+    /// so only the gate is seen going down.
+    /// </summary>
+    public void Slide(System.Numerics.Vector2 at)
     {
         int i = _seals.FindIndex(s => s.At == at);
         if (i < 0) return;
-        var (_, wall, height) = _seals[i];
+        var (_, wall, remains, height) = _seals[i];
         _seals.RemoveAt(i);
+        if (remains is not null) remains.Visible = true;
         var tween = CreateTween();
-        // A shudder, then down into the floor.
-        for (int k = 0; k < 4; k++)
-            tween.TweenProperty(wall, "position", new Vector3(k % 2 == 0 ? 0.12f : -0.12f, 0f, k % 2 == 0 ? -0.08f : 0.08f), 0.04f);
-        tween.TweenProperty(wall, "position", Vector3.Down * (height + 1f), 0.9f).SetEase(Tween.EaseType.In).SetTrans(Tween.TransitionType.Quad);
-        tween.TweenCallback(Callable.From(wall.QueueFree));
-        var start = new Vector3(at.X, _map.HeightAt(at), at.Y);
-        float across = 3f;
-        var chunk = Rock(0.4f);
-        var rng = new RandomNumberGenerator { Seed = (ulong)(at.X * 97f + at.Y * 13f) };
-        for (int k = 0; k < 14; k++)
+        tween.TweenMethod(Callable.From<float>(t =>
         {
-            float a = rng.Randf() * Mathf.Tau;
-            float size = rng.RandfRange(0.25f, 0.6f);
-            var from = start + new Vector3(Mathf.Cos(a) * across * 0.5f, height * rng.RandfRange(0.5f, 0.9f), Mathf.Sin(a) * across * 0.5f);
-            var piece = new MeshInstance3D { Mesh = new SphereMesh { Radius = 1f, Height = 1.6f, RadialSegments = 7, Rings = 4 }, MaterialOverride = chunk, Position = from, Scale = Vector3.One * size, Rotation = new Vector3(rng.Randf() * 3f, rng.Randf() * 3f, 0f) };
-            AddChild(piece);
-            var land = new Vector3(from.X + Mathf.Cos(a) * rng.RandfRange(1f, 3f), _map.HeightAt(new System.Numerics.Vector2(from.X + Mathf.Cos(a) * 2f, from.Z + Mathf.Sin(a) * 2f)) + size * 0.3f, from.Z + Mathf.Sin(a) * rng.RandfRange(1f, 3f));
-            var t = CreateTween();
-            t.TweenInterval(0.12f + rng.Randf() * 0.15f);
-            t.TweenProperty(piece, "position", land, rng.RandfRange(0.5f, 0.8f)).SetEase(Tween.EaseType.In).SetTrans(Tween.TransitionType.Quad);
-            t.Parallel().TweenProperty(piece, "rotation", piece.Rotation + new Vector3(rng.RandfRange(-4f, 4f), rng.RandfRange(-4f, 4f), 0f), 0.7f);
-            // The rubble settles, then sinks into the silt.
-            t.TweenInterval(2.5f);
-            t.TweenProperty(piece, "scale", Vector3.Zero, 1.2f);
-            t.TweenCallback(Callable.From(piece.QueueFree));
-        }
+            // A tremor all through it as it grinds down.
+            float shake = t < 0.95f ? 0.035f * Mathf.Sin(t * 170f) * (1f - t) : 0f;
+            wall.Position = new Vector3(shake, -(height + 0.3f) * SlideAt(t), shake * 0.6f);
+        }), 0f, 1f, SlideSeconds);
+        tween.TweenCallback(Callable.From(wall.QueueFree));
     }
 
     public override void _Ready()
@@ -171,16 +172,22 @@ public partial class LevelView : Node3D
             AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = roof });
         }
         foreach (var canopy in map.Canopies) AddCanopy(canopy);
-        // A secret's seal: the wall carried on across the way in (the reef's own ground, as high as the rock either side), so
-        // it is one more stretch of wall. SealView carves its emblem; Crumble brings it down.
+        // Sealed walls: the reef wall carried on across their passage (LevelMap.Sealed), in the reef's own ground, so each is
+        // one more stretch of wall. SealView carves its emblem; Slide brings it down.
         _seals.Clear();
         foreach (var rock in map.WeakRocks)
         {
             if (SealSurface(map, rock) is not { } surface) continue;
             var wall = new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = _ground };
             AddChild(wall);
-            var facing = SealFacing(map, rock);
-            _seals.Add((rock.Center, wall, SealTop(map, rock, facing) - map.HeightAt(rock.Center)));
+            // A long one's remains (what stands either side of its gate once it opens), hidden till then.
+            MeshInstance3D? remains = null;
+            if (rock.Gate < rock.Radius && RemainsSurface(map, rock) is { } rest)
+            {
+                remains = new MeshInstance3D { Mesh = ToMesh(rest), MaterialOverride = _ground, Visible = false };
+                AddChild(remains);
+            }
+            _seals.Add((rock.Center, wall, remains, SealDrop(map, rock)));
         }
         ShowDecor(shape);
         _cover = null;
@@ -314,53 +321,83 @@ public partial class LevelView : Node3D
     static float CatmullRom(float p0, float p1, float p2, float p3, float t) =>
         0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t * t + (3f * p1 - p0 - 3f * p2 + p3) * t * t * t);
 
-    /// <summary>Out of a secret's cave toward the canyon (its seal's canyon side).</summary>
+    /// <summary>The way a sealed wall faces: toward the side it is met from.</summary>
     public static System.Numerics.Vector2 SealFacing(LevelMap map, WeakRock rock) =>
-        rock.Cave >= 0 && rock.Cave < map.Caves.Count ? map.Caves[rock.Cave].Facing : System.Numerics.Vector2.UnitY;
+        rock.Thick > 0f ? rock.Facing : rock.Cave >= 0 && rock.Cave < map.Caves.Count ? map.Caves[rock.Cave].Facing : System.Numerics.Vector2.UnitY;
 
-    /// <summary>How high a seal's wall stands: as high as the lower of the rock either side of the way in.</summary>
-    public static float SealTop(LevelMap map, WeakRock rock, System.Numerics.Vector2 facing)
+    /// <summary>Whether a grid point is part of this sealed wall (nearer it than any other).</summary>
+    static bool OfSeal(LevelMap map, WeakRock rock, int x, int y)
     {
-        var across = new System.Numerics.Vector2(-facing.Y, facing.X);
-        float left = 0f, right = 0f;
-        for (float d = 3f; d <= 8f; d += 0.5f)
-        {
-            left = Mathf.Max(left, map.HeightAt(rock.Center + across * d));
-            right = Mathf.Max(right, map.HeightAt(rock.Center - across * d));
-        }
-        return Mathf.Clamp(Mathf.Min(left, right), LevelMap.SwimBand + 3f, ReefTerrain.HMax);
+        var p = new System.Numerics.Vector2(x, y);
+        float reach = rock.Radius + (rock.Thick > 0f ? rock.Thick : rock.Radius) + 10f;
+        if (System.Numerics.Vector2.Distance(p, rock.Center) > reach) return false;
+        foreach (var other in map.WeakRocks)
+            if (other != rock && System.Numerics.Vector2.Distance(p, other.Center) < System.Numerics.Vector2.Distance(p, rock.Center)) return false;
+        return true;
+    }
+
+    /// <summary>The terrain with this sealed wall standing in it (LevelMap.Sealed where it stands, the ground elsewhere), smooth.</summary>
+    public static float SealHeight(LevelMap map, WeakRock rock, float x, float y) =>
+        SmoothSample((i, j) => float.IsNaN(map.SealedAt(i, j)) || !OfSeal(map, rock, i, j) ? map[i, j] : map.SealedAt(i, j), x, y);
+
+    /// <summary>The terrain with what a long sealed wall leaves standing once its gate is open (LevelMap.SealedOpen), smooth.</summary>
+    public static float RemainsHeight(LevelMap map, WeakRock rock, float x, float y) =>
+        SmoothSample((i, j) => float.IsNaN(map.SealedOpenAt(i, j)) || !OfSeal(map, rock, i, j) ? map[i, j] : map.SealedOpenAt(i, j), x, y);
+
+    /// <summary>A long sealed wall's remains: only where they stand above the ground.</summary>
+    internal static LevelShape.Surface? RemainsSurface(LevelMap map, WeakRock rock)
+    {
+        int reach = (int)(rock.Radius + rock.Thick) + 10;
+        int x0 = Math.Max(0, (int)rock.Center.X - reach), x1 = Math.Min(LevelMap.Size, (int)rock.Center.X + reach);
+        int y0 = Math.Max(0, (int)rock.Center.Y - reach), y1 = Math.Min(LevelMap.Size, (int)rock.Center.Y + reach);
+        return SurfaceMesh((x, y) => RemainsHeight(map, rock, x, y) + 0.02f, x0, y0, x1, y1, (x, y) => RemainsHeight(map, rock, x, y) > SmoothHeight(map, x, y) + 0.04f);
+    }
+
+    /// <summary>How far the sealed wall stands over the ground at its tallest (how far it has to slide down, below its remains too).</summary>
+    public static float SealDrop(LevelMap map, WeakRock rock)
+    {
+        float most = 0f;
+        int r = (int)(rock.Radius + rock.Thick) + 10;
+        for (int y = Math.Max(0, (int)rock.Center.Y - r); y <= Math.Min(LevelMap.Size, (int)rock.Center.Y + r); y++)
+        for (int x = Math.Max(0, (int)rock.Center.X - r); x <= Math.Min(LevelMap.Size, (int)rock.Center.X + r); x++)
+            if (!float.IsNaN(map.SealedAt(x, y)) && OfSeal(map, rock, x, y)) most = Mathf.Max(most, map.SealedAt(x, y) - map[x, y]);
+        return most;
     }
 
     /// <summary>
-    /// The ground with a secret's seal standing in it: the way in filled to the height of the rock either side, its
-    /// canyon face rising from the floor at the seal's edge as steeply as the walls do, its top rolling a little, fading
-    /// into the walls across the way and into the cave behind.
+    /// Where a sealed wall meets the seabed: points along its feet, on the passage floor at the foot of its faces (the
+    /// silt is pushed up there as it slides down).
     /// </summary>
-    public static float SealHeight(LevelMap map, WeakRock rock, float x, float y)
+    public static List<Vector3> SealFoot(LevelMap map, WeakRock rock)
     {
-        float ground = SmoothHeight(map, x, y);
-        var facing = SealFacing(map, rock);
-        var rel = new System.Numerics.Vector2(x, y) - rock.Center;
-        float along = System.Numerics.Vector2.Dot(rel, facing), side = MathF.Abs(rel.X * -facing.Y + rel.Y * facing.X);
-        float top = SealTop(map, rock, facing);
-        // A rounded block over the way in, its sides falling away as steeply as the walls do: its canyon face meets her
-        // plane just past the seal's edge, its back runs on into the cave, its flanks into the rock either side.
-        const float slope = 1.7f, corner = 2f;
-        float rear = -rock.Radius - 3f, edge = MathF.Max(rock.Radius + 0.5f - (top - LevelMap.SwimBand) / slope, rear + 1f);
-        float qx = MathF.Abs(along - 0.5f * (edge + rear)) - 0.5f * (edge - rear) + corner, qy = side - rock.Radius + corner;
-        float d = MathF.Sqrt(MathF.Max(qx, 0f) * MathF.Max(qx, 0f) + MathF.Max(qy, 0f) * MathF.Max(qy, 0f)) + MathF.Min(MathF.Max(qx, qy), 0f) - corner;
-        float roll = 1.4f * TerrainNoise.Fbm(x / 7f, y / 7f, 0x5EA1u, 3);
-        float wall = top + roll - slope * MathF.Max(d, 0f) - 0.4f * MathF.Max(d + 1.5f, 0f);
-        return MathF.Max(ground, wall);
+        var feet = new List<Vector3>();
+        int r = (int)(rock.Radius + rock.Thick) + 4;
+        for (int y = Math.Max(1, (int)rock.Center.Y - r); y <= Math.Min(LevelMap.Size - 1, (int)rock.Center.Y + r); y++)
+        for (int x = Math.Max(1, (int)rock.Center.X - r); x <= Math.Min(LevelMap.Size - 1, (int)rock.Center.X + r); x++)
+        {
+            float s0 = map.SealedAt(x, y);
+            if (float.IsNaN(s0) || s0 - map[x, y] < 0.4f || map[x, y] > LevelMap.BlockHeight || !OfSeal(map, rock, x, y)) continue;
+            // A long one goes down only at its gate.
+            if (rock.Gate < rock.Radius && MathF.Abs(System.Numerics.Vector2.Dot(new System.Numerics.Vector2(x, y) - rock.Center, rock.Across)) > rock.Gate + 0.5f) continue;
+            // At its edge: a neighbour on the open floor with no wall over it.
+            bool edge = false;
+            foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            {
+                float sn = map.SealedAt(x + dx, y + dy);
+                if ((float.IsNaN(sn) || sn - map[x + dx, y + dy] < 0.3f) && map[x + dx, y + dy] <= LevelMap.BlockHeight) edge = true;
+            }
+            if (edge) feet.Add(new Vector3(x, map[x, y] + 0.1f, y));
+        }
+        return feet;
     }
 
-    /// <summary>A seal's stretch of wall: only where it stands above the ground.</summary>
+    /// <summary>A sealed wall's stretch of wall: only where it stands above the ground.</summary>
     internal static LevelShape.Surface? SealSurface(LevelMap map, WeakRock rock)
     {
-        int reach = (int)rock.Radius + 9;
+        int reach = (int)(rock.Radius + rock.Thick) + 10;
         int x0 = Math.Max(0, (int)rock.Center.X - reach), x1 = Math.Min(LevelMap.Size, (int)rock.Center.X + reach);
         int y0 = Math.Max(0, (int)rock.Center.Y - reach), y1 = Math.Min(LevelMap.Size, (int)rock.Center.Y + reach);
-        return SurfaceMesh((x, y) => SealHeight(map, rock, x, y), x0, y0, x1, y1, (x, y) => SealHeight(map, rock, x, y) > SmoothHeight(map, x, y) + 0.05f);
+        return SurfaceMesh((x, y) => SealHeight(map, rock, x, y) + 0.01f, x0, y0, x1, y1, (x, y) => SealHeight(map, rock, x, y) > SmoothHeight(map, x, y) + 0.04f);
     }
 
     /// <summary>A chunk of the ground. The shaft has no floor: through it, the level below shows.</summary>
@@ -821,7 +858,7 @@ public partial class LevelView : Node3D
         AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 18, Rings = 9 }, Rock(0.22f), shape.Rocks));
         if (shape.Glows.Count > 0)
             AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 8, Rings = 4 },
-                new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(0.4f, 1f, 0.9f), EmissionEnabled = true, Emission = new Color(0.4f, 1f, 0.9f), EmissionEnergyMultiplier = 2f }, shape.Glows));
+                new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(0.4f, 1f, 0.9f), EmissionEnabled = true, Emission = new Color(0.4f, 1f, 0.9f), EmissionEnergyMultiplier = 2f }, shape.Glows, shadow: false));
     }
 
     /// <summary>Maps the generator's decoration onto the existing flora art. Positions, yaw and scale all come from the map.</summary>
@@ -924,10 +961,11 @@ public partial class LevelView : Node3D
         _flora.SetPalette(FloraKind.BarrelSponge, Dark(look.Coral, 0.35f), look.Coral.Lerp(look.Rock, 0.4f), Dark(look.Coral2, 0.35f), look.Coral2.Lerp(look.Rock, 0.4f));
     }
 
-    static MultiMeshInstance3D Instances(Mesh mesh, Material material, List<Transform3D> transforms)
+    /// <summary>One mesh many times; it casts shadows (the boulders) unless it is light itself (the glows).</summary>
+    static MultiMeshInstance3D Instances(Mesh mesh, Material material, List<Transform3D> transforms, bool shadow = true)
     {
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = transforms.Count };
         for (int i = 0; i < transforms.Count; i++) mm.SetInstanceTransform(i, transforms[i]);
-        return new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        return new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = material, CastShadow = shadow ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off };
     }
 }

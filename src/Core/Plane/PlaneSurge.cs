@@ -245,7 +245,7 @@ public sealed partial class PlaneWorld
             var next = at + dir * step;
             float w = ray.WidthAt(gone + step);
             bool rim = CrossesRim(at, next);
-            if (rim || !Map.IsOpen(next) || _rocks.Exists(r => Vector2.Distance(next, r.Center) < r.Radius) || ClamShellAt(next))
+            if (rim || !Map.IsOpen(next) || _rocks.Exists(r => r.Contains(next)) || ClamShellAt(next))
             {
                 if (bounces > 0 && !rim)
                 {

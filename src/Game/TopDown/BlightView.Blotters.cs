@@ -79,7 +79,7 @@ public partial class BlightView
         {
             if (!_bombs.TryGetValue(bomb, out var view))
             {
-                var ball = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.32f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+                var ball = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.32f, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
                 ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.08f);
                 ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 1.4f);
                 ball.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), bomb.From.X * 0.3f);
@@ -180,7 +180,7 @@ public partial class BlightView
 
     MeshInstance3D Part(Node3D parent, Mesh mesh, Color skin, float ember = 0f, float seed = 0f, ShaderMaterial? material = null)
     {
-        var m = new MeshInstance3D { Mesh = mesh, MaterialOverride = material ?? _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        var m = new MeshInstance3D { Mesh = mesh, MaterialOverride = material ?? _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
         m.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), ember);
         m.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0f);
         m.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), seed);
@@ -194,7 +194,7 @@ public partial class BlightView
     {
         _crabShell ??= new StandardMaterial3D { AlbedoColor = CrabRed, Roughness = 0.45f, EmissionEnabled = true, Emission = CrabRed, EmissionEnergyMultiplier = 0.35f, RimEnabled = true, Rim = 0.4f };
         _crabTail ??= new StandardMaterial3D { AlbedoColor = CrabPink, Roughness = 0.6f, EmissionEnabled = true, Emission = CrabPink, EmissionEnergyMultiplier = 0.25f };
-        var m = new MeshInstance3D { Mesh = mesh, MaterialOverride = tail ? _crabTail : _crabShell, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        var m = new MeshInstance3D { Mesh = mesh, MaterialOverride = tail ? _crabTail : _crabShell, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
         parent.AddChild(m);
         return m;
     }

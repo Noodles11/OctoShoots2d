@@ -180,7 +180,7 @@ public partial class BlightView
         eye.SetInstanceShaderParameter(SN.Of("wobble"), 0f);
         eye.SetInstanceShaderParameter(SN.Of("ember_tint"), Kin.Tint(new Color(1f, 0.35f, 0.3f)));
         head.AddChild(eye);
-        var tip = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.17f, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        var tip = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.17f, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
         tip.SetInstanceShaderParameter(SN.Of("ember"), 0.9f);
         tip.SetInstanceShaderParameter(SN.Of("wobble"), 1f);
         tip.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Lashjaw, 0.8f));

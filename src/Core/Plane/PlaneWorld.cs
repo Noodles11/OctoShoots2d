@@ -54,8 +54,6 @@ public sealed class PlaneBody
     public bool WasFiring;
     /// <summary>Bubble Shield: untouchable inside it while this counts down.</summary>
     public float ShieldTimer;
-    /// <summary>Held by a coiling gloomvine (no swimming; a dash frees her).</summary>
-    public float RootTimer;
 
     public bool IsDashing => DashTimer > 0f;
 }
@@ -73,13 +71,13 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     ChargeFull, LightBurst, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
     SurgeStarted, SurgeEnded, GeyserFizz, GeyserSpray, GeyserEnded, VaseHit, VaseBroken, FullBubbleFreed,
     BlightrootDrank, BlightrootInflate, GuardiansWoke, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, ThumpWindup, ThumpLeap, ThumpLand, ThumpRoll, ThumpBurst, Warded, WardenFreed, LashWindup, LashOut, LashCatch, LashSwallow, LashBite, LashStun, LashFreed, SealLit, SealOpened, FishStruck, FishTurned, FishFreed,
-    MurklingCling, VineCoiled, VineCut, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, DenCleared, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
+    MurklingCling, BlightrootSwing, BlightrootSlam, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, DenCleared, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseCleared, FountainSpout, Cavitation, Necklace, SchoolPoints,
     ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
     XpGained, LevelUp }
 
-/// <summary>What hurt Clementine (the killing blow names what ended a run).</summary>
+/// <summary>What hurt Clementine (the killing blow names what ended a run; saved by number, so Gloomvine stays though nothing deals it now).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse }
 
 /// <summary>
@@ -238,12 +236,11 @@ public sealed partial class PlaneWorld
         }
         p.JetTimer -= Dt;
 
-        // Coiled by a gloomvine: held in place (a dash frees her).
-        if (p.RootTimer > 0f && p.DashTimer <= 0f) p.Velocity = Vector2.Zero;
         Move(ref p.Position, ref p.Velocity, Radius, barrier: ArenaBarrier.Inside);
 
         StepReef();
         StepVases();
+        StepSeals();
 
         foreach (var c in Clouds) c.Life -= Dt;
         Clouds.RemoveAll(c => c.Life <= 0f);
@@ -335,7 +332,7 @@ public sealed partial class PlaneWorld
             if (!Map.IsOpen(p + new Vector2(MathF.Cos(a), MathF.Sin(a)) * radius)) return false;
         }
         foreach (var rock in _rocks)
-            if (Vector2.Distance(p, rock.Center) < rock.Radius + radius) return false;
+            if (rock.Contains(p, radius)) return false;
         return VaseAt(p, radius) is null;
     }
 
@@ -347,8 +344,8 @@ public sealed partial class PlaneWorld
     {
         if (!BarrierAllows(p, radius, barrier)) return BarrierNormal(p, barrier);
         foreach (var rock in _rocks)
-            if (Vector2.Distance(p, rock.Center) < rock.Radius + radius)
-                return SafeNormalize(rock.Center - p);
+            if (rock.Contains(p, radius))
+                return rock.Inward(p);
         if (VaseAt(p, radius) is { } vase) return SafeNormalize(vase.Position - p);
         // The wall lies where the rim of the circle meets high ground (a trench's downhill slope beside it must not count).
         Vector2 blocked = Vector2.Zero;

@@ -181,6 +181,51 @@ public class TopDownGenTests
 
     [Theory]
     [MemberData(nameof(Seeds))]
+    public void SealedWallsStandTallAndShutTheBossArenaUntilOpened(string seed)
+    {
+        foreach (var map in new[] { Map(seed), Map(seed, BossLevel(seed)) })
+        {
+            foreach (var rock in map.WeakRocks)
+            {
+                // A real wall: it stands well over her plane somewhere across its passage.
+                float tallest = 0f;
+                for (int y = 0; y <= LevelMap.Size; y++)
+                for (int x = 0; x <= LevelMap.Size; x++)
+                    if (!float.IsNaN(map.SealedAt(x, y)) && rock.Contains(new Vector2(x, y))) tallest = MathF.Max(tallest, map.SealedAt(x, y));
+                Assert.True(tallest > LevelMap.SwimBand + 2f, $"{rock.Kind} wall only {tallest:0.0} m high");
+                // Nothing was left inside it.
+                Assert.DoesNotContain(map.Spawns, sp => rock.Contains(sp.Position, 0.5f));
+            }
+            if (!map.HasBoss || map.Rift) continue;
+            Assert.Contains(map.WeakRocks, r => r.Kind == SealKind.Boss);
+            // With its walls standing, the arena cannot be reached from the start.
+            const int N = LevelMap.Samples;
+            bool Open(int x, int y) => map[x, y] < 0.2f && !map.WeakRocks.Any(r => r.Contains(new Vector2(x, y)));
+            var seen = new bool[N * N];
+            var queue = new System.Collections.Generic.Queue<(int X, int Y)>();
+            int sx = (int)MathF.Round(map.Start.Position.X), sy = (int)MathF.Round(map.Start.Position.Y);
+            queue.Enqueue((sx, sy));
+            seen[sy * N + sx] = true;
+            int ex = (int)MathF.Round(map.Exit.Position.X), ey = (int)MathF.Round(map.Exit.Position.Y);
+            bool reached = false;
+            while (queue.Count > 0 && !reached)
+            {
+                var (x, y) = queue.Dequeue();
+                reached = x == ex && y == ey;
+                foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= N || ny >= N || seen[ny * N + nx] || !Open(nx, ny)) continue;
+                    seen[ny * N + nx] = true;
+                    queue.Enqueue((nx, ny));
+                }
+            }
+            Assert.False(reached, "the arena is open past its sealed walls");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Seeds))]
     public void KelpGrowsInDenseBedsOnTheOpenFloorAwayFromThePlaces(string seed)
     {
         var map = Map(seed);

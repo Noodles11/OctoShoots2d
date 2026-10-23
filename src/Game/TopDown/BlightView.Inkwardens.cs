@@ -140,11 +140,11 @@ public partial class BlightView
         var tips = new MeshInstance3D[WardenTentacles];
         for (int i = 0; i < WardenTentacles; i++)
         {
-            tentacles[i] = new MeshInstance3D { Mesh = _tentacleMesh, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            tentacles[i] = new MeshInstance3D { Mesh = _tentacleMesh, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
             tentacles[i].SetInstanceShaderParameter(SN.Of("ember"), 0f);
             tentacles[i].SetInstanceShaderParameter(SN.Of("wobble"), 0.2f);
             tentacles[i].SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Inkwarden, 0.7f));
-            tips[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.07f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            tips[i] = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _orb, Scale = Vector3.One * 0.07f, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
             tips[i].SetInstanceShaderParameter(SN.Of("ember"), 1.2f);
             tips[i].SetInstanceShaderParameter(SN.Of("ember_tint"), new Color(0.7f, 0.35f, 1f, 1f));
             node.AddChild(tentacles[i]);
@@ -230,7 +230,7 @@ public partial class BlightView
             MaterialOverride = _paleAnemone,
             Position = new Vector3(at.X, floor + 0.25f, at.Y),
             Scale = new Vector3(0.35f, 0.25f, 0.35f),
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.On,
         };
         AddChild(anemone);
         _freedAnemones.Add(anemone);

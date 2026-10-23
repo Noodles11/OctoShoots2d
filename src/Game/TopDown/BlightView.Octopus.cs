@@ -6,53 +6,117 @@ using OctoShoots.Core.Plane;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The Blightroot as it is drawn (docs/CORRUPTION.md): a captive octopus sitting on the seabed, its mantle raised to her
-/// plane (the target her light drains), its eight arms splayed flat on the ground and pinned there by chains of ink
-/// that run over them into little ink wells; dark droplets drain off its arms into the wells. On the pulse its mantle
-/// swells, the chains pull taut and its arms flinch. Its two gloomvines are chains torn loose that lash at her. Freed,
-/// its ink pops off, the chains snap, and it curls its arms in, pushes off the floor and jets up and away, healthy again,
-/// trailing bubbles. It has no eyes.
+/// The Blightroot as it is drawn (docs/CORRUPTION.md), all of it painted as the murklings are: a pole of ink standing
+/// from a splay of rootlets on the seabed up to its head at her plane — the target her light drains. The head is a
+/// liquid body (the murklings' soft body, BlightView.Murklings): it breathes, swells on the pulse as a swell of ink runs
+/// up the pole into it, sways on its pole, and her hits dent it, tear holes in it that close as its corruption grows
+/// back, and rip chunks of ink from it.
+/// <para>
+/// It stands tall, its head well over her plane, so it can stand between her and the camera: its head and pole are
+/// then drawn over her where they cover her, as kelp is (over_her.gdshaderinc), and she wears her outline.
+/// It stands like a boxing pole, its foot held fast in the sand: its pole tilts on a spring and rings back to upright.
+/// Her hits push it back (each by as much as it was strong, a run of them further, never past TiltMax); its hammer
+/// (PlaneBlight.StepHammer) rears it back away from her, stretching up, then swings its head down at her and back. Its
+/// pulse: as it gathers, it stretches up, then it squashes all the way down to the sand as the ring runs out, and
+/// springs back up.
+/// </para>
+/// <para>
+/// Freed, it becomes what it was, smoothly: its ink bursts off its head, the pole runs away from the top down into
+/// drips and the rootlets draw back into the sand, while the head takes its own healthy colour and draws out into an
+/// octopus's mantle and eight arms grow out under it, hanging, then curling; then it swims away from her in strokes
+/// of its arms (each a contraction that drives it on, then a glide as they flare), rising, trailing clean bubbles,
+/// fading out in the distance. It has no eyes.
+/// </para>
 /// </summary>
 public partial class BlightView
 {
-    const int Arms = 8;
-    /// <summary>Where along an arm the chains pin it (shares of its length), and how far either side their wells sit.</summary>
-    static readonly float[] PinAt = { 0.32f, 0.58f, 0.84f };
-    const float PinSpread = 0.5f, LinkSpacing = 0.13f;
-    /// <summary>The freed octopus jets up and away over this long.</summary>
-    const float FleeSeconds = 2.6f;
+    const int Arms = 8, Rootlets = 7;
+    /// <summary>Freed, it changes over ChangeSeconds and is gone FleeSeconds after it was freed.</summary>
+    const float ChangeSeconds = 1.5f, FleeSeconds = 4.6f;
     /// <summary>Its colour once freed: a healthy reef octopus.</summary>
     static readonly Color Healthy = new(0.95f, 0.4f, 0.28f);
+    /// <summary>Its skin once freed, for the painted ink shading (which keeps a kind's colour dark under the ink): bright, nearly all of it.</summary>
+    static readonly Color HealthySkin = new(Healthy.R * 2.4f, Healthy.G * 2.4f, Healthy.B * 2.4f, 0.95f);
+    /// <summary>Its head's size (shares of the sac's radius) and the pole's thickness (metres).</summary>
+    const float HeadSize = 0.6f, PoleRadius = 0.17f;
 
     sealed class Root
     {
-        public Node3D Node = null!;
-        public MeshInstance3D Mantle = null!, Ring = null!;
-        public Node3D[] Arms = null!;
-        public float[] Angle = null!, Length = null!, Phase = null!;
-        public float Floor;
+        public Node3D Node = null!, PoleBase = null!, Holder = null!;
+        public MeshInstance3D Head = null!, HeadOver = null!, Pole = null!, PoleOver = null!, Ring = null!;
+        public Node3D[] Arms = null!, Rootlets = null!;
+        public float[] Angle = null!, Phase = null!;
+        public float Floor, Height, Seed;
         public bool Burst;
         public float Since, Drip;
+        public Vector3 FleeDir, FleeVelocity, FleeAt;
+        /// <summary>How far its pole leans (radians, toward x east and y south), and how fast it is leaning.</summary>
+        public Vector2 Tilt, TiltVel;
+        /// <summary>How far its pole is drawn out (a share of its length), and how fast.</summary>
+        public float Stretch = 1f, StretchVel;
+        /// <summary>Its swing: where the strike set off from (its lean and stretch), whether it has landed, and how long ago.</summary>
+        public Vector2 StrikeFromTilt;
+        public float StrikeFromStretch, SinceLanded = 10f;
+        public bool Striking, Landed;
     }
 
-    MultiMeshInstance3D _chains = null!;
-    readonly List<(Transform3D At, Color Look)> _links = new();
+    /// <summary>
+    /// The boxing pole: its spring back to upright (lightly damped, so it rings), how far her hits may push it back,
+    /// how far its hammer swings it down at her, and how hard a hit pushes (a plain one, and per its share of the meter).
+    /// </summary>
+    const float PoleStiff = 55f, PoleDamp = 5f, TiltMax = 0.45f, SlamTilt = 1.05f, HitPush = 1.4f, HitPushPerShare = 6f;
+    /// <summary>The pulse: it stretches up as it gathers, then squashes all the way down to the sand (Flat) in Down seconds.</summary>
+    const float PulseStretch = 0.16f, Flat = 0.07f, Down = 0.07f;
+    /// <summary>
+    /// Its hammer: rearing back it leans RearTilt away from her and draws up to RearStretch; it rests on what it struck
+    /// for Rest seconds, then the water's drag lets it rise back slowly (RecoverStiff, on its spring); on her, its head
+    /// sits this far over her plane (on top of her bell).
+    /// </summary>
+    const float RearTilt = 0.38f, RearStretch = 1.3f, Rest = 0.1f, RecoverStiff = 22f, OnHer = 0.62f;
 
-    void ReadyChains()
+    ShaderMaterial? _stalkMat, _plainMurk;
+    Shader? _murkOverShader;
+
+    static readonly StringName[] HeadParams = { "skin", "seed", "ember", "ember_tint", "swell", "fade", "hit", "worn" };
+    static readonly StringName[] PoleParams = { "skin", "seed", "pulse", "melt" };
+
+    /// <summary>Its over-her copies wear what the head and the pole wear.</summary>
+    static void Mirror(Root view)
     {
-        var link = new TorusMesh { InnerRadius = 0.028f, OuterRadius = 0.07f, Rings = 12, RingSegments = 6 };
-        var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = link };
-        _chains = new MultiMeshInstance3D
-        {
-            Multimesh = mm,
-            MaterialOverride = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_chain.gdshader") },
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            ExtraCullMargin = 200f,
-        };
-        AddChild(_chains);
+        foreach (var p in HeadParams)
+            if (view.Head.GetInstanceShaderParameter(p) is { VariantType: not Variant.Type.Nil } v) view.HeadOver.SetInstanceShaderParameter(p, v);
+        foreach (var p in PoleParams)
+            if (view.Pole.GetInstanceShaderParameter(p) is { VariantType: not Variant.Type.Nil } v) view.PoleOver.SetInstanceShaderParameter(p, v);
     }
 
-    /// <summary>One arm: a tapering tube lying along +X from the mantle's foot, its tip curling round.</summary>
+    /// <summary>
+    /// Whether a Blightroot stands between her and the camera now (its head or its pole nearer the camera than her bell
+    /// and over her on screen): its over-her copies cover her then, and she wears her outline.
+    /// </summary>
+    public bool Covers(Vector3 bell, Camera3D? camera)
+    {
+        if (camera is null) return false;
+        var fwd = -camera.GlobalBasis.Z;
+        float herDepth = (bell - camera.GlobalPosition).Dot(fwd);
+        var herPx = camera.UnprojectPosition(bell);
+        float px = herPx.DistanceTo(camera.UnprojectPosition(bell + camera.GlobalBasis.X));
+        bool Over(Vector3 p, float radius) =>
+            (p - camera.GlobalPosition).Dot(fwd) < herDepth - 0.15f && camera.UnprojectPosition(p).DistanceTo(herPx) < (0.55f + radius) * px;
+        foreach (var view in _roots)
+        {
+            if (!view.Node.Visible || view.Node.Position.DistanceTo(new Vector3(bell.X, 0f, bell.Z)) > 8f) continue;
+            var head = view.Head.GlobalPosition;
+            if (Over(head, view.Head.GlobalBasis.Scale.X)) return true;
+            if (!view.Pole.Visible) continue;
+            var foot = view.PoleBase.GlobalPosition;
+            var top = view.Pole.GlobalTransform * new Vector3(0f, 0.5f, 0f);
+            for (int k = 1; k <= 6; k++)
+                if (Over(foot.Lerp(top, k / 6f), view.Pole.GlobalBasis.Scale.X)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>One arm (or a rootlet): a tapering tube lying along +X from its base, its tip curling round.</summary>
     static ArrayMesh ArmMesh(float length, float curl)
     {
         var st = new SurfaceTool();
@@ -72,7 +136,6 @@ public partial class BlightView
             for (int s = 0; s < sides; s++)
             {
                 float a = s * Mathf.Tau / sides;
-                // Flattened against the floor, rounder on top.
                 ring[s] = centre[k] + side * Mathf.Cos(a) * r + up * Mathf.Sin(a) * r * (Mathf.Sin(a) > 0f ? 0.8f : 0.45f);
             }
             if (prev is not null)
@@ -88,7 +151,7 @@ public partial class BlightView
         return st.Commit();
     }
 
-    /// <summary>An arm's radius at a share of its length (thick at the mantle, thin at the tip).</summary>
+    /// <summary>An arm's radius at a share of its length (thick at its base, thin at the tip).</summary>
     static float ArmRadius(float t) => Mathf.Lerp(0.38f, 0.05f, Mathf.Pow(t, 0.75f));
 
     /// <summary>A point along an arm (local: out along +X, a little off the floor), its last third curling.</summary>
@@ -107,117 +170,211 @@ public partial class BlightView
 
     Root MakeRoot(Blightroot root)
     {
+        _murkShader ??= GD.Load<Shader>("res://assets/shaders/murkling.gdshader");
+        _stalkMat ??= new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_stalk.gdshader") };
+        _plainMurk ??= new ShaderMaterial { Shader = _murkShader };
         float floor = Floor(root.Position);
         var node = new Node3D { Position = new Vector3(root.Position.X, 0f, root.Position.Y) };
         AddChild(node);
-        var view = new Root { Node = node, Floor = floor, Arms = new Node3D[Arms], Angle = new float[Arms], Length = new float[Arms], Phase = new float[Arms] };
         float seed = root.Position.X * 0.37f + root.Position.Y * 0.11f;
+        var view = new Root
+        {
+            Node = node, Floor = floor, Seed = seed, Arms = new Node3D[Arms], Rootlets = new Node3D[Rootlets],
+            Angle = new float[Arms], Phase = new float[Arms], Height = Mathf.Max(SacHeight - floor - 0.35f, 0.5f),
+        };
+        // Rootlets splayed over the sand round its foot.
+        for (int i = 0; i < Rootlets; i++)
+        {
+            float a = i * Mathf.Tau / Rootlets + 0.3f * Mathf.Sin(seed + i * 2.1f);
+            var pivot = new Node3D { Position = new Vector3(0f, floor, 0f), Basis = new Basis(Vector3.Up, -a) * new Basis(Vector3.Back, -0.08f), Scale = Vector3.One * 0.34f };
+            node.AddChild(pivot);
+            var r = new MeshInstance3D { Mesh = ArmMesh(1.8f + 0.9f * (0.5f + 0.5f * Mathf.Sin(seed * 1.3f + i * 1.7f)), i % 2 == 0 ? 1f : -1f), MaterialOverride = _plainMurk, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+            Paint(r, Kin.Skin(Kin.Blightroot, 0.55f), seed + i);
+            r.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("hollow"), 0f);
+            pivot.AddChild(r);
+            view.Rootlets[i] = pivot;
+        }
+        // The pole, from the sand up to its head.
+        view.PoleBase = new Node3D { Position = new Vector3(0f, floor, 0f) };
+        node.AddChild(view.PoleBase);
+        view.Pole = new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = 0.65f, BottomRadius = 1f, Height = 1f, RadialSegments = 14, Rings = 12 },
+            MaterialOverride = _stalkMat,
+            Position = new Vector3(0f, view.Height * 0.5f, 0f),
+            Scale = new Vector3(PoleRadius, view.Height, PoleRadius),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.On,
+        };
+        view.Pole.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(Kin.Blightroot, 0.5f));
+        view.Pole.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), seed);
+        view.PoleBase.AddChild(view.Pole);
+        // Its pole again over her, where it covers her (over_her.gdshaderinc, as kelp is): it follows the pole.
+        view.PoleOver = new MeshInstance3D { Mesh = view.Pole.Mesh, MaterialOverride = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_stalk_over.gdshader"), RenderPriority = 3 }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        view.Pole.AddChild(view.PoleOver);
+        // The head, on top of it: a liquid body (its material its own: its shape and holes).
+        view.Holder = new Node3D { Position = new Vector3(0f, SacHeight, 0f) };
+        node.AddChild(view.Holder);
+        view.Head = new MeshInstance3D { Mesh = _sphere, MaterialOverride = BodyOf(root).Material, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+        Paint(view.Head, Kin.Skin(Kin.Blightroot, 0.6f), seed);
+        view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), Kin.Tint(new Color(0.55f, 0.8f, 1f)));
+        view.Holder.AddChild(view.Head);
+        // Its head again over her, where it covers her (she is drawn over the scene; this is drawn over her, only there,
+        // as kelp is: over_her.gdshaderinc). It follows the head.
+        var body = BodyOf(root);
+        _murkOverShader ??= GD.Load<Shader>("res://assets/shaders/murkling_over.gdshader");
+        body.Over = new ShaderMaterial { Shader = _murkOverShader, RenderPriority = 4 };
+        view.HeadOver = new MeshInstance3D { Mesh = _sphere, MaterialOverride = body.Over, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        view.Head.AddChild(view.HeadOver);
+        // The arms it will have again: hidden until it is freed.
         for (int i = 0; i < Arms; i++)
         {
-            view.Angle[i] = i * Mathf.Tau / Arms + 0.25f * Mathf.Sin(seed + i * 2.3f);
-            view.Length[i] = 2.1f + 0.6f * (0.5f + 0.5f * Mathf.Sin(seed * 1.7f + i * 1.9f));
+            view.Angle[i] = i * Mathf.Tau / Arms + 0.2f * Mathf.Sin(seed + i * 2.3f);
             view.Phase[i] = seed + i * 1.37f;
-            var pivot = new Node3D { Position = new Vector3(0f, floor, 0f) };
-            node.AddChild(pivot);
-            var arm = new MeshInstance3D { Mesh = ArmMesh(view.Length[i], i % 2 == 0 ? 1f : -1f), MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            Skin(arm, Kin.Blightroot, 0.7f);
+            var pivot = new Node3D { Visible = false };
+            view.Holder.AddChild(pivot);
+            var arm = new MeshInstance3D { Mesh = ArmMesh(2f + 0.5f * (0.5f + 0.5f * Mathf.Sin(seed * 1.7f + i * 1.9f)), i % 2 == 0 ? 1f : -1f), MaterialOverride = _plainMurk, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+            Paint(arm, HealthySkin, seed + 10 + i);
+            arm.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("hollow"), 0f);
             pivot.AddChild(arm);
             view.Arms[i] = pivot;
         }
-        // The mantle: raised from the floor up to her plane, leaning back a little — the target her light drains.
-        view.Mantle = new MeshInstance3D { Mesh = _sphere, MaterialOverride = _sacMat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-        view.Mantle.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), seed);
-        Skin(view.Mantle, Kin.Blightroot, 0.6f);
-        view.Mantle.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_tint"), Kin.Tint(new Color(0.55f, 0.8f, 1f)));
-        node.AddChild(view.Mantle);
-        // The ink wells its chains run into.
-        for (int i = 0; i < Arms; i++)
-            foreach (float at in PinAt)
-                for (int side = -1; side <= 1; side += 2)
-                {
-                    var p = PinWell(view, i, at, side, 0f);
-                    var well = new MeshInstance3D
-                    {
-                        Mesh = new CylinderMesh { TopRadius = 0.09f, BottomRadius = 0.12f, Height = 0.05f, RadialSegments = 8, Rings = 1 },
-                        MaterialOverride = _orb,
-                        Position = p - node.Position,
-                        CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                    };
-                    Skin(well, Kin.Blightroot, 0.3f);
-                    node.AddChild(well);
-                }
         view.Ring = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, Visible = false, Position = new Vector3(0f, LevelMap.SwimBand - 0.35f, 0f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         node.AddChild(view.Ring);
-        Place(view, 0f, 0f, 1f);
         return view;
     }
 
-    static void Skin(MeshInstance3D mesh, Color kin, float amount)
+    static void Paint(MeshInstance3D mesh, Color skin, float seed)
     {
         mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0f);
-        mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.3f);
-        mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), Kin.Skin(kin, amount));
-    }
-
-    /// <summary>An arm's transform now: its angle, a weak twitch, a flinch (lifting it) and how far it is curled in.</summary>
-    Basis ArmBasis(Root view, int i, float flinch, float curlIn)
-    {
-        float twitch = 0.05f * Mathf.Sin(_time * 1.3f + view.Phase[i]) + 0.03f * Mathf.Sin(_time * 3.7f + view.Phase[i] * 2f);
-        return new Basis(Vector3.Up, -(view.Angle[i] + twitch)) * new Basis(Vector3.Back, 0.12f * flinch + curlIn);
-    }
-
-    /// <summary>The world point a chain's well (side −1/1) stands at, by an arm at a share of its length.</summary>
-    Vector3 PinWell(Root view, int i, float at, int side, float flinch)
-    {
-        var b = new Basis(Vector3.Up, -view.Angle[i]);
-        var p = ArmPoint(at, view.Length[i], i % 2 == 0 ? 1f : -1f);
-        var across = b * Vector3.Back;
-        return view.Node.Position + new Vector3(0f, view.Floor + 0.02f, 0f) + b * new Vector3(p.X, 0f, p.Z) + across * side * PinSpread;
-    }
-
-    /// <summary>Lays the octopus out: its arms (flinching, curling in), its mantle (swelling).</summary>
-    void Place(Root view, float flinch, float curlIn, float mantle)
-    {
-        for (int i = 0; i < Arms; i++) view.Arms[i].Basis = ArmBasis(view, i, flinch, curlIn);
-        view.Mantle.Position = new Vector3(-0.05f, view.Floor + 0.95f * mantle, 0.08f);
-        view.Mantle.Scale = new Vector3(0.72f, 1.02f, 0.72f) * mantle;
-        view.Mantle.Rotation = new Vector3(-0.18f, 0f, 0f);
+        mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), skin);
+        mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), seed);
     }
 
     void SyncRoots(PlaneWorld world, float dt)
     {
-        _links.Clear();
+        var her = world.Player.Position;
         for (int i = 0; i < _roots.Count && i < world.Blightroots.Count; i++)
         {
             var view = _roots[i];
             var root = world.Blightroots[i];
             if (!root.Alive)
             {
-                Flee(view, root, dt);
+                Flee(view, root, dt, her);
                 continue;
             }
-            // Breathing; swelling on the telegraph; shrinking as her light drains it.
+            // The boxing pole: what it leans toward (upright, or its hammer's swing), and how far it is drawn out.
             float starve = Mathf.Clamp(root.Corruption.Fraction / 0.45f, 0f, 1f);
-            float breathe = 1f + 0.05f * Mathf.Sin(_time * 2.1f + i);
-            float size = breathe * (0.7f + 0.3f * starve) * (1f + 0.3f * root.Inflate);
-            Place(view, root.Inflate, 0f, size);
-            view.Mantle.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("swell"), root.Inflate);
-            view.Mantle.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.2f + 0.8f * root.Inflate);
-            view.Mantle.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), 0.5f + 0.8f * root.Inflate);
-            // The chains over its arms, taut on the pulse.
-            for (int a = 0; a < Arms; a++)
-                foreach (float at in PinAt)
-                    PinChain(view, a, at, root.Inflate);
-            // Its ink draining off into the wells: dark droplets lifting off its arms and sinking toward a chain's well.
-            view.Drip += dt * 7f;
+            float breathe = 1f + 0.06f * Mathf.Sin(_time * 2.1f + i) + 0.025f * Mathf.Sin(_time * 5.3f + i * 2f);
+            float size = BlightTuning.SacRadius * HeadSize * breathe * (0.75f + 0.25f * starve) * (1f + 0.3f * root.Inflate);
+            var want = Vector2.Zero;
+            float stiff = PoleStiff, stretchWant = 1f, max = TiltMax;
+            bool posed = false;
+            if (root.Swing < 0f)
+            {
+                view.Striking = view.Landed = false;
+            }
+            else
+            {
+                var d = new Vector2(root.SwingDir.X, root.SwingDir.Y);
+                float lands = BlightTuning.HammerWindup + BlightTuning.HammerStrike;
+                if (root.Swing < BlightTuning.HammerWindup)
+                {
+                    // Rearing back away from her, drawing itself up tall.
+                    float k = Mathf.SmoothStep(0f, 1f, root.Swing / BlightTuning.HammerWindup);
+                    want = -d * RearTilt * k;
+                    stretchWant = Mathf.Lerp(1f, RearStretch, k);
+                    max = RearTilt + 0.1f;
+                }
+                else if (root.Swing < lands + Rest)
+                {
+                    // The blow: from where it reared to where it lands, ever faster (a hammer falls), its pole drawn out to
+                    // reach it: on top of her, or the sand as far as it reaches.
+                    if (!view.Striking)
+                    {
+                        view.Striking = true;
+                        view.StrikeFromTilt = view.Tilt;
+                        view.StrikeFromStretch = view.Stretch;
+                    }
+                    var (slamTilt, slamStretch) = SlamPose(view, root, world, size);
+                    float u = Mathf.Clamp((root.Swing - BlightTuning.HammerWindup) / BlightTuning.HammerStrike, 0f, 1f);
+                    float e = u * u;
+                    view.Tilt = view.StrikeFromTilt.Lerp(slamTilt, e);
+                    view.Stretch = Mathf.Lerp(view.StrikeFromStretch, slamStretch, e);
+                    view.TiltVel = Vector2.Zero;
+                    view.StretchVel = 0f;
+                    posed = true;
+                    if (u >= 1f && !view.Landed)
+                    {
+                        view.Landed = true;
+                        view.SinceLanded = 0f;
+                        Slammed(view, root, size);
+                    }
+                }
+                else
+                {
+                    // Rising off what it struck, slowly through the water, on its spring back to upright.
+                    stiff = RecoverStiff;
+                    max = SlamTilt + 0.4f;
+                }
+            }
+            view.SinceLanded += dt;
+            if (!posed)
+            {
+                view.TiltVel += ((want - view.Tilt) * stiff - view.TiltVel * PoleDamp) * dt;
+                view.Tilt += view.TiltVel * dt;
+                view.StretchVel += ((stretchWant - view.Stretch) * stiff - view.StretchVel * PoleDamp) * dt;
+                view.Stretch += view.StretchVel * dt;
+                // Its foot is held: it leans so far and no further.
+                if (view.Tilt.Length() > max)
+                {
+                    var n = view.Tilt.Normalized();
+                    view.Tilt = n * max;
+                    float outward = view.TiltVel.Dot(n);
+                    if (outward > 0f) view.TiltVel -= n * outward;
+                }
+            }
+            // And the water's slow sway on top (not while it is set on its blow).
+            var lean = view.Tilt + new Vector2(
+                0.05f * Mathf.Sin(_time * 1.1f + view.Seed) + 0.025f * Mathf.Sin(_time * 2.7f + view.Seed * 2f),
+                0.04f * Mathf.Sin(_time * 0.8f + view.Seed * 1.7f) + 0.02f * Mathf.Sin(_time * 2.1f + view.Seed)) * (posed ? 0f : 1f);
+            float angle = lean.Length();
+            view.PoleBase.Basis = angle > 1e-4f ? new Basis(new Vector3(lean.Y, 0f, -lean.X) / angle, angle) : Basis.Identity;
+            float stretch = view.Stretch;
+            // Its pulse: stretching up as it gathers, then squashed all the way down to the sand as the ring runs out,
+            // springing back up.
+            float tall = stretch;
+            if (root.PulseRadius >= 0f)
+            {
+                float tr = root.PulseRadius / BlightTuning.PulseSpeed;
+                tall = tr < Down ? Mathf.Lerp(1f + PulseStretch, Flat, Mathf.SmoothStep(0f, 1f, tr / Down))
+                    : Flat + (1f - Flat) * (1f - Mathf.Exp(-(tr - Down) * 6f) * Mathf.Cos((tr - Down) * 10f));
+            }
+            else if (root.Inflate > 0f) tall *= 1f + PulseStretch * Mathf.SmoothStep(0f, 1f, root.Inflate);
+            float h = view.Height * Mathf.Max(tall, Flat);
+            // Drawn out, it thins (its ink spread along it); squashed, it thickens.
+            float thick = PoleRadius * (1f + 0.4f * (1f - Mathf.Min(tall, 1f))) / Mathf.Sqrt(Mathf.Max(tall, 1f));
+            view.Pole.Scale = new Vector3(thick, h, thick);
+            view.Pole.Position = new Vector3(0f, h * 0.5f, 0f);
+            // Flattened as it squashes down; and where it struck, its liquid head flattened on the blow, ringing back.
+            float squash = Mathf.Clamp(1f - tall, 0f, 1f);
+            float blow = view.SinceLanded < 0.6f ? 0.32f * Mathf.Exp(-9f * view.SinceLanded) * Mathf.Cos(22f * view.SinceLanded) : 0f;
+            var top = view.PoleBase.Position + view.PoleBase.Basis * new Vector3(0f, h + size * 0.75f * (1f - 0.4f * squash), 0f);
+            view.Holder.Position = top;
+            view.Head.Scale = new Vector3(1f + 0.4f * squash + 0.45f * blow, 1f - 0.45f * squash - blow, 1f + 0.4f * squash + 0.45f * blow) * size;
+
+            view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("swell"), root.Inflate);
+            view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.2f + 0.8f * root.Inflate);
+            view.Pole.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("pulse"), root.Inflate);
+            Mirror(view);
+            SoftStep(BodyOf(root), System.Numerics.Vector2.Zero, Vector3.Zero, false, false, root.Corruption, view.Seed, dt, 0.08f);
+            // Ink running down its pole now and then, sinking into the sand.
+            view.Drip += dt * 3f;
             while (view.Drip >= 1f)
             {
                 view.Drip -= 1f;
-                int a = (int)(_droplets.RandRange(0f, Arms - 0.001f));
-                float at = PinAt[(int)_droplets.RandRange(0f, PinAt.Length - 0.001f)];
-                var from = view.Node.Position + new Vector3(0f, view.Floor, 0f) + view.Arms[a].Basis * ArmPoint(at, view.Length[a], a % 2 == 0 ? 1f : -1f) + Vector3.Up * 0.12f;
-                var to = PinWell(view, a, at, _droplets.RandRange(0f, 1f) < 0.5f ? -1 : 1, 0f);
-                _droplets.Emit(from, (to - from) * 1.6f + Vector3.Up * 0.5f, 0.6f, 0.05f, 0.015f, new Color(0.03f, 0.02f, 0.07f, 0.9f), new Color(0.15f, 0.3f, 0.6f, 0f), drag: 2f, buoyancy: -0.6f);
+                float a = _droplets.RandRange(0f, Mathf.Tau);
+                var from = view.Node.Position + view.Holder.Position + new Vector3(Mathf.Cos(a), -0.6f, Mathf.Sin(a)) * size * 0.8f;
+                _droplets.Emit(from, new Vector3(0f, -1.2f, 0f), 0.8f, 0.06f, 0.02f, InkDrop, InkDropFade, drag: 1.5f, buoyancy: -1.4f);
             }
             // Its ring of ink running out over its reach.
             view.Ring.Visible = root.PulseRadius >= 0f;
@@ -233,69 +390,115 @@ public partial class BlightView
         }
     }
 
-    /// <summary>A chain over an arm: from one well, arching over the arm, down into the other; lower and tauter on the pulse.</summary>
-    void PinChain(Root view, int arm, float at, float taut)
+    /// <summary>
+    /// Where its blow lands, as the lean and stretch of its pole that put its head there: on top of her (her bell, at
+    /// OnHer over her plane) if she is in reach in front of it — as the sim judges it — else on the sand as far as it
+    /// reaches her way.
+    /// </summary>
+    (Vector2 Tilt, float Stretch) SlamPose(Root view, Blightroot root, PlaneWorld world, float size)
     {
-        var a = PinWell(view, arm, at, -1, taut);
-        var b = PinWell(view, arm, at, 1, taut);
-        // Over the top of the arm there (pulled down onto it on the pulse).
-        float lift = ArmPoint(at, view.Length[arm], arm % 2 == 0 ? 1f : -1f).Y + ArmRadius(at) * 0.8f + 0.1f - 0.07f * taut;
-        int n = Mathf.Max(3, (int)(Mathf.Pi * PinSpread / LinkSpacing));
-        var path = new List<Vector3>(n + 1);
-        for (int k = 0; k <= n; k++)
+        var p = world.Player.Position;
+        var to = p - root.Position;
+        float her = to.Length();
+        bool inFront = her < 1e-3f || System.Numerics.Vector2.Dot(to / her, root.SwingDir) > 0.3f;
+        bool on = her <= BlightTuning.HammerHit + world.Radius && inFront;
+        Vector3 head;
+        if (on) head = new Vector3(to.X, LevelMap.SwimBand + OnHer, to.Y);
+        else
         {
-            float u = k / (float)n;
-            path.Add(a.Lerp(b, u) + Vector3.Up * Mathf.Sin(u * Mathf.Pi) * lift);
+            var at = root.SwingDir * Mathf.Min(Mathf.Max(her, 1f), BlightTuning.HammerHit);
+            head = new Vector3(at.X, Floor(root.Position + at) + size * 0.7f, at.Y);
         }
-        AddChain(path, 0f, taut, 0.9f);
+        // The pole from its foot to under the head (the head rides size × 0.75 out past its top).
+        var d = head - view.PoleBase.Position;
+        float len = d.Length();
+        if (len < 1e-3f) return (Vector2.Zero, 1f);
+        float theta = Mathf.Acos(Mathf.Clamp(d.Y / len, -1f, 1f));
+        var flat = new Vector2(d.X, d.Z);
+        flat = flat.LengthSquared() > 1e-6f ? flat.Normalized() : new Vector2(root.SwingDir.X, root.SwingDir.Y);
+        return (flat * theta, Mathf.Max((len - size * 0.75f) / view.Height, 0.3f));
     }
 
-    /// <summary>Links along a path, every LinkSpacing, each turned a quarter from the last (as a real chain lies).</summary>
-    void AddChain(List<Vector3> path, float gone, float taut, float scale)
+    /// <summary>
+    /// Its head comes down: its liquid flattened on the blow (a dent that rings back), drops of it torn off and flung
+    /// out round it (slowed hard by the water, sinking), a few chunks ripped away, and the water shoved out in rings
+    /// (the swells' distortion).
+    /// </summary>
+    void Slammed(Root view, Blightroot root, float size)
     {
-        float carry = 0f;
-        int count = 0;
-        for (int k = 1; k < path.Count; k++)
+        var at = view.Node.Position + view.Holder.Position;
+        var down = (Vector3.Down * 0.8f + new Vector3(root.SwingDir.X, 0f, root.SwingDir.Y) * 0.6f).Normalized();
+        var b = BodyOf(root);
+        for (int i = 0; i < Lobes; i++)
         {
-            var from = path[k - 1];
-            var seg = path[k] - from;
-            float len = seg.Length();
-            if (len < 1e-4f) continue;
-            var dir = seg / len;
-            for (float s = carry; s < len; s += LinkSpacing)
-            {
-                var at = from + dir * s;
-                var side = dir.Cross(Vector3.Up);
-                if (side.LengthSquared() < 1e-4f) side = Vector3.Right;
-                side = side.Normalized();
-                var up = side.Cross(dir).Normalized();
-                // The link's long axis along the chain; every other one turned a quarter about it.
-                bool turned = count++ % 2 == 1;
-                var basis = new Basis(dir * 1.7f * scale, (turned ? side : up) * scale, (turned ? up : side) * scale);
-                _links.Add((new Transform3D(basis, at), new Color(gone, taut, 0f, 1f)));
-                carry = s + LinkSpacing - len;
-            }
-            if (carry < 0f) carry = 0f;
+            float k = LobeDirs[i].Dot(down);
+            // The face it struck with pushed in; its sides bulging out (its volume keeps the rest).
+            b.V[i] -= 9f * Mathf.Max(k, 0f);
+            b.V[i] += 3.5f * (1f - Mathf.Abs(k));
         }
+        // Drops torn off its rim and flung out round it, low, the water slowing them fast; a few sinking slower.
+        int drops = 16 + (int)(_droplets.RandRange(0f, 6f));
+        for (int k = 0; k < drops; k++)
+        {
+            float a = k * Mathf.Tau / drops + _droplets.RandRange(-0.25f, 0.25f);
+            var out_ = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            var from = at + out_ * size * 0.8f + Vector3.Down * size * 0.3f;
+            var v = out_ * _droplets.RandRange(3f, 6.5f) + Vector3.Up * _droplets.RandRange(0.2f, 1.6f);
+            float sz = _droplets.RandRange(0.07f, 0.15f);
+            _droplets.Emit(from, v, _droplets.RandRange(0.5f, 0.9f), sz, sz * 0.3f, InkDrop, InkDropFade, drag: 4.2f, buoyancy: -1.2f);
+        }
+        // Chunks of its mercury ripped away.
+        int chunks = 3 + (int)(_droplets.RandRange(0f, 2.99f));
+        for (int c = 0; c < chunks; c++)
+        {
+            float a = _droplets.RandRange(0f, Mathf.Tau);
+            var out_ = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            AddChunk(at + out_ * size * 0.7f, out_ * _droplets.RandRange(2f, 3.6f) + Vector3.Up * _droplets.RandRange(0.6f, 1.4f), size * _droplets.RandRange(0.18f, 0.28f), view.Seed + c * 3.1f);
+        }
+        // The water shoved out: two rings of refraction, a quick wide one and a slower, closer one.
+        var g = view.Holder.GlobalPosition;
+        Swells?.AddRing(new Vector2(g.X, g.Z), 1.8f, 1.5f);
+        Swells?.AddRing(new Vector2(g.X, g.Z), 1.2f, 0.8f);
     }
 
-    /// <summary>Freed: its ink pops, the chains snap, and it curls its arms in, pushes off and jets up and away, healthy.</summary>
-    void Flee(Root view, Blightroot root, float dt)
+    /// <summary>Her light struck a Blightroot's head (from InkSplash): torn as a murkling is.</summary>
+    void TearRoot(Blightroot root, Vector3 back, float hitShare)
     {
+        int i = -1;
+        if (_lastWorld is { } w) i = w.Blightroots.IndexOf(root);
+        if (i < 0 || i >= _roots.Count) return;
+        var view = _roots[i];
+        var at = view.Node.Position + view.Holder.Position;
+        Tear(BodyOf(root), root.Corruption, back, hitShare, at, BlightTuning.SacRadius * HeadSize, view.Seed);
+        // Pushed back, away from the shot, as hard as it struck: a run of hits pushes it further (to TiltMax).
+        view.TiltVel += new Vector2(-back.X, -back.Z) * (HitPush + HitPushPerShare * hitShare);
+    }
+
+    /// <summary>
+    /// Freed: its ink bursts; the pole runs away into drips and the rootlets draw into the sand; the head takes its own
+    /// colour, draws out into a mantle and grows its eight arms; then it swims away from her in strokes, rising, fading.
+    /// </summary>
+    void Flee(Root view, Blightroot root, float dt, System.Numerics.Vector2 her)
+    {
+        var headAt = view.Node.Position + view.Holder.Position;
         if (!view.Burst)
         {
             view.Burst = true;
             view.Since = 0f;
-            var mantle = view.Node.Position + view.Mantle.Position;
-            Pop(mantle, BlightTuning.SacRadius, Kin.Blightroot);
-            // The chains snap: their links fly off.
-            for (int a = 0; a < Arms; a++)
-                foreach (float at in PinAt)
-                {
-                    var p = PinWell(view, a, at, 1, 0f).Lerp(PinWell(view, a, at, -1, 0f), 0.5f) + Vector3.Up * 0.3f;
-                    _droplets.Burst(p, Vector3.Up, 4, 2.5f, 1f, 0.6f, 0.07f, 0.02f, new Color(0.03f, 0.02f, 0.07f, 0.95f), new Color(0.2f, 0.48f, 1f, 0f), drag: 2.5f);
-                }
+            Pop(headAt, BlightTuning.SacRadius, Kin.Blightroot);
             view.Ring.Visible = false;
+            var away = new Vector3(root.Position.X - her.X, 0f, root.Position.Y - her.Y);
+            away = away.LengthSquared() > 1e-4f ? away.Normalized() : new Vector3(0f, 0f, -1f);
+            view.FleeDir = (away + Vector3.Up * 0.45f).Normalized();
+            view.FleeAt = view.Holder.Position;
+            view.FleeVelocity = Vector3.Zero;
+            // Its holes close at once and it rounds out: it is whole again.
+            if (_bodies.TryGetValue(root, out var body))
+            {
+                body.Holes.Clear();
+                body.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("holes"), new Vector4[MaxHoles]);
+                body.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lobes"), new float[Lobes]);
+            }
         }
         view.Since += dt;
         float t = view.Since;
@@ -304,27 +507,70 @@ public partial class BlightView
             view.Node.Visible = false;
             return;
         }
-        // Healthy again: the ink's colour gives way to its own.
-        float heal = Mathf.Clamp(t / 0.5f, 0f, 1f);
-        foreach (var mesh in Meshes(view.Node))
-            if (mesh != view.Ring) mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), new Color(Healthy.R, Healthy.G, Healthy.B, Mathf.Lerp(0.6f, 0.8f, heal)));
-        // It gathers itself (arms curling in and up), pushes off, and jets up and away to the north, arms trailing.
-        float gather = Mathf.SmoothStep(0f, 1f, t / 0.5f);
-        float jet = Mathf.Clamp((t - 0.4f) / (FleeSeconds - 0.4f), 0f, 1f);
-        float e = jet * jet;
-        // Arms up round its body as it gathers, then trailing down below it as it jets.
-        float curl = Mathf.Lerp(0.9f * gather, -1.3f, Mathf.SmoothStep(0f, 1f, jet * 3f));
-        Place(view, 0f, curl, 1f - 0.15f * gather + 0.15f * Mathf.Sin(t * 12f) * (1f - jet));
-        view.Node.Position = new Vector3(root.Position.X, 14f * e, root.Position.Y - 9f * e);
-        view.Node.Scale = Vector3.One * (1f - 0.35f * jet);
-        foreach (var mesh in Meshes(view.Node))
-            if (mesh.Mesh is CylinderMesh) mesh.Visible = false;
-        // A trail of clean bubbles.
-        if (jet > 0f && _motes.RandRange(0f, 1f) < 0.7f)
-            _motes.Emit(view.Node.Position + new Vector3(0f, view.Floor + 0.3f, 0f) * view.Node.Scale.X, new Vector3(_motes.RandRange(-0.4f, 0.4f), -0.6f, _motes.RandRange(-0.4f, 0.4f)), 1.2f, 0.08f, 0.14f, new Color(0.85f, 0.95f, 1f, 0.7f), new Color(0.85f, 0.95f, 1f, 0f), drag: 1f, buoyancy: 1.2f);
-        float fade = 1f - Mathf.Clamp((t - FleeSeconds + 0.6f) / 0.6f, 0f, 1f);
-        foreach (var mesh in Meshes(view.Node))
-            if (mesh != view.Ring) mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), fade);
+        // The pole runs away from the top down into drips; the rootlets draw back into the sand.
+        float melt = Mathf.SmoothStep(0f, 0.9f, t);
+        view.Pole.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("melt"), melt);
+        view.Pole.Visible = melt < 0.999f;
+        if (melt < 1f && _droplets.RandRange(0f, 1f) < 0.8f)
+        {
+            float hgt = view.Height * (1f - melt) * _droplets.RandRange(0.5f, 1f);
+            var p = view.Node.Position + view.PoleBase.Position + view.PoleBase.Basis * new Vector3(0f, hgt, 0f);
+            _droplets.Emit(p, new Vector3(_droplets.RandRange(-0.3f, 0.3f), -0.8f, _droplets.RandRange(-0.3f, 0.3f)), 0.6f, 0.07f, 0.02f, InkDrop, InkDropFade, drag: 1.5f, buoyancy: -1.6f);
+        }
+        float sink = Mathf.SmoothStep(0.1f, 1f, t);
+        foreach (var r in view.Rootlets)
+        {
+            r.Scale = Vector3.One * 0.34f * Mathf.Max(1f - sink, 0.01f);
+            r.Visible = sink < 0.999f;
+        }
+        // Its own colour coming back, its head drawing out into a mantle.
+        float heal = Mathf.SmoothStep(0.15f, 1.1f, t);
+        var skin = Kin.Skin(Kin.Blightroot, 0.6f).Lerp(HealthySkin, heal);
+        view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("skin"), skin);
+        view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.2f * (1f - heal));
+        view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("swell"), 0f);
+        Mirror(view);
+        // Its arms growing out under it.
+        float grow = Mathf.SmoothStep(0.35f, ChangeSeconds, t);
+        // Then it swims: strokes every StrokeSeconds — a contraction (arms closing back, the mantle squeezed) that drives
+        // it on, then a glide as they flare open again.
+        const float StrokeSeconds = 0.75f;
+        float swim = Mathf.Max(0f, t - ChangeSeconds);
+        float phase = swim / StrokeSeconds;
+        float squeeze = swim > 0f ? Mathf.Pow(0.5f - 0.5f * Mathf.Cos(Mathf.Tau * phase), 1.5f) : 0f;
+        if (swim > 0f)
+        {
+            view.FleeVelocity += view.FleeDir * 9f * squeeze * dt;
+            view.FleeVelocity *= Mathf.Exp(-1.6f * dt);
+            view.FleeAt += view.FleeVelocity * dt;
+            if (_motes.RandRange(0f, 1f) < 0.25f + 0.6f * squeeze)
+                _motes.Emit(view.Node.Position + view.FleeAt - view.FleeDir * 0.5f, new Vector3(_motes.RandRange(-0.4f, 0.4f), -0.2f, _motes.RandRange(-0.4f, 0.4f)) - view.FleeDir * 0.8f,
+                    1.2f, 0.07f, 0.13f, new Color(0.85f, 0.95f, 1f, 0.7f), new Color(0.85f, 0.95f, 1f, 0f), drag: 1f, buoyancy: 1.2f);
+        }
+        view.Holder.Position = view.FleeAt;
+        // Swimming, it leans its mantle into its way, arms trailing.
+        float lean = Mathf.SmoothStep(0f, 1f, swim / 0.6f) * 1.1f;
+        var flat = new Vector3(view.FleeDir.X, 0f, view.FleeDir.Z);
+        var axis = flat.LengthSquared() > 1e-4f ? Vector3.Up.Cross(flat.Normalized()) : Vector3.Right;
+        view.Holder.Basis = new Basis(axis.Normalized(), lean);
+        float size = BlightTuning.SacRadius * HeadSize;
+        float mantleLong = 1f + 0.35f * heal;
+        view.Head.Scale = new Vector3(1f - 0.18f * squeeze, mantleLong, 1f - 0.18f * squeeze) * size * (1f - 0.1f * heal);
+        view.Head.Position = new Vector3(0f, size * 0.25f * heal, 0f);
+        for (int a = 0; a < Arms; a++)
+        {
+            var pivot = view.Arms[a];
+            pivot.Visible = grow > 0.01f;
+            if (!pivot.Visible) continue;
+            // Hanging as they grow, curling a little; swimming, closing back with each stroke and flaring between.
+            float wave = 0.12f * Mathf.Sin(_time * 3.1f + view.Phase[a]) * (1f - squeeze);
+            float droop = Mathf.Lerp(1.3f, Mathf.Lerp(0.75f, 1.5f, squeeze), Mathf.SmoothStep(0f, 1f, swim / 0.5f)) + wave;
+            pivot.Basis = new Basis(Vector3.Up, -view.Angle[a]) * new Basis(Vector3.Back, -droop);
+            pivot.Scale = Vector3.One * 0.5f * grow * (1f + 0.06f * Mathf.Sin(_time * 4f + view.Phase[a]));
+            pivot.Position = new Vector3(0f, -size * 0.35f, 0f);
+        }
+        float fade = 1f - Mathf.Clamp((t - FleeSeconds + 0.8f) / 0.8f, 0f, 1f);
+        foreach (var mesh in Meshes(view.Holder)) mesh.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), fade);
     }
 
     static IEnumerable<MeshInstance3D> Meshes(Node node)
@@ -332,48 +578,5 @@ public partial class BlightView
         if (node is MeshInstance3D m) yield return m;
         foreach (var child in node.GetChildren())
             foreach (var inner in Meshes(child)) yield return inner;
-    }
-
-    /// <summary>A Blightroot's gloomvines: chains torn loose from its wells, lashing from the floor up to her plane, coiling round her.</summary>
-    void SyncVines(PlaneWorld world)
-    {
-        var her = new Vector3(world.Player.Position.X, LevelMap.SwimBand, world.Player.Position.Y);
-        foreach (var vine in world.Vines)
-        {
-            if (vine.Points.Count < 2) continue;
-            float gone = vine.Dissolving >= 0f ? vine.Dissolving / BlightTuning.DissolveSeconds : 0f;
-            float rootFloor = Floor(vine.Root.Position) + 0.1f;
-            var path = new List<Vector3>(vine.Points.Count + 24);
-            for (int k = 0; k < vine.Points.Count; k++)
-            {
-                var q = vine.Points[k];
-                float along = k * BlightTuning.Segment;
-                float rise = Mathf.SmoothStep(0f, 1f, along / 1.8f);
-                float sway = Mathf.Sin(_time * 1.4f + k * 0.5f + vine.Curl * 3f) * 0.06f * rise;
-                path.Add(new Vector3(q.X + sway, Mathf.Lerp(rootFloor, LevelMap.SwimBand - 0.15f, rise), q.Y - sway));
-            }
-            if (vine.Coiling)
-            {
-                // The coil: a helix round her, closing as it holds.
-                var tip = path[^1];
-                float a0 = Mathf.Atan2(tip.Z - her.Z, tip.X - her.X);
-                for (int k = 1; k <= 20; k++)
-                {
-                    float a = a0 + k * 0.42f;
-                    float r = Mathf.Lerp(0.75f, 0.5f, k / 20f);
-                    path.Add(her + new Vector3(Mathf.Cos(a) * r, -0.25f + k * 0.03f, Mathf.Sin(a) * r));
-                }
-            }
-            AddChain(path, gone, vine.Coiling ? 1f : 0.35f, 1.25f);
-        }
-        // Every chain this frame, in one draw.
-        var mm = _chains.Multimesh;
-        if (mm.InstanceCount < _links.Count) mm.InstanceCount = Mathf.Max(Mathf.Max(_links.Count, mm.InstanceCount * 2), 256);
-        mm.VisibleInstanceCount = _links.Count;
-        for (int i = 0; i < _links.Count; i++)
-        {
-            mm.SetInstanceTransform(i, _links[i].At);
-            mm.SetInstanceColor(i, _links[i].Look);
-        }
     }
 }

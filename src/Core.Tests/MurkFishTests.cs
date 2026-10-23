@@ -25,7 +25,6 @@ public class MurkFishTests
         w.Murklings.Clear();
         w.Blotters.Clear();
         w.Bombs.Clear();
-        foreach (var vine in w.Vines) vine.Points.RemoveRange(1, vine.Points.Count - 1);
         Assert.NotEmpty(w.Schools);
         return w;
     }
