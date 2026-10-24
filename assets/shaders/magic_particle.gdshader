@@ -1,4 +1,4 @@
-// A star speck (StarSpecks): a tiny drawing in fine-tip white or ecru — a "+" or a "*" — as a comic panel marks a
+// A magic particle (MagicParticles): a tiny drawing in fine-tip white or ecru — a "+" or a "*" — as a comic panel marks a
 // sparkle: thin strokes tapering to their tips, a hair of dark edge so they read on bright sand. Camera-facing quads;
 // the instance colour is its ink, INSTANCE_CUSTOM.x its shape (0 "+", 1 "*").
 shader_type spatial;

@@ -28,6 +28,8 @@ public static class DenTuning
     public const float Ink = 0.8f, InkReach = 1.1f;
     /// <summary>Cleared: cleansed out to its radius + Clear metres.</summary>
     public const float Clear = 3f;
+    /// <summary>Its cleansing wave: how fast it runs out from the den's middle (m/s).</summary>
+    public const float WaveSpeed = 14f;
     /// <summary>The payout: Shells + ShellsPerMenace × Menace shells (give or take one), and a light orb this often.</summary>
     public const int Shells = 4;
     public const float ShellsPerMenace = 2f, OrbChance = 0.4f;
@@ -47,6 +49,8 @@ public sealed class Den
     /// <summary>Whether each of its creatures is still corrupted.</summary>
     public readonly List<Func<bool>> Members = new();
     public bool Cleared;
+    /// <summary>Its cleansing wave, running out from its middle once it is cleared: how far it has come (−1: none).</summary>
+    public float Wave = -1f;
 }
 
 public sealed partial class PlaneWorld
@@ -139,19 +143,27 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>
-    /// A den's battle is over once every creature of it is freed and no murkling is left in its nave: it is cleansed
-    /// whole, and it pays out.
+    /// A den's battle is over once every creature of it is freed and no murkling is left in its nave: it pays out, and a
+    /// cleansing wave runs out from its middle over the whole nave (WaveSpeed), clearing all it passes — an unseen wave,
+    /// its work seen as the corruption going in magic particles, ring by ring.
     /// </summary>
     void StepDens(CorruptionField field)
     {
+        foreach (var den in Dens)
+        {
+            if (den.Wave < 0f) continue;
+            // Whole: strong enough that even its rim, where a cleansing fades, is left clean.
+            den.Wave = MathF.Min(den.Wave + DenTuning.WaveSpeed * Dt, den.Radius + DenTuning.Clear);
+            field.Cleanse(den.At, den.Wave, 3f);
+            if (den.Wave >= den.Radius + DenTuning.Clear) den.Wave = -1f;
+        }
         if (Tick % 6 != 0) return;
         foreach (var den in Dens)
         {
             if (den.Cleared || den.Members.Any(alive => alive())) continue;
             if (Murklings.Any(m => m.Alive && Vector2.Distance(m.Position, den.At) < den.Radius)) continue;
             den.Cleared = true;
-            // Whole: strong enough that even its rim, where a cleansing fades, is left clean.
-            field.Cleanse(den.At, den.Radius + DenTuning.Clear, 3f);
+            den.Wave = 0f;
             int shells = DenTuning.Shells + (int)MathF.Round(DenTuning.ShellsPerMenace * Menace) + _blightRng.Int(3) - 1;
             for (int i = 0; i < shells; i++) Shells.Add(new PlaneShell { Position = den.At, Velocity = Fling(2f, 5f) });
             bool orb = _blightRng.NextFloat() < DenTuning.OrbChance;

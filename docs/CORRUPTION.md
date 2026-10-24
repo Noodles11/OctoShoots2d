@@ -221,8 +221,10 @@ Every nave (a chamber off the main route) that holds no place holds a den: a kno
 (DESIGN-TOPDOWN §4.9 has the rules). Its ground lies thick with ink. A murkling or more waits in it (1 plus 1 per
 Menace, drifting back into the nave while she is away), and most dens have a heart: a Blightroot (its guardians bud
 round it as ever), a Thumpsquirt, or an Inkwarden warding the murklings (free the warden first). When every creature
-of it is freed and no murkling is left in the nave, the battle is over: the whole nave is cleansed at once, and it pays
-out shells (4 plus 2 per Menace) and, 40% of the time, a light orb (`DenCleared`; gold light over the nave, a bell).
+of it is freed and no murkling is left in the nave, the battle is over: it pays out shells (4 plus 2 per Menace) and, 40% of the time, a light orb (`DenCleared`, a bell),
+and an unseen cleansing wave runs out from its middle over the whole nave at 14 m/s (out to 3 m past its rim,
+`Den.Wave`), clearing all it passes: its work is seen only as the corruption going up in magic particles, ring by ring,
+as her light clears it. No ring of light is drawn.
 
 ## Light orbs
 
@@ -438,22 +440,22 @@ field never seeds there.
 
 ## Evaporation: corruption clearing
 
-Cleared corruption never just vanishes. It goes in a twinkle: tiny fine-tip star drawings, "+" and "*" in white and
-ecru (`StarSpecks`, star_speck.gdshader), thin strokes tapering to their tips with a hair of dark edge, as a painted
+Cleared corruption never just vanishes. It goes in a twinkle of **magic particles**: tiny fine-tip star drawings, "+" and "*" in white and
+ecru (`MagicParticles`, magic_particle.gdshader), thin strokes tapering to their tips with a hair of dark edge, as a painted
 comic marks a sparkle. Each pops in with a little overshoot, twirls (spinning down), drifts and rises a touch, and
 pops out in a quick swell, a third to two thirds of a second after it appeared.
 
 | Where | What |
 |---|---|
-| The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Stars pop up off them. The chance of one grows with how much a cell lost. At most 48 a frame. |
-| Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same stars twinkle off her body. It is thicker the faster she clears. |
+| The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Magic particles pop up off them, so the corruption goes quickly in a twinkle: up to two or three per cell cleansed (the chance grows with how much it lost), at most 120 a frame. |
+| Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same magic particles twinkle off her body. It is thicker the faster she clears. |
 | Her meter (`MinimapView` frame) | Wisps of ink steam off the arc's receding tip. They drift outward and up, curling, and turn violet, then gold, as they fade. |
-| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, a Blotter's shell, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the stars twinkle off it as off the floor. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
+| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, a Blotter's shell, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the magic particles twinkle off it as off the floor. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
 
 ## Presentation
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
-  out from how fast each cell falls and fades over ~0.4 s. It uploads at most 30 times a second, and only while
+  out from how fast each cell falls and fades over ~0.17 s. It uploads at most 30 times a second, and only while
   something changes. The level's floor and its shards read it.
 - **Ink drip** (`corruption_shards.gdshader`, `CorruptionView`): the corruption's only mark on the floor, as if from
   another dimension: ink dripping upward out of the ground, as fine as plankton (drops 4–8 cm across, about 70%

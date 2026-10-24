@@ -90,6 +90,8 @@ public class DenTests
         }
         Assert.True(cleared);
         Assert.True(den.Cleared);
+        // Its wave runs out over the whole nave (well under a second).
+        for (int i = 0; i < 60; i++) w.Step(default);
         // Its whole nave is cleansed, and it pays out.
         Assert.True(w.Corruption!.At(den.At) < CorruptionTuning.Clean);
         Assert.True(w.Corruption.At(den.At + new Vector2(den.Radius * 0.8f, 0f)) < CorruptionTuning.Clean || !w.Clear(den.At + new Vector2(den.Radius * 0.8f, 0f), 0.2f));

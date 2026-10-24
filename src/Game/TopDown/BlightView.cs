@@ -375,22 +375,6 @@ public partial class BlightView : Node3D
                 AddRipple(e.Position, Floor(e.Position) + 0.06f, 0.4f, 4f, e.Size, new Color(Ink.R, Ink.G, Ink.B, 0.95f));
                 _droplets.Burst(new Vector3(e.Position.X, Floor(e.Position) + 0.2f, e.Position.Y), Vector3.Up, 30, 3.5f, 0.6f, 0.8f, 0.2f, 0.05f, new Color(0.02f, 0.01f, 0.04f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 2f);
                 break;
-            case PlaneEventType.DenCleared:
-            {
-                // A den's battle is over: gold light washes out over its whole nave, and rises off it.
-                float floor = Floor(e.Position);
-                AddRipple(e.Position, floor + 0.08f, 0.6f, e.Size, 1.4f, new Color(Gold.R * 1.3f, Gold.G * 1.2f, Gold.B, 0.9f));
-                AddRipple(e.Position, floor + 0.1f, 0.3f, e.Size * 0.6f, 0.9f, new Color(1f, 0.95f, 0.8f, 0.7f));
-                var from = new Vector3(e.Position.X, floor + 0.3f, e.Position.Y);
-                for (int i = 0; i < 60; i++)
-                {
-                    var ring = _motes.RandDir();
-                    ring.Y = 0f;
-                    var p = from + ring.Normalized() * _motes.RandRange(0f, e.Direction.X);
-                    _motes.Emit(p, new Vector3(0f, _motes.RandRange(1f, 2.6f), 0f) + _motes.RandDir() * 0.4f, _motes.RandRange(0.9f, 1.6f), _motes.RandRange(0.08f, 0.2f), 0.02f, Gold, new Color(1f, 0.6f, 0.2f, 0f), drag: 1.2f, buoyancy: 0.6f);
-                }
-                break;
-            }
             case PlaneEventType.BlotterBurst:
                 // Cleansed: its shell pops, and the bare crab runs.
                 FreeHermit(e.Position);

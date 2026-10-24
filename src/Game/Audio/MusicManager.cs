@@ -30,7 +30,9 @@ public partial class MusicManager : Node
     [Export] public float DuckDb = -6f;
     /// <summary>Extra pitch on the dark corruption bus, in semitones (e.g. -2 detunes it a little; 0 = none).</summary>
     [Export] public float DarkBusPitchSemitones;
-    /// <summary>The music bus's level (dB), under the game's sounds.</summary>
+    /// <summary>The soundtrack is off for now: nothing plays (the game's sounds do).</summary>
+    public const bool SoundtrackOn = false;
+        /// <summary>The music bus's level (dB), under the game's sounds.</summary>
     [Export] public float MusicDb = -6f;
 
     const string BusMusic = "Music", BusTheme = "MTheme", BusDark = "MDark", BusEerie = "MEerie", BusCombat = "MCombat";
@@ -53,8 +55,10 @@ public partial class MusicManager : Node
         _dark = MakePlayer(Load("corruption_dark"), BusDark);
         _eerie = MakePlayer(Load("corruption_eerie"), BusEerie);
         _combat = MakePlayer(Load("combat"), BusCombat);
-        // The music is off for now: audio/theme.mp3 is a placeholder (not ours to ship). Uncomment to hear it again.
-        // StartAllStems();
+        // The music is off for now (audio/theme.mp3 is a placeholder, not ours to ship): no stem starts, and the music bus
+        // is muted, so the combat layer (started on encounters) stays silent too. Set SoundtrackOn to hear it again.
+        if (SoundtrackOn) StartAllStems();
+        AudioServer.SetBusMute(AudioServer.GetBusIndex(BusMusic), !SoundtrackOn);
         static string Of(AudioStreamPlayer p) => p.Stream is null ? "none" : $"{p.Stream.ResourcePath.GetFile()} ({p.Stream.GetLength():0} s)";
         GD.Print($"Music: theme {Of(_theme)}, dark {Of(_dark)}, eerie {Of(_eerie)}, combat {Of(_combat)}; playing {_theme.Playing}");
     }

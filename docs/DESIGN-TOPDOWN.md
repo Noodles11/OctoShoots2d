@@ -777,8 +777,9 @@ pays (the main route's chambers are the way through):
     the kind's own limit (else the den holds murklings only).
   - A small nave (under 6 m) and a quiet level's naves hold a single murkling.
   - A nave in the boss arena or in a safe place's clean water (round the start, a shop or a clam room) holds no den.
-- **Its battle over:** once every creature of the den is freed and no murkling is left in the nave, the whole nave is
-  cleansed at once (out to 3 m past its rim), and it pays out: 4 shells, plus 2 per Menace, give or take one, and a
+- **Its battle over:** once every creature of the den is freed and no murkling is left in the nave, an unseen
+  cleansing wave runs out from its middle over the whole nave (out to 3 m past its rim, 14 m/s), the corruption going
+  up in magic particles as it passes, and it pays out: 4 shells, plus 2 per Menace, give or take one, and a
   light orb 40% of the time. Gold light washes out over the nave and rises off it, with a bell.
 
 ### 4.7 The reef director — the world acts without her
@@ -1178,7 +1179,11 @@ The FP staging ("look up through the surface") is replaced:
   (DESIGN-3D §7.2); in Trench/Abyss, sound *is* the off-screen warning system.
 - SFX pitch lowers with depth (inherited presentation shift); muffled glass
   thumps from Depth 4+; filter-intake hum in the Tank.
-- Music: post-v1 (inherited decision).
+- Music: post-v1 (inherited decision). The soundtrack is off for now (`MusicManager.SoundtrackOn`): nothing plays.
+- **Every explosion is felt** (`TopDownMain.Explode`): hers (a Starburst burst, by its reach; a Pistol Shrimp's bang),
+  the creatures' (a Blotter's bomb, a creature of ink bursting — a prime far more than a murkling — a Blightroot bursting
+  or slamming down, a Thumpsquirt bursting, a boss's ink sac, a burst throw) and the reef's (a geyser): the screen
+  shakes and the controller kicks by its size, fully within 5 m of her and fading out by 24 m.
 
 ---
 
@@ -1326,24 +1331,21 @@ at mist distance (inherited fade rule).
 - **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
   her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
   mobs from then on: she may swim away, and they stay. An ambush springs once.
-- **Clam rooms (look):** the room is the inside of a giant clam, a single dead-end chamber at the end of its spur. A
-  shell wall of mother-of-pearl lines the chamber (ribbed, scalloped at the top, open at the mouth): a muted pearly
-  shell, iridescent, glossy but not a mirror (her lantern leaves a soft sheen, not a white blot), glowing only very
-  faintly of itself, so the pearl's patterned light is what shows on it; weathered shell outside.
-  The chamber's floor is mother-of-pearl too, and the pearl hangs still in the middle of the room. About 80 gold
-  motes spiral round the pearl. **The pearl lights the room:** the light leaving it takes its own colours in its own
-  pattern (its bands, swirl, spots, marble, rings, stripes, speckle or halo, as on the pearl itself), painted over the
-  whole room, the shell wall and the floor (`pearl_glow.gdshaderinc`), reaching right across to the wall, its dark
-  parts near dark so the pattern reads; the pearl itself glows from within only enough to keep its own colours and
-  pattern (not burning white). A dim fill light high over it, the light
-  spilling out of the mouth into the canyon and the water pass's haze (ClamRoomView, `clam_glows` and `clam_colors`
-  in topdown_post) are in its colour too, so from a distance the room shows what it holds. **The light pours out
-  over the path:** the spill stands 7 m out from the mouth (off the shell) and reaches 17 m, and the haze lies in three
-  pools — a faint one over the room (so it never veils the pattern), one 3 m out over its mouth, and the widest 7 m out
-  along the canyon — so the room is plain to see from the path; the haze lifts what lies under it gently. A stream of gold motes drifts out of the mouth and far into the canyon. The spill and the haze are brighter the deeper she is (0.6 at
-  Depth 0, +0.3 per depth, at most 2.2), so in dark depths the room is a beacon; the pattern on the shell stops growing
-  at 1.2, so it never burns out. When the pearl is taken, the motes fling out and
-  dissolve over 1.2 s and its light fades out with them.
+- **Clam rooms (look)** (`ClamRoomView`): a chamber like any other, the dead end of its spur, and in its middle a giant
+  clam lying open on the sand — three times the pearl's width, bone-cream, ribbed — its mouth turned to the chamber's
+  entrance, the hinge behind, its soft flesh inside and the pearl lying on its lower valve. **The pearl's light comes out
+  of the clam's mouth only:** in the pearl's own colours and pattern (its bands, swirl, spots, marble, rings, stripes,
+  speckle or halo, `pearl_glow.gdshaderinc`) laid over the chamber's floor and the foot of its walls in a cone of 120°
+  toward the entrance, softly edged (`pearl_floor_light.gdshader`), with a shadowed spotlight of its colour the same way
+  and the pearl's own light shadowed by the shell — nothing of it falls behind the clam. Its light pours out of the
+  chamber's mouth over the path: a spill 7 m out from the mouth reaching 17 m, and the water pass's haze in three pools
+  (a faint one over the room, one 3 m out over the mouth, the widest 7 m out along the canyon), in its colour, so the
+  room is plain to see from the path. The spill and the haze are brighter the deeper she is (0.6 at Depth 0, +0.3 per
+  depth, at most 2.2); the pattern stops growing at 1.2, so it never burns out. **Magic particles** (`MagicParticles`:
+  tiny fine-tip "+" and "*" in white and ecru, popping in, twirling, popping out — the game's sparkle wherever magic
+  is) float up round the clam, about seven a second. **When the pearl is taken** they stop, the clam closes over 0.6 s
+  and its light fades out over 1.2 s. **The pearl's absorbing ends** (it shatters into her) **in a burst of magic
+  particles** flung out from her all round.
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
   plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json). The
   pearls she has absorbed circle her bell (`PearlOrbitView`): one small pearl each (non-unique ones as often as she took

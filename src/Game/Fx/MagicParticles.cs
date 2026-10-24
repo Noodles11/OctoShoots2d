@@ -4,21 +4,22 @@ using Godot;
 namespace OctoShoots.Game.Fx;
 
 /// <summary>
-/// Tiny fine-tip star drawings (star_speck.gdshader): a "+" or a "*" in white or ecru that pops in with a little
-/// overshoot, twirls (spinning down), drifts and rises a touch, and at the end pops — a quick swell as it goes. Drawn as
+/// Magic particles: tiny fine-tip star drawings (magic_particle.gdshader), a "+" or a "*" in white or ecru, that pops in with a little
+/// overshoot, twirls (spinning down), drifts (or, given gravity, is thrown and falls like dust), and at the end pops — a
+/// quick swell as it goes. Drawn as
 /// camera-facing quads in one MultiMesh, turned about the view for the twirl. Cosmetic only.
 /// </summary>
-public partial class StarSpecks : Node3D
+public partial class MagicParticles : Node3D
 {
-    struct Speck
+    struct Particle
     {
         public Vector3 Position, Velocity;
-        public float Life, MaxLife, Size, Angle, Spin;
+        public float Life, MaxLife, Size, Angle, Spin, Gravity, Drag;
         public Color Color;
         public bool Star;
     }
 
-    readonly Speck[] _specks;
+    readonly Particle[] _particles;
     int _count;
     MultiMesh _multimesh = null!;
     readonly Random _random = new(4242);
@@ -26,7 +27,7 @@ public partial class StarSpecks : Node3D
     /// <summary>The inks: white and a warm ecru.</summary>
     public static readonly Color White = new(1f, 0.99f, 0.96f), Ecru = new(0.94f, 0.88f, 0.74f);
 
-    public StarSpecks(int capacity) => _specks = new Speck[capacity];
+    public MagicParticles(int capacity) => _particles = new Particle[capacity];
 
     public float RandRange(float a, float b) => a + (b - a) * (float)_random.NextDouble();
 
@@ -37,8 +38,8 @@ public partial class StarSpecks : Node3D
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
             UseColors = true,
             UseCustomData = true,
-            Mesh = new QuadMesh { Size = Vector2.One, Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/star_speck.gdshader") } },
-            InstanceCount = _specks.Length,
+            Mesh = new QuadMesh { Size = Vector2.One, Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/magic_particle.gdshader") } },
+            InstanceCount = _particles.Length,
             VisibleInstanceCount = 0,
         };
         AddChild(new MultiMeshInstance3D
@@ -49,17 +50,22 @@ public partial class StarSpecks : Node3D
         });
     }
 
-    /// <summary>A speck here, drifting so, for this long, this big (metres across); a star or a cross, white or ecru, at random.</summary>
-    public void Emit(Vector3 at, Vector3 velocity, float life, float size)
+    /// <summary>
+    /// A particle here, drifting so, for this long, this big (metres across); a star or a cross, white or ecru, at random.
+    /// With gravity it falls (dust thrown up by a blast), its water drag slowing it as it goes.
+    /// </summary>
+    public void Emit(Vector3 at, Vector3 velocity, float life, float size, float gravity = 0f, float drag = 2.5f)
     {
-        if (_count >= _specks.Length) return;
-        _specks[_count++] = new Speck
+        if (_count >= _particles.Length) return;
+        _particles[_count++] = new Particle
         {
             Position = at,
             Velocity = velocity,
             Life = life,
             MaxLife = life,
             Size = size,
+            Gravity = gravity,
+            Drag = drag,
             Angle = RandRange(0f, Mathf.Tau),
             Spin = RandRange(4f, 9f) * (_random.NextDouble() < 0.5 ? -1f : 1f),
             Color = _random.NextDouble() < 0.5 ? White : Ecru,
@@ -74,14 +80,15 @@ public partial class StarSpecks : Node3D
         int i = 0;
         while (i < _count)
         {
-            ref var s = ref _specks[i];
+            ref var s = ref _particles[i];
             s.Life -= dt;
             if (s.Life <= 0f)
             {
-                _specks[i] = _specks[--_count];
+                _particles[i] = _particles[--_count];
                 continue;
             }
-            s.Velocity *= Mathf.Max(0f, 1f - 2.5f * dt);
+            s.Velocity *= Mathf.Max(0f, 1f - s.Drag * dt);
+            s.Velocity.Y -= s.Gravity * dt;
             s.Position += s.Velocity * dt;
             float t = 1f - s.Life / s.MaxLife;
             // The twirl, spinning down.

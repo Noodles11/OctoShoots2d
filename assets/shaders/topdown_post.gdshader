@@ -72,6 +72,10 @@ uniform int lens_count = 0;
 uniform vec4 swells[6];
 uniform vec4 swell_dirs[6];
 uniform int swell_count = 0;
+// Blasts' marks (CameraRig.AddBlur): where a burst of her light went off, a small round smear of the picture on her
+// plane — a zoom blur drawn in toward its middle — that fades: world x, z, age (0 → 1), radius (m).
+uniform vec4 blurs[4];
+uniform int blur_count = 0;
 // Her light and the warm tint of her glow (HerColor.cs, data/clementine_color.cfg).
 global uniform vec3 her_light;
 global uniform vec3 her_warm;
@@ -180,6 +184,25 @@ void fragment() {
 	float peak = open_deep ? 0.0 : smoothstep(peak_from, peak_from + peak_span, h);
 	lod += peak_blur * peak;
 	vec3 col = blurred(suv, lod);
+	// Blasts' marks: inside each, the picture smeared in toward its middle (a zoom blur), strongest at its heart,
+	// softening out to its rim and fading as it ages — painterly, never a bright disc.
+	if (blur_count > 0) {
+		vec4 bm = INV_PROJECTION_MATRIX * vec4(uv * 2.0 - 1.0, 0.5, 1.0);
+		vec3 bray = normalize((INV_VIEW_MATRIX * vec4(bm.xyz / bm.w, 0.0)).xyz);
+		vec3 bcam = INV_VIEW_MATRIX[3].xyz;
+		vec3 bp = bcam + bray * ((swim_level - bcam.y) / min(bray.y, -1e-3));
+		for (int i = 0; i < blur_count; i++) {
+			vec4 b = blurs[i];
+			float r = distance(bp.xz, b.xy);
+			float k = (1.0 - smoothstep(b.w * 0.35, b.w, r)) * (1.0 - b.z) * (1.0 - b.z);
+			if (k < 0.002) continue;
+			vec4 c = PROJECTION_MATRIX * VIEW_MATRIX * vec4(b.x, swim_level, b.y, 1.0);
+			vec2 cuv = c.xy / c.w * 0.5 + 0.5;
+			vec3 acc = col;
+			for (int t = 1; t <= 6; t++) acc += blurred(mix(suv, cuv, float(t) / 6.0 * 0.18 * k), lod + 0.8 * k);
+			col = mix(col, acc / 7.0, clamp(k * 1.6, 0.0, 1.0));
+		}
+	}
 
 	// Everything is seen through water: reds fade and a turquoise in-scatter rises with the water between the sea
 	// surface and what this pixel shows (rock tops near the surface keep more of their colour).

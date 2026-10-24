@@ -17,7 +17,7 @@ public sealed class CorruptionTexture
 {
     const int N = CorruptionField.N;
     /// <summary>How often it uploads; how fast a cleansed cell's gold (and the last drops lit with it) fades, and how fast it lights.</summary>
-    const float Interval = 1f / 30f, BurnFade = 2.55f, BurnGain = 4f;
+    const float Interval = 1f / 30f, BurnFade = 6f, BurnGain = 4f;
 
     readonly Image _image;
     readonly byte[] _bytes = new byte[N * N * 2];

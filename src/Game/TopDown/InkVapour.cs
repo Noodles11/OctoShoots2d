@@ -7,7 +7,7 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// Corruption going as it is cleared (docs/CORRUPTION.md). Where her light cleanses the floor, it goes in a twinkle:
-/// tiny fine-tip stars, "+" and "*" in white and ecru (StarSpecks), popping up off the cleansed ground, twirling and
+/// tiny fine-tip stars, "+" and "*" in white and ecru (MagicParticles), popping up off the cleansed ground, twirling and
 /// popping out, as a painted comic marks a sparkle. When her own meter drains (a light spring, or any healing), they
 /// twinkle off her the same way. A corrupted creature freed pops like a water balloon (<see cref="Pop"/>): the ink it
 /// was made of showers out in droplets glowing in its colour, and goes off the spray in the same stars. Cosmetic only;
@@ -16,20 +16,20 @@ namespace OctoShoots.Game.TopDown;
 public partial class InkVapour : Node3D
 {
     /// <summary>At most this many puffs a frame from the floor, and how many per unit of density cleansed.</summary>
-    const int FloorBudget = 48;
-    const float PerDrop = 0.9f;
+    const int FloorBudget = 120;
+    const float PerDrop = 2.5f;
 
     static readonly Color Ink = new(0.05f, 0.02f, 0.09f, 0.75f);
 
     FxParticles _ink = null!, _glints = null!;
-    StarSpecks _stars = null!;
+    MagicParticles _stars = null!;
     float _herOwed;
 
     public override void _Ready()
     {
         _ink = new FxParticles(1536, additive: false);
         _glints = new FxParticles(1024, additive: true);
-        _stars = new StarSpecks(1024);
+        _stars = new MagicParticles(1024);
         AddChild(_ink);
         AddChild(_glints);
         AddChild(_stars);
@@ -54,7 +54,7 @@ public partial class InkVapour : Node3D
             var c = CorruptionField.CellCentre(cell % CorruptionField.N, cell / CorruptionField.N);
             float floor = Mathf.Min(map.HeightAt(c), LevelMap.BlockHeight);
             var at = new Vector3(c.X + _ink.RandRange(-0.25f, 0.25f), floor + 0.05f, c.Y + _ink.RandRange(-0.25f, 0.25f));
-            Puff(at, _ink.RandRange(0.4f, 1.1f), 1f);
+            Puff(at, _ink.RandRange(0.6f, 1.4f), 1f);
         }
         // Each upload's drops are lifted once.
         texture.Drops.Clear();
@@ -106,7 +106,7 @@ public partial class InkVapour : Node3D
 
     void Puff(Vector3 at, float rise, float scale) => Puff(at, new Vector3(_ink.RandRange(-0.35f, 0.35f), rise, _ink.RandRange(-0.35f, 0.35f)), scale);
 
-    /// <summary>A star speck popping up here, drifting so: brief (a third of a second to two thirds), small.</summary>
+    /// <summary>A magic particle popping up here, drifting so: brief (a third of a second to two thirds), small.</summary>
     void Puff(Vector3 at, Vector3 drift, float scale) =>
         _stars.Emit(at + Vector3.Up * 0.1f, drift * 0.6f, _stars.RandRange(0.35f, 0.6f), _stars.RandRange(0.12f, 0.24f) * scale);
 

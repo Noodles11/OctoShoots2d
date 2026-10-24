@@ -141,6 +141,43 @@ public partial class CameraRig : Node3D
 
     readonly float[] _swells = new float[OctoShoots.Game.Fx.WaterSwells.Max * 4], _swellDirs = new float[OctoShoots.Game.Fx.WaterSwells.Max * 4];
 
+    /// <summary>
+    /// A blast's mark (topdown_post's blurs): a small round smear of the picture on her plane at this point, this wide,
+    /// fading over BlurSeconds. At most four at once (the oldest gives way).
+    /// </summary>
+    public void AddBlur(System.Numerics.Vector2 at, float radius)
+    {
+        int i = _blurCount < MaxBlurs ? _blurCount++ : OldestBlur();
+        _blurSpots[i] = new Vector4(at.X, at.Y, 0f, radius);
+    }
+
+    int OldestBlur()
+    {
+        int o = 0;
+        for (int i = 1; i < _blurCount; i++)
+            if (_blurSpots[i].Z > _blurSpots[o].Z) o = i;
+        return o;
+    }
+
+    void TickBlurs(float dt)
+    {
+        for (int i = _blurCount - 1; i >= 0; i--)
+        {
+            _blurSpots[i].Z += dt / BlurSeconds;
+            if (_blurSpots[i].Z >= 1f) _blurSpots[i] = _blurSpots[--_blurCount];
+        }
+        for (int i = 0; i < _blurCount; i++)
+            for (int c = 0; c < 4; c++) _blurFlat[i * 4 + c] = _blurSpots[i][c];
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("blurs"), _blurFlat);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("blur_count"), _blurCount);
+    }
+
+    const int MaxBlurs = 4;
+    const float BlurSeconds = 0.9f;
+    readonly Vector4[] _blurSpots = new Vector4[MaxBlurs];
+    readonly float[] _blurFlat = new float[MaxBlurs * 4];
+    int _blurCount;
+
     /// <summary>A big-merge kill: the screen's edges lift toward white for 60 ms.</summary>
     public void EdgeFlash() => _edgeFlash = 1f;
     float _edgeFlash;
@@ -173,6 +210,7 @@ public partial class CameraRig : Node3D
     /// </summary>
     public void Track(Vector3 focus, float dt, bool snap = false, Vector3 look = default)
     {
+        TickBlurs(dt);
         var aim = focus + look;
         if (snap || !_snapped)
         {

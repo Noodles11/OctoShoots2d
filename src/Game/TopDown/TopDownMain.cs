@@ -1389,6 +1389,9 @@ public partial class TopDownMain : Node3D
                     Say(_world.Calm ? $"Level {(int)e.Size}!" : $"Level {(int)e.Size}! Your skill point waits until the fight is over.");
                     _sfx.PlayPitched("synergy", 1.25f, -6f);
                 }
+                // Any explosion (hers, a creature's, the reef's): the screen shakes and the controller kicks, by its size and
+                // how near her it went off.
+                if (Blast(e) is float power) Explode(e.Position, power);
                 // Her light struck something: flares burst round its outline (hits by a shot carry its direction).
                 if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit && e.Direction != default)
                 {
@@ -1414,6 +1417,8 @@ public partial class TopDownMain : Node3D
                 {
                     _sfx.PlayPitched("merge", 1.6f, -4f);
                     _combat.ShatterPearl(BellView.RitualAt(_bell.GlobalPosition, PearlRitual.ShatterAt));
+                    // Its last: a burst of magic particles out from her.
+                    _combat.MagicBurst(_bell.GlobalPosition);
                     _haptics.Pulse(0.45f, 0.2f, 0.12f);
                 }
                 else if (e.Type == PlaneEventType.Cavitation)
@@ -1501,7 +1506,8 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.LightBurst)
                 {
                     _combat.LightBurst(e.Position, e.Size);
-                    _camera.Shake(0.12f);
+                    // Its mark: a small round smear of the picture where it went off.
+                    _camera.AddBlur(e.Position, Mathf.Clamp(e.Size * 0.75f, 1f, 2.4f));
                 }
                 else if (e.Type == PlaneEventType.ActiveUsed) _combat.ActiveUsed(_world);
                 else if (e.Type == PlaneEventType.ShieldBlocked) _bell.ShieldRipple();
@@ -2062,7 +2068,8 @@ public partial class TopDownMain : Node3D
                 _sfx.PlayPitched("curse_enter", 1.5f, -12f);
                 break;
             case PlaneEventType.DenCleared:
-                // A den's battle is over: a bell, a felt lift, the nave's corruption gone and its payout out.
+                // A den's battle is over: a bell, a felt lift, its payout out, and its cleansing wave running out over the nave
+                // (unseen but in the corruption going up in magic particles as it passes).
                 _sfx.PlayPitched("bell_ring", 1.15f, -6f);
                 _haptics.Pulse(0.4f, 0.3f, 0.25f);
                 _camera.Shake(0.2f);
@@ -2408,6 +2415,39 @@ public partial class TopDownMain : Node3D
         foreach (var w in _world.Inkwardens) Near(w.Position, WardenTuning.Radius);
         foreach (var t in _world.Thumpsquirts) Near(t.Position, ThumpTuning.Radius);
         return radius;
+    }
+
+    /// <summary>How big an explosion an event is (0..1), or null when it is none.</summary>
+    static float? Blast(PlaneEvent e) => e.Type switch
+    {
+        // Hers: the Starburst Gland's burst (by its reach) and the Pistol Shrimp's bang.
+        PlaneEventType.LightBurst => Mathf.Clamp(e.Size / 3f, 0.35f, 1f),
+        PlaneEventType.Cavitation => 0.55f,
+        // The creatures': a Blotter's bomb, a creature of ink bursting (a prime far more than a murkling), a Blightroot
+        // bursting or slamming down, a Thumpsquirt bursting, a boss's ink sac.
+        PlaneEventType.BombSplash => 0.5f,
+        PlaneEventType.BlotterBurst => 0.7f,
+        PlaneEventType.MurklingBurst => e.Direction.X > 0.5f ? 0.8f : 0.25f,
+        PlaneEventType.BlightrootBurst => 0.8f,
+        PlaneEventType.BlightrootSlam => 0.6f,
+        PlaneEventType.ThumpBurst => 0.6f,
+        PlaneEventType.BossSacBurst => 0.6f,
+        PlaneEventType.MurkShotBurst => 0.2f,
+        // The reef's: a geyser bursting.
+        PlaneEventType.GeyserSpray => 0.45f,
+        _ => null,
+    };
+
+    /// <summary>
+    /// An explosion here, this big: the screen shakes and the controller kicks — fully within 5 m of her, fading out by
+    /// 24 m (it is felt through the water, less the farther off).
+    /// </summary>
+    void Explode(System.Numerics.Vector2 at, float power)
+    {
+        float near = 1f - Mathf.SmoothStep(5f, 24f, System.Numerics.Vector2.Distance(at, _world.Player.Position));
+        if (near <= 0.02f) return;
+        _camera.Shake(Mathf.Min((0.1f + 0.35f * power) * near, 0.5f));
+        _haptics.Pulse((0.25f + 0.55f * power) * near, (0.15f + 0.7f * power) * near, 0.1f + 0.2f * power);
     }
 
     PlaneInput ReadInput()

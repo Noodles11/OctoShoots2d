@@ -93,6 +93,8 @@ public partial class CombatView : Node3D
         AddChild(_trails);
         _fireworks = new FxParticles(1024, additive: true);
         AddChild(_fireworks);
+        _dust = new MagicParticles(512);
+        AddChild(_dust);
         _afterimages = new FxParticles(1536, additive: true);
         AddChild(_afterimages);
         _wake = new FxParticles(400, additive: false, FxParticles.Bubble());
@@ -296,6 +298,7 @@ public partial class CombatView : Node3D
         foreach (var h in _halos) h.QueueFree();
         _trails.Clear();
         _fireworks.Clear();
+        _dust.Clear();
         foreach (var q in _pearls) q.QueueFree();
         _shots.Clear();
         _halos.Clear();
@@ -482,50 +485,44 @@ void fragment() {
     ShaderMaterial _sparkMat = null!;
     LightTrails _trails = null!;
     FxParticles _fireworks = null!;
+    /// <summary>The magic particles a light burst throws up (falling back like dust) and a pearl's absorbing bursts out.</summary>
+    MagicParticles _dust = null!;
     /// <summary>The light her shots shed as they fly (afterimage bursts), and Pistol Shrimp's cavitation bubbles in their wake.</summary>
     FxParticles _afterimages = null!, _wake = null!;
     /// <summary>Per shot: when it next sheds a burst of light, and how many bounces it had left (a bounce glints).</summary>
     Dictionary<PlaneShot, (float Next, int Bounces)> _shed = new(), _shedNext = new();
     readonly RandomNumberGenerator _rng = new();
 
-    const float BlastSeconds = 0.65f;
-
-    sealed class BlastFx
+    /// <summary>
+    /// The pearl's absorbing ends (it shatters into her): a burst of magic particles flung out from her all round, up a
+    /// little, slowing in the water, twirling, and popping out.
+    /// </summary>
+    public void MagicBurst(Vector3 at)
     {
-        public Node3D Node = null!;
-        public MeshInstance3D Cloud = null!;
-        public MeshInstance3D[] Puffs = null!;
-        public Vector3[] PuffDirs = null!;
-        public StandardMaterial3D Material = null!;
-        public float Radius, Age;
+        for (int i = 0; i < 44; i++)
+        {
+            float a = i * Mathf.Tau / 44f + _dust.RandRange(-0.08f, 0.08f);
+            var dir = new Vector3(Mathf.Cos(a), _dust.RandRange(-0.15f, 0.45f), Mathf.Sin(a)).Normalized();
+            _dust.Emit(at + dir * 0.4f, dir * _dust.RandRange(3f, 6.5f), _dust.RandRange(0.7f, 1.15f), _dust.RandRange(0.12f, 0.22f), drag: 2.2f);
+        }
     }
 
-    readonly List<BlastFx> _blasts = new();
-
     /// <summary>
-    /// Starburst Gland: a shot bursts into light here. A white-gold flash swells to the burst's reach and fades, sparks
-    /// fly out like a big firework, and a bloom of light lies on the water a moment.
+    /// Starburst Gland: a burst of her light, painterly rather than a bright disc. A small round smear of the picture on
+    /// her plane where it went off (CameraRig.AddBlur, which TopDownMain lays), and a spray of magic particles — "+"
+    /// and "*" in white and ecru — thrown up and out from it, twirling, then falling back like dust in the water.
     /// </summary>
     public void LightBurst(System.Numerics.Vector2 at, float radius)
     {
-        AddBloom(at, 1.8f, 0.9f, Mathf.Min(radius * 1.2f, 3f));
-        Firework(at, 10, System.Numerics.Vector2.Zero);
-        var node = new Node3D { Position = new Vector3(at.X, LevelMap.SwimBand, at.Y) };
-        AddChild(node);
-        var material = new StandardMaterial3D
+        var from = new Vector3(at.X, LevelMap.SwimBand, at.Y);
+        int n = Mathf.Clamp((int)(16f + 8f * radius), 16, 40);
+        for (int i = 0; i < n; i++)
         {
-            AlbedoColor = HerColor.Light.Lerp(Colors.White, 0.3f) with { A = 0.55f },
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            BlendMode = BaseMaterial3D.BlendModeEnum.Add,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            EmissionEnabled = true,
-            Emission = HerColor.Light,
-            EmissionEnergyMultiplier = 1.6f,
-            RimEnabled = true,
-        };
-        var cloud = new MeshInstance3D { Mesh = _unitSphere, MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-        node.AddChild(cloud);
-        _blasts.Add(new BlastFx { Node = node, Cloud = cloud, Puffs = System.Array.Empty<MeshInstance3D>(), PuffDirs = System.Array.Empty<Vector3>(), Material = material, Radius = radius });
+            float a = _dust.RandRange(0f, Mathf.Tau);
+            var outward = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            var v = outward * _dust.RandRange(1.5f, 3.5f) * (0.6f + 0.25f * radius) + Vector3.Up * _dust.RandRange(2.5f, 5f);
+            _dust.Emit(from + outward * 0.2f, v, _dust.RandRange(0.8f, 1.3f), _dust.RandRange(0.08f, 0.16f), gravity: 7f, drag: 1.4f);
+        }
     }
 
     const float SongSeconds = 1.6f;
@@ -992,7 +989,11 @@ void fragment() {
             _afterimages.Tick(dt, cam.GlobalBasis);
             _wake.Tick(dt, cam.GlobalBasis);
         }
-        if (GetViewport().GetCamera3D() is { } camera) _fireworks.Tick(dt, camera.GlobalBasis);
+        if (GetViewport().GetCamera3D() is { } camera)
+        {
+            _fireworks.Tick(dt, camera.GlobalBasis);
+            _dust.Tick(dt, camera.GlobalBasis);
+        }
 
         // Popping bubbles: the tear opens from the struck point and sweeps the film away; droplets break off the rim
         // as it passes and fly on, shrinking and fading.
@@ -1024,26 +1025,6 @@ void fragment() {
                 pop.Drops[d].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), 1f - k * k);
                 if (pop.Light > 0f) pop.Drops[d].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), Mathf.Max(0f, 1f - pop.Age / (FlareSeconds * 2f)));
             }
-        }
-
-        // Light bursts: the flash swells out to its reach and fades.
-        for (int i = _blasts.Count - 1; i >= 0; i--)
-        {
-            var blast = _blasts[i];
-            blast.Age += dt;
-            float k = blast.Age / BlastSeconds;
-            if (k >= 1f)
-            {
-                blast.Node.QueueFree();
-                _blasts.RemoveAt(i);
-                continue;
-            }
-            float grow = 1f - (1f - k) * (1f - k) * (1f - k);
-            // A flash: quick to swell, white-gold at first and warming as it fades.
-            blast.Cloud.Scale = new Vector3(1f, 0.6f, 1f) * blast.Radius * (0.3f + 0.7f * grow);
-            float fade = (1f - k) * (1f - k);
-            blast.Material.AlbedoColor = new Color(1f, 0.92f - 0.15f * k, 0.7f - 0.3f * k, 0.55f * fade);
-            blast.Material.EmissionEnergyMultiplier = 1.6f * fade;
         }
 
         // Shockwaves: the ring races out (fast, then easing) and thins; the flash is gone in a blink.
@@ -1110,9 +1091,11 @@ void fragment() {
             _pearls[i].Scale = Vector3.One;
             float fall = Mathf.Clamp((_time - _pearlBorn[i]) / PearlFall, 0f, 1f);
             float drop = PearlFallHeight * (1f - fall) * (1f - fall);
-            // A clam room's pearl hangs still (breathing a hair); others float and bob.
+            // A clam room's pearl lies still on the clam's lower valve; others float and bob.
             bool resting = world.Map.Pois.Exists(q => q.Kind == PoiKind.TreasureCave && q.Position == pearl.Position);
-            float y = resting ? ClamRoomView.RestHeight + 0.015f * Mathf.Sin(_time * 1.3f + i) : LevelMap.SwimBand + 0.25f * Mathf.Sin(_time * 1.6f + i);
+            float y = resting ? ClamRoomView.RestHeight : LevelMap.SwimBand + 0.25f * Mathf.Sin(_time * 1.6f + i);
+            // In its clam its light is shadowed: the shell keeps it off what lies behind.
+            _pearlLooks[i].Light.ShadowEnabled = resting && OctoShoots.Game.Settings.ViewOptions.Shadows;
             _pearls[i].Position = new Vector3(pearl.Position.X, y + drop, pearl.Position.Y);
             _pearls[i].Rotation = new Vector3(0f, _time * 0.7f, 0f);
         }
