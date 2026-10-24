@@ -918,6 +918,8 @@ public partial class TopDownMain : Node3D
         string where = _id.Level == 1 ? $"{ReefLook.For(_id.Depth).Name} · {_id}" : _id.ToString();
         string title = _map.Template is { Name.Length: > 0 } template ? template.Name : _id.Level == 1 ? ReefLook.For(_id.Depth).Name : $"Level {_id.Level}";
         _hud.ShowTitle(title, where);
+        // Heard through deeper water: more muffled.
+        _sfx.SetDepth(_id.ShownDepth);
         _fullMap.Caption = $"{where} · {title}";
         GD.Print($"Top-down level {_seed} {_id}: attempt {_map.Attempt + 1}, {ms} ms, {_map.Pois.Count} POIs{(_map.HasBoss ? ", boss" : "")}, {_map.Canopies.Count} canopy pieces, {_map.Decor.Count} decor");
         _belowTask = Shape(LevelPlan.NextOf(_seed, _id), background: true);
@@ -1498,6 +1500,8 @@ public partial class TopDownMain : Node3D
                 else if (e.Type == PlaneEventType.Shot)
                 {
                     _bell.Spend(e.Size);
+                    // Lightning under water: a muffled crackle and a sizzle of bubbles, a touch louder for a stronger volley.
+                    _sfx.PlayZap(Mathf.Clamp(-10f + 4f * Mathf.Log(Mathf.Max(_world.LastVolleyDamage / PlaneCombatTuning.ShotDamage, 0.5f)), -14f, -3f));
                     ShotKick(_world.LastVolleyDamage / PlaneCombatTuning.ShotDamage);
                 }
                 else if (e.Type is PlaneEventType.MobHit or PlaneEventType.BossHit) _damage.Show(e);
@@ -2420,8 +2424,9 @@ public partial class TopDownMain : Node3D
     /// <summary>How big an explosion an event is (0..1), or null when it is none.</summary>
     static float? Blast(PlaneEvent e) => e.Type switch
     {
-        // Hers: the Starburst Gland's burst (by its reach) and the Pistol Shrimp's bang.
-        PlaneEventType.LightBurst => Mathf.Clamp(e.Size / 3f, 0.35f, 1f),
+        // Hers: the Starburst Gland's burst (it comes with nearly every shot, so only a subtle tremor) and the Pistol
+        // Shrimp's bang.
+        PlaneEventType.LightBurst => 0.06f,
         PlaneEventType.Cavitation => 0.55f,
         // The creatures': a Blotter's bomb, a creature of ink bursting (a prime far more than a murkling), a Blightroot
         // bursting or slamming down, a Thumpsquirt bursting, a boss's ink sac.
@@ -2446,8 +2451,8 @@ public partial class TopDownMain : Node3D
     {
         float near = 1f - Mathf.SmoothStep(5f, 24f, System.Numerics.Vector2.Distance(at, _world.Player.Position));
         if (near <= 0.02f) return;
-        _camera.Shake(Mathf.Min((0.1f + 0.35f * power) * near, 0.5f));
-        _haptics.Pulse((0.25f + 0.55f * power) * near, (0.15f + 0.7f * power) * near, 0.1f + 0.2f * power);
+        _camera.Shake(Mathf.Min((0.03f + 0.42f * power) * near, 0.5f));
+        _haptics.Pulse((0.1f + 0.7f * power) * near, (0.05f + 0.8f * power) * near, 0.08f + 0.22f * power);
     }
 
     PlaneInput ReadInput()

@@ -4,10 +4,25 @@ using Godot;
 
 namespace OctoShoots.Game.Fx;
 
-/// <summary>Synth-style placeholder sounds generated at startup, played flat or positionally.</summary>
+/// <summary>
+/// The game's sounds: synth-style placeholders generated at startup, and recorded ones (audio/sfx), played flat or
+/// positionally. All of them go through the Sfx bus, heard as through water: a low-pass filter takes the treble off,
+/// more the deeper she is (SetDepth). Her attacks are lightning under water (PlayZap): a short, sharp electric crackle
+/// muffled by the water, and a sizzle of bubbles after it.
+/// </summary>
 public partial class Sfx : Node
 {
     const int Rate = 44100;
+    const string Bus = "Sfx";
+    /// <summary>The water's low-pass: its cutoff in the Shallows and at the deepest (Hz).</summary>
+    const float ShallowCutoff = 7000f, DeepCutoff = 1500f;
+    /// <summary>A zap: how much of the crackle is heard (s), and its bubble tail's delay and length (s).</summary>
+    const float ZapSeconds = 0.26f, TailDelay = 0.05f, TailSeconds = 0.42f;
+
+    AudioEffectLowPassFilter _water = null!;
+    AudioStream? _discharge, _bubble;
+    readonly List<AudioStreamPlayer> _zaps = new(), _tails = new();
+    int _nextZap, _nextTail;
 
     readonly Dictionary<string, AudioStreamWav> _sounds = new();
     readonly List<AudioStreamPlayer> _flat = new();
@@ -17,6 +32,27 @@ public partial class Sfx : Node
 
     public override void _Ready()
     {
+        // The water's bus: everything heard muffled by it.
+        if (AudioServer.GetBusIndex(Bus) == -1)
+        {
+            AudioServer.AddBus();
+            int idx = AudioServer.BusCount - 1;
+            AudioServer.SetBusName(idx, Bus);
+            AudioServer.SetBusSend(idx, "Master");
+            AudioServer.AddBusEffect(idx, new AudioEffectLowPassFilter { CutoffHz = ShallowCutoff, Resonance = 0.6f });
+        }
+        _water = (AudioEffectLowPassFilter)AudioServer.GetBusEffect(AudioServer.GetBusIndex(Bus), 0);
+        _discharge = ResourceLoader.Exists("res://audio/sfx/electric_discharge.mp3") ? GD.Load<AudioStream>("res://audio/sfx/electric_discharge.mp3") : null;
+        _bubble = ResourceLoader.Exists("res://audio/sfx/big_bubble.mp3") ? GD.Load<AudioStream>("res://audio/sfx/big_bubble.mp3") : null;
+        for (int i = 0; i < 4; i++)
+        {
+            var z = new AudioStreamPlayer { Bus = Bus, Stream = _discharge };
+            AddChild(z);
+            _zaps.Add(z);
+            var t = new AudioStreamPlayer { Bus = Bus, Stream = _bubble };
+            AddChild(t);
+            _tails.Add(t);
+        }
         _sounds["shot"] = Make(0.11f, (t, n) => Sweep(t, 0.11f, 620f, 170f) * Env(t, 0.004f, 0.11f) * 0.5f + n * Env(t, 0.002f, 0.05f) * 0.25f);
         _sounds["hit"] = Make(0.16f, (t, n) => Sweep(t, 0.16f, 320f, 80f) * Env(t, 0.002f, 0.16f) * 0.7f + n * Env(t, 0.001f, 0.06f) * 0.5f);
         _sounds["splat"] = Make(0.12f, (t, n) => n * Env(t, 0.002f, 0.12f) * 0.3f);
@@ -91,16 +127,64 @@ public partial class Sfx : Node
 
         for (int i = 0; i < 10; i++)
         {
-            var p = new AudioStreamPlayer();
+            var p = new AudioStreamPlayer { Bus = Bus };
             AddChild(p);
             _flat.Add(p);
         }
         for (int i = 0; i < 14; i++)
         {
-            var p = new AudioStreamPlayer3D { MaxDistance = 45f, UnitSize = 6f, AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.InverseDistance };
+            var p = new AudioStreamPlayer3D { Bus = Bus, MaxDistance = 45f, UnitSize = 6f, AttenuationModel = AudioStreamPlayer3D.AttenuationModelEnum.InverseDistance };
             AddChild(p);
             _spatial.Add(p);
         }
+    }
+
+    /// <summary>How deep she is (as shown, 0 the Shallows … 5 the Abyss): the deeper, the more the water muffles what she hears.</summary>
+    public void SetDepth(int depth)
+    {
+        if (_water is null) return;
+        float k = Mathf.Clamp(depth / 5f, 0f, 1f);
+        // Falling off geometrically, as the ear hears it.
+        _water.CutoffHz = ShallowCutoff * Mathf.Pow(DeepCutoff / ShallowCutoff, k);
+    }
+
+    /// <summary>
+    /// Her light shot out: lightning under water — a short piece of the electric crackle (from a random point in it, at
+    /// a pitch a little apart each time, cut off after ZapSeconds), and a moment after, a quieter sizzle of bubbles
+    /// trailing off. Louder for a stronger volley (volumeDb).
+    /// </summary>
+    public void PlayZap(float volumeDb = 0f)
+    {
+        if (_discharge is not null)
+        {
+            var z = _zaps[_nextZap];
+            _nextZap = (_nextZap + 1) % _zaps.Count;
+            z.VolumeDb = volumeDb;
+            z.PitchScale = 0.9f + (float)_random.NextDouble() * 0.3f;
+            z.Play((float)_random.NextDouble() * (float)Mathf.Max(0.0, _discharge.GetLength() - ZapSeconds - 0.05));
+            Fade(z, ZapSeconds);
+        }
+        if (_bubble is not null)
+        {
+            var t = _tails[_nextTail];
+            _nextTail = (_nextTail + 1) % _tails.Count;
+            t.VolumeDb = volumeDb - 9f;
+            t.PitchScale = 0.85f + (float)_random.NextDouble() * 0.4f;
+            var tween = CreateTween();
+            tween.TweenInterval(TailDelay);
+            tween.TweenCallback(Callable.From(() => t.Play()));
+            tween.TweenInterval(0.01f);
+            tween.TweenCallback(Callable.From(() => Fade(t, TailSeconds)));
+        }
+    }
+
+    /// <summary>A player's sound eased out to silence over this long, then stopped.</summary>
+    void Fade(AudioStreamPlayer p, float seconds)
+    {
+        float from = p.VolumeDb;
+        var tween = CreateTween();
+        tween.TweenProperty(p, "volume_db", from - 40f, seconds).SetEase(Tween.EaseType.In).SetTrans(Tween.TransitionType.Quad);
+        tween.TweenCallback(Callable.From(p.Stop));
     }
 
     public void Play(string name, float volumeDb = 0f, float pitchJitter = 0.06f)

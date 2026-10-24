@@ -1180,7 +1180,14 @@ The FP staging ("look up through the surface") is replaced:
 - SFX pitch lowers with depth (inherited presentation shift); muffled glass
   thumps from Depth 4+; filter-intake hum in the Tank.
 - Music: post-v1 (inherited decision). The soundtrack is off for now (`MusicManager.SoundtrackOn`): nothing plays.
-- **Every explosion is felt** (`TopDownMain.Explode`): hers (a Starburst burst, by its reach; a Pistol Shrimp's bang),
+- **Heard through water** (`Sfx`): every game sound goes through the Sfx bus, whose low-pass filter takes the treble off
+  as water does — 7 kHz in the Shallows, falling off to 1.5 kHz at the deepest (`SetDepth`, by the depth shown).
+- **Her attacks are lightning under water** (`Sfx.PlayZap`, on every volley): a short, sharp electric crackle — 0.26 s
+  of the discharge recording (audio/sfx/electric_discharge.mp3), from a random point in it, its pitch a little apart
+  each time — muffled by the water, and 0.05 s after it a quieter sizzle of bubbles (audio/sfx/big_bubble.mp3) trailing
+  off over 0.42 s. A stronger volley is a little louder.
+- **Every explosion is felt** (`TopDownMain.Explode`): hers (a Starburst burst — only a subtle tremor, since it comes
+  with nearly every shot; a Pistol Shrimp's bang),
   the creatures' (a Blotter's bomb, a creature of ink bursting — a prime far more than a murkling — a Blightroot bursting
   or slamming down, a Thumpsquirt bursting, a boss's ink sac, a burst throw) and the reef's (a geyser): the screen
   shakes and the controller kicks by its size, fully within 5 m of her and fading out by 24 m.
