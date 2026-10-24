@@ -73,6 +73,13 @@ public partial class SettingsCard : PanelContainer
         });
         box.AddChild(Row("Camera zoom", "How close the camera follows Clementine. Also in the pause menu.", zoom));
 
+        var clock = Toggle(_view.ShowClock, on =>
+        {
+            _view.ShowClock = on;
+            Save();
+        });
+        box.AddChild(Row("Run clock", "The run's time at the top left of the screen. Off, it shows in the pause menu and on the map.", clock));
+
         var shake = Toggle(_view.CameraShake, on =>
         {
             _view.CameraShake = on;

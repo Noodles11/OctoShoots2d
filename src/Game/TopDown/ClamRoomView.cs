@@ -32,6 +32,8 @@ public partial class ClamRoomView : Node3D
     }
 
     const int Motes = 80;
+    /// <summary>The room's light (over the pearl) and the light spilling out of its mouth, at Depth 1 (brighter deeper).</summary>
+    const float InnerEnergy = 0.45f, SpillEnergy = 2.8f;
     /// <summary>Where the pearl hangs in the room: at the swim level.</summary>
     public const float RestHeight = LevelMap.SwimBand + 0.02f;
 
@@ -114,11 +116,12 @@ public partial class ClamRoomView : Node3D
         // The light: filling the room, and spilling out of its mouth into the canyon.
         // The pearl's light: just over it, filling the room in its colour.
         // Shadowed: the room's flora and motes throw shadows over the nacre.
-        var inner = new OmniLight3D { LightColor = Gold, LightEnergy = 1.2f * bright, OmniRange = 10f, OmniAttenuation = 0.7f, ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, OmniShadowMode = OmniLight3D.ShadowMode.DualParaboloid, ShadowBias = 0.08f, ShadowBlur = 1.5f, Position = new Vector3(at.X, RestHeight + 1.4f, at.Y) };
+        // Low, so the pearl's patterned light (the nacre's) is what shows on the shell, not a white wash.
+        var inner = new OmniLight3D { LightColor = Gold, LightEnergy = InnerEnergy * bright, OmniRange = 10f, OmniAttenuation = 0.7f, ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, OmniShadowMode = OmniLight3D.ShadowMode.DualParaboloid, ShadowBias = 0.08f, ShadowBlur = 1.5f, Position = new Vector3(at.X, RestHeight + 2.6f, at.Y) };
         root.AddChild(inner);
-        // The spill reaches well out over the path, so the room shows from the canyon.
-        var mouth = cave.Mouth + cave.Facing * 4.5f;
-        var spill = new OmniLight3D { LightColor = Gold, LightEnergy = 3.6f * bright, OmniRange = 17f, OmniAttenuation = 1.1f, ShadowEnabled = false, Position = new Vector3(mouth.X, LevelMap.SwimBand + 3f, mouth.Y) };
+        // The spill reaches well out over the path, so the room shows from the canyon; it stands out there, off the shell.
+        var mouth = cave.Mouth + cave.Facing * 7f;
+        var spill = new OmniLight3D { LightColor = Gold, LightEnergy = SpillEnergy * bright, OmniRange = 17f, OmniAttenuation = 1.1f, ShadowEnabled = false, Position = new Vector3(mouth.X, LevelMap.SwimBand + 3f, mouth.Y) };
         root.AddChild(spill);
         // A few motes drifting out of the mouth, catching the eye from the canyon.
         var moteMat = new StandardMaterial3D
@@ -154,7 +157,7 @@ public partial class ClamRoomView : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         root.AddChild(drift);
-        return new Room { Root = root, Sparks = sparks, Nacre = nacre, Inner = inner, Spill = spill, Drift = drift, At = at, Mouth = cave.Mouth + cave.Facing * 1.5f, Out = cave.Mouth + cave.Facing * 6f, Bright = bright };
+        return new Room { Root = root, Sparks = sparks, Nacre = nacre, Inner = inner, Spill = spill, Drift = drift, At = at, Mouth = cave.Mouth + cave.Facing * 3f, Out = cave.Mouth + cave.Facing * 7f, Bright = bright };
     }
 
     public void Sync(PlaneWorld world, float dt)
@@ -166,10 +169,11 @@ public partial class ClamRoomView : Node3D
             room.Gone = Mathf.MoveToward(room.Gone, waiting ? 0f : 1f, dt / 1.2f);
             room.Sparks.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("gone"), room.Gone);
             float k = 1f - room.Gone;
-            room.Inner.LightEnergy = 1.2f * room.Bright * k;
-            // The pearl's patterned light over the room, fading out once it is taken.
-            room.Nacre.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_strength"), 1.3f * room.Bright * k);
-            room.Spill.LightEnergy = 3.6f * room.Bright * k;
+            room.Inner.LightEnergy = InnerEnergy * room.Bright * k;
+            // The pearl's patterned light over the room, fading out once it is taken (no stronger in the deep: it would burn
+            // out the pattern; the spill and the haze are the deep's beacon).
+            room.Nacre.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_strength"), 1.3f * Mathf.Min(room.Bright, 1.2f) * k);
+            room.Spill.LightEnergy = SpillEnergy * room.Bright * k;
             room.Inner.Visible = room.Spill.Visible = k > 0.001f;
             room.Drift.Emitting = room.Gone < 0.5f;
         }
@@ -178,9 +182,10 @@ public partial class ClamRoomView : Node3D
         foreach (var room in _rooms)
         {
             float k = (1f - room.Gone) * room.Bright;
-            Glows.Add(new Vector4(room.At.X, room.At.Y, 5.5f, 0.55f * k));
+            // Faint over the room itself, so its haze does not veil the pattern on the shell.
+            Glows.Add(new Vector4(room.At.X, room.At.Y, 5.5f, 0.18f * k));
             // Its light pours out of the mouth into the canyon: a haze over the mouth, and a wider one out on the path.
-            Glows.Add(new Vector4(room.Mouth.X, room.Mouth.Y, 6.5f, 0.6f * k));
+            Glows.Add(new Vector4(room.Mouth.X, room.Mouth.Y, 5f, 0.6f * k));
             Glows.Add(new Vector4(room.Out.X, room.Out.Y, 9f, 0.32f * k));
             GlowColors.Add(room.Tint);
             GlowColors.Add(room.Tint);

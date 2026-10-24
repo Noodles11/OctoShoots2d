@@ -7,17 +7,19 @@ using OctoShoots.Game.Fx;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The light springs (docs/CORRUPTION.md): a pool of clear, luminous water on the floor with her emblem flowing under
-/// it, a soft column of light rising to her plane, sparkles drifting up, and an aqua-gold light on the rocks around.
-/// While she bathes it brightens, the emblem turns faster and the sparkles stream. Once spent (it has healed her and she
-/// has left it), the water, the column, the light and the sparkles fade away over SpentFade seconds and it is gone.
+/// The light springs (docs/CORRUPTION.md): her emblem in white light on the floor (the gonads and a circle, still),
+/// under a dome like a great jellyfish bell lying on the sand — a clear, faint force field, breathing — sparkles drifting
+/// up, and an aqua light on the rocks round it. While she bathes it brightens, a burst of holy light (god rays) blazes up
+/// from the emblem and fans out round her, and the sparkles stream (the screen trembles and the controller
+/// hums while it heals her: TopDownMain). Once spent (it has healed her and she has left it), all of it fades away over
+/// SpentFade seconds and it is gone.
 /// </summary>
 public partial class SpringView : Node3D
 {
     sealed class View
     {
         public required LightSpring Spring;
-        public required MeshInstance3D Pool, Column;
+        public required MeshInstance3D Pool, Column, Dome;
         public required OmniLight3D Light;
         public required float Floor;
         public float Bathe, Spark, Fade = 1f;
@@ -26,7 +28,11 @@ public partial class SpringView : Node3D
     const float SpentFade = 2.5f;
 
     readonly List<View> _views = new();
-    ShaderMaterial _pool = null!, _column = null!;
+    ShaderMaterial _pool = null!, _column = null!, _dome = null!;
+    ArrayMesh? _domeMesh;
+    /// <summary>The dome: how high it stands over the floor (her plane well inside it), and its margin's lappets.</summary>
+    const float DomeHeight = 2.6f;
+    const int Lappets = 16;
     FxParticles _sparkles = null!;
     LevelMap? _map;
 
@@ -34,6 +40,7 @@ public partial class SpringView : Node3D
     {
         _pool = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_spring.gdshader"), RenderPriority = 1 };
         _column = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/light_column.gdshader"), RenderPriority = 1 };
+        _dome = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/spring_dome.gdshader"), RenderPriority = 2 };
         _sparkles = new FxParticles(384, additive: true);
         AddChild(_sparkles);
     }
@@ -46,6 +53,7 @@ public partial class SpringView : Node3D
         {
             v.Pool.QueueFree();
             v.Column.QueueFree();
+            v.Dome.QueueFree();
             v.Light.QueueFree();
         }
         _views.Clear();
@@ -65,10 +73,11 @@ public partial class SpringView : Node3D
             Position = at + Vector3.Up * (floor + 0.06f),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
-        float height = LevelMap.SwimBand + 0.6f - floor;
+        // The holy light: a burst of rays up from the emblem, fanning out wide as it climbs, well past her plane.
+        float height = LevelMap.SwimBand + 5f - floor;
         var column = new MeshInstance3D
         {
-            Mesh = new CylinderMesh { TopRadius = r * 0.55f, BottomRadius = r * 0.85f, Height = height, RadialSegments = 24, Rings = 1, CapTop = false, CapBottom = false },
+            Mesh = new CylinderMesh { TopRadius = r * 2.3f, BottomRadius = r * 0.45f, Height = height, RadialSegments = 64, Rings = 1, CapTop = false, CapBottom = false },
             MaterialOverride = _column,
             Position = at + Vector3.Up * (floor + height * 0.5f),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -85,10 +94,50 @@ public partial class SpringView : Node3D
             ShadowBlur = 1.5f,
             Position = at + Vector3.Up * (floor + 1.2f),
         };
+        var dome = new MeshInstance3D
+        {
+            Mesh = _domeMesh ??= DomeMesh(r),
+            MaterialOverride = _dome,
+            Position = at + Vector3.Up * floor,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
         AddChild(pool);
         AddChild(column);
+        AddChild(dome);
         AddChild(light);
-        return new View { Spring = spring, Pool = pool, Column = column, Light = light, Floor = floor };
+        return new View { Spring = spring, Pool = pool, Column = column, Dome = dome, Light = light, Floor = floor };
+    }
+
+    /// <summary>
+    /// The dome: a jellyfish bell lying on the sand, as wide as the spring — a full, rounded crown easing down to a margin
+    /// of Lappets scallops on the floor. UV x from the apex (0) to the margin (1), y round it.
+    /// </summary>
+    static ArrayMesh DomeMesh(float radius)
+    {
+        const int rings = 22, segments = 96;
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        for (int i = 0; i <= rings; i++)
+            for (int j = 0; j <= segments; j++)
+            {
+                float u = i / (float)rings, a = j / (float)segments * Mathf.Tau;
+                float th = u * Mathf.Pi * 0.5f;
+                float scallop = 1f + 0.05f * Mathf.Pow(u, 6f) * Mathf.Cos(a * Lappets);
+                float rho = radius * Mathf.Pow(Mathf.Sin(th), 0.8f) * scallop;
+                float y = DomeHeight * Mathf.Pow(Mathf.Cos(th), 1.15f);
+                var n = new Vector3(Mathf.Cos(a) * Mathf.Sin(th) / radius, Mathf.Cos(th) / DomeHeight, Mathf.Sin(a) * Mathf.Sin(th) / radius).Normalized();
+                st.SetNormal(n);
+                st.SetUV(new Vector2(u, j / (float)segments));
+                st.AddVertex(new Vector3(Mathf.Cos(a) * rho, y, Mathf.Sin(a) * rho));
+            }
+        for (int i = 0; i < rings; i++)
+            for (int j = 0; j < segments; j++)
+            {
+                int k = i * (segments + 1) + j, k1 = k + 1, n0 = k + segments + 1, n1 = n0 + 1;
+                st.AddIndex(k); st.AddIndex(n0); st.AddIndex(k1);
+                st.AddIndex(k1); st.AddIndex(n0); st.AddIndex(n1);
+            }
+        return st.Commit();
     }
 
     public void Sync(float dt, Camera3D? camera)
@@ -97,16 +146,18 @@ public partial class SpringView : Node3D
         {
             if (v.Spring.Spent) v.Fade = Mathf.MoveToward(v.Fade, 0f, dt / SpentFade);
             bool shown = v.Fade > 0f;
-            v.Pool.Visible = v.Column.Visible = v.Light.Visible = shown;
+            v.Pool.Visible = v.Column.Visible = v.Dome.Visible = v.Light.Visible = shown;
             if (!shown) continue;
             // Fading, it eases out (slow at first, then gone).
             float k = v.Fade * v.Fade;
             v.Bathe = Mathf.MoveToward(v.Bathe, v.Spring.Bathing ? 1f : 0f, dt * 2.5f);
             v.Pool.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bathing"), v.Bathe);
             v.Column.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bathing"), v.Bathe);
+            v.Dome.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bathing"), v.Bathe);
             v.Pool.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), k);
             v.Column.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), k);
-            v.Light.LightEnergy = (1.4f + 1.6f * v.Bathe) * k;
+            v.Dome.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), k);
+            v.Light.LightEnergy = (1.4f + 3.2f * v.Bathe) * k;
             v.Light.LightColor = new Color(0.55f, 0.95f, 1f).Lerp(new Color(1f, 0.85f, 0.55f), 0.4f * v.Bathe);
             // Sparkles rise from the water: a few always, a stream while she bathes.
             v.Spark += dt * (5f + 30f * v.Bathe) * k;

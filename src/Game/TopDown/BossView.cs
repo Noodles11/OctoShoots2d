@@ -12,7 +12,7 @@ namespace OctoShoots.Game.TopDown;
 /// what every boss shares: the pearl (black and glinting while corrupted; white once freed, left where it sat), the
 /// crust's lumps on its back, the ink drip lifting off its mutation sites (gold in the freeing), its pulse rings, the
 /// sacs bursting, the freeing itself (the mutations melt, true colours flood back, the true body — smaller — moves off),
-/// and the arena: the shadow before it drops, the landing wave and sand puff, the snap's warning rim, the mud cloud.
+/// and the arena: the shadow before it drops, the landing wave and sand puff and the snap's warning rim.
 /// </summary>
 public partial class BossView : Node3D
 {
@@ -30,8 +30,6 @@ public partial class BossView : Node3D
     OctoShoots.Game.Fx.FxParticles _motes = null!, _drips = null!;
     readonly List<MeshInstance3D> _rings = new();
     bool _burst;
-    readonly ShaderMaterial[] _mud = new ShaderMaterial[4];
-    Node3D _mudRoot = null!;
     float _time, _drained = 1f, _snapSlam = 1f, _landedAt = -10f, _freedAt = -10f, _drip, _surge, _scale = 1f;
     BossStage _lastStage;
 
@@ -95,24 +93,6 @@ public partial class BossView : Node3D
         _snapRim = new MeshInstance3D { Mesh = new TorusMesh { InnerRadius = 0.96f, OuterRadius = 1f, Rings = 64, RingSegments = 4 }, MaterialOverride = _snapMat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         AddChild(_snapRim);
 
-        // The mud cloud: stacked layers of haze around the arena, the higher ones over the walls.
-        _mudRoot = new Node3D();
-        AddChild(_mudRoot);
-        var shader = GD.Load<Shader>("res://assets/shaders/mud_cloud.gdshader");
-        float[] heights = { 0.4f, 2.5f, 5.5f, 9.5f };
-        for (int i = 0; i < _mud.Length; i++)
-        {
-            _mud[i] = new ShaderMaterial { Shader = shader };
-            _mud[i].SetShaderParameter(OctoShoots.Game.Fx.SN.Of("layer"), (float)i);
-            _mudRoot.AddChild(new MeshInstance3D
-            {
-                // Far wider than the level (and its skirt), so no layer's edge is ever on screen.
-                Mesh = new PlaneMesh { Size = new Vector2(400f, 400f) },
-                MaterialOverride = _mud[i],
-                Position = new Vector3(0f, LevelMap.SwimBand + heights[i], 0f),
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            });
-        }
         Visible = false;
     }
 
@@ -221,14 +201,6 @@ public partial class BossView : Node3D
             BuildCrust(_rig, boss.Radius);
             _snapRim.Scale = new Vector3(boss.Radius + PlaneBossTuning.SnapReach, 0.05f, boss.Radius + PlaneBossTuning.SnapReach);
             _pearl.Scale = Vector3.One * boss.Spec.PearlRadius * 0.55f;
-        }
-        var c = world.ArenaCenter;
-        _mudRoot.Position = new Vector3(c.X, 0f, c.Y);
-        foreach (var m in _mud)
-        {
-            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("center"), new Vector2(c.X, c.Y));
-            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("rim"), world.ArenaRadius);
-            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("amount"), 0f);
         }
         _drained = 1f;
         _scale = 1f;
@@ -340,7 +312,7 @@ public partial class BossView : Node3D
         }
         // Released, its cleansed pearl is the reward: the world's pearl takes its place where it sat, and it moves away
         // from under it.
-        _pearl.Visible = !(boss.Stage == BossStage.Freed && !world.ArenaSealed);
+        _pearl.Visible = !(boss.Stage == BossStage.Freed && !world.BossBattle);
         if (_burst)
         {
             _burstLight.LightEnergy = Mathf.MoveToward(_burstLight.LightEnergy, 1.2f, dt * 10f);
@@ -420,8 +392,5 @@ public partial class BossView : Node3D
             _snapRim.Position = new Vector3(boss.Position.X, LevelMap.SwimBand - 0.5f, boss.Position.Y);
             _snapMat.AlbedoColor = new Color(1f, 0.2f, 0.2f, 0.35f + 0.35f * Mathf.Sin(_time * 30f));
         }
-
-        foreach (var m in _mud) m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("amount"), boss.Cloud);
-        _mudRoot.Visible = boss.Cloud > 0.001f;
     }
 }

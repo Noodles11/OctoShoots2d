@@ -221,7 +221,7 @@ public static class BossGenerator
         var spec = new BossSpec
         {
             Seed = rng.Seed, Cycle = cycle, Depth = depth, Menace = MenaceOf(cycle, depth), Tier = BossTier.Common,
-            Plan = BodyPlan.Bivalve, Form = BodyForm.GiantClam, Concept = BossConcept.TheLid, Reference = true, Name = "Queen Clam",
+            Plan = BodyPlan.Bivalve, Form = BodyForm.GiantClam, Concept = BossConcept.TheLid, Reference = true, Blockade = true, Name = "Queen Clam",
             Radius = 2.5f, Stretch = 1f, Count = 18, Bulk = 0.5f, TrueColor = body, Accent = accent, TrueScale = 0.65f,
             Theme = MutationTheme.OvergrownShell, Mutation = 0.3f,
             Exposure = Exposure.OpenMoments, Pearl = concept.Pearl, PearlRadius = 0.9f,

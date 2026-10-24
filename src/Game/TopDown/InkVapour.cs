@@ -6,11 +6,12 @@ using OctoShoots.Game.Fx;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// Corruption evaporating as it is cleared (docs/CORRUPTION.md). Where her light cleanses the floor, the ink lifts off
-/// as dark curls of vapour that swell, thin to violet and let go a gold glint. When her own meter drains (a light
-/// spring, or any healing), the ink steams off her the same way. A corrupted creature freed pops like a water balloon
-/// (<see cref="Pop"/>): the ink it was made of showers out in droplets glowing in its colour, and evaporates the same
-/// way. Cosmetic only; the work is capped per frame.
+/// Corruption going as it is cleared (docs/CORRUPTION.md). Where her light cleanses the floor, it goes in a twinkle:
+/// tiny fine-tip stars, "+" and "*" in white and ecru (StarSpecks), popping up off the cleansed ground, twirling and
+/// popping out, as a painted comic marks a sparkle. When her own meter drains (a light spring, or any healing), they
+/// twinkle off her the same way. A corrupted creature freed pops like a water balloon (<see cref="Pop"/>): the ink it
+/// was made of showers out in droplets glowing in its colour, and goes off the spray in the same stars. Cosmetic only;
+/// the work is capped per frame.
 /// </summary>
 public partial class InkVapour : Node3D
 {
@@ -19,24 +20,26 @@ public partial class InkVapour : Node3D
     const float PerDrop = 0.9f;
 
     static readonly Color Ink = new(0.05f, 0.02f, 0.09f, 0.75f);
-    static readonly Color Thin = new(0.5f, 0.25f, 0.8f, 0f);
-    static readonly Color Glint = new(1f, 0.86f, 0.5f, 1f);
 
     FxParticles _ink = null!, _glints = null!;
+    StarSpecks _stars = null!;
     float _herOwed;
 
     public override void _Ready()
     {
         _ink = new FxParticles(1536, additive: false);
         _glints = new FxParticles(1024, additive: true);
+        _stars = new StarSpecks(1024);
         AddChild(_ink);
         AddChild(_glints);
+        AddChild(_stars);
     }
 
     public void Clear()
     {
         _ink.Clear();
         _glints.Clear();
+        _stars.Clear();
     }
 
     /// <summary>Lifts ink off the cells cleansed since the texture last uploaded.</summary>
@@ -51,7 +54,7 @@ public partial class InkVapour : Node3D
             var c = CorruptionField.CellCentre(cell % CorruptionField.N, cell / CorruptionField.N);
             float floor = Mathf.Min(map.HeightAt(c), LevelMap.BlockHeight);
             var at = new Vector3(c.X + _ink.RandRange(-0.25f, 0.25f), floor + 0.05f, c.Y + _ink.RandRange(-0.25f, 0.25f));
-            Puff(at, _ink.RandRange(0.6f, 1.6f), 1f);
+            Puff(at, _ink.RandRange(0.4f, 1.1f), 1f);
         }
         // Each upload's drops are lifted once.
         texture.Drops.Clear();
@@ -91,8 +94,8 @@ public partial class InkVapour : Node3D
             // Each drop glows in its colour as it flies, a little ahead of the dark ink.
             _glints.Emit(from, v * 1.05f, _glints.RandRange(0.5f, 0.9f), 0.09f + 0.03f * size, 0.015f, lit, gone, drag: 4.5f, buoyancy: 0.4f);
         }
-        // And it evaporates: curls of ink lifting off where the spray slows, thinning to violet.
-        for (int i = 0; i < n * 3 / 4; i++)
+        // And it goes: stars twinkling off where the spray slows.
+        for (int i = 0; i < n / 2; i++)
         {
             var dir = _ink.RandDir();
             dir.Y = Mathf.Abs(dir.Y) * 0.4f;
@@ -103,18 +106,15 @@ public partial class InkVapour : Node3D
 
     void Puff(Vector3 at, float rise, float scale) => Puff(at, new Vector3(_ink.RandRange(-0.35f, 0.35f), rise, _ink.RandRange(-0.35f, 0.35f)), scale);
 
-    void Puff(Vector3 at, Vector3 drift, float scale)
-    {
-        float life = _ink.RandRange(0.9f, 1.6f);
-        _ink.Emit(at, drift, life, _ink.RandRange(0.12f, 0.22f) * scale, _ink.RandRange(0.5f, 0.8f) * scale, Ink, Thin, drag: 1.1f, buoyancy: 0.7f);
-        if (_glints.RandRange(0f, 1f) < 0.45f)
-            _glints.Emit(at + Vector3.Up * 0.2f, drift * 1.3f, life * 0.8f, 0.07f * scale, 0.01f, Glint, Glint with { A = 0f }, drag: 0.8f, buoyancy: 0.5f);
-    }
+    /// <summary>A star speck popping up here, drifting so: brief (a third of a second to two thirds), small.</summary>
+    void Puff(Vector3 at, Vector3 drift, float scale) =>
+        _stars.Emit(at + Vector3.Up * 0.1f, drift * 0.6f, _stars.RandRange(0.35f, 0.6f), _stars.RandRange(0.12f, 0.24f) * scale);
 
     public void Tick(float dt, Camera3D? camera)
     {
         if (camera is null) return;
         _ink.Tick(dt, camera.GlobalBasis);
         _glints.Tick(dt, camera.GlobalBasis);
+        _stars.Tick(dt, camera.GlobalBasis);
     }
 }

@@ -283,6 +283,9 @@ public sealed partial class PlaneWorld
     public CorruptionField? Corruption { get; private set; }
     public List<Blightroot> Blightroots { get; } = new();
     public List<Murkling> Murklings { get; } = new();
+    /// <summary>Murklings made during a step that join Murklings at its end (a prime's pieces: Bud while _budLater).</summary>
+    readonly List<Murkling> _madeLater = new();
+    bool _budLater;
     public List<MurkShot> MurkShots { get; } = new();
     public List<CorruptArea> Areas { get; } = new();
     /// <summary>The arena's area (boss levels), or null.</summary>
@@ -463,7 +466,8 @@ public sealed partial class PlaneWorld
     {
         if (Corruption is not { } field) return;
         if (cleanse) field.Cleanse(at, reach, 0.9f);
-        foreach (var m in Murklings)
+        // Over a copy of each list: freeing one may change them.
+        foreach (var m in Murklings.ToArray())
         {
             if (!m.Alive || m.Clinging || Vector2.Distance(m.Position, at) > reach + m.Radius) continue;
             float dealt = Ward(m, m.Position, light);
@@ -471,7 +475,7 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, Vector2.Zero, dealt));
             if (emptied) BurstMurkling(m, ember: true);
         }
-        foreach (var b in Blotters)
+        foreach (var b in Blotters.ToArray())
         {
             if (!b.Alive || b.Rise > 0f || !b.Touches(at, reach)) continue;
             b.SinceStruck = 0f;
@@ -495,7 +499,7 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, Vector2.Zero, light));
             if (emptied) FreeWarden(w);
         }
-        foreach (var t in Thumpsquirts)
+        foreach (var t in Thumpsquirts.ToArray())
         {
             if (!t.Alive || t.Airborne || Vector2.Distance(t.Position, at) > reach + ThumpTuning.Radius) continue;
             float dealt = Ward(t, t.Position, light);
@@ -617,9 +621,10 @@ public sealed partial class PlaneWorld
                     float d = root.CellDistance[k];
                     if (d >= r0 && d < r1) field.Raise(area.Cells[k], MathF.Min(BlightTuning.PulseStain, field.Initial[area.Cells[k]]), 1f);
                 }
-                // ...snuffs out her shots it crosses...
-                foreach (var shot in Shots)
+                // ...snuffs out her shots it crosses (by index: a popping shot may throw more)...
+                for (int si = 0; si < Shots.Count; si++)
                 {
+                    var shot = Shots[si];
                     if (!shot.FromPlayer || shot.Life <= 0f || shot.Pulse == root.PulseId) continue;
                     float d = Vector2.Distance(shot.Position, root.Position);
                     if (MathF.Abs(d - r1) > BlightTuning.PulseBand * 0.5f + shot.Radius) continue;
@@ -772,7 +777,7 @@ public sealed partial class PlaneWorld
                 m.Shaken -= Dt;
                 m.Windup = 0f;
                 m.Velocity = MoveToward(m.Velocity, Vector2.Zero, BlightTuning.ShakeSpeed * 1.2f * Dt);
-                Move(ref m.Position, ref m.Velocity, m.Body, report: false, barrier: ArenaBarrier.Outside);
+                Move(ref m.Position, ref m.Velocity, m.Body, report: false);
                 continue;
             }
             if (m.Lesser)
@@ -817,7 +822,7 @@ public sealed partial class PlaneWorld
             wish += new Vector2(MathF.Sin(Time * 1.7f + m.Seed), MathF.Cos(Time * 1.3f + m.Seed * 2f)) * 0.35f;
             float pace = (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace) * (m.Windup > 0f ? BlightTuning.WindupSlow : 1f) * (m.Prime ? BlightTuning.PrimeSpeed : 1f);
             m.Velocity = MoveToward(m.Velocity, SafeNormalize(wish) * pace, 4f * Dt);
-            Move(ref m.Position, ref m.Velocity, m.Body, report: false, barrier: ArenaBarrier.Outside);
+            Move(ref m.Position, ref m.Velocity, m.Body, report: false);
 
             // A prime is too big to cling: it rams her, shoving her off.
             if (m.Prime && Vector2.Distance(m.Position, p.Position) < m.Radius * 0.8f + Radius)
@@ -869,7 +874,7 @@ public sealed partial class PlaneWorld
             s.Position += s.Velocity * Dt;
             s.Traveled += s.Velocity.Length() * Dt;
             if (s.Traveled >= BlightTuning.ThrowFallAt) s.Fall = Dt;
-            if (!Map.IsOpen(s.Position) || CrossesRim(was, s.Position)) s.Life = 0f;
+            if (!Map.IsOpen(s.Position)) s.Life = 0f;
             else if (Vector2.Distance(s.Position, p.Position) < Radius + s.Radius)
             {
                 s.Life = 0f;
@@ -993,7 +998,7 @@ public sealed partial class PlaneWorld
             _primesBorn++;
         }
         m.Draw = draught;
-        Murklings.Add(m);
+        (_budLater ? _madeLater : Murklings).Add(m);
         // The bud: its time, how far out it drinks and how thick that ink is (the view pulls dots in from the cells it drinks).
         float radius = draught?.Radius ?? BlightTuning.GatherRadius;
         float ink = draught?.Ink ?? (Corruption is { } field ? DenseShare(field, at, radius, 0.15f) : 0f);
@@ -1055,7 +1060,10 @@ public sealed partial class PlaneWorld
                 var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
                 var at = m.Position + dir * 1.2f;
                 for (int k = 0; k < 4 && !Clear(at, BlightTuning.MurkRadius); k++) at = Vector2.Lerp(at, m.Position, 0.35f);
+                // (Joining the others at the step's end: a prime bursts while loops walk them.)
+                _budLater = true;
                 var piece = Bud(at, m.Area, drink: false)!;
+                _budLater = false;
                 piece.Bud = 0f;
                 piece.Matter = share;
                 matter -= share;

@@ -1,7 +1,7 @@
 // A murkling (docs/CORRUPTION.md; BlightView.MurkBody): a drop of ink adrift, liquid as mercury in no gravity, painted.
 // Its shape is a soft body the view simulates: lobes[12] are how far each of twelve points round it (the icosahedron's
 // corners) stands out of round, so it bulges where it lags, dents where it is struck and rings back, its volume kept.
-// Her hits tear holes in it (holes[6]: a direction and how wide, radians), ragged, an ember glow at their edges and its
+// Her hits tear holes in it (holes[6]: a direction and how wide, radians), ragged, dark inside (never see-through), an ember glow at their edges and its
 // lit inside showing through; they close as its corruption grows back. Painted like her light is (light_stroke): its ink
 // brushed in flowing bands, a ragged violet rim laid as a dry-brushed stroke, a torn silhouette, one soft dab of sheen.
 // The throw (pull, bud) and its own throws (drip) are shaped as corruption_orb shapes them. worn, hit: her outline.
@@ -123,20 +123,21 @@ void fragment() {
 	float over = over_her(v_world, VERTEX.z, VIEW_MATRIX);
 	if (over < 0.01) discard;
 #endif
-	// Her hits' holes: open through it.
+	// Her hits' holes: torn into it, its dark inside showing — never through it (a big body stands in the sand, and the
+	// seabed must not show through).
 	float rim_h;
 	float into = hole_at(p, rim_h);
-	if (into > 0.0) discard;
+	bool torn = into > 0.0 && hollow > 0.5;
 	vec3 glow = ember_tint.a > 0.5 ? ember_tint.rgb : ember_color;
 	float flicker = 0.7 + 0.3 * sin(TIME * 7.0 + seed * 3.0) * sin(TIME * 4.3 + seed);
-	if (!FRONT_FACING && hollow > 0.5) {
-		// Its inside, seen through a hole: the stolen ember's light in the ink.
+	if (torn || !FRONT_FACING && hollow > 0.5) {
+		// Its inside, in a hole: dark ink, the stolen ember's light glowing deep in it (toward the hole's middle), the
+		// ink darkest at the torn edge.
 		ALBEDO = vec3(0.02, 0.01, 0.02);
 		ROUGHNESS = 1.0;
 		SPECULAR = 0.0;
-		// Deep in it the ember glows; toward the torn edge the ink is dark.
-		float depth = clamp(dot(-NORMAL, VIEW), 0.0, 1.0);
-		EMISSION = glow * (0.08 + 0.55 * ember * depth * depth) * flicker + rim_color * 0.08;
+		float depth = torn ? smoothstep(0.0, 0.35, into) : clamp(dot(-NORMAL, VIEW), 0.0, 1.0);
+		EMISSION = glow * (0.06 + 0.5 * ember * depth * depth) * flicker + rim_color * 0.05;
 	} else {
 		if (!FRONT_FACING) NORMAL = -NORMAL;
 		float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);

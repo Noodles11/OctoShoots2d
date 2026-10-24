@@ -7,13 +7,14 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// The HUD minimap (DESIGN-TOPDOWN §9): circular, top-right, a <see cref="TopoMap"/> window centred on Clementine,
-/// north up like the camera (§3). Round it her experience (DESIGN-TOPDOWN §2.6): a thin gold ring outside the corruption bezel, with
-/// small percentages under it, her experience to the left and her health to the right.
+/// north up like the camera (§3). Its bezel is her corruption meter (her health: what is missing of it); round it her
+/// experience (DESIGN-TOPDOWN §2.6), a thin gold ring outside the bezel with her level in a small badge on it. No
+/// numbers: the bezel, the ring and her bell say it. The place she enters is named for a moment on the map's lower rim.
 /// </summary>
 public partial class MinimapView : Control
 {
-    const float Diameter = 260f;
-    const float Margin = 16f;
+    public const float Diameter = 220f;
+    public const float Margin = 18f;
     /// <summary>Metres across the disc.</summary>
     public const float Span = 90f;
     /// <summary>
@@ -67,29 +68,37 @@ public partial class MinimapView : Control
         AddChild(_frame = new Frame { Size = new Vector2(Diameter, Diameter) });
         AddChild(_xp = new XpRing { Position = -Vector2.One * XpRing.Out, Size = new Vector2(Diameter, Diameter) + Vector2.One * XpRing.Out * 2f });
 
-        // The place Clementine is in, named under the map.
+        // The place Clementine enters, named for a moment on the map's lower rim.
         _place = new Label
         {
-            Position = new Vector2(-40f, Diameter + 8f),
-            Size = new Vector2(Diameter + 80f, 32f),
+            Position = new Vector2(-30f, Diameter - 40f),
+            Size = new Vector2(Diameter + 60f, 26f),
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore,
             Modulate = new Color(1f, 1f, 1f, 0f),
         };
-        _place.AddThemeFontSizeOverride("font_size", 22);
+        _place.AddThemeFontSizeOverride("font_size", 19);
         _place.AddThemeConstantOverride("outline_size", 6);
         _place.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.85f));
         AddChild(_place);
     }
 
-    /// <summary>Names the place Clementine has entered (null when she is in none); the label fades in and out.</summary>
+    /// <summary>Names the place Clementine has entered (null when she is in none): the name fades in, stays a moment and fades out.</summary>
     public void ShowPlace(string? name, Color color)
     {
-        _placeShown = name is not null;
+        // Only on entering it: the name stays put while she is inside.
+        if (name == _placeName) return;
+        _placeName = name;
         if (name is null) return;
         _place.Text = name;
         _place.AddThemeColorOverride("font_color", color);
+        _placeShown = true;
+        _placeAge = 0f;
     }
+    /// <summary>How long the place's name shows on entering it (seconds).</summary>
+    const float PlaceSeconds = 2.4f;
+    float _placeAge;
+    string? _placeName;
 
     /// <summary>Diving (0 → 1): the old level's map zooms in on her and fades away.</summary>
     public void DiveOut(float k)
@@ -133,6 +142,8 @@ public partial class MinimapView : Control
             _arrive = Mathf.MoveToward(_arrive, 1f, (float)delta / 0.8f);
             ApplyDive();
         }
+        _placeAge += (float)delta;
+        if (_placeAge > PlaceSeconds) _placeShown = false;
         _placeAlpha = Mathf.MoveToward(_placeAlpha, _placeShown ? 1f : 0f, (float)delta * 2.5f);
         _place.Modulate = new Color(1f, 1f, 1f, _placeAlpha);
     }
@@ -205,9 +216,6 @@ public partial class MinimapView : Control
         _map.Seen = fog;
     }
 
-    /// <summary>The mud cloud around the boss arena (0: none).</summary>
-    public void SetMud(System.Numerics.Vector2 center, float rim, float amount) => _map.Mud = new Vector4(center.X, center.Y, rim, amount);
-
     /// <summary>Her health as a share of her max (0..1): the bezel shows the rest as her corruption meter.</summary>
     public void SetHealth(float health)
     {
@@ -216,7 +224,6 @@ public partial class MinimapView : Control
         if (health < _frame.Health - 1e-4f) _frame.Hit = 1f;
         _frame.Health = health;
         _frame.QueueRedraw();
-        _xp.Health = health;
     }
 
     /// <summary>Her experience toward the next level (0..1), her level, and whether a level waits to be spent (the ring full, pulsing).</summary>
@@ -359,14 +366,14 @@ public partial class MinimapView : Control
 
     /// <summary>
     /// Her experience round the minimap: a thin ring just outside the bezel, filling clockwise from 12 o'clock in gold
-    /// over a dark track. Full (a level waiting to be spent), it pulses slowly and glows outward. Small numbers under it:
-    /// her level and experience to the left, her health to the right.
+    /// over a dark track. Full (a level waiting to be spent), it pulses slowly and glows outward. Her level sits on it in
+    /// a small gold badge at about half past seven.
     /// </summary>
     partial class XpRing : Control
     {
         /// <summary>How far the ring's control reaches past the minimap (room for the ring, its glow and the numbers).</summary>
         public const float Out = 26f;
-        public float Share, Health = 1f;
+        public float Share;
         public int Level = 1;
         public bool Full;
         float _shown, _pulse;
@@ -404,22 +411,15 @@ public partial class MinimapView : Control
                 var fill = Full ? Gold.Lerp(new Color(1f, 0.95f, 0.75f), 0.5f * wave) : Gold;
                 DrawArc(c, r, from, to, points, fill, width + (Full ? 1.5f * wave : 0f), true);
             }
-            // The numbers, small, under the ring: experience at about 7 o'clock, health at about 5.
+            // Her level: a small badge on the ring at about half past seven, gold, glowing with the pulse when full.
             var font = ThemeDB.FallbackFont;
-            const int size = 13;
-            string xp = $"Lv {Level} · {Mathf.RoundToInt(Mathf.Clamp(Share, 0f, 1f) * 100f)}%";
-            string hp = $"HP {Mathf.RoundToInt(Mathf.Clamp(Health, 0f, 1f) * 100f)}%";
-            var left = c + new Vector2(Mathf.Cos(Mathf.Pi * 0.72f), Mathf.Sin(Mathf.Pi * 0.72f)) * (r + 10f);
-            var right = c + new Vector2(Mathf.Cos(Mathf.Pi * 0.28f), Mathf.Sin(Mathf.Pi * 0.28f)) * (r + 10f);
-            float xw = font.GetStringSize(xp, HorizontalAlignment.Left, -1, size).X;
-            Text(font, left + new Vector2(-xw, size), xp, size, Full ? Gold.Lerp(Colors.White, 0.4f * wave) : Gold);
-            Text(font, right + new Vector2(0f, size), hp, size, new Color(1f, 0.9f, 0.72f));
-        }
-
-        void Text(Font font, Vector2 at, string text, int size, Color color)
-        {
-            DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, 4, new Color(0f, 0f, 0f, 0.8f));
-            DrawString(font, at, text, HorizontalAlignment.Left, -1, size, color);
+            var at = c + new Vector2(Mathf.Cos(Mathf.Pi * 0.75f), Mathf.Sin(Mathf.Pi * 0.75f)) * r;
+            DrawCircle(at, 12.5f, new Color(0f, 0f, 0f, 0.7f));
+            DrawCircle(at, 11f, Full ? Gold.Lerp(new Color(1f, 0.95f, 0.75f), 0.5f * wave) : Gold);
+            string lv = Level.ToString();
+            const int size = 14;
+            var ls = font.GetStringSize(lv, HorizontalAlignment.Left, -1, size);
+            DrawString(font, at + new Vector2(-ls.X * 0.5f, size * 0.36f), lv, HorizontalAlignment.Left, -1, size, new Color(0.2f, 0.12f, 0.03f));
         }
     }
 }

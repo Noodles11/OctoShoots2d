@@ -19,9 +19,13 @@ namespace OctoShoots.Game.Title;
 
 /// <summary>
 /// The title screen (docs/TITLE-MENU-PROPOSAL.md): a menu over the live sea. Clementine swims slowly along a canyon of a
-/// fixed seed while the camera follows; the menu offers Continue, New run, Seeded run, Sea-pedia, Statistics, Save &amp;
-/// load, Settings and Quit. Run with game flags (--seed=, --at=, …) it skips straight to a run.
+/// fixed seed in the middle of the screen, the camera following her, and the menu's items stand in a ring round her:
+/// Continue, New run, Seeded run, Sea-pedia, Statistics, Save &amp; load, Settings and Quit. She turns to face the
+/// pointer (her crosshair, GonadCursor), or with the controller the item in focus, her first gonad toward it, as in the
+/// game; choosing an item, she shoots her light at it, and what it does happens as the shot strikes it. Run with game
+/// flags (--seed=, --at=, …) it skips straight to a run.
 /// Review flags: --title-sample (an example profile, never saved), --title-card=stats|pedia|creatures|save|settings|seed,
+/// --title-pick=id (that item focused, then chosen: her shot at it),
 /// --title-launch=new|continue (starts that run after a moment; the game then takes --capture), --capture=dir --frames=a,b.
 /// </summary>
 public partial class TitleMain : Node3D
@@ -50,10 +54,16 @@ public partial class TitleMain : Node3D
 
     // The menu.
     Control _ui = null!;
-    VBoxContainer _column = null!;
+    /// <summary>The ring of items round her (and the inline cards under them).</summary>
+    Control _ring = null!;
     Control _logo = null!;
     readonly List<(Button Button, Label Detail, string Id)> _items = new();
-    readonly Dictionary<Button, Control> _glide = new();
+    /// <summary>The ring: its middle (on her) and its radii, on the 1600×900 page.</summary>
+    static readonly Vector2 RingRadii = new(430f, 300f);
+    Vector2 RingCentre => PageSize * 0.5f + new Vector2(0f, -8f);
+    /// <summary>The last pointer she followed: the mouse, or (with the controller or the keys) the item in focus.</summary>
+    bool _byPad;
+    MenuShots _shots = null!;
     Control? _inline;
     Control? _card;
     ColorRect _fade = null!;
@@ -65,6 +75,8 @@ public partial class TitleMain : Node3D
     int _frame;
     string? _openCard;
     string? _autoLaunch;
+    /// <summary>Review: --title-pick=id focuses that item and chooses it a moment in (her shot at it).</summary>
+    string? _autoPick;
 
     static readonly string[] TitleOnlyFlags = { "--capture=", "--frames=", "--title", "--no-focus", "--dbg-" };
 
@@ -90,12 +102,15 @@ public partial class TitleMain : Node3D
         InputSetup.Register();
         AddChild(new PadMenus());
         Input.MouseMode = Input.MouseModeEnum.Visible;
+        // Her crosshair, as in the game.
+        OctoShoots.Game.Fx.GonadCursor.Use();
         foreach (string arg in args)
         {
             string Value(string prefix) => arg[prefix.Length..];
             if (arg == "--title-sample") GameSave.UseInMemory(SampleSave());
             else if (arg.StartsWith("--title-card=")) _openCard = Value("--title-card=");
             else if (arg.StartsWith("--title-launch=")) _autoLaunch = Value("--title-launch=");
+            else if (arg.StartsWith("--title-pick=")) _autoPick = Value("--title-pick=");
             else if (arg.StartsWith("--capture=")) _captureDir = Value("--capture=");
             else if (arg.StartsWith("--frames="))
                 foreach (string f in Value("--frames=").Split(','))
@@ -131,6 +146,8 @@ public partial class TitleMain : Node3D
     }
 
     void SkipToGame() => GetTree().ChangeSceneToFile(RunLaunch.GameScene);
+
+    public override void _ExitTree() => OctoShoots.Game.Fx.GonadCursor.Release();
 
     /// <summary>The menu is laid out on a 1600×900 page, scaled to fit the window.</summary>
     static readonly Vector2 Page = new(1600f, 900f);
@@ -200,11 +217,41 @@ public partial class TitleMain : Node3D
         return to.LengthSquared() > 0.01f ? System.Numerics.Vector2.Normalize(to) * SwimInput : default;
     }
 
-    /// <summary>The camera looks a little left of her, so she swims in the right third, clear of the menu.</summary>
+    /// <summary>The camera keeps her in the middle of the screen, inside the ring of items.</summary>
     Vector3 Focus(float alpha)
     {
         var p = System.Numerics.Vector2.Lerp(_world!.Player.PrevPosition, _world.Player.Position, alpha);
-        return new Vector3(p.X - 6f, LevelMap.SwimBand, p.Y + 1f);
+        return new Vector3(p.X, LevelMap.SwimBand, p.Y);
+    }
+
+    /// <summary>
+    /// Where she aims: at the pointer, or with the controller (or the keys) at the item in focus — the point of her plane
+    /// under it on the screen, from her.
+    /// </summary>
+    System.Numerics.Vector2 AimNow()
+    {
+        if (_world is null) return -System.Numerics.Vector2.UnitY;
+        Vector2? screen = null;
+        if (_byPad)
+        {
+            if (GetViewport().GuiGetFocusOwner() is Button b && _items.Any(it => it.Button == b)) screen = b.GetGlobalRect().GetCenter();
+        }
+        else screen = GetViewport().GetMousePosition();
+        if (screen is not { } at) return _world.Player.Aim;
+        var cam = _camera.Camera;
+        Vector3 origin = cam.ProjectRayOrigin(at), dir = cam.ProjectRayNormal(at);
+        if (Mathf.Abs(dir.Y) < 1e-4f) return _world.Player.Aim;
+        var hit = origin + dir * ((LevelMap.SwimBand - origin.Y) / dir.Y);
+        var to = new System.Numerics.Vector2(hit.X, hit.Z) - _world.Player.Position;
+        return to.LengthSquared() > 1e-4f ? System.Numerics.Vector2.Normalize(to) : _world.Player.Aim;
+    }
+
+    /// <summary>Where she is on the screen (in the page's units).</summary>
+    Vector2 HerOnPage()
+    {
+        if (_world is null) return RingCentre;
+        var p = _world.Player.Position;
+        return _camera.Camera.UnprojectPosition(new Vector3(p.X, LevelMap.SwimBand, p.Y)) / UiScale;
     }
 
     public override void _Process(double delta)
@@ -226,7 +273,7 @@ public partial class TitleMain : Node3D
             int steps = 0;
             while (_accumulator >= PlaneWorld.Dt && steps < 4)
             {
-                _world.Step(new PlaneInput { Move = SwimInputNow(), Aim = -System.Numerics.Vector2.UnitY });
+                _world.Step(new PlaneInput { Move = SwimInputNow(), Aim = AimNow() });
                 _accumulator -= PlaneWorld.Dt;
                 steps++;
             }
@@ -238,6 +285,8 @@ public partial class TitleMain : Node3D
             _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
             _level.UpdateCanopy(_world.Player.Position, dt, _camera.Camera.GlobalPosition);
         }
+        LayoutRing();
+        _shots.From = HerOnPage();
         Capture();
     }
 
@@ -251,37 +300,40 @@ public partial class TitleMain : Node3D
         layer.AddChild(_ui);
         FitUi();
 
-        // Dim the water under the menu column for legibility.
+        // A light dimming of the whole sea, deeper toward the edges, so the ring's words read anywhere on it.
         var shade = new Gradient();
-        shade.SetColor(0, new Color(0.01f, 0.05f, 0.07f, 0.62f));
-        shade.SetColor(1, new Color(0.01f, 0.05f, 0.07f, 0f));
+        shade.SetColor(0, new Color(0.01f, 0.05f, 0.07f, 0.12f));
+        shade.SetColor(1, new Color(0.01f, 0.05f, 0.07f, 0.6f));
         var dim = new TextureRect
         {
-            Texture = new GradientTexture2D { Gradient = shade, Width = 256, Height = 4, FillFrom = new Vector2(0.3f, 0f), FillTo = new Vector2(1f, 0f) },
+            Texture = new GradientTexture2D { Gradient = shade, Width = 256, Height = 256, Fill = GradientTexture2D.FillEnum.Radial, FillFrom = new Vector2(0.5f, 0.5f), FillTo = new Vector2(1.05f, 0.5f) },
             StretchMode = TextureRect.StretchModeEnum.Scale,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             MouseFilter = Control.MouseFilterEnum.Ignore,
-            AnchorBottom = 1f,
-            OffsetRight = 900f,
         };
+        dim.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _ui.AddChild(dim);
 
-        _column = new VBoxContainer { Position = new Vector2(72f, 70f), CustomMinimumSize = new Vector2(760f, 0f) };
-        _column.AddThemeConstantOverride("separation", 4);
-        _ui.AddChild(_column);
+        _ring = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _ring.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _ui.AddChild(_ring);
 
-        var logo = new VBoxContainer();
-        logo.AddThemeConstantOverride("separation", -8);
-        var name = TitleStyle.Text("INK DEEP", 104, TitleStyle.Pearl, TitleStyle.Display);
+        // The logo, top left, clear of the ring.
+        var logo = new VBoxContainer { Position = new Vector2(56f, 34f) };
+        logo.AddThemeConstantOverride("separation", -6);
+        var name = TitleStyle.Text("INK DEEP", 72, TitleStyle.Pearl, TitleStyle.Display);
         name.AddThemeColorOverride("font_shadow_color", new Color(1f, 0.478f, 0.42f, 0.55f));
         name.AddThemeConstantOverride("shadow_offset_x", 0);
-        name.AddThemeConstantOverride("shadow_offset_y", 6);
+        name.AddThemeConstantOverride("shadow_offset_y", 5);
         logo.AddChild(name);
-        var sub = TitleStyle.Text("the absorbent jellyfish", 24, TitleStyle.WaterSoft, TitleStyle.Italic);
+        var sub = TitleStyle.Text("the absorbent jellyfish", 20, TitleStyle.WaterSoft, TitleStyle.Italic);
         logo.AddChild(sub);
         _logo = logo;
-        _column.AddChild(logo);
-        _column.AddChild(new Control { CustomMinimumSize = new Vector2(0f, 26f) });
+        _ui.AddChild(logo);
+
+        // Her shots at the items, over the ring.
+        _shots = new MenuShots();
+        _shots.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
         AddItem("continue", "Continue", () => Launch(LaunchMode.Continue, default));
         AddItem("new", "New run", NewRun);
@@ -298,6 +350,8 @@ public partial class TitleMain : Node3D
         footer.Position -= new Vector2(24f, 30f);
         footer.GrowHorizontal = Control.GrowDirection.Begin;
         _ui.AddChild(footer);
+
+        _ui.AddChild(_shots);
 
         _fade = new ColorRect { Color = new Color(0f, 0f, 0f, 1f), MouseFilter = Control.MouseFilterEnum.Ignore };
         _fade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -320,6 +374,12 @@ public partial class TitleMain : Node3D
         _items.First(it => it.Button.GetParent<Control>().Visible).Button.GrabFocus();
         if (_autoLaunch is { } launch)
             GetTree().CreateTimer(1.2).Timeout += () => Launch(launch == "continue" ? LaunchMode.Continue : LaunchMode.New, SeedCode.NewRandom());
+        if (_autoPick is { } pick && _items.Any(it => it.Id == pick))
+        {
+            _byPad = true;
+            Item(pick).Button.GrabFocus();
+            GetTree().CreateTimer(2.0).Timeout += () => Item(pick).Button.EmitSignal(BaseButton.SignalName.Pressed);
+        }
         if (_openCard is { } open)
         {
             if (open == "seed") ToggleSeedBox();
@@ -329,12 +389,10 @@ public partial class TitleMain : Node3D
 
     void AddItem(string id, string text, Action pressed)
     {
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 0);
-        // The focus glide: this spacer widens, pushing the item right.
-        var glide = new Control { CustomMinimumSize = Vector2.Zero, MouseFilter = Control.MouseFilterEnum.Ignore };
-        row.AddChild(glide);
-        var button = new Button { Text = text, Flat = true, FocusMode = Control.FocusModeEnum.All, Alignment = HorizontalAlignment.Left, MouseDefaultCursorShape = Control.CursorShape.PointingHand };
+        // Each item a little stack, centred on its place in the ring: its word, and its detail line under it.
+        var row = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        row.AddThemeConstantOverride("separation", -2);
+        var button = new Button { Text = text, Flat = true, FocusMode = Control.FocusModeEnum.All, Alignment = HorizontalAlignment.Center, MouseDefaultCursorShape = Control.CursorShape.PointingHand };
         button.AddThemeFontOverride("font", TitleStyle.BodyBold);
         button.AddThemeFontSizeOverride("font_size", 32);
         foreach (string state in new[] { "font_color", "font_pressed_color" }) button.AddThemeColorOverride(state, TitleStyle.Pearl);
@@ -342,31 +400,71 @@ public partial class TitleMain : Node3D
         button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
         button.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.08f, 0.1f, 0.6f));
         button.AddThemeConstantOverride("outline_size", 4);
+        button.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
         row.AddChild(button);
-        row.AddChild(new Control { CustomMinimumSize = new Vector2(16f, 0f), MouseFilter = Control.MouseFilterEnum.Ignore });
-        var detail = TitleStyle.Text("", 17, TitleStyle.WaterSoft, TitleStyle.Body);
-        detail.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var detail = TitleStyle.Text("", 16, TitleStyle.WaterSoft, TitleStyle.Body, HorizontalAlignment.Center);
         detail.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.08f, 0.1f, 0.6f));
         detail.AddThemeConstantOverride("outline_size", 3);
         row.AddChild(detail);
-        _column.AddChild(row);
+        _ring.AddChild(row);
+        // Chosen, she shoots her light at it; what it does happens as the shot strikes.
         button.Pressed += () =>
         {
-            if (_launching) return;
-            pressed();
+            if (_launching || _shots.Busy) return;
+            _shots.Fire(button.GetGlobalRect().GetCenter() / UiScale, () =>
+            {
+                Struck(button);
+                pressed();
+            });
         };
         button.MouseEntered += () => button.GrabFocus();
-        button.FocusEntered += () => Focused(glide, true);
-        button.FocusExited += () => Focused(glide, false);
-        _glide[button] = glide;
+        button.FocusEntered += () => Focused(button, true);
+        button.FocusExited += () => Focused(button, false);
         _items.Add((button, detail, id));
     }
 
-    /// <summary>The focused item glides right (it is coral too: the button's focus colour).</summary>
-    void Focused(Control glide, bool on)
+    /// <summary>The item in focus swells a little (it is coral too: the button's focus colour).</summary>
+    void Focused(Button button, bool on)
     {
         float seconds = Reduced ? 0.01f : 0.12f;
-        glide.CreateTween().TweenProperty(glide, "custom_minimum_size:x", on ? 12f : 0f, seconds).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
+        button.PivotOffset = button.Size * 0.5f;
+        button.CreateTween().TweenProperty(button, "scale", Vector2.One * (on ? 1.12f : 1f), seconds).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
+    }
+
+    /// <summary>Her shot strikes an item: it jolts, bigger for a beat, and settles.</summary>
+    void Struck(Button button)
+    {
+        if (Reduced) return;
+        button.PivotOffset = button.Size * 0.5f;
+        var t = button.CreateTween();
+        t.TweenProperty(button, "scale", Vector2.One * 1.3f, 0.06f).SetEase(Tween.EaseType.Out);
+        t.TweenProperty(button, "scale", Vector2.One * (button.HasFocus() ? 1.12f : 1f), 0.25f).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Back);
+    }
+
+    /// <summary>
+    /// The items on their ring round her: evenly spaced, the first at the top, clockwise; the inline card (the seed box,
+    /// a confirmation) under its item, kept on the page.
+    /// </summary>
+    void LayoutRing()
+    {
+        var visible = _items.Where(it => it.Button.GetParent<Control>().Visible).ToList();
+        var centre = RingCentre;
+        for (int i = 0; i < visible.Count; i++)
+        {
+            var row = visible[i].Button.GetParent<Control>();
+            float a = -Mathf.Pi * 0.5f + i * Mathf.Tau / visible.Count;
+            var at = centre + new Vector2(Mathf.Cos(a) * RingRadii.X, Mathf.Sin(a) * RingRadii.Y);
+            row.Size = row.GetCombinedMinimumSize();
+            row.Position = at - row.Size * 0.5f;
+        }
+        if (_inline?.GetParent() is Control holder && holder.HasMeta("under") && holder.GetMeta("under").As<Button>() is { } under)
+        {
+            var row = under.GetParent<Control>();
+            holder.Size = holder.GetCombinedMinimumSize();
+            var at = new Vector2(row.Position.X + row.Size.X * 0.5f - holder.Size.X * 0.5f, row.Position.Y + row.Size.Y + 6f);
+            var page = PageSize;
+            holder.Position = new Vector2(Mathf.Clamp(at.X, 16f, page.X - holder.Size.X - 16f), Mathf.Clamp(at.Y, 16f, page.Y - holder.Size.Y - 16f));
+        }
     }
 
     (Button Button, Label Detail, string Id) Item(string id) => _items.First(it => it.Id == id);
@@ -479,13 +577,12 @@ public partial class TitleMain : Node3D
     void ShowInline(Control content, Button under)
     {
         CloseInline();
-        var row = under.GetParent<Control>();
         var holder = new MarginContainer();
-        holder.AddThemeConstantOverride("margin_left", 36);
+        holder.SetMeta("under", under);
         holder.AddChild(content);
-        _column.AddChild(holder);
-        _column.MoveChild(holder, row.GetIndex() + 1);
+        _ring.AddChild(holder);
         _inline = content;
+        LayoutRing();
         TitleStyle.Bloom(holder, 0f, Reduced);
     }
 
@@ -519,7 +616,7 @@ public partial class TitleMain : Node3D
         _ui.MoveChild(card, _fade.GetIndex());
         _card = card;
         TitleStyle.Surface(card, 80f, 0.42f, 0f, Reduced);
-        _column.CreateTween().TweenProperty(_column, "modulate:a", 0.4f, 0.2f);
+        _ring.CreateTween().TweenProperty(_ring, "modulate:a", 0.25f, 0.2f);
         if (which == "creatures" && card is SeaPediaCard pedia) pedia.CallDeferred(SeaPediaCard.MethodName.ShowCreatures);
         // Focus the card's first control, so the keyboard works there.
         CallDeferred(MethodName.FocusCard);
@@ -549,7 +646,7 @@ public partial class TitleMain : Node3D
         _card = null;
         if (instant) card.QueueFree();
         else TitleStyle.Dive(card, card.QueueFree, 0.38f, Reduced);
-        _column.CreateTween().TweenProperty(_column, "modulate:a", 1f, 0.2f);
+        _ring.CreateTween().TweenProperty(_ring, "modulate:a", 1f, 0.2f);
         Refresh();
         _items.FirstOrDefault(it => it.Button.GetParent<Control>().Visible).Button?.GrabFocus();
     }
@@ -560,6 +657,13 @@ public partial class TitleMain : Node3D
         Engine.MaxFps = _captureDir is null ? view.MaxFps : 0;
         _sun.SetStrength(view.SunLight);
         _camera.SetReducedMotion(view.ReducedMotion);
+    }
+
+    public override void _Input(InputEvent e)
+    {
+        // The mouse moving: she follows it; the controller or the keys: she follows the item in focus.
+        if (e is InputEventMouseMotion) _byPad = false;
+        else if (e is InputEventJoypadButton or InputEventKey || e is InputEventJoypadMotion m && Mathf.Abs(m.AxisValue) > 0.3f) _byPad = true;
     }
 
     public override void _UnhandledInput(InputEvent e)
@@ -577,11 +681,12 @@ public partial class TitleMain : Node3D
             return;
         }
         // W/S move through the menu like the arrow keys.
-        if (_card is null && key.PhysicalKeycode is Key.W or Key.S && GetViewport().GuiGetFocusOwner() is not LineEdit)
+        if (_card is null && key.PhysicalKeycode is Key.W or Key.S or Key.A or Key.D && GetViewport().GuiGetFocusOwner() is not LineEdit)
         {
+            // Round the ring: S and D on clockwise, W and A back.
             var visible = _items.Where(it => it.Button.GetParent<Control>().Visible).Select(it => it.Button).ToList();
             int at = visible.FindIndex(b => b.HasFocus());
-            int next = Math.Clamp((at < 0 ? 0 : at) + (key.PhysicalKeycode == Key.S ? 1 : -1), 0, visible.Count - 1);
+            int next = ((at < 0 ? 0 : at) + (key.PhysicalKeycode is Key.S or Key.D ? 1 : -1) + visible.Count) % visible.Count;
             visible[next].GrabFocus();
             GetViewport().SetInputAsHandled();
         }

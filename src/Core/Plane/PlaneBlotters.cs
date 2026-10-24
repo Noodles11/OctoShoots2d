@@ -202,7 +202,7 @@ public sealed partial class PlaneWorld
             float facing = MathF.Max(0f, Vector2.Dot(b.Heading, want));
             b.Velocity = b.Heading * speed * gait * (0.25f + 0.75f * facing);
             var before = b.Position;
-            Move(ref b.Position, ref b.Velocity, BlotterTuning.Radius, report: false, barrier: ArenaBarrier.Outside);
+            Move(ref b.Position, ref b.Velocity, BlotterTuning.Radius, report: false);
             float moved = Vector2.Distance(before, b.Position);
             b.StuckFor = moved < speed * Dt * 0.2f ? b.StuckFor + Dt : 0f;
             // Its trail: ink smeared over the ground beneath it.
@@ -230,7 +230,6 @@ public sealed partial class PlaneWorld
                     to = b.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
                 }
                 // A sealed arena is closed to it: a bomb bound inside lands just outside instead.
-                if (ArenaSealed && Vector2.Distance(to, ArenaCenter) < ArenaRadius + BlotterTuning.SplashRadius) to = OutsideArena(to);
                 Bombs.Add(new CorruptionBomb { From = mouth, To = to });
                 Events.Add(new PlaneEvent(PlaneEventType.BombThrown, mouth, to - mouth, BlotterTuning.BombSeconds));
             }

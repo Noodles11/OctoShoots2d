@@ -63,12 +63,12 @@ away.
     hits tear it as they tear a murkling: a deep dent that rings back, ragged holes (its inner blue light showing
     through) that close as its meter refills, chunks of ink ripped away. Ink runs down its pole into the sand.
   - It wears the Blightroot's blue under the ink, and its hit outline like every corrupted creature.
-- **Freed** (smoothly, over 1.5 s, then away): its ink bursts off its head; the pole runs away from the top down into
+- **Freed** (smoothly, over 1.1 s, then away): its ink bursts off its head; the pole runs away from the top down into
   drips and the rootlets draw back into the sand; its head takes its own healthy coral, rounds out whole and draws out
-  into a mantle while eight arms grow out under it, hanging, then curling. Then it swims away from her, rising, in
-  strokes of its arms (each a contraction, arms closing back and the mantle squeezed, that drives it on, then a glide
-  as they flare), leaning its mantle into its way, a trail of clean bubbles behind it. It fades out 4.6 s after it was
-  freed.
+  into a mantle while eight arms grow out under it, hanging, then curling. Then it swims **up** off the seabed toward
+  the light, quickly, drifting a little away from her, in strokes of its arms every half second (each a contraction,
+  arms closing back and the mantle squeezed, that drives it on, then a glide as they flare), its mantle pointing up its
+  way and its arms trailing under it, a trail of clean bubbles behind it. It fades out 3.4 s after it was freed.
 - **Its guardians:** while it has been struck by her light within the last 3 s, its area's murklings wake to guard
   it. Its area buds every 5 s ÷ (1 + 1.5 × Menace) (5 s in the early depths, 2 s by the Tank), each bud 4–7 m round
   it (at least 5 m from her, drinking its ink as any bud does). Its cap rises by 1 + round(2 × Menace), and it buds
@@ -244,8 +244,8 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   silhouette, one soft dab of sheen.
 - **Her hits tear it** (`TearMurkling`): the struck side dents deep and rebounds past round; a ragged hole opens there,
   wider for a stronger hit (about 0.25 rad for a plain shot, up to about 0.7 for one that takes all of it; at most
-  six, the nearest widened past that), its lip glowing with the ember, its dark inside showing through with the ember
-  deep in it; and chunks of its ink are ripped away (1 + 5 × the hit's share of its meter): wobbling blobs flung off
+  six, the nearest widened past that), its lip glowing with the ember, its dark inside showing in it with the ember
+  deep in it (never through it to what lies behind); and chunks of its ink are ripped away (1 + 5 × the hit's share of its meter): wobbling blobs flung off
   the struck side that drag to a stop, sink, shed drops and break into a few. **The holes close as its corruption grows
   back:** they hold while its meter waits (its delay), shrink as it refills, and are gone when it is full.
 - **Budding:** each living Blightroot's area buds one from dense ground (≥ 0.6), at least 5 m from her, every
@@ -375,12 +375,12 @@ Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no fac
 - **Every boss's rule** (`CLAUDE.md`): a boss holds a corrupted pearl (`PlaneBoss.PearlAt`), the source of its
   malice and its only weak spot; defeated, the cleansed pearl is the reward, left exactly where it was attached.
 - **Defeat:** the pearl bursts into bright light and stays white. The whole arena is wiped clean of corruption
-  (`CorruptionField.Clear`), so the Crack opens as soon as the arena unseals. Her colour floods back. After a short
+  (`CorruptionField.Clear`), so the Crack opens as soon as she is freed. Her colour floods back. After a short
   shudder she leaps 6.5 m aside in one arc (0.7 s) and lies there wide open. Her cleansed pearl is the reward: it
   stays exactly where it sat in her (over the Crack's middle) as she leaps away from under it, ready to take.
-- **The arena is hers alone during the fight:** sealing it sets every murkling (clinging ones too) and Blotter inside
-  down just outside. Murklings never bud in it. Murklings and Blotters cannot cross the sealed rim, murkling
-  throws stop at it, and a Blotter's bomb bound inside lands just outside.
+- **The arena is open during the fight** (DESIGN-TOPDOWN §6.4): murklings and Blotters already in it stay, others may
+  come in, and their throws and bombs cross the rim like hers. When her sword walls rise behind Clementine they keep
+  out whatever is beyond them.
 
 ## The arena: condensation
 
@@ -421,28 +421,39 @@ field never seeds there.
 - Entering it while corrupted raises `SpringEntered`: a chime. Reaching clean raises
   `SpringCleansed`: a bell and "Wholly cleansed".
 - Visuals (`SpringView`):
-  - `light_spring.gdshader`: drifting caustics, a bright rim, and under the water her emblem, the four gold gonad
-    horseshoes in a ring round a gold heart. The emblem turns slowly and wavers with the ripples.
-  - `light_column.gdshader`: a soft column of light rising to her plane.
+  - `light_spring.gdshader`: her emblem on the floor in white light — the four gonad horseshoes, open toward the
+    middle at the same quarters as on her bell, inside a white circle. Still: nothing moves in it.
+  - `spring_dome.gdshader`: a dome over it like a great jellyfish bell lying on the sand (2.6 m high, as wide as the
+    spring, a margin of 16 scallops), a clear, faint force field with no lines on it: only a soft sheen where it is
+    seen edge-on, fading out at the sand, breathing slowly.
+  - `light_column.gdshader`: only while she bathes, a burst of holy light: god rays blazing up from the emblem and
+    fanning out wide as they climb past her plane (from 0.45 to 2.3 times the spring's radius), 22 shafts of uneven
+    width and strength round a soft glow, each flaring and dimming on its own while the light streams up them,
+    brightest at the foot and thinning to nothing high up; bright enough to bloom. From above, a sunburst round her.
   - Rising aqua and gold sparkles, and an aqua OmniLight.
-  - While she bathes, everything brightens and warms, the emblem turns faster, and the sparkles stream.
+  - While she bathes, everything brightens and warms, the dome breathes faster, and the sparkles stream.
+    While it heals her (`LightSpring.Healing`: until she is wholly clean) the screen trembles softly and the controller
+    hums, swelling and easing like a slow breath.
 - On both maps, once seen: an aqua dot with a gold heart.
 
 ## Evaporation: corruption clearing
 
-Cleared corruption never just vanishes. It evaporates.
+Cleared corruption never just vanishes. It goes in a twinkle: tiny fine-tip star drawings, "+" and "*" in white and
+ecru (`StarSpecks`, star_speck.gdshader), thin strokes tapering to their tips with a hair of dark edge, as a painted
+comic marks a sparkle. Each pops in with a little overshoot, twirls (spinning down), drifts and rises a touch, and
+pops out in a quick swell, a third to two thirds of a second after it appeared.
 
 | Where | What |
 |---|---|
-| The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Ink lifts off them as dark curls that rise and swell, then thin to violet and fade. Gold glints rise with them. The chance of a curl grows with how much a cell lost. At most 48 curls a frame. |
-| Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same vapour steams off her body. It is thicker the faster she clears. |
+| The floor (`InkVapour.FromField`) | Each texture upload lists the cells whose density fell (`CorruptionTexture.Drops`). Stars pop up off them. The chance of one grows with how much a cell lost. At most 48 a frame. |
+| Her (`InkVapour.FromHer`) | When her meter drains (a light spring or any healing), the same stars twinkle off her body. It is thicker the faster she clears. |
 | Her meter (`MinimapView` frame) | Wisps of ink steam off the arc's receding tip. They drift outward and up, curling, and turn violet, then gold, as they fade. |
-| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, a Blotter's shell, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the ink evaporates off it in the floor's dark curls, thinning to violet, with their gold glints. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
+| A creature freed (`InkVapour.Pop`) | Never a flash of light. Every corrupted creature freed (a murkling or prime, a Blightroot's mantle, a Blotter's shell, a Thumpsquirt, an Inkwarden, a Lashjaw) pops like a water balloon full of ink. Its skin snaps and the ink it was made of showers out all round: droplets flung out fast, slowing in the water, each glowing in the creature's own colour as it thins (see the kinds' colours under Presentation). As the spray slows, the stars twinkle off it as off the floor. The shower scales with the body: about 40 droplets per metre of radius, 14 at least. Whatever ground it cleanses evaporates as the floor does. |
 
 ## Presentation
 
 - **One texture** (`CorruptionTexture`) holds the field: R is density, G is the gold of corruption dying. G is worked
-  out from how fast each cell falls and fades over ~1.2 s. It uploads at most 30 times a second, and only while
+  out from how fast each cell falls and fades over ~0.4 s. It uploads at most 30 times a second, and only while
   something changes. The level's floor and its shards read it.
 - **Ink drip** (`corruption_shards.gdshader`, `CorruptionView`): the corruption's only mark on the floor, as if from
   another dimension: ink dripping upward out of the ground, as fine as plankton (drops 4–8 cm across, about 70%
@@ -475,8 +486,9 @@ Cleared corruption never just vanishes. It evaporates.
   own lantern.
 - Other shaders:
   - `ink_ring.gdshader`: pulses, buds, bursts.
-- **HUD** (`CleanseMeter`): the level cleansed, with the 50% and 75% tipping points marked. On boss levels it also
-  shows the arena, with the Crack's 60% mark and the crust as pips.
+- **HUD** (`CleanseMeter`): a slim bar under the minimap, the level cleansed, its 50% and 75% tipping points notched;
+  captioned only while it moves. Inside the boss's arena a second bar, the arena's, notched at the Crack's 60%. The
+  crust's pips are on the boss's own bar.
 - **Maps:** they show neither the corruption nor any corrupted creature; only the light springs, of its works.
 
 ## Not yet

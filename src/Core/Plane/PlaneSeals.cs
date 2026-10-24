@@ -30,6 +30,8 @@ public sealed class SecretSeal
     public Vector2 Facing, Emblem;
     public int Hits;
     public bool Open;
+    /// <summary>Shut by a barred boss arena while its fight runs (it cannot be lit meanwhile); whether it stood open before.</summary>
+    public bool Barred, WasOpen;
     /// <summary>Since the last hit that counted (its light drains once Hold has passed), and the drain's clock.</summary>
     public float Since, DrainClock;
     public SealKind Kind => Rock.Kind;
@@ -73,7 +75,7 @@ public sealed partial class PlaneWorld
     {
         foreach (var seal in Seals)
         {
-            if (seal.Open || !seal.Rock.Contains(at, 0.3f) || Vector2.Distance(at, seal.Emblem) > SealTuning.Reach) continue;
+            if (seal.Open || seal.Barred || !seal.Rock.Contains(at, 0.3f) || Vector2.Distance(at, seal.Emblem) > SealTuning.Reach) continue;
             seal.Hits++;
             seal.Since = seal.DrainClock = 0f;
             Events.Add(new PlaneEvent(PlaneEventType.SealLit, seal.Emblem, seal.Facing, seal.Glow));
@@ -87,10 +89,46 @@ public sealed partial class PlaneWorld
         }
     }
 
-    /// <summary>Verification: a shot of her light striking the first seal's emblem.</summary>
-    public void DebugStrikeSeal()
+    /// <summary>
+    /// A barred boss arena's fight begins: every sealed wall into it is shut for the fight. One she opened rises back up
+    /// out of the sand behind her (its whole wall, gate and all); the others simply stay, and none can be lit meanwhile.
+    /// What stands in a wall as it rises is pushed out of it (PlaneWorld.Move's way out of rock).
+    /// </summary>
+    void BarArena()
     {
-        if (Seals.FirstOrDefault(x => !x.Open) is { } seal) StrikeSeal(seal.Emblem - seal.Facing * 0.3f);
+        foreach (var seal in Seals)
+        {
+            if (seal.Kind != SealKind.Boss) continue;
+            seal.Barred = true;
+            seal.WasOpen = seal.Open;
+            seal.Hits = 0;
+            if (!seal.Open) continue;
+            seal.Open = false;
+            foreach (var part in seal.Rock.Remains()) _rocks.Remove(part);
+            _rocks.Add(seal.Rock);
+            Events.Add(new PlaneEvent(PlaneEventType.SealClosed, seal.Rock.Center, seal.Facing, seal.Rock.Radius));
+        }
+    }
+
+    /// <summary>The fight is over: the walls it shut slide back down by themselves; the others can be lit again.</summary>
+    void UnbarArena()
+    {
+        foreach (var seal in Seals)
+        {
+            if (!seal.Barred) continue;
+            seal.Barred = false;
+            if (!seal.WasOpen) continue;
+            seal.Open = true;
+            _rocks.Remove(seal.Rock);
+            _rocks.AddRange(seal.Rock.Remains());
+            Events.Add(new PlaneEvent(PlaneEventType.SealOpened, seal.Rock.Center, seal.Facing, seal.Rock.Radius));
+        }
+    }
+
+    /// <summary>Verification: a shot of her light striking this seal's emblem (or the first one still shut).</summary>
+    public void DebugStrikeSeal(SecretSeal? which = null)
+    {
+        if ((which ?? Seals.FirstOrDefault(x => !x.Open)) is { } seal) StrikeSeal(seal.Emblem - seal.Facing * 0.3f);
     }
 
     /// <summary>The caves still sealed (the maps draw them as wall).</summary>

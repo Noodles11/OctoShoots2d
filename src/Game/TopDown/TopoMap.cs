@@ -30,6 +30,8 @@ public partial class TopoMap : Control
     public System.Numerics.Vector2 Player;
     public System.Numerics.Vector2 PlayerHeading = new(0f, -1f);
     public bool ShowLegend;
+    /// <summary>With the legend (the Tab map): where the run stands, and its clock, at the top left.</summary>
+    public string Caption = "", Clock = "";
     /// <summary>Dashed routes, arch symbols, area outlines (the rift's arena, cave chambers), peak crosses and spot heights — the minimap leaves them out.</summary>
     public bool ShowDetail = true;
     /// <summary>Places Clementine has been to (indices into the level's POIs): only these show.</summary>
@@ -151,9 +153,6 @@ public partial class TopoMap : Control
             if (into.All(p => System.Numerics.Vector2.Distance(p.At, at) >= spacing)) into.Add((at, h));
     }
 
-    /// <summary>The mud cloud around a sealed boss arena (centre x, y, rim, how risen), drawn over the fog.</summary>
-    public Vector4 Mud;
-
     float PixelsPerMetre => Size.X / MetresAcross;
 
     System.Numerics.Vector2 Origin => Center - new System.Numerics.Vector2(Size.X, Size.Y) * 0.5f / PixelsPerMetre;
@@ -175,7 +174,6 @@ public partial class TopoMap : Control
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("band_px"), ppm > 4f ? Mathf.Clamp(ppm * 3.2f, 14f, 26f) : 16f);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_fog"), Fog is not null);
         if (Fog is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fog"), Fog.Texture);
-        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mud"), Mud);
         QueueRedraw();
     }
 
@@ -278,7 +276,11 @@ public partial class TopoMap : Control
             DrawPolyline(arrow.Append(arrow[0]).ToArray(), Colors.Black, 1.5f * MathF.Max(k * 0.9f, 1f), true);
         }
 
-        if (ShowLegend) DrawLegend(font);
+        if (ShowLegend)
+        {
+            DrawLegend(font);
+            DrawCaption(font);
+        }
     }
 
     /// <summary>
@@ -448,6 +450,14 @@ public partial class TopoMap : Control
         DrawCircle(V(0f, -1.6f), 1.5f * k, Ink);
         DrawCircle(V(-0.6f, -2f), 0.45f * k, new Color(1f, 0.85f, 0.85f));
         DrawCircle(V(0.6f, -2f), 0.45f * k, new Color(1f, 0.85f, 0.85f));
+    }
+
+    void DrawCaption(Font font)
+    {
+        if (Caption.Length == 0 && Clock.Length == 0) return;
+        var at = new Vector2(14f, 26f);
+        DrawString(font, at, Caption, HorizontalAlignment.Left, -1, 15, Ink);
+        if (Clock.Length > 0) DrawString(font, at + new Vector2(0f, 20f), Clock, HorizontalAlignment.Left, -1, 14, Ink with { A = 0.75f });
     }
 
     void DrawLegend(Font font)

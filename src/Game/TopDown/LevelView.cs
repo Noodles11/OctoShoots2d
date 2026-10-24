@@ -117,21 +117,34 @@ public partial class LevelView : Node3D
     /// one opens only its gate: what stands either side of it (its remains) is there at once, and the wall sinks behind it,
     /// so only the gate is seen going down.
     /// </summary>
-    public void Slide(System.Numerics.Vector2 at)
+    public void Slide(System.Numerics.Vector2 at) => Move(at, up: false);
+
+    /// <summary>The stretch of wall a seal stands as (its carvings are cut in it), if it has one.</summary>
+    public MeshInstance3D? SealWall(System.Numerics.Vector2 at) => _seals.Find(s => s.At == at).Wall;
+
+    /// <summary>A barred boss arena's way in rises back up out of the sand: the slide played backwards.</summary>
+    public void Raise(System.Numerics.Vector2 at) => Move(at, up: true);
+
+    void Move(System.Numerics.Vector2 at, bool up)
     {
         int i = _seals.FindIndex(s => s.At == at);
         if (i < 0) return;
         var (_, wall, remains, height) = _seals[i];
-        _seals.RemoveAt(i);
         if (remains is not null) remains.Visible = true;
+        wall.Visible = true;
         var tween = CreateTween();
         tween.TweenMethod(Callable.From<float>(t =>
         {
-            // A tremor all through it as it grinds down.
+            // A tremor all through it as it grinds.
             float shake = t < 0.95f ? 0.035f * Mathf.Sin(t * 170f) * (1f - t) : 0f;
-            wall.Position = new Vector3(shake, -(height + 0.3f) * SlideAt(t), shake * 0.6f);
+            wall.Position = new Vector3(shake, -(height + 0.3f) * SlideAt(up ? 1f - t : t), shake * 0.6f);
         }), 0f, 1f, SlideSeconds);
-        tween.TweenCallback(Callable.From(wall.QueueFree));
+        // Down, it is gone; up, it is whole again (its remains are part of it).
+        tween.TweenCallback(Callable.From(() =>
+        {
+            wall.Visible = up;
+            if (up && remains is not null) remains.Visible = false;
+        }));
     }
 
     public override void _Ready()
@@ -150,6 +163,7 @@ public partial class LevelView : Node3D
             if (child != _flora) child.QueueFree();
         _canopies.Clear();
         _materials.Clear();
+        _seeThrough = default;
         Track(_ground);
         foreach (var m in _flora.Materials) Track(m);
         var map = _map = shape.Map;
@@ -230,6 +244,23 @@ public partial class LevelView : Node3D
     }
 
     /// <summary>The dive's portal: world xz centre, radius, and mode (0 off, 1 cut away inside, 2 only the inside).</summary>
+    /// <summary>
+    /// In a curse den's tunnel: rock between the camera and the tunnel round her (world xz, this far round, at her plane's
+    /// height) thins away by this much (0 none), so the walls in front never hide the way (level_frame's lf_see_cut).
+    /// </summary>
+    public void SeeThrough(Vector3 her, float radius, float amount)
+    {
+        var v = new Vector4(her.X, her.Z, radius, amount);
+        if (v == _seeThrough) return;
+        _seeThrough = v;
+        foreach (var m in _materials)
+        {
+            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("see_through"), v);
+            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("see_through_y"), her.Y);
+        }
+    }
+    Vector4 _seeThrough;
+
     public void SetPortal(Vector2 centre, float radius, int mode)
     {
         foreach (var m in _materials) m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("portal"), new Vector4(centre.X, centre.Y, radius, mode));

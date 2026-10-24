@@ -23,6 +23,10 @@ how authored pieces combine, never from noise.
 
 ## 1. Where bosses come from
 
+**Parked.** For now bosses are hardcoded, one per depth (`BossRoster`; DESIGN-TOPDOWN §12.2): every depth meets Queen
+Clam, scaled by Menace. The generator, its validator and its rigs stay in the code and its tests, unused by the game,
+for when the roster is grown from it again. What follows is how it works when it is in use.
+
 - **Generated:** the boss of every real depth's boss level — Depths 1–5 (Kelp Jungle → Abyss).
 - **Authored:** only **The Hand** (Depth 6, the Tank), never generated (not built yet; until it is, Depth 6 rolls a
   generated boss like the others).

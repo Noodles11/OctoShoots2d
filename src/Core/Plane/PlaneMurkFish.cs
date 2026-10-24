@@ -177,7 +177,7 @@ public sealed partial class PlaneWorld
         if (wish.Length() > speed) wish = Vector2.Normalize(wish) * speed;
         m.Target = chase ? p.Position : centre;
         m.Velocity = MoveToward(m.Velocity, wish, 7f * Dt);
-        Move(ref m.Position, ref m.Velocity, m.Radius, report: false, barrier: ArenaBarrier.Outside);
+        Move(ref m.Position, ref m.Velocity, m.Radius, report: false);
 
         // It clings on touch: no hit, only the drain.
         if (Vector2.Distance(m.Position, p.Position) < m.Radius + Radius && p.DashInvulnerableTimer <= 0f && p.ShieldTimer <= 0f

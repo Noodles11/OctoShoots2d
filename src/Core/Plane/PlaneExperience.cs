@@ -122,6 +122,6 @@ public sealed partial class PlaneWorld
         bool Near(Vector2 p) => Vector2.DistanceSquared(p, at) < r * r;
         return Murklings.Any(m => m.Alive && Near(m.Position)) || Blotters.Any(b => b.Alive && Near(b.Position))
             || Thumpsquirts.Any(t => t.Alive && Near(t.Position)) || Inkwardens.Any(w => w.Alive && Near(w.Position))
-            || Lashjaws.Any(l => l.Alive && Near(l.Position)) || Boss is { Freed: false } && ArenaSealed;
+            || Lashjaws.Any(l => l.Alive && Near(l.Position)) || Boss is { Freed: false } && BossBattle;
     }
 }

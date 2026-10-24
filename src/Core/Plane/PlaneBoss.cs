@@ -29,10 +29,8 @@ public static class PlaneBossTuning
     /// then a beat, then her shadow grows and she lands.
     /// </summary>
     public const float DropDelay = 0.5f, ShadowSeconds = 0.8f;
-    /// <summary>The landing wave reaches the rim in this long, sweeping mobs out; it nudges her outward.</summary>
+    /// <summary>The landing wave reaches the rim in this long; it nudges her outward.</summary>
     public const float WaveSeconds = 0.5f, WaveNudge = 5f;
-    /// <summary>The mud cloud rises over this long when the arena seals, and settles over CloudSettle once she is freed.</summary>
-    public const float CloudRise = 1.5f, CloudSettle = 2f;
 
     public const float PearlDamage = 12f, PearlSpeed = 7f, PearlRadius = 0.3f, PearlLife = 4f;
     public const float OpenTelegraph = 0.9f, VolleyInterval = 1.2f;
@@ -71,9 +69,6 @@ public static class PlaneBossTuning
 }
 
 public enum BossStage { Waiting, Banner, Drop, Fight, Freed }
-
-/// <summary>Where the sealed arena's wall keeps a body: inside (Clementine), outside (mobs), or nowhere.</summary>
-public enum ArenaBarrier { None, Inside, Outside }
 
 /// <summary>Where a boss is in its cycle (docs/BOSS-GENERATOR.md §7): rest, the warning, its act (Helix: the helix playing in it), the window after it, and the stagger of a phase change.</summary>
 public enum BossAct { Rest, Telegraph, Act, Helix, Window, Stagger }
@@ -123,8 +118,6 @@ public sealed class PlaneBoss
     /// <summary>Freed (not a clam): the way it swims off, and whether it is gone from the screen.</summary>
     public Vector2 LeaveDir;
     public bool Gone;
-    /// <summary>The mud cloud around the arena: 0 settled, 1 fully risen.</summary>
-    public float Cloud;
     /// <summary>Its health at the fight's start (eased by the level cleansed) and how dense its patterns are (1 full).</summary>
     public float MaxHp = PlaneBossTuning.Hp, Pattern = 1f;
     /// <summary>The corruption's crust on it (0..CrustLayers): armour, denser patterns, longer reach. Each fifth of the arena cleansed strips one.</summary>
@@ -185,8 +178,12 @@ public sealed partial class PlaneWorld
 {
     public PlaneBoss? Boss { get; private set; }
 
-    /// <summary>While the battle runs the arena is sealed: she cannot leave it, and mobs and their shots cannot come in.</summary>
-    public bool ArenaSealed { get; private set; }
+    /// <summary>
+    /// The battle runs: from her coming into the arena until the boss is freed. The arena stays open — she may leave it,
+    /// and so may a boss that chases her; mobs and shots come and go — unless the boss's author bars it (BossSpec.Blockade,
+    /// PlaneSeals' BarArena).
+    /// </summary>
+    public bool BossBattle { get; private set; }
     public Vector2 ArenaCenter => Map.Exit.Position;
     public float ArenaRadius => Map.Exit.Radius;
 
@@ -195,14 +192,14 @@ public sealed partial class PlaneWorld
     static bool IsVolley(BossAttack a) => a is BossAttack.Ring or BossAttack.Wall or BossAttack.Helix or BossAttack.SacBurst or BossAttack.PulseRing or BossAttack.ArcBombs;
 
     /// <summary>
-    /// Only a boss level has one: it waits on the Crack, which stays shut until it is freed. Its body and fight are the
-    /// boss generator's for this loop's depth (docs/BOSS-GENERATOR.md), unless the options name one. The tutorial's open
-    /// rift has the arena but no boss, and its Crack is open.
+    /// Only a boss level has one: it waits on the Crack, which stays shut until it is freed. It is the roster's boss for
+    /// this loop's depth (BossRoster), unless the options name one. The tutorial's open rift has the arena but no boss,
+    /// and its Crack is open.
     /// </summary>
     void PlaceBoss()
     {
         if (!Map.HasBoss || Map.Rift) return;
-        var spec = Options.Boss ?? BossGenerator.For(Map.Seed, Map.Cycle, Math.Max(1, Map.Depth - LevelPlan.Tutorial));
+        var spec = Options.Boss ?? BossRoster.For(Map.Seed, Map.Cycle, Math.Max(1, Map.Depth - LevelPlan.Tutorial));
         Boss = new PlaneBoss { Spec = spec, Position = ArenaCenter, Hp = spec.Hp, MaxHp = spec.Hp };
         // It lies with its opening toward the screen (south, the camera's side), so the pearl shows.
         ExitOpen = false;
@@ -211,30 +208,6 @@ public sealed partial class PlaneWorld
         Boss.Heard = ArenaCenter;
         if (spec.Exposure == Exposure.CoaxOut)
             foreach (var site in spec.Sites.Where(s => s.Sac)) Boss.Sacs.Add(new BossSac { Site = site, Hp = spec.SacHp });
-    }
-
-    /// <summary>True when the barrier lets a circle stand here.</summary>
-    bool BarrierAllows(Vector2 p, float radius, ArenaBarrier barrier)
-    {
-        if (!ArenaSealed || barrier == ArenaBarrier.None) return true;
-        float d = Vector2.Distance(p, ArenaCenter);
-        return barrier == ArenaBarrier.Inside ? d <= ArenaRadius - radius : d >= ArenaRadius + radius;
-    }
-
-    /// <summary>The barrier's "uphill" direction at p (into the wall).</summary>
-    Vector2 BarrierNormal(Vector2 p, ArenaBarrier barrier)
-    {
-        Vector2 out_ = SafeNormalize(p - ArenaCenter);
-        if (out_ == Vector2.Zero) out_ = Vector2.UnitX;
-        return barrier == ArenaBarrier.Inside ? out_ : -out_;
-    }
-
-    /// <summary>True when a point crosses the sealed arena's rim between a and b (shots stop there).</summary>
-    bool CrossesRim(Vector2 a, Vector2 b)
-    {
-        if (!ArenaSealed) return false;
-        bool ina = Vector2.Distance(a, ArenaCenter) < ArenaRadius, inb = Vector2.Distance(b, ArenaCenter) < ArenaRadius;
-        return ina != inb;
     }
 
     void StepBoss()
@@ -249,14 +222,14 @@ public sealed partial class PlaneWorld
         switch (boss.Stage)
         {
             case BossStage.Waiting:
-                // It seals the arena the moment Clementine is wholly inside it.
+                // The battle begins the moment Clementine is wholly inside the arena; a barred one shuts behind her.
                 if (Vector2.Distance(p.Position, ArenaCenter) <= ArenaRadius - Radius - 0.3f)
                 {
                     boss.Stage = BossStage.Banner;
                     boss.StageTime = 0f;
-                    ArenaSealed = true;
-                    ClearArenaOfCreatures();
-                    Events.Add(new PlaneEvent(PlaneEventType.ArenaSealed, ArenaCenter, Vector2.Zero));
+                    BossBattle = true;
+                    if (boss.Spec.Blockade) BarArena();
+                    Events.Add(new PlaneEvent(PlaneEventType.BattleBegan, ArenaCenter, Vector2.Zero));
                 }
                 break;
             case BossStage.Banner:
@@ -273,36 +246,16 @@ public sealed partial class PlaneWorld
                 StepFight(boss);
                 break;
             case BossStage.Freed:
-                if (boss.StageTime >= PlaneBossTuning.FreedShudder && ArenaSealed) Release(boss);
-                else if (!ArenaSealed) StepLeaving(boss);
+                if (boss.StageTime >= PlaneBossTuning.FreedShudder && BossBattle) Release(boss);
+                else if (!BossBattle) StepLeaving(boss);
                 break;
         }
 
-        // The mud cloud rises while sealed and settles afterwards.
-        float rate = ArenaSealed ? Dt / PlaneBossTuning.CloudRise : -Dt / PlaneBossTuning.CloudSettle;
-        boss.Cloud = Math.Clamp(boss.Cloud + rate, 0f, 1f);
-
-        // The landing wave runs out to the rim, sweeping mobs before it.
+        // The landing wave runs out to the rim.
         if (boss.Wave >= 0f)
         {
             boss.Wave += ArenaRadius / PlaneBossTuning.WaveSeconds * Dt;
-            foreach (var mob in Mobs)
-            {
-                if (!mob.Alive) continue;
-                Vector2 off = mob.Position - ArenaCenter;
-                float d = off.Length();
-                if (d >= ArenaRadius + PlaneCombatTuning.MobRadius) continue;
-                Vector2 dir = d > 1e-3f ? off / d : Vector2.UnitX;
-                if (d < boss.Wave + PlaneCombatTuning.MobRadius) mob.Position = ArenaCenter + dir * MathF.Min(boss.Wave + PlaneCombatTuning.MobRadius, ArenaRadius);
-            }
-            if (boss.Wave >= ArenaRadius)
-            {
-                boss.Wave = -1f;
-                // Set down just outside the wall, where there is water.
-                foreach (var mob in Mobs)
-                    if (mob.Alive && Vector2.Distance(mob.Position, ArenaCenter) < ArenaRadius + PlaneCombatTuning.MobRadius)
-                        mob.Position = OutsideArena(mob.Position);
-            }
+            if (boss.Wave >= ArenaRadius) boss.Wave = -1f;
         }
 
         // Its body is solid: Clementine is pushed off it (and hurt by it while the fight runs). Freed, only a clam
@@ -348,10 +301,11 @@ public sealed partial class PlaneWorld
         Events.Add(new PlaneEvent(PlaneEventType.BossLanded, boss.Position, dir));
     }
 
-    /// <summary>Freed: the arena opens, its pearl floats free and the Crack opens; a clam leaps aside, the others leave.</summary>
+    /// <summary>Freed: the battle ends (a barred arena opens), its pearl floats free and the Crack opens; a clam leaps aside, the others leave.</summary>
     void Release(PlaneBoss boss)
     {
-        ArenaSealed = false;
+        BossBattle = false;
+        if (boss.Spec.Blockade) UnbarArena();
         // The Crack opens once the arena is cleansed enough too (StepCondensation).
         ExitOpen = Corruption is null || ArenaCleansed >= CorruptionTuning.ArenaToOpen;
         if (ExitOpen && Corruption is not null) Events.Add(new PlaneEvent(PlaneEventType.CrackOpened, ArenaCenter, Vector2.Zero));
@@ -402,56 +356,6 @@ public sealed partial class PlaneWorld
         boss.Position += boss.LeaveDir * speed * Dt;
         boss.Facing = Turn(boss.Facing, boss.LeaveDir, 1.2f * Dt);
         if (boss.Leap >= 1f) boss.Gone = true;
-    }
-
-    /// <summary>
-    /// The arena seals: no creature but the boss may be inside during the fight. Murklings (clinging ones too) and
-    /// Blotters in it are set down just outside; bombs bound for it are spent.
-    /// </summary>
-    void ClearArenaOfCreatures()
-    {
-        float Inside(Vector2 at, float radius) => Vector2.Distance(at, ArenaCenter) - (ArenaRadius + radius);
-        foreach (var m in Murklings)
-            if (m.Alive && Inside(m.Position, m.Radius) < 0f)
-            {
-                m.Clinging = false;
-                m.Position = OutsideArena(m.Position);
-                m.Velocity = Vector2.Zero;
-            }
-        foreach (var w in Inkwardens)
-            if (w.Alive && Inside(w.Position, WardenTuning.Radius) < 0f) w.Target = w.Position = OutsideArena(w.Position);
-        foreach (var t in Thumpsquirts)
-            if (t.Alive && Inside(t.Position, ThumpTuning.Radius) < 0f)
-            {
-                t.Position = OutsideArena(t.Position);
-                t.To = t.From = t.Position;
-            }
-        foreach (var b in Blotters)
-            if (b.Alive && Inside(b.Position, BlotterTuning.Radius) < 0f)
-            {
-                b.Position = OutsideArena(b.Position);
-                b.Target = b.Position;
-            }
-        Bombs.RemoveAll(bomb => Inside(bomb.To, 0f) < 0f);
-        MurkShots.Clear();
-    }
-
-    /// <summary>The nearest open water just outside the arena's rim, along the way out from p (then turning a little).</summary>
-    Vector2 OutsideArena(Vector2 p)
-    {
-        Vector2 dir = SafeNormalize(p - ArenaCenter);
-        if (dir == Vector2.Zero) dir = Vector2.UnitX;
-        for (int turn = 0; turn < 36; turn++)
-        {
-            float a = (turn % 2 == 0 ? 1 : -1) * (turn + 1) / 2 * 10f * MathUtil.Deg2Rad;
-            Vector2 d = Rotate(dir, a);
-            for (float r = ArenaRadius + PlaneCombatTuning.MobRadius + 0.6f; r < ArenaRadius + 12f; r += 1f)
-            {
-                Vector2 q = ArenaCenter + d * r;
-                if (Clear(q, PlaneCombatTuning.MobRadius)) return q;
-            }
-        }
-        return ArenaCenter + dir * (ArenaRadius + 2f);
     }
 
     /// <summary>
@@ -620,8 +524,10 @@ public sealed partial class PlaneWorld
         return d == Vector2.Zero ? boss.Facing : d;
     }
 
+    /// <summary>It keeps to its arena — unless it chases her, when it may follow her out.</summary>
     Vector2 KeepInArena(PlaneBoss boss, Vector2 at)
     {
+        if (boss.Spec.Chaser) return at;
         float max = ArenaRadius - boss.Radius - PlaneBossTuning.RimKeep;
         var off = at - ArenaCenter;
         return off.Length() > max ? ArenaCenter + SafeNormalize(off) * max : at;
@@ -724,7 +630,7 @@ public sealed partial class PlaneWorld
                     }
                     var off = to - ArenaCenter;
                     float max = ArenaRadius - 1f;
-                    if (off.Length() > max) to = ArenaCenter + SafeNormalize(off) * max;
+                    if (!spec.Chaser && off.Length() > max) to = ArenaCenter + SafeNormalize(off) * max;
                     Bombs.Add(new CorruptionBomb { From = boss.Position, To = to, FromBoss = true });
                 }
                 Events.Add(new PlaneEvent(PlaneEventType.BombThrown, boss.Position, boss.Facing));
@@ -904,6 +810,12 @@ public sealed partial class PlaneWorld
         SetAct(boss, BossAct.Stagger);
         boss.SnapTimer = -1f;
         Events.Add(new PlaneEvent(PlaneEventType.BossStagger, boss.Position, boss.Facing, 1f));
+    }
+
+    /// <summary>Verification: the fighting boss is freed at once.</summary>
+    public void DebugFreeBoss()
+    {
+        if (Boss is { Stage: BossStage.Fight } boss) FreeBoss(boss);
     }
 
     void FreeBoss(PlaneBoss boss)

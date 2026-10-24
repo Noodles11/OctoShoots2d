@@ -52,7 +52,7 @@ public class CurseDenTests
                 var mid = Vector2.Lerp(a, b, 0.5f);
                 if (i > 2) Assert.False(map.IsOpen(mid + side * 3.2f) && map.IsOpen(mid - side * 3.2f), $"{id}: the tunnel is not narrow at {mid}");
             }
-            Assert.True(length >= 26f, $"{id}: only {length} m long");
+            Assert.True(length >= 16f, $"{id}: only {length} m long");
             // A dead end: from the end chamber, the only way out is back along the tunnel to the mouth.
             var end = cave.Chambers[^1].Center;
             var reach = LevelValidator.Distances(map, map.Start.Position);

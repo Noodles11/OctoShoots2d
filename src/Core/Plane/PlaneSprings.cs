@@ -63,8 +63,8 @@ public static class LightSprings
 public sealed class LightSpring
 {
     public Vector2 Position;
-    /// <summary>She is in it and it is washing her.</summary>
-    public bool Bathing;
+    /// <summary>She is in it, and whether it is healing her this moment (she is not yet wholly clean).</summary>
+    public bool Bathing, Healing;
     /// <summary>It has washed her on this visit: when she leaves, it is spent.</summary>
     public bool Used;
     /// <summary>Its washing is gone: it heals no more, and fades away.</summary>
@@ -93,6 +93,7 @@ public sealed partial class PlaneWorld
             bool inside = !spring.Spent && Vector2.Distance(p.Position, spring.Position) <= SpringTuning.Radius;
             bool was = spring.Bathing;
             spring.Bathing = inside;
+            spring.Healing = false;
             if (!inside && spring.Used && !spring.Spent)
             {
                 spring.Spent = true;
@@ -102,6 +103,7 @@ public sealed partial class PlaneWorld
             float max = Run.MaxHp;
             if (p.Hp >= max) continue;
             spring.Used = true;
+            spring.Healing = true;
             if (!was) Events.Add(new PlaneEvent(PlaneEventType.SpringEntered, spring.Position, Vector2.Zero));
             p.Hp = MathF.Min(max, p.Hp + max * SpringTuning.CleansePerSecond * Dt);
             Run.Hp = p.Hp;

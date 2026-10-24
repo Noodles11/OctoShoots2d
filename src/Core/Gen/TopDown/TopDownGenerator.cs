@@ -1229,7 +1229,8 @@ public static class TopDownGenerator
     static string? BuildFeatures(LevelMap map, Rng rng, Dictionary<int, Vector2> spurDirs, WallStrata strata)
     {
 
-        // Caves: every special room gets one, carved into the ridge behind its spur.
+        // Caves: every special room gets one, carved into the ridge behind its spur: a single chamber, the dead end of its
+        // spur (the curse den a long winding tunnel).
         for (int pi = 0; pi < map.Pois.Count; pi++)
         {
             var poi = map.Pois[pi];
@@ -1242,34 +1243,12 @@ public static class TopDownGenerator
             }
             var cave = new CaveSite
             {
-                Kind = poi.Kind is PoiKind.TreasureCave or PoiKind.CurseDen ? CaveKind.MultiChamber : CaveKind.Pocket,
+                Kind = CaveKind.Pocket,
                 Poi = pi,
                 Facing = facing,
                 Mouth = poi.Position + facing * poi.Radius,
             };
             cave.Chambers.Add((poi.Position, poi.Radius));
-            if (cave.Kind == CaveKind.MultiChamber)
-            {
-                // Deeper chambers lead back into the ridge, away from the mouth.
-                Vector2 side = Geo.Perp(facing) * (rng.NextFloat() < 0.5f ? -1f : 1f);
-                float r2 = rng.Range(5f, 6f), r3 = rng.Range(4f, 5f);
-                bool third = rng.NextFloat() < 0.5f;
-                // Try a few directions back into the ridge until the chambers clear every corridor.
-                foreach (float turn in new[] { 0f, 0.5f, -0.5f, 1f, -1f, 1.5f, -1.5f, 2f, -2f })
-                {
-                    Vector2 back = Rotate(-facing, turn);
-                    Vector2 second = poi.Position + back * (poi.Radius + 4.5f);
-                    var extra = new List<(Vector2, float)> { (second, r2) };
-                    if (third) extra.Add((second + Rotate(side, turn) * 9f, r3));
-                    if (extra.All(ch => ChamberClear(map, ch.Item1, ch.Item2, pi)))
-                    {
-                        cave.Chambers.AddRange(extra);
-                        break;
-                    }
-                }
-                // Where the ridge behind is too thin for more chambers, the room is a single pocket.
-                if (cave.Chambers.Count == 1) cave.Kind = CaveKind.Pocket;
-            }
             foreach (var (c, r) in cave.Chambers)
             {
                 if (!Inside(c, Rim + r + 2f)) return $"the {poi.Kind} cave runs into the rim";
@@ -1607,16 +1586,6 @@ public static class TopDownGenerator
 
     static Vector2 Rotate(Vector2 v, float a) => new(v.X * MathF.Cos(a) - v.Y * MathF.Sin(a), v.X * MathF.Sin(a) + v.Y * MathF.Cos(a));
 
-    static bool ChamberClear(LevelMap map, Vector2 c, float r, int poi)
-    {
-        if (!Inside(c, Rim + r + 2f) || !RockAround(map, c, r + 2.5f)) return false;
-        foreach (var corridor in map.Corridors)
-            if (corridor.Poi != poi && corridor.DistanceToCentre(c) < r + corridor.HalfWidth + 1.5f) return false;
-        foreach (var other in map.Pois)
-            if (map.Pois.IndexOf(other) != poi && Vector2.Distance(other.Position, c) < other.Radius + r + 3f) return false;
-        return true;
-    }
-
     /// <summary>How far from the corridor centre, along dir, the ground first reaches peak height (−1 if not within 12 m of the edge).</summary>
     /// <summary>Raises two smooth rock shoulders facing each other across a corridor, clear of every other open place.</summary>
     static bool RaiseShoulders(LevelMap map, Rng rng)
@@ -1850,13 +1819,7 @@ public static class TopDownGenerator
 
         EnemyKind DenKind() => rng.NextFloat() < 0.75f ? Swimmers[rng.Int(Swimmers.Length)] : EnemyKind.Crabby;
 
-        // Dens in caves (the shop is safe water; the curse den's dark is danger enough) and in pockets along the ridges.
-        for (int pi = 0; pi < map.Pois.Count; pi++)
-        {
-            var poi = map.Pois[pi];
-            if (poi.Kind is PoiKind.TreasureCave && poi.Cave >= 0 && map.Caves[poi.Cave].Chambers.Count > 1)
-                Add(SpawnRole.Den, DenKind(), Scaled(2 + rng.Int(2)), map.Caves[poi.Cave].Chambers[^1].Center, pi);
-        }
+        // Dens in pockets along the ridges.
         int ridgeDens = 2 + rng.Int(3);
         var mains = map.Corridors.Where(c => c.Kind == CorridorKind.Main).ToList();
         for (int tries = 0; tries < 300 && map.Spawns.Count(s => s.Role == SpawnRole.Den && s.Poi < 0) < ridgeDens; tries++)

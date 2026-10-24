@@ -27,8 +27,6 @@ public static class PlaneCombatTuning
     /// LingerDrag): it slows to a hover near the end of its range, so later shots catch up and merge with it.
     /// </summary>
     public const float ShotSpeed = 30f;
-    /// <summary>The surge back to her after a hit cleanses a line of ground this wide, by this much density.</summary>
-    public const float StrikeWidth = 0.6f, StrikeCleanse = 0.25f;
     public const float BubbleRange = 12.8f, MinReach = 1.5f, LightSettle = 8f;
     /// <summary>
     /// Below this speed a bubble hovers: still drifting and slowing, each bubble for its own time between BubbleHoverMin
@@ -345,7 +343,7 @@ public sealed partial class PlaneWorld
     public bool OverShaft => Map.Shaft.Contains(Player.Position);
 
     /// <summary>An active battle: the arena is sealed, or a creature that has noticed her is close.</summary>
-    public bool InBattle => ArenaSealed || Mobs.Any(m => m.Alive && m.Aggro && Vector2.Distance(m.Position, Player.Position) < PlaneCombatTuning.DiveSafeDistance)
+    public bool InBattle => BossBattle || Mobs.Any(m => m.Alive && m.Aggro && Vector2.Distance(m.Position, Player.Position) < PlaneCombatTuning.DiveSafeDistance)
                             || Murklings.Any(m => m.Alive && !m.Budding && Vector2.Distance(m.Position, Player.Position) < PlaneCombatTuning.DiveSafeDistance);
 
     /// <summary>She may dive now (DESIGN-TOPDOWN §4.6): over the shaft, the way open, and no battle on.</summary>
@@ -478,7 +476,7 @@ public sealed partial class PlaneWorld
             // Knocked back by her hits, easing off.
             if (mob.Knock.LengthSquared() > 1e-4f)
             {
-                Move(ref mob.Position, ref mob.Knock, PufferlingTuning.CalmRadius, report: false, barrier: ArenaBarrier.Outside);
+                Move(ref mob.Position, ref mob.Knock, PufferlingTuning.CalmRadius, report: false);
                 mob.Knock *= MathF.Exp(-PlaneCombatTuning.KnockDecay * Dt);
             }
             StepPufferling(mob);
@@ -505,7 +503,7 @@ public sealed partial class PlaneWorld
                         if (bubble.FromPlayer && bubble.Life > 0f && Geo.SegmentDistance(bubble.Position, was, shot.Position) < bubble.Radius + shot.Radius)
                             Pop(bubble, was - bubble.Position);
                 // Rock and pots stop shots, and so does the sealed arena's wall.
-                if (!Map.IsOpen(shot.Position) || _rocks.Any(r => r.Contains(shot.Position)) || VaseAt(shot.Position, shot.Radius) is not null || CrossesRim(was, shot.Position)) shot.Life = 0f;
+                if (!Map.IsOpen(shot.Position) || _rocks.Any(r => r.Contains(shot.Position)) || VaseAt(shot.Position, shot.Radius) is not null) shot.Life = 0f;
             }
             if (shot.Life <= 0f) continue;
             if (shot.FromPlayer)
@@ -1057,19 +1055,13 @@ public sealed partial class PlaneWorld
             BubbleMeetsVase(shot, vase, dir);
             return;
         }
-        bool rim = CrossesRim(shot.Line, next);
-        if (rim || !Map.IsOpen(next) || _rocks.Any(r => r.Contains(next)))
+        if (!Map.IsOpen(next) || _rocks.Any(r => r.Contains(next)))
         {
             // Her light striking a secret's seal lights its emblem (once a bubble, whatever it carries).
-            if (!rim && !shot.SealStruck && _rocks.Any(r => r.Contains(next)))
+            if (!shot.SealStruck && _rocks.Any(r => r.Contains(next)))
             {
                 shot.SealStruck = true;
                 StrikeSeal(next);
-            }
-            if (rim)
-            {
-                Pop(shot, dir);
-                return;
             }
             // A returning boomerang passes back over what it cleared.
             if (!(shot.Boomerang && shot.Returning))
@@ -1124,25 +1116,6 @@ public sealed partial class PlaneWorld
         shot.Life = -1000f;
         Events.Add(new PlaneEvent(PlaneEventType.ShotOut, shot.Position, SafeNormalize(shot.Velocity), shot.Radius));
         LightReleased(shot);
-    }
-
-    /// <summary>
-    /// Her light struck something: the surge that arcs back to her (the view's lightning) is bright enough to cleanse a
-    /// thin line of ground on its way.
-    /// </summary>
-    void StrikeBack()
-    {
-        if (Corruption is not { } field) return;
-        var her = Player.Position;
-        foreach (var e in Events)
-        {
-            if (e.Type is not (PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit or PlaneEventType.VaseHit) || e.Direction == Vector2.Zero) continue;
-            var from = e.Position;
-            float length = Vector2.Distance(from, her);
-            int steps = Math.Max(1, (int)(length / 0.5f));
-            for (int i = 0; i <= steps; i++)
-                field.Cleanse(Vector2.Lerp(from, her, i / (float)steps), PlaneCombatTuning.StrikeWidth, PlaneCombatTuning.StrikeCleanse);
-        }
     }
 
     void Pop(PlaneShot shot, Vector2? toward = null)

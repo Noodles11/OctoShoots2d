@@ -5,10 +5,11 @@ shader_type spatial;
 render_mode cull_disabled;
 
 uniform float ribs = 18.0;
-uniform vec3 nacre_base : source_color = vec3(0.96, 0.88, 0.9);
+uniform vec3 nacre_base : source_color = vec3(0.56, 0.5, 0.56);
 uniform vec3 shell_outer : source_color = vec3(0.62, 0.52, 0.5);
-// Its own faint glow; the room is lit by the pearl in it (ClamRoomView), whose pattern its light paints here.
-uniform float glow = 0.35;
+// Its own faint glow (kept low: the room is lit by the pearl in it, ClamRoomView, whose pattern its light paints here
+// and must read over the shell's own colour).
+uniform float glow = 0.1;
 
 #include "res://assets/shaders/pearl_glow.gdshaderinc"
 
@@ -31,10 +32,11 @@ void fragment() {
 		vec3 col = mix(nacre_base, film, 0.32 + 0.25 * fres);
 		col *= 1.0 - 0.18 * groove;
 		ALBEDO = col;
-		ROUGHNESS = 0.12;
-		SPECULAR = 0.9;
-		CLEARCOAT = 1.0;
-		CLEARCOAT_ROUGHNESS = 0.05;
+		// Glossy, but not a mirror: her lantern close by leaves a soft sheen, not a white blot over the pattern.
+		ROUGHNESS = 0.32;
+		SPECULAR = 0.45;
+		CLEARCOAT = 0.4;
+		CLEARCOAT_ROUGHNESS = 0.25;
 		// Its own faint glow, and the pearl's light in its pattern over it.
 		EMISSION = col * glow * (0.6 + 0.4 * fres) + pearl_glow(glow_world) * (0.45 + 0.55 * col);
 	} else {

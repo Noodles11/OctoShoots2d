@@ -26,9 +26,6 @@ uniform float band_px = 14.0;           // the hatching band's depth into the ro
 uniform bool hatching = true;
 uniform bool use_fog = false;
 uniform sampler2D fog : filter_linear;
-// The mud cloud around a sealed boss arena, a ring about 15 m thick: centre (metres), rim, how risen (0–1).
-uniform vec4 mud = vec4(0.0, 0.0, 15.0, 0.0);
-const vec3 MUD = vec3(0.3, 0.25, 0.19);
 const vec3 FOG = vec3(0.16, 0.19, 0.21);
 
 const vec3 LAND = vec3(0.985, 0.983, 0.975);
@@ -159,10 +156,6 @@ void fragment() {
 			col = mix(col, SHORE, edge);
 		}
 		if (use_fog) col = mix(FOG, col, smoothstep(0.0, 1.0, texture(fog, (w + 0.5) / samples).r));
-		if (use_fog && mud.w > 0.0) {
-			float d = length(w - mud.xy);
-			col = mix(col, MUD, mud.w * 0.92 * smoothstep(mud.z, mud.z + 3.0, d) * (1.0 - smoothstep(mud.z + 12.0, mud.z + 18.0, d)));
-		}
 		COLOR = vec4(col, 1.0);
 	}
 }

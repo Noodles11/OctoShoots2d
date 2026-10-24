@@ -184,6 +184,11 @@ different visual channel, so they can never be confused.
     brings them back in order. The rings follow her HP smoothly (draining at
     most 0.8 of her max a second, returning at 1.5), so a lost quarter visibly
     fades rather than blinking off.
+- **The first ring leads — her aim.** She turns about her axis to face where she aims (the mouse, or the right
+  stick), easing round quickly (rate 14 a second), and the first ring — a little larger and hotter than the others,
+  and the last to go — keeps toward it. Playing with the mouse, the pointer is a small orange crosshair of her four
+  gonads (32 px: horseshoes at the quarters, open toward the middle as on her bell, a dark edge, a dot at its heart);
+  under menus the system's arrow; with the controller no pointer at all.
   - *Critical:* at a quarter or less, the last ring's light pulses slowly in and
     out — a dying light at the centre of her body, readable in peripheral
     vision without looking away from the fight.
@@ -353,8 +358,8 @@ its own.
   square's water she never reaches becomes mountains.
 - **The special rooms** (shop, secret, clam room, curse den) are laid next,
   while the rock is whole: each a dead-end branch off the chain, its chamber
-  left as rock with rock kept round it (6 m; 8 m for a clam room's deeper
-  chambers; 9 m for the curse den's tunnel), its tunnel — the room's spur —
+  left as rock with rock kept round it (6 m; 9 m for the curse den's
+  tunnel), its tunnel — the room's spur —
   stopping at the room's mouth, 14–21 m out. Stage 4 hollows the cave out
   behind it.
 - **Shortcuts** are bored once the rock stands: the passes of Stage 4, tunnels
@@ -541,7 +546,8 @@ Running after the checks, it never changes what she can reach.
   wall itself: the generator raises the walls once more as if that slab of passage were rock and lays only what that
   adds on the finished terrain (`LevelMap.Sealed`), so it is as steep and terraced as the walls round it and meets them
   without a seam; drawn in the reef's own ground. Nothing else tells it apart but **its carving**, on the face it is met
-  from:
+  from — cut into the wall's own surface (laid out as seen from above, so the steep face does not squash it, and only
+  on the rock, never on the seabed at its foot), part of the wall, so it goes wherever the wall goes:
   - **an X**, faint (a shallow shade in the stone, easy to miss), on a **secret room's way in** and on **side tunnels**
     a level's template seals (its `pathSeals` rule);
   - **a sword**, on **every way into the boss's arena** (each opening in its rim found by rays out from its middle, a
@@ -558,10 +564,21 @@ Running after the checks, it never changes what she can reach.
   (`LevelMap.SealedOpen`). Until a
   secret's wall is opened the minimap and the Tab map draw the whole secret cave (its chamber, its way in and the wall)
   as wall, so the charts give it away no more than the reef does.
+  - **A barred boss arena** (its boss's `Blockade`, §6.4): as the battle begins, every sword wall into the arena is
+    shut for the fight. One she opened **rises back up out of the sand behind her** — the slide played backwards: up
+    from under the sand slow to start, steady, easing into place with a last jolt, silt pushed up along its feet and
+    the screen shaking as long as it goes — whole again, gate and all; whatever stood in it is pushed out to the
+    nearer side. Each carries **the sword on its inner face** too, seen from inside the arena, burning crimson while
+    the fight holds it shut; none can be lit meanwhile. Once the boss is freed, the walls it raised **slide back down
+    by themselves** (as an opened wall does, both carvings sinking with it); the ones she never opened can be lit again.
 - **Curse den** (`PlaneCurse.cs`, `CurseDarkness`, `CurseDenView`): a long, narrow, winding **dead-end tunnel** bored
   into the ridge behind its spur, 16–32 m long (about 2.8 m wide, in bending legs of 5–10 m), ending in a small end
   chamber. Black fog seeps out of its mouth into the canyon: the sign of what is inside.
   - **Going in is safe:** no dark, no curse, all the way to the end.
+  - **The walls in front thin away** (`LevelView.SeeThrough`, level_frame's `lf_see_cut`): while she is in the
+    tunnel, the rock standing between the camera and the tunnel round her (4.5 m) is dithered away — up to 85% of it,
+    soft at the edge, only rock above her plane and on the camera's side of her, fading in and out over 0.4 s — so a
+    leg running across the screen never hides the way her light shows.
   - **The end always rewards her** (rolled per level): **20%** a **pearl** (from any pool), else the **shell fountain**,
     a small vent of rock with a pale glow in its throat, spouting a shell a second whenever the last one has been
     taken, for as long as she stays in the den's dark.
@@ -650,7 +667,7 @@ levels: ~4–5 min rushed, ~25 min explored.
   regenerates only the saved level and the one below.
 - **The dive: Shift** over the shaft. Not in an active battle — while a
   creature that has noticed her is within 12 m, an ambush is fighting her or
-  the arena is sealed, the prompt reads "Not while fighting"; the Crack opens
+  a boss battle runs, the prompt reads "Not while fighting"; the Crack opens
   only when the boss is freed ("The Crack is sealed").
 - **The animation (1.6 s, input locked):** she gathers (a flare, a small rise);
   a hard stroke turns her head-first and she sinks the 8 m down the shaft in
@@ -742,7 +759,7 @@ everything scattered. A template:
 | Default | every slot | the general rolls | the general rules | — |
 
 Kinds a template names as absent are absent; the others outside its cast keep their general rules. Its name shows
-after the level's title at the top of the HUD ("Depth 2 · Level 3 · The Hoard"; the default has none).
+as the level's title when she arrives (§9; the default has none).
 
 ### 4.9 Naves — something in every side chamber
 
@@ -906,7 +923,7 @@ exactly and cheaply, and the water glows where light passes through it.
   and their chunks, the Blightroot's pole, head and rootlets and its octopus arms, blotters, inkwardens, lashjaws,
   thumpsquirts, pufferlings, the reef fish, the bosses' pearl and crust, thrown ink), the reef's boulders, kelp, flora,
   vases and their shards, and the shells she collects. What is light or water casts none: her own bell and strands,
-  glows, rings and halos, particles and trails, decals, mud clouds, the light springs' columns and the jellies' see-through
+  glows, rings and halos, particles and trails, decals, the light springs' columns and the jellies' see-through
   bodies; nor do the copies drawn over her, so nothing is shadowed twice. Under the steep sun a creature's shadow
   lies close beneath it; round her lantern in the deep, shadows stretch away from her across the floor.
 - **Cost** (RTX 3090, 1600×900): about 0.4 ms of GPU per frame over the old look, and a quarter of a millisecond of CPU
@@ -947,12 +964,15 @@ where hiding among identical fish is visual, not camera-based.
 
 ### 6.4 Bosses
 - A depth's boss stands on its last level (level 4, or 5). Arenas: wide grottoes with the Crack across the floor —
-  the level's only way down. On entry an invisible wall seals them and a mud cloud rises around them (the top-down
-  stand-in for the inherited current walls; see Queen Clam in §12.2).
+  the level's only way down. The battle begins when she is wholly inside; **the arena stays open** — she may swim out
+  mid-fight and back, and a boss that chases her (a creeper, `BossSpec.Chaser`) may follow her out, while the others
+  keep to it; mobs, their shots and hers come and go across its rim. Nothing resets while she is out: the boss keeps
+  its health and goes on with its fight. **Its author may bar it** (`BossSpec.Blockade`): then the sword walls into it
+  close behind her for the fight and open once the boss is freed (§4.2). Queen Clam bars hers.
 - Patterns translate from "rings, spheres, sweeping planes" to 2D: rings, fans,
   sweeping lines, rotating beams, spawning adds. Every boss keeps 2–3 phases,
   its anime cut-in (below), and **freed-not-killed** poofs.
-- **The boss intro** (`BossIntro`, `BossIntroArt`): as the arena seals, a
+- **The boss intro** (`BossIntro`, `BossIntroArt`): as the battle begins, a
   drawn anime cut-in covers the whole screen for about 5.4 s while the game
   holds (the boss's drop waits for it). Any key, click or button skips to
   its end. Five beats:
@@ -1092,12 +1112,21 @@ The FP staging ("look up through the surface") is replaced:
 
 ## 9. UI
 
-- **HUD**: health and the active pearl's charge are diegetic on the bell (§2.5:
-  gonad rings and rim), bubble orbs are diegetic under the bell (no ammo
-  counter needed); the HUD keeps sand dollars, ink bombs, the minimap. At the
-  top centre: the run's clock, and beside it, always on, where the run stands
-  ("Depth 1 · Level 2"; a depth's first level names the depth too: "Sunlit
-  Shallows · Depth 0 · Level 1"). Moving between levels shows no other message.
+- **HUD** (`HudView`, `MinimapView`, `CleanseMeter`): minimal, in three zones — top right where she is and how she
+  is doing (the minimap, its bezel and experience ring, the cleanse bar under it), bottom left what she owns (the
+  shell counter), and the top centre empty at rest, for what comes and goes. Health and the active pearl's charge are
+  diegetic on the bell (§2.5: gonad rings and rim), bubble orbs under it; no numbers for any of them on the HUD. One
+  text style throughout: light text with a soft dark outline, no boxes, readable on bright sand and in the deeps.
+  Laid out on a 1080-line screen and scaled with the window, gently (its height's share to the 0.6 power: 0.9 at
+  900 lines, 1.5 at 2160), so it keeps readable on a small window and does not grow huge on a big one.
+  - **The level's title** shows for a moment as she arrives (0.4 s in, 2.6 s, 0.7 s out), top centre: what it is
+    about large (its template's name, else the depth's on its first level, else "Level 3"), where it is small above
+    it ("Depth 1 · Level 2"; a depth's first level names the depth too: "Sunlit Shallows · Depth 0 · Level 1"). It is
+    also on the Tab map, with the run's clock, at the top left.
+  - **The run's clock** is off the HUD unless the **Run clock** setting is on (then small and faint at the top left);
+    it shows in the pause menu's summary and on the Tab map.
+  - **The boss's bar** shows at the top centre while its fight runs (§12.2), its crust's pips inside its right end.
+  - **Messages** drop in a short way to the top centre (under the title or the boss's bar when one shows).
 - **The minimap's bezel is a quiet health bar**: four warm-gold segments just
   inside its rim, parted at north, east, south and west — one for each gonad
   ring — each as opaque as its quarter of her HP is full, over a faint track
@@ -1121,9 +1150,13 @@ The FP staging ("look up through the surface") is replaced:
 - **Experience ring** (§2.6, `MinimapView.XpRing`): a thin ring just outside
   the minimap's bezel fills clockwise from 12 o'clock in gold over a dark track
   as she earns experience. Full (a skill point waiting), it pulses slowly and
-  glows outward in soft gold rings. Small numbers sit under it: to the lower
-  left her level and experience ("Lv 3 · 42%"), to the lower right her health
-  ("HP 87%").
+  glows outward in soft gold rings. Her level sits on it in a small gold badge at
+  about half past seven; there are no other numbers round the map.
+- **The minimap** is 220 (of 1080) across, top right. The place she enters is named on its lower rim for a moment
+  (2.4 s, in the place's colour), then the name fades.
+- **The cleanse bar** (`CleanseMeter`, docs/CORRUPTION.md) runs under the minimap, as wide as it: slim, gold over
+  ink, its tipping points notched. No caption at rest; while it moves, "Reef 34%" shows beside it and fades 1.6 s
+  after it settles. Inside a boss's arena a second bar under it, the arena's, captioned the same way.
 - **Pause menu**: resume, restart, save & quit, camera zoom; two tabs — the
   pearls she has absorbed, and the **achievements** (earned ones with their line
   and the pearl they unlocked; unearned ones as a dark pearl silhouette, the
@@ -1208,12 +1241,13 @@ at mist distance (inherited fade rule).
    and the way down the evacuation sign (a white figure running out of a door, on a green plate). The Tab map's
    legend shows the same emblems (the Tab map draws them half again as large). There are no hints for places not yet found. The maps never show enemies: no creatures, and no ambush (it
    springs unannounced, even once she has been there), nor the corruption. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
-   names it under the minimap (all but the start); there are no beacons.
+   names it for a moment on the minimap's lower rim (all but the start); there are no beacons.
 3. **Ninja respawn:** §6.3 carries the ninja over "intact (… nest respawn)"; the inherited Ink Deep rules
    (DESIGN-2D §1, DEPTH1-BESTIARY §8) free a defeated ninja into its school for good, and the current Core does that.
 4. **Cave count vs special rooms:** Stage 4 asks for 1–2 pockets and 1–2 multi-chamber caves (2–4 caves), while
    §4.2 puts every special room in a cave: shop, clam room, 1–2 secrets and 0–1 curse den (3–5 rooms). Built: each
-   special room gets its own cave (clam room multi-chamber, the curse den a tunnel, shop and secrets pockets), so a
+   special room gets its own cave (the curse den a tunnel; the shop, the secrets and the clam room each a single
+   chamber, the dead end of its spur), so a
    level can have 3 pockets and 5 caves.
 5. **Secret cave vs reachability:** the secret cave is sealed, but every POI must be flood-fill reachable. Built:
    the heightfield reaches it; the seal is a separate `WeakRock` (a slab) that blocks swimming and shots until her light on its
@@ -1241,7 +1275,7 @@ at mist distance (inherited fade rule).
 - Ridge walls between the camera and Clementine dissolve in a dithered cutout (a presentation rule for walls;
   the canopy layer has its own fade). A canopy fading over Clementine is drawn unblurred while it fades.
 - **Combat** (`PlaneCombat.cs`; the Depth-1 bestiary is being ported onto the plane, the Pufferling first): Clementine has
-  100 HP (shown by the gonad rings on her bell, §2.5; the run's play time, stopped while paused, top centre) and shoots toward the mouse (held) or the
+  100 HP (shown by the gonad rings on her bell, §2.5; the run's play time, stopped while paused, §9) and shoots toward the mouse (held) or the
   arrow keys — 10 damage, 4–5 volleys a second. Her shots are translucent bubbles, and a bubble never stops dead:
   thrown at 17 m/s, it slows steadily at first, then — once the water's drag (2.2 × its speed, per second) is the
   gentler — eases off exponentially, the two meeting smoothly at about 6.5 m/s. Slower than 0.9 m/s it hovers, still
@@ -1292,18 +1326,23 @@ at mist distance (inherited fade rule).
 - **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
   her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
   mobs from then on: she may swim away, and they stay. An ambush springs once.
-- **Clam rooms (look):** the room is the inside of a giant clam. A shell wall of mother-of-pearl lines the chamber
-  (ribbed, scalloped at the top, open at the mouth): iridescent and glowing faintly from inside, weathered shell outside.
+- **Clam rooms (look):** the room is the inside of a giant clam, a single dead-end chamber at the end of its spur. A
+  shell wall of mother-of-pearl lines the chamber (ribbed, scalloped at the top, open at the mouth): a muted pearly
+  shell, iridescent, glossy but not a mirror (her lantern leaves a soft sheen, not a white blot), glowing only very
+  faintly of itself, so the pearl's patterned light is what shows on it; weathered shell outside.
   The chamber's floor is mother-of-pearl too, and the pearl hangs still in the middle of the room. About 80 gold
   motes spiral round the pearl. **The pearl lights the room:** the light leaving it takes its own colours in its own
   pattern (its bands, swirl, spots, marble, rings, stripes, speckle or halo, as on the pearl itself), painted over the
-  whole room, the shell wall and the floor (`pearl_glow.gdshaderinc`), reaching right across to the wall; a fill light, the light
+  whole room, the shell wall and the floor (`pearl_glow.gdshaderinc`), reaching right across to the wall, its dark
+  parts near dark so the pattern reads; the pearl itself glows from within only enough to keep its own colours and
+  pattern (not burning white). A dim fill light high over it, the light
   spilling out of the mouth into the canyon and the water pass's haze (ClamRoomView, `clam_glows` and `clam_colors`
   in topdown_post) are in its colour too, so from a distance the room shows what it holds. **The light pours out
-  over the path:** the spill stands 4.5 m out from the mouth and reaches 17 m, and the haze lies in three pools —
-  over the room, a wider one over its mouth, and the widest 6 m out along the canyon — so the room is plain to see
-  from the path. A stream of gold motes drifts out of the mouth and far into the canyon. The light is brighter the deeper she is (0.6 at Depth 0, +0.3 per
-  depth, at most 2.2), so in dark depths the room is a beacon. When the pearl is taken, the motes fling out and
+  over the path:** the spill stands 7 m out from the mouth (off the shell) and reaches 17 m, and the haze lies in three
+  pools — a faint one over the room (so it never veils the pattern), one 3 m out over its mouth, and the widest 7 m out
+  along the canyon — so the room is plain to see from the path; the haze lifts what lies under it gently. A stream of gold motes drifts out of the mouth and far into the canyon. The spill and the haze are brighter the deeper she is (0.6 at
+  Depth 0, +0.3 per depth, at most 2.2), so in dark depths the room is a beacon; the pattern on the shell stops growing
+  at 1.2, so it never burns out. When the pearl is taken, the motes fling out and
   dissolve over 1.2 s and its light fades out with them.
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
   plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json). The
@@ -1389,23 +1428,26 @@ at mist distance (inherited fade rule).
   has three stand slots: a pearl she does not have on half the visits (30 shells), always a heart (a health top-up:
   +25 HP, 5 shells, only when hurt), and a third slot kept empty for wares to come. The
   goods float on their own (pearls as in a clam room, the top-up as a red heart), each with a small price tag on a
-  string (the price and a shell), shown only while she is inside the shop; she buys by touching one. The HUD counter (a shell icon and the number) sits bottom left. Each shell she
-  picks up flies there, so a pickup is never missed: in 0.55 s, from where she took it, as a small glowing shell with a
-  short wisp of warm light behind it, on a slight arc (several at once bow alternately to either side); the counter
-  counts it only as it lands, brightening and swelling with a ring of light spreading from it. Shells carry down with her pearls and HP.
-- **Bosses are generated** (docs/BOSS-GENERATOR.md, `src/Core/Bosses`, the fight in `PlaneBoss.cs`, the bodies in
-  `src/Game/TopDown/Bosses`): every real depth's boss level meets a boss grown from the run seed, the loop and the depth
-  — a body plan, a designed fight concept, its mutation, its pearl and its attacks — run through the same arena and
-  cycle machine. **Queen Clam** (adapted from DEPTH1-BESTIARY §5) is the clam's reference roll, often met in the early
-  depths; what follows describes her fight, the one every generated boss is held to. The arena is the exit's flat 15 m
-  disc.
-  - **Entering.** The first time Clementine is wholly inside the disc, the arena seals: an invisible wall on the rim
-    stops her (her bubbles pop on it). Mobs cannot come in, and shots cannot cross it either way. A mud cloud of
-    churning sand-brown haze rises outside the rim over 1.5 s and hides what lies beyond; on the minimap it is a brown
-    ring about 15 m thick. The boss intro plays (§6.4): **CLEMENTINE VS QUEEN CLAM**, the game held under it.
+  string (the price and a shell), shown only while she is inside the shop; she buys by touching one. **A shell** is a
+  round nautilus coated in silver (`NautilusShell`, nautilus.gdshader), 0.62 m across: a plump planispiral coil, its
+  aperture open, fine wavy growth lines across its whorls, polished so it mirrors a bright sky, a dark horizon band and
+  warm sand (its own surround, so it reads as silver in every depth); each lies as it fell, turned at random in every
+  axis, turning slowly about its tilt and bobbing a little. The HUD counter sits bottom left: the same silver nautilus
+  (in 3D, still, its coil to the eye) and the number. Each shell she picks up flies there itself, so a pickup
+  is never missed: in 0.55 s, from where she took it, the very shell — as big as it lay on screen, turned as it lay —
+  shrinking to the counter's size and righting itself to the counter's turn with a tumble on the way, a short wisp of
+  warm light behind it, on a slight arc (several at once bow alternately to either side); the counter counts it only
+  as it lands, its shell swelling and a ring of light spreading from it. Shells carry down with her pearls and HP.
+- **Bosses are hardcoded, one per depth** (`BossRoster`, the fight in `PlaneBoss.cs`, the bodies in
+  `src/Game/TopDown/Bosses`): the boss generator (docs/BOSS-GENERATOR.md) is parked until the hand-made roster grows.
+  For now **every depth's boss is Queen Clam** (adapted from DEPTH1-BESTIARY §5), tougher the deeper she is met and on
+  later loops: her health ×(1 + 0.6 × Menace) and her pearls' damage ×(1 + 0.4 × Menace) (Menace 0 at Depth 1, 1 at
+  Depth 6 of the first loop). The numbers below are hers at Depth 1. The arena is the exit's flat 15 m disc, and she
+  bars it (§6.4, §4.2).
+  - **Entering.** The first time Clementine is wholly inside the disc, the battle begins: the sword walls rise behind
+    her (§4.2) and the boss intro plays (§6.4): **CLEMENTINE VS QUEEN CLAM**, the game held under it.
   - **The drop.** 0.5 s later her shadow grows on the Crack for 0.8 s and she drops onto it, facing Clementine. The
-    thump shakes the camera, puffs sand, and sends a wave out to the rim in 0.5 s: it sweeps every mob in the disc out
-    ahead of it and sets them down just outside the wall, unhurt, and nudges Clementine outward.
+    thump shakes the camera, puffs sand, and sends a wave out to the rim in 0.5 s that nudges Clementine outward.
   - **Her body.** A giant ribbed clam 5 m across with a pearl crown and grumpy eyes, her colours drained. Her shell
     is solid; touching it while she fights costs 18 and bounces Clementine off. She turns toward Clementine at 30°/s.
     She has 800 HP and is hurt only while open; closed, bubbles pop harmlessly on her shell. Her pearls (12 damage,
@@ -1419,10 +1461,10 @@ at mist distance (inherited fade rule).
     merged from two), and if it hits her it costs 14 and slows her to 60% for 2 s. While open, she snaps once per
     opening if Clementine comes within 7 m: a 0.7 s warning (a red rim at her reach), then 18 damage within it.
     The pause shut is 2.2 s.
-  - **Freed.** At 0 HP her pearls in the water burst, and she shudders for 0.3 s. Then the wall lifts, the mud
-    settles over 2 s, her colours come back, and she shuffles 6.5 m off the Crack as a harmless clam. One pearl (a
+  - **Freed.** At 0 HP her pearls in the water burst, and she shudders for 0.3 s. Then the sword walls slide back
+    down, her colours come back, and she shuffles 6.5 m off the Crack as a harmless clam. One pearl (a
     ported one she does not have, from the boss pool when one is) floats down beside the Crack, and the Crack opens.
-    Her HP bar sits under the clock while the fight runs.
+    Her HP bar sits at the top centre while the fight runs.
 - **Death:** at 0 HP the run is over. The world stops, and a splash of the same kind fades in with how far the run
   got (the level reached, time, foes defeated, shells collected, pearls absorbed, seed). Enter or a click starts a
   clean new run: a new random seed, the first level, no pearls or shells, full HP. Esc goes back to the title
@@ -1439,9 +1481,16 @@ at mist distance (inherited fade rule).
   starts on a random seed unless she types one on the title screen.
 - **Title screen** (docs/TITLE-MENU-PROPOSAL.md has the full layout and motion):
   - **The backdrop.** The game boots into a menu over the live sea. Clementine swims slowly back and forth along a
-    canyon of a fixed seed (KELP 7Q2Z), in the right third of the screen.
-  - **The menu:** Continue (only with a saved run), New run, Seeded run, Sea-pedia, Statistics, Save & load,
-    Settings, Quit. Each item has a detail line.
+    canyon of a fixed seed (KELP 7Q2Z), the camera keeping her in the middle of the screen; the sea is dimmed a
+    little, more toward the edges. The logo sits at the top left.
+  - **The menu** stands in a ring round her (an oval 860 × 600 on the 1600 × 900 page), evenly spaced from the top,
+    clockwise: Continue (only with a saved run), New run, Seeded run, Sea-pedia, Statistics, Save & load, Settings,
+    Quit. Each item is its word with its detail line under it; the one in focus swells a little and turns coral. W/S
+    and A/D (and the D-pad) go round the ring.
+  - **She aims as in the game:** the pointer is her crosshair (four orange gonads, as in play), and she turns to face
+    it, her first gonad toward it; with the controller or the keys she faces the item in focus. **Choosing an item,
+    she shoots at it:** a bolt of her light, a hot white heart with a short tail, flies from her to the item on a
+    slight arc (0.22 s) and bursts on it in a ring and a spray of sparks, the item jolting; what it does happens then.
   - **Seeded run** opens a seed box under the item. Typing is forgiving and paste works; there is a random dice and
     the last five seeds as chips. Seeded runs never earn achievements.
   - **Sea-pedia:**

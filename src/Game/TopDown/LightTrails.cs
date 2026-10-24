@@ -7,8 +7,8 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// Her light painted on the water (docs/LIGHT-BUBBLES.md, light_stroke.gdshader): the afterlight her shots leave, and
-/// the lightning that strikes back to her when her light hits something. Every stroke is laid in three passes — a wide
-/// warm wash, a ragged dry-brushed body, a broken white-hot core.
+/// the lightning that crackles off whatever her light hits. Every stroke is laid in three passes — a wide warm wash, a
+/// ragged dry-brushed body, a broken white-hot core.
 /// <para>
 /// A shot's afterlight is never a straight line: each point is thrown aside and a kink struck into every segment, the
 /// kinks re-striking a dozen times a second and growing as the light ages, so it crackles. Its shape follows the
@@ -16,10 +16,10 @@ namespace OctoShoots.Game.TopDown;
 /// a fuse fizzes wider.
 /// </para>
 /// <para>
-/// A strike is a real bolt: a fractal path from the impact to her (each half of every segment bent aside by a share of
-/// its length), with branches forking off it toward her and twigs off those, tapering to nothing. Each pattern holds
-/// for a few frames, then the bolt re-strikes along a new one, flickering, while it fades over half a second; sparks
-/// crackle off its sharpest kinks as it strikes.
+/// A hit charges the struck body like a coil for a moment: bolts of lightning crackle straight out of its own outline
+/// (the hit outline its shader draws) — jagged at every scale, some forking — re-striking at new places a dozen times a
+/// second, most on the side struck, shorter and fewer as the charge drains. The harder the hit, the more, the longer
+/// and the longer-lasting they are.
 /// </para>
 /// All of it is one mesh, built in one upload a frame.
 /// </summary>
@@ -29,9 +29,9 @@ public partial class LightTrails : Node3D
     const float Life = 0.32f, Spacing = 0.3f, Width = 0.26f;
     /// <summary>The wash and the core, as shares of the body's width.</summary>
     const float WashWidth = 3.4f, CoreWidth = 0.32f;
-    /// <summary>A strike: how long it lasts, its width at the impact, how often it re-strikes, how many at once.</summary>
-    const float SurgeLife = 0.5f, SurgeWidth = 0.2f, SurgeStrikes = 11f;
-    const int MaxSurges = 8;
+    /// <summary>A hit's charge: how long it crackles (a plain hit's, longer for a harder one), its bolts' width at the outline, how often they re-strike, and how many at once.</summary>
+    const float FlareLife = 0.3f, BoltWidth = 0.12f, BoltStrikes = 15f;
+    const int MaxFlares = 12;
     /// <summary>Jitter: aside at the head, aside when old, and how often it re-strikes.</summary>
     const float JitterNew = 0.03f, JitterOld = 0.2f, Strikes = 13f;
 
@@ -56,17 +56,16 @@ public partial class LightTrails : Node3D
         public int Seed;
     }
 
-    sealed class Surge
+    sealed class Flare
     {
-        public Vector3 From;
-        public float Age;
-        public int Seed, LastStrike = -1;
+        public Vector3 Center;
+        /// <summary>The outline's radius, the angle of the side struck, the hit's strength (a plain shot's 1).</summary>
+        public float Radius, Facing, Strength;
+        public float Age, Life;
+        public int Seed;
     }
 
-    readonly List<Surge> _surges = new();
-
-    /// <summary>Where Clementine is (the far end of every strike), set each frame.</summary>
-    public Vector3 Her;
+    readonly List<Flare> _flares = new();
 
     readonly Dictionary<PlaneShot, Trail> _live = new();
     readonly List<Trail> _fading = new();
@@ -117,20 +116,33 @@ public partial class LightTrails : Node3D
         else pts[^1] = (at, pts[^1].Born, pts[^1].Id);
     }
 
-    /// <summary>Her light struck something at this point: lightning strikes between it and her.</summary>
-    public void Strike(Vector3 at)
+    /// <summary>
+    /// Her light struck a body here (its middle, its outline this far out): lightning crackles out of its outline, more
+    /// and longer for a harder hit (strength: the hit's share of a plain shot's), most on the side struck (from: the way
+    /// the light came, toward the body; none for a hit without one).
+    /// </summary>
+    public void Flares(Vector3 center, float radius, Vector3 from, float strength)
     {
-        // Several hits in one place at once are one strike, renewed.
-        foreach (var s in _surges)
-            if (s.Age < 0.1f && s.From.DistanceSquaredTo(at) < 0.5f)
+        float s = Mathf.Clamp(strength, 0.4f, 4f);
+        var hitSide = new Vector2(-from.X, -from.Z);
+        float facing = hitSide.LengthSquared() > 1e-6f ? Mathf.Atan2(hitSide.Y, hitSide.X) : _sparks.RandRange(0f, Mathf.Tau);
+        // Hits on the same body at once are one charge, renewed and made stronger.
+        foreach (var old in _flares)
+            if (old.Age < 0.08f && old.Center.DistanceSquaredTo(center) < 0.25f)
             {
-                s.Age = 0f;
+                old.Age = 0f;
+                old.Strength = Mathf.Min(old.Strength + s * 0.5f, 4f);
                 return;
             }
-        if (_surges.Count >= MaxSurges) _surges.RemoveAt(0);
-        _surges.Add(new Surge { From = at, Seed = _ids++ * 31 });
-        // The flash where it struck: a spray of white-gold sparks.
-        for (int i = 0; i < 10; i++)
+        if (_flares.Count >= MaxFlares) _flares.RemoveAt(0);
+        _flares.Add(new Flare
+        {
+            Center = center, Radius = radius, Facing = facing, Strength = s, Seed = _ids++ * 31,
+            Life = Mathf.Min(FlareLife * (1f + 0.2f * s), 0.65f),
+        });
+        // The flash where it struck: a spray of white-gold sparks off the struck side of the outline.
+        var at = center + new Vector3(Mathf.Cos(facing), 0f, Mathf.Sin(facing)) * radius;
+        for (int i = 0; i < 6 + (int)(4f * s); i++)
         {
             var d = _sparks.RandDir();
             d.Y = Mathf.Abs(d.Y) * 0.6f + 0.1f;
@@ -142,7 +154,7 @@ public partial class LightTrails : Node3D
     /// <summary>A new level: no afterlight carries over.</summary>
     public void Clear()
     {
-        _surges.Clear();
+        _flares.Clear();
         _live.Clear();
         _fading.Clear();
         _mesh.ClearSurfaces();
@@ -169,12 +181,12 @@ public partial class LightTrails : Node3D
         foreach (var trail in _live.Values) Build(trail);
         for (int i = _fading.Count - 1; i >= 0; i--)
             if (!Build(_fading[i])) _fading.RemoveAt(i);
-        for (int i = _surges.Count - 1; i >= 0; i--)
+        for (int i = _flares.Count - 1; i >= 0; i--)
         {
-            var surge = _surges[i];
-            surge.Age += dt;
-            if (surge.Age >= SurgeLife) _surges.RemoveAt(i);
-            else BuildSurge(surge);
+            var flare = _flares[i];
+            flare.Age += dt;
+            if (flare.Age >= flare.Life) _flares.RemoveAt(i);
+            else BuildFlare(flare);
         }
         if (camera is not null) _sparks.Tick(dt, camera.GlobalBasis);
         _mesh.ClearSurfaces();
@@ -237,69 +249,53 @@ public partial class LightTrails : Node3D
         return true;
     }
 
-    // ───────────────────────── a strike's bolt ─────────────────────────
+    // ───────────────────────── a hit's lightning ─────────────────────────
 
-    /// <summary>The bolt's colours: her light, and a deeper, warmer shade of it for the branches.</summary>
-    static Color BoltColor => HerColor.Light;
-    static Color BranchColor => HerColor.Light.Lerp(HerColor.Warm, 0.45f);
+    /// <summary>The bolts' colours: her light, and a warmer shade of it for their forks.</summary>
+    static Color FlareColor => HerColor.Light;
+    static Color ForkColor => HerColor.Light.Lerp(HerColor.Warm, 0.4f);
 
     /// <summary>
-    /// A strike: the fractal bolt from the impact to her, branches and twigs off it, re-struck every few frames,
-    /// flickering, fading out over its half second; sparks off its sharpest kinks each time it strikes.
+    /// A charge now: its bolts for this strike — each from a point on the outline (a hair inside it, so it comes out of
+    /// the outline itself) straight out, jagged, tapering to nothing, a fork off some — struck anew a dozen times a
+    /// second at new places, fewer and shorter as the charge drains.
     /// </summary>
-    void BuildSurge(Surge surge)
+    void BuildFlare(Flare flare)
     {
-        float k = surge.Age / SurgeLife;
-        int strike = (int)(_time * SurgeStrikes);
-        bool fresh = strike != surge.LastStrike;
-        surge.LastStrike = strike;
-        int seed = surge.Seed + strike * 7919;
-        // A hard flash, then flickering down: each strike a little brighter or dimmer.
-        float flicker = 0.7f + 0.3f * Signed(seed + 5, 0);
-        float strength = (1f - k) * (1f - k * 0.5f) * flicker * 0.85f;
-        var from = surge.From;
-        var to = Her;
-        float length = (to - from).Length();
-        if (length < 0.2f) return;
-        _path.Clear();
-        Bolt(from, to, seed, 0.28f, SurgeWidth * (1f - 0.35f * k), 0.35f, _path);
-        Strokes(_path, null, BoltColor, strength, seed);
-        // Branches: from points along the bolt, off toward her at an angle, a third to a fifth as long; a twig off each.
-        int branches = 2 + (int)(Signed(seed + 41, 0) * 0.5f + 1f);
-        var main = new List<(Vector3 At, float Width)>(_path);
-        for (int b = 0; b < branches; b++)
+        float k = flare.Age / flare.Life;
+        float s = flare.Strength;
+        int strike = (int)(_time * BoltStrikes);
+        int seed = flare.Seed + strike * 7919;
+        float charge = 1f - k;
+        float strength = Mathf.Min(charge * (0.85f + 0.15f * Signed(seed + 5, 0)) * (0.9f + 0.15f * s), 1.5f);
+        int count = Mathf.Max(1, Mathf.RoundToInt((3f + 2.2f * s) * (0.4f + 0.6f * charge)));
+        for (int b = 0; b < count; b++)
         {
-            int at = (int)((0.15f + 0.65f * (Signed(seed + 11 + b * 3, 0) * 0.5f + 0.5f)) * (main.Count - 1));
-            var (start, w) = main[at];
-            var on = (to - start) with { Y = 0f };
-            if (on.LengthSquared() < 0.04f) continue;
-            on = on.Normalized();
-            var side = new Vector3(-on.Z, 0f, on.X) * (Signed(seed + 17 + b, 0) < 0f ? -1f : 1f);
-            float len = Mathf.Clamp(length * (0.18f + 0.15f * (Signed(seed + 23 + b, 0) * 0.5f + 0.5f)), 0.5f, 3f);
-            var end = start + (on * 0.55f + side * 0.85f).Normalized() * len;
-            _scratch.Clear();
-            Bolt(start, end, seed + 101 * (b + 1), 0.32f, w * 0.6f, 0f, _scratch);
-            Strokes(_scratch, null, BranchColor, strength * 0.6f, seed + b * 5);
-            if (_scratch.Count > 4)
+            // Most come off the side struck; a few anywhere round it.
+            float u = Signed(seed + b * 31, 0);
+            float angle = b < count * 2 / 3 + 1 ? flare.Facing + u * 1.4f : u * Mathf.Pi;
+            float toward = Mathf.Max(0f, Mathf.Cos(angle - flare.Facing));
+            float len = (0.25f + 0.28f * s) * (0.55f + 0.45f * Signed(seed + b * 53, 1)) * (0.65f + 0.6f * toward) * (0.5f + 0.5f * charge);
+            if (len < 0.05f) continue;
+            var dir = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+            var foot = flare.Center + dir * flare.Radius * 0.97f;
+            // Straight out, bent a little to one side.
+            var side = new Vector3(-dir.Z, 0f, dir.X);
+            var tip = foot + (dir + side * 0.35f * Signed(seed + b * 71, 2)).Normalized() * len;
+            float w = BoltWidth * (0.6f + 0.25f * Mathf.Sqrt(s)) * (0.7f + 0.4f * toward);
+            _path.Clear();
+            Bolt(foot, tip, seed + b * 101, 0.32f, w, 0.05f, _path);
+            Strokes(_path, null, FlareColor, strength, seed + b * 7);
+            // A fork off some, from partway along, angling off.
+            if (Signed(seed + b * 97, 3) > 0.1f && _path.Count > 4)
             {
-                var (tw, tww) = _scratch[_scratch.Count / 2];
-                var twigEnd = tw + (side * 0.8f + on * 0.3f).Normalized() * len * 0.4f;
-                var twig = new List<(Vector3 At, float Width)>();
-                Bolt(tw, twigEnd, seed + 303 * (b + 1), 0.35f, tww * 0.6f, 0f, twig);
-                Strokes(twig, null, BranchColor, strength * 0.4f, seed + b * 9 + 1);
+                var (from, fw) = _path[_path.Count / 2];
+                var forkTo = from + (dir + side * (Signed(seed + b * 13, 4) < 0f ? -0.9f : 0.9f)).Normalized() * len * 0.45f;
+                _scratch.Clear();
+                Bolt(from, forkTo, seed + b * 211, 0.35f, fw * 0.6f, 0f, _scratch);
+                Strokes(_scratch, null, ForkColor, strength * 0.7f, seed + b * 11);
             }
         }
-        // As it strikes: sparks off its sharpest kinks.
-        if (fresh && k < 0.6f)
-            for (int i = 1; i + 1 < main.Count; i += 3)
-            {
-                var a = (main[i].At - main[i - 1].At).Normalized();
-                var c = (main[i + 1].At - main[i].At).Normalized();
-                if (a.Dot(c) > 0.55f) continue;
-                var d = (c - a).Normalized() + Vector3.Up * 0.4f;
-                _sparks.Emit(main[i].At, d * _sparks.RandRange(1.2f, 2.6f), _sparks.RandRange(0.12f, 0.25f), _sparks.RandRange(0.04f, 0.07f), 0.01f,
-                    new Color(1.5f, 1.35f, 1f), new Color(1f, 0.6f, 0.2f, 0f), drag: 4f);
-            }
     }
 
     /// <summary>
@@ -309,7 +305,7 @@ public partial class LightTrails : Node3D
     static void Bolt(Vector3 a, Vector3 b, int seed, float rough, float w, float taper, List<(Vector3 At, float Width)> into)
     {
         var pts = new List<Vector3> { a, b };
-        int depth = Mathf.Clamp((int)Mathf.Ceil(Mathf.Log((a - b).Length() / 0.18f) / Mathf.Log(2f)), 2, 6);
+        int depth = Mathf.Clamp((int)Mathf.Ceil(Mathf.Log((a - b).Length() / 0.08f) / Mathf.Log(2f)), 1, 5);
         for (int level = 0; level < depth; level++)
         {
             var next = new List<Vector3>(pts.Count * 2);
@@ -327,10 +323,7 @@ public partial class LightTrails : Node3D
             pts = next;
         }
         for (int i = 0; i < pts.Count; i++)
-        {
-            float t = i / (float)(pts.Count - 1);
-            into.Add((pts[i], w * Mathf.Lerp(1f, taper, t) * (0.75f + 0.25f * Mathf.Sin(t * Mathf.Pi + 0.3f))));
-        }
+            into.Add((pts[i], w * Mathf.Lerp(1f, taper, i / (float)(pts.Count - 1))));
     }
 
     // ───────────────────────── painting ─────────────────────────

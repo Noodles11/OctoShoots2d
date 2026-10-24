@@ -16,6 +16,8 @@ public sealed class ViewOptions
     /// <summary>Camera zoom: 1.5 by default; above it closer, below it farther (CameraRig.MinZoom..MaxZoom, 1–2).</summary>
     [Tune("View", 1f, 2f)] public float CameraZoom = 1.5f;
     [Tune("View", 10f, 80f)] public float MinimapRange = 32f;
+    /// <summary>The run's clock on the HUD (top left); off, it shows in the pause menu and on the Tab map only.</summary>
+    [Tune("View")] public bool ShowClock = false;
     /// <summary>Frame-rate cap (0 = uncapped). Keeps the GPU cool; vsync caps it further on slower screens.</summary>
     [Tune("View", 0f, 240f)] public int MaxFps = 60;
     /// <summary>

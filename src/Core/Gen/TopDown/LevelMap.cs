@@ -102,10 +102,10 @@ public readonly record struct Shaft(Vector2 Center, Vector2 Axis, float HalfLeng
 }
 
 /// <summary>
-/// Pocket: one chamber. MultiChamber: two or three, deeper ones leading back into the ridge. Tunnel (the curse den): a
-/// long, narrow, winding dead end, its chambers the points along it (each its half-width), the last its end chamber.
+/// Pocket: one chamber, the dead end of its spur (the shop, a secret, a clam room). Tunnel (the curse den): a long,
+/// narrow, winding dead end, its chambers the points along it (each its half-width), the last its end chamber.
 /// </summary>
-public enum CaveKind { Pocket, MultiChamber, Tunnel }
+public enum CaveKind { Pocket, Tunnel }
 
 /// <summary>A cave hollowed out inside a mountain: floor under the swim level, roofed by the mountain (<see cref="LevelMap.Lid"/>), opening through its mouth.</summary>
 public sealed class CaveSite

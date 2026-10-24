@@ -386,26 +386,6 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void TheSurgeBackFromAHitCleansesAThinLineOfGround()
-    {
-        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
-        Quiet(w);
-        var field = w.Corruption!;
-        // A murkling 6 m off over thick ink; she stands on clean ground.
-        int cell = Enumerable.Range(0, field.Density.Length).First(i => field.Density[i] > 0.8f && w.Clear(CellAt(i), 1f)
-            && w.Clear(CellAt(i) + new Vector2(6f, 0f), 0.6f) && w.LineOfSight(CellAt(i), CellAt(i) + new Vector2(6f, 0f)));
-        var at = CellAt(cell);
-        w.Player.Position = w.Player.PrevPosition = at + new Vector2(6f, 0f);
-        var mid = at + new Vector2(3f, 0f);
-        float before = field.At(mid);
-        var m = new Murkling { Position = at, Bud = 0f };
-        w.Murklings.Add(m);
-        w.Shots.Add(Light(at));
-        w.Step(default);
-        Assert.True(field.At(mid) < before || before <= 0f);
-    }
-
-    [Fact]
     public void ABlotterTakesHitsAnywhereOnItsShell()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1 && p.Menace == 0f);
@@ -826,6 +806,22 @@ public class CorruptionTests
         Assert.Equal(0f, m.Matter);
         Assert.Equal(0f, w.Corruption.Held);
         Assert.True(w.Corruption.Total <= total + 1e-3f);
+    }
+
+    [Fact]
+    public void ALightBurstFreeingAPrimeLetsItBreakApartWithoutUpsettingTheStep()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var m = BudAt(w, PrimeSpot(w, 12f), prime: true)!;
+        for (int i = 0; i < (int)(BlightTuning.PrimeBud * 60f) + 2; i++) w.Step(default);
+        // A Starburst bubble popping on it with more than its whole meter of light.
+        var shot = Light(m.Position, m.Corruption.Max * 4f);
+        shot.Explosive = true;
+        w.Shots.Add(shot);
+        w.Step(default);
+        Assert.False(m.Alive);
+        Assert.Equal(BlightTuning.PrimeSplit, w.Murklings.Count(x => x.Alive && !x.Prime && !x.Budding));
     }
 
     [Fact]

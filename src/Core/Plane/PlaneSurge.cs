@@ -244,10 +244,9 @@ public sealed partial class PlaneWorld
             }
             var next = at + dir * step;
             float w = ray.WidthAt(gone + step);
-            bool rim = CrossesRim(at, next);
-            if (rim || !Map.IsOpen(next) || _rocks.Exists(r => r.Contains(next)) || ClamShellAt(next))
+            if (!Map.IsOpen(next) || _rocks.Exists(r => r.Contains(next)) || ClamShellAt(next))
             {
-                if (bounces > 0 && !rim)
+                if (bounces > 0)
                 {
                     bounces--;
                     Vector2 wall = Map.Gradient(next);

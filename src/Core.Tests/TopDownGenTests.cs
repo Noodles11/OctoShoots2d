@@ -498,4 +498,44 @@ public class TopDownGenTests
             Assert.DoesNotContain(map.Spawns, s => s.Role == SpawnRole.Den && Vector2.Distance(s.Position, shop.Position) < shop.Radius);
         Assert.NotEmpty(map.Decor);
     }
+
+    [Fact]
+    public void EveryClamRoomIsADeadEndChamber()
+    {
+        int rooms = 0;
+        foreach (var id in TestLevels.All(p => p.Treasures > 0))
+        {
+            var map = TestLevels.Get(id);
+            foreach (var cave in map.Caves.Where(c => map.Pois[c.Poi].Kind == PoiKind.TreasureCave))
+            {
+                rooms++;
+                Assert.Equal(CaveKind.Pocket, cave.Kind);
+                Assert.Single(cave.Chambers);
+                // With its own spur shut, nothing else reaches it.
+                const int N = LevelMap.Size;
+                var seen = new bool[N * N];
+                var queue = new System.Collections.Generic.Queue<(int X, int Y)>();
+                var start = LevelValidator.Cell(map.Start.Position);
+                queue.Enqueue(start);
+                seen[start.Y * N + start.X] = true;
+                var (room, radius) = cave.Chambers[0];
+                while (queue.Count > 0)
+                {
+                    var (x, y) = queue.Dequeue();
+                    foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                    {
+                        int nx = x + dx, ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx >= N || ny >= N || seen[ny * N + nx]) continue;
+                        var p = new Vector2(nx + 0.5f, ny + 0.5f);
+                        if (Vector2.Distance(p, cave.Mouth) < 3f || map.Corridors.Any(k => k.Poi == cave.Poi && k.DistanceToCentre(p) < k.HalfWidth + 1.5f)) continue;
+                        if (!LevelValidator.CellOpen(map, nx, ny)) continue;
+                        seen[ny * N + nx] = true;
+                        Assert.True(Vector2.Distance(p, room) > radius * 0.6f, $"{id}: its clam room is reached at {p} without its spur");
+                        queue.Enqueue((nx, ny));
+                    }
+                }
+            }
+        }
+        Assert.True(rooms > 5, $"only {rooms} clam rooms");
+    }
 }

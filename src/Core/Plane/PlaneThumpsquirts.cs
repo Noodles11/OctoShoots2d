@@ -141,7 +141,6 @@ public sealed partial class PlaneWorld
                     var to = p.Position;
                     if (Vector2.Distance(to, t.Position) > ThumpTuning.Range) to = t.Position + SafeNormalize(to - t.Position) * ThumpTuning.Range;
                     for (int k = 0; k < 8 && !Clear(to, ThumpTuning.Body); k++) to = Vector2.Lerp(to, t.Position, 0.2f);
-                    if (ArenaSealed && Vector2.Distance(to, ArenaCenter) < ArenaRadius + ThumpTuning.Body) to = OutsideArena(to);
                     t.From = t.Position;
                     t.To = Clear(to, ThumpTuning.Body) ? to : t.Position;
                     Enter(t, ThumpState.Flight);
@@ -295,7 +294,7 @@ public sealed partial class PlaneWorld
             t.Heading = SafeNormalize(new Vector2(t.Heading.X * c - t.Heading.Y * s, t.Heading.X * s + t.Heading.Y * c));
         }
         t.Velocity = t.Heading * (ThumpTuning.RollSpeed + ThumpTuning.RollSpeedPerMenace * Menace);
-        Move(ref t.Position, ref t.Velocity, ThumpTuning.Body, report: false, barrier: ArenaBarrier.Outside);
+        Move(ref t.Position, ref t.Velocity, ThumpTuning.Body, report: false);
         field.Spread(t.Position, ThumpTuning.TrailRadius, ThumpTuning.TrailInk, 4f * Dt);
         if (Vector2.Distance(p.Position, t.Position) < ThumpTuning.Radius + Radius)
         {

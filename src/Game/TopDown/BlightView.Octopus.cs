@@ -32,7 +32,7 @@ public partial class BlightView
 {
     const int Arms = 8, Rootlets = 7;
     /// <summary>Freed, it changes over ChangeSeconds and is gone FleeSeconds after it was freed.</summary>
-    const float ChangeSeconds = 1.5f, FleeSeconds = 4.6f;
+    const float ChangeSeconds = 1.1f, FleeSeconds = 3.4f;
     /// <summary>Its colour once freed: a healthy reef octopus.</summary>
     static readonly Color Healthy = new(0.95f, 0.4f, 0.28f);
     /// <summary>Its skin once freed, for the painted ink shading (which keeps a kind's colour dark under the ink): bright, nearly all of it.</summary>
@@ -476,7 +476,8 @@ public partial class BlightView
 
     /// <summary>
     /// Freed: its ink bursts; the pole runs away into drips and the rootlets draw into the sand; the head takes its own
-    /// colour, draws out into a mantle and grows its eight arms; then it swims away from her in strokes, rising, fading.
+    /// colour, draws out into a mantle and grows its eight arms; then it swims up and away in quick strokes — up off the
+    /// seabed toward the light, drifting a little away from her — fading as it goes.
     /// </summary>
     void Flee(Root view, Blightroot root, float dt, System.Numerics.Vector2 her)
     {
@@ -489,7 +490,8 @@ public partial class BlightView
             view.Ring.Visible = false;
             var away = new Vector3(root.Position.X - her.X, 0f, root.Position.Y - her.Y);
             away = away.LengthSquared() > 1e-4f ? away.Normalized() : new Vector3(0f, 0f, -1f);
-            view.FleeDir = (away + Vector3.Up * 0.45f).Normalized();
+            // Mostly up, toward the light; a little away from her.
+            view.FleeDir = (away * 0.4f + Vector3.Up).Normalized();
             view.FleeAt = view.Holder.Position;
             view.FleeVelocity = Vector3.Zero;
             // Its holes close at once and it rounds out: it is whole again.
@@ -534,13 +536,13 @@ public partial class BlightView
         float grow = Mathf.SmoothStep(0.35f, ChangeSeconds, t);
         // Then it swims: strokes every StrokeSeconds — a contraction (arms closing back, the mantle squeezed) that drives
         // it on, then a glide as they flare open again.
-        const float StrokeSeconds = 0.75f;
+        const float StrokeSeconds = 0.5f;
         float swim = Mathf.Max(0f, t - ChangeSeconds);
         float phase = swim / StrokeSeconds;
         float squeeze = swim > 0f ? Mathf.Pow(0.5f - 0.5f * Mathf.Cos(Mathf.Tau * phase), 1.5f) : 0f;
         if (swim > 0f)
         {
-            view.FleeVelocity += view.FleeDir * 9f * squeeze * dt;
+            view.FleeVelocity += view.FleeDir * 24f * squeeze * dt;
             view.FleeVelocity *= Mathf.Exp(-1.6f * dt);
             view.FleeAt += view.FleeVelocity * dt;
             if (_motes.RandRange(0f, 1f) < 0.25f + 0.6f * squeeze)
@@ -548,8 +550,8 @@ public partial class BlightView
                     1.2f, 0.07f, 0.13f, new Color(0.85f, 0.95f, 1f, 0.7f), new Color(0.85f, 0.95f, 1f, 0f), drag: 1f, buoyancy: 1.2f);
         }
         view.Holder.Position = view.FleeAt;
-        // Swimming, it leans its mantle into its way, arms trailing.
-        float lean = Mathf.SmoothStep(0f, 1f, swim / 0.6f) * 1.1f;
+        // Swimming, its mantle points up its way (tipped a little toward where it drifts), arms trailing under it.
+        float lean = Mathf.SmoothStep(0f, 1f, swim / 0.4f) * 0.4f;
         var flat = new Vector3(view.FleeDir.X, 0f, view.FleeDir.Z);
         var axis = flat.LengthSquared() > 1e-4f ? Vector3.Up.Cross(flat.Normalized()) : Vector3.Right;
         view.Holder.Basis = new Basis(axis.Normalized(), lean);

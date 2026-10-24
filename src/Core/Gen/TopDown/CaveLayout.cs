@@ -37,10 +37,10 @@ public sealed class CaveLayout
     /// <summary>The craggy edge: two octaves of noise on the outline (metres).</summary>
     const float Crag = 1.6f, CragFine = 0.6f;
     /// <summary>
-    /// Rock kept round a room's chamber, past its radius: its walls and the crag's reach, more for a treasure cave's
-    /// deeper chambers and most for the curse den's winding tunnel.
+    /// Rock kept round a room's chamber, past its radius: its walls and the crag's reach, more for the curse den's winding
+    /// tunnel.
     /// </summary>
-    static float RoomKeep(PoiKind kind) => kind switch { PoiKind.CurseDen => 9f, PoiKind.TreasureCave => 8f, _ => 6f };
+    static float RoomKeep(PoiKind kind) => kind == PoiKind.CurseDen ? 9f : 6f;
     const int RoomTries = 600;
     /// <summary>The scatter rules (the validator checks them): how far every place keeps from the start and the way down
     /// and from each other (rooms further), and how far from the start the early place may lie.</summary>

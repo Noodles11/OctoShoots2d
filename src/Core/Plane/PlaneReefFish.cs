@@ -382,7 +382,7 @@ public sealed partial class PlaneWorld
             Vector2 to = SecretWay - s.Position;
             if (to.LengthSquared() > 1e-4f) s.Pointing = Vector2.Normalize(to);
             s.Velocity = MoveToward(s.Velocity, Vector2.Zero, 3f * Dt);
-            Move(ref s.Position, ref s.Velocity, ReefFishTuning.SchoolRadius * 0.6f, report: false, barrier: ArenaBarrier.Outside);
+            Move(ref s.Position, ref s.Velocity, ReefFishTuning.SchoolRadius * 0.6f, report: false);
             return;
         }
         if (s.Wait > 0f)
@@ -410,7 +410,7 @@ public sealed partial class PlaneWorld
             else s.Velocity = MoveToward(s.Velocity, to / d * ReefFishTuning.SchoolSpeed * MathUtil.Clamp01(d / 3f + 0.3f), 1.5f * Dt);
         }
         // The centre keeps to water wide enough for the school.
-        Move(ref s.Position, ref s.Velocity, ReefFishTuning.SchoolRadius * 0.6f, report: false, barrier: ArenaBarrier.Outside);
+        Move(ref s.Position, ref s.Velocity, ReefFishTuning.SchoolRadius * 0.6f, report: false);
     }
 
     /// <summary>A chromis in its school: apart from its neighbours, along with them, round the centre; aside from her.</summary>

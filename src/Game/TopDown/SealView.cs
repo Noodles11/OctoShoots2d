@@ -11,7 +11,9 @@ namespace OctoShoots.Game.TopDown;
 /// tunnel's; a sword on the way into the boss's arena, its crimson smouldering — filling with light as her shots strike
 /// it and flashing with each, draining if they stop. Filled, the wall slides down into the sand (LevelView.Slide): it
 /// shudders as it gives, the carving sinking with it, silt pushed up and rolling out all along its feet where it meets the
-/// seabed, chips of rock flicked out, a dull grinding under it; the screen shakes as long as it goes (Sliding).
+/// seabed, chips of rock flicked out, a dull grinding under it; the screen shakes as long as it goes (Sliding). A barred
+/// boss arena's way in rises back up behind her as the fight begins (the slide played backwards) and carries the sword on
+/// its inner face too, burning crimson while the fight runs; freed, the boss lets it slide down again.
 /// </summary>
 public partial class SealView : Node3D
 {
@@ -19,19 +21,20 @@ public partial class SealView : Node3D
     {
         public MeshInstance3D Mesh = null!;
         public ShaderMaterial Material = null!;
-        public Vector3 At;
         public float Fill, Flash, Fade = 1f;
     }
 
     sealed class Slide
     {
-        public Emblem? Emblem;
+        public List<Emblem> Emblems = new();
         public List<Vector3> Feet = new();
         public float Age, Height;
-        public Vector3 Facing;
+        public bool Up;
     }
 
     readonly List<Emblem> _emblems = new();
+    /// <summary>The swords on the inner faces of a barred arena's ways in, by seal.</summary>
+    readonly Dictionary<int, Emblem> _inner = new();
     readonly List<Slide> _slides = new();
     FxParticles _dust = null!, _silt = null!;
     LevelMap? _map;
@@ -50,54 +53,95 @@ public partial class SealView : Node3D
         AddChild(_silt);
     }
 
-    public void Show(PlaneWorld world)
+    public void Show(PlaneWorld world, LevelView level)
     {
         _map = world.Map;
-        foreach (var e in _emblems) e.Mesh.QueueFree();
+        // (Those on the last level's walls went with them.)
+        foreach (var e in _emblems) if (IsInstanceValid(e.Mesh)) e.Mesh.QueueFree();
+        foreach (var e in _inner.Values) if (IsInstanceValid(e.Mesh)) e.Mesh.QueueFree();
         _emblems.Clear();
+        _inner.Clear();
         _slides.Clear();
         var shader = GD.Load<Shader>("res://assets/shaders/seal_emblem.gdshader");
-        foreach (var seal in world.Seals)
+        bool barred = world.Boss is { Spec.Blockade: true };
+        for (int i = 0; i < world.Seals.Count; i++)
         {
-            // On the face it is met from, where it stands a little over her plane (in focus, where her shots strike it).
-            var map = world.Map;
-            float H(System.Numerics.Vector2 q) => LevelView.SealHeight(map, seal.Rock, q.X, q.Y);
-            float y = LevelMap.SwimBand + 0.9f;
-            var spot = seal.Rock.Center;
-            for (float d = 0f; d <= seal.Rock.Thick + seal.Rock.Radius + 6f; d += 0.05f)
-            {
-                spot = seal.Rock.Center + seal.Facing * d;
-                if (H(spot) <= y) break;
-            }
-            const float e = 0.3f;
-            var normal = new Vector3(H(spot - new System.Numerics.Vector2(e, 0f)) - H(spot + new System.Numerics.Vector2(e, 0f)), 2f * e,
-                H(spot - new System.Numerics.Vector2(0f, e)) - H(spot + new System.Numerics.Vector2(0f, e))).Normalized();
-            var at = new Vector3(spot.X, H(spot), spot.Y);
-            var material = new ShaderMaterial { Shader = shader };
-            bool boss = seal.Kind == SealKind.Boss;
-            material.SetShaderParameter(SN.Of("shape"), boss ? 1 : 0);
-            if (boss)
-            {
-                material.SetShaderParameter(SN.Of("light_color"), Crimson);
-                material.SetShaderParameter(SN.Of("ember"), 1f);
-            }
-            var mesh = new MeshInstance3D
-            {
-                Mesh = new QuadMesh { Size = boss ? new Vector2(3.4f, 3.4f) : new Vector2(2f, 2f) },
-                MaterialOverride = material,
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            };
-            AddChild(mesh);
-            // Tipped up toward the camera above (the face is steep: seen from overhead a carving flat on it would be
-            // edge-on), standing a little proud of the stone so the tilt does not sink it; its up up the wall.
-            normal = (normal + Vector3.Up * 1.2f).Normalized();
-            var side = normal.Cross(Vector3.Up).Normalized();
-            if (side.LengthSquared() < 1e-4f) side = Vector3.Right;
-            var upish = side.Cross(normal).Normalized();
-            var where = at + normal * 0.35f;
-            mesh.GlobalTransform = new Transform3D(new Basis(side, upish, normal), where);
-            _emblems.Add(new Emblem { Mesh = mesh, Material = material, At = where, Fade = seal.Open ? 0f : 1f });
+            var seal = world.Seals[i];
+            _emblems.Add(Carve(world.Map, seal, seal.Facing, shader, seal.Open ? 0f : 1f, level));
+            // A barred arena's ways in carry the sword on their inner face as well, seen only while the fight holds them shut.
+            if (barred && seal.Kind == SealKind.Boss) _inner[i] = Carve(world.Map, seal, -seal.Facing, shader, 0f, level);
         }
+    }
+
+    /// <summary>
+    /// The carving on the face of a seal looking along <paramref name="facing"/>: cut into the wall's own surface — a
+    /// patch of it lifted a hair off the stone, part of the wall's mesh (LevelView.SealWall), so it goes wherever the wall
+    /// goes. Laid out as seen from above (the camera's view), so the steep face does not squash it; it shows only on the
+    /// rock, never on the seabed at its foot.
+    /// </summary>
+    Emblem Carve(LevelMap map, SecretSeal seal, System.Numerics.Vector2 facing, Shader shader, float fade, LevelView level)
+    {
+        bool boss = seal.Kind == SealKind.Boss;
+        float half = boss ? 1.7f : 1f;
+        float H(System.Numerics.Vector2 q) => LevelView.SealHeight(map, seal.Rock, q.X, q.Y);
+        // Out along the face from the wall's middle to the seabed in front, and the wall's top above it.
+        float top = float.MinValue, d = 0f;
+        for (; d <= seal.Rock.Thick + seal.Rock.Radius + 6f; d += 0.05f)
+        {
+            float h = H(seal.Rock.Center + facing * d);
+            top = Mathf.Max(top, h);
+            if (h <= LevelMap.SwimBand) break;
+        }
+        float floor = H(seal.Rock.Center + facing * (d + 1.5f));
+        // Its middle on the face, a little over halfway up, where her shots strike it.
+        var mid = seal.Rock.Center + facing * d;
+        float want = floor + 0.55f * (top - floor);
+        for (float k = d; k >= 0f; k -= 0.05f)
+        {
+            mid = seal.Rock.Center + facing * k;
+            if (H(mid) >= want) break;
+        }
+        // Its blade (or the X's) along the way out of the wall, across the passage the other way.
+        var along = facing;
+        var across = new System.Numerics.Vector2(-facing.Y, facing.X);
+        const int n = 28;
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        for (int y = 0; y <= n; y++)
+            for (int x = 0; x <= n; x++)
+            {
+                float u = x / (float)n, v = y / (float)n;
+                var q = mid + across * ((u * 2f - 1f) * half) + along * ((v * 2f - 1f) * half);
+                float h = H(q);
+                const float e = 0.15f;
+                var normal = new Vector3(H(q - new System.Numerics.Vector2(e, 0f)) - H(q + new System.Numerics.Vector2(e, 0f)), 2f * e,
+                    H(q - new System.Numerics.Vector2(0f, e)) - H(q + new System.Numerics.Vector2(0f, e))).Normalized();
+                // On the rock only: gone where the stone meets the seabed.
+                float onRock = Mathf.SmoothStep(floor + 0.2f, floor + 0.6f, h);
+                st.SetColor(new Color(1f, 1f, 1f, onRock));
+                st.SetUV(new Vector2(u, v));
+                st.SetNormal(normal);
+                st.AddVertex(new Vector3(q.X, h, q.Y) + normal * 0.05f);
+            }
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                int a = y * (n + 1) + x, b = a + 1, c = a + n + 1, dd = c + 1;
+                st.AddIndex(a); st.AddIndex(c); st.AddIndex(b);
+                st.AddIndex(b); st.AddIndex(c); st.AddIndex(dd);
+            }
+        var material = new ShaderMaterial { Shader = shader };
+        material.SetShaderParameter(SN.Of("shape"), boss ? 1 : 0);
+        if (boss)
+        {
+            material.SetShaderParameter(SN.Of("light_color"), Crimson);
+            material.SetShaderParameter(SN.Of("ember"), 1f);
+        }
+        var mesh = new MeshInstance3D { Mesh = st.Commit(), MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        // In the wall's own frame (both are laid out in the level's metres), so it rises and sinks with it.
+        if (level.SealWall(seal.Rock.Center) is { } wall) wall.AddChild(mesh);
+        else AddChild(mesh);
+        return new Emblem { Mesh = mesh, Material = material, Fade = fade };
     }
 
     public void Sync(PlaneWorld world, float dt, Camera3D? camera)
@@ -114,18 +158,24 @@ public partial class SealView : Node3D
             e.Material.SetShaderParameter(SN.Of("flash"), e.Flash);
             e.Material.SetShaderParameter(SN.Of("fade"), e.Fade);
         }
+        // The inner swords burn crimson while the fight holds the way shut.
+        foreach (var (i, e) in _inner)
+        {
+            if (i >= world.Seals.Count) continue;
+            e.Fill = Mathf.MoveToward(e.Fill, world.Seals[i].Barred ? 1f : 0f, dt * 1.5f);
+            e.Mesh.Visible = e.Fade > 0.001f;
+            e.Material.SetShaderParameter(SN.Of("fill"), e.Fill);
+            e.Material.SetShaderParameter(SN.Of("fade"), e.Fade);
+        }
         for (int i = _slides.Count - 1; i >= 0; i--)
         {
             var s = _slides[i];
             s.Age += dt;
             float t = s.Age / LevelView.SlideSeconds;
-            float down = LevelView.SlideAt(t);
-            // The carving goes down with its wall, glowing out.
-            if (s.Emblem is { } em)
-            {
-                em.Mesh.GlobalPosition = em.At + Vector3.Down * (s.Height + 0.3f) * down;
-                em.Fade = 1f - Mathf.SmoothStep(0.4f, 0.9f, t);
-            }
+            float down = LevelView.SlideAt(s.Up ? 1f - t : t);
+            // The carvings, cut in their wall, go down with it glowing out (or come up with it, glowing in).
+            foreach (var em in s.Emblems)
+                em.Fade = s.Up ? Mathf.SmoothStep(0.1f, 0.6f, t) : 1f - Mathf.SmoothStep(0.4f, 0.9f, t);
             // Silt pushed up along its feet as it goes into the sand, rolling out low and settling; chips of rock flicked off.
             if (s.Feet.Count > 0 && t > 0.06f && t < 1f)
             {
@@ -163,19 +213,21 @@ public partial class SealView : Node3D
             int i = world.Seals.FindIndex(s => s.Emblem == e.Position);
             if (i >= 0 && i < _emblems.Count) _emblems[i].Flash = 1f;
         }
-        else if (e.Type == PlaneEventType.SealOpened)
+        else if (e.Type is PlaneEventType.SealOpened or PlaneEventType.SealClosed)
         {
-            // The wall gives and slides down into the sand.
+            // The wall gives and slides down into the sand (or rises back up out of it), its carvings with it.
             int i = world.Seals.FindIndex(s => s.Rock.Center == e.Position);
             if (i < 0) return;
             var seal = world.Seals[i];
-            _slides.Add(new Slide
+            var slide = new Slide
             {
-                Emblem = i < _emblems.Count ? _emblems[i] : null,
                 Feet = LevelView.SealFoot(_map, seal.Rock),
                 Height = LevelView.SealDrop(_map, seal.Rock),
-                Facing = new Vector3(seal.Facing.X, 0f, seal.Facing.Y),
-            });
+                Up = e.Type == PlaneEventType.SealClosed,
+            };
+            if (i < _emblems.Count) slide.Emblems.Add(_emblems[i]);
+            if (_inner.TryGetValue(i, out var inner)) slide.Emblems.Add(inner);
+            _slides.Add(slide);
         }
     }
 }

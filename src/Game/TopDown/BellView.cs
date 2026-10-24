@@ -65,6 +65,8 @@ public partial class BellView : Node3D
     /// <summary>Across her course (horizontal): the way trailing strands ripple.</summary>
     Vector3 _across = Vector3.Right;
     float _time, _phase = 0.5f, _amp = 0.3f, _pulse, _hurt, _inkGhost, _idle = 1f, _spin;
+    /// <summary>How fast she turns to face her aim (an easing rate, per second).</summary>
+    const float AimTurn = 14f;
     float _lastJet, _lastDash, _lastHurt;
     Vector2 _lean, _leanVel;
 
@@ -303,7 +305,13 @@ public partial class BellView : Node3D
         float ease = _idle * _idle * (3f - 2f * _idle);
         float bob = 0.5f * Mathf.Sin(_time * 1.1f) * ease + 0.06f * _pulse;
         Position = new Vector3(at.X, LevelMap.SwimBand + bob * (1f - DiveTurn) - DiveDepth, at.Y);
-        _spin += h * 0.08f;
+        // She turns to face her aim, her first gonad toward it (a turn about her axis: gonad 0 sits at 45° in the bell's
+        // own frame), quickly but not in a snap.
+        if (p.Aim.LengthSquared() > 1e-6f)
+        {
+            float target = Mathf.Pi * 0.25f - Mathf.Atan2(p.Aim.Y, p.Aim.X);
+            _spin = Mathf.LerpAngle(_spin, target, 1f - Mathf.Exp(-AimTurn * h));
+        }
         float lean = _lean.Length();
         var tilt = lean > 1e-4f ? new Basis(new Vector3(_lean.Y, 0f, -_lean.X) / lean, lean) : Basis.Identity;
         _body.Basis = tilt * new Basis(Vector3.Up, _spin);

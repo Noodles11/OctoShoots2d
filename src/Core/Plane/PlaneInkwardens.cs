@@ -167,7 +167,7 @@ public sealed partial class PlaneWorld
             float d = to.Length();
             var want = d > WardenTuning.Settle ? to / d * WardenTuning.Drift : Vector2.Zero;
             w.Velocity = MoveToward(w.Velocity, want, 1f * Dt);
-            Move(ref w.Position, ref w.Velocity, WardenTuning.Radius, report: false, barrier: ArenaBarrier.Outside);
+            Move(ref w.Position, ref w.Velocity, WardenTuning.Radius, report: false);
         }
 
         // Her shots of light: the warden itself has no guard.

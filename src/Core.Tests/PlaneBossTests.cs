@@ -10,7 +10,7 @@ using Xunit;
 
 namespace OctoShoots.Core.Tests;
 
-/// <summary>Queen Clam and her arena: the seal, the landing wave, the fight, and freeing her.</summary>
+/// <summary>Queen Clam and her arena: the battle's start, its blockade, the landing wave, the fight, and freeing her.</summary>
 public class PlaneBossTests
 {
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
@@ -54,13 +54,13 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void EnteringSealsTheArenaAndSheLandsAfterTheBanner()
+    public void EnteringBeginsTheBattleAndSheLandsAfterTheBanner()
     {
         var w = World();
         Enter(w);
         w.Step(default);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.ArenaSealed);
-        Assert.True(w.ArenaSealed);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.BattleBegan);
+        Assert.True(w.BossBattle);
         int ticks = StepUntil(w, PlaneEventType.BossLanded);
         float intro = PlaneBossTuning.DropDelay + PlaneBossTuning.ShadowSeconds;
         Assert.InRange(ticks * PlaneWorld.Dt, intro - 0.05f, intro + 0.05f);
@@ -68,37 +68,64 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void SheCannotLeaveTheSealedArena()
+    public void WithoutABlockadeSheMayLeaveTheArenaMidFight()
     {
-        var w = World();
-        Enter(w);
-        w.Step(default);
-        for (int i = 0; i < 60 * 4; i++)
-        {
-            w.Step(new PlaneInput { Move = Vector2.UnitY });
-            Assert.True(Vector2.Distance(w.Player.Position, w.ArenaCenter) <= w.ArenaRadius - w.Radius + 0.01f);
-        }
+        var spec = OctoShoots.Core.Bosses.BossGenerator.QueenClam(1UL, 1, 1);
+        spec.Blockade = false;
+        var w = new PlaneWorld(Shared.Value, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), new PlaneOptions { Corruption = false, Boss = spec });
+        // A way out: open water just inside the rim and well beyond it.
+        var dir = Enumerable.Range(0, 72).Select(i => new Vector2(MathF.Cos(i * MathF.Tau / 72f), MathF.Sin(i * MathF.Tau / 72f)))
+            .First(d => Enumerable.Range(0, 12).All(k => w.Clear(w.ArenaCenter + d * (w.ArenaRadius - 2f + k * 0.5f), w.Radius + 0.2f)));
+        w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + dir * (w.ArenaRadius - 2f);
+        Assert.True(StepUntil(w, PlaneEventType.BossLanded) > 0);
+        w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + dir * (w.ArenaRadius - 2f);
+        for (int i = 0; i < 60; i++) w.Step(new PlaneInput { Move = dir });
+        Assert.True(Vector2.Distance(w.Player.Position, w.ArenaCenter) > w.ArenaRadius + 1f);
+        // The fight carries on while she is out; nothing resets.
+        Assert.True(w.BossBattle);
+        Assert.Equal(BossStage.Fight, w.Boss!.Stage);
+        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.SealClosed);
     }
 
     [Fact]
-    public void TheLandingSweepsMobsOutAndKeepsThemOut()
+    public void ABarredArenasWayInRisesBehindHerAndSlidesDownOnceSheIsFreed()
     {
         var w = World();
-        var mob = w.Mobs[0];
-        mob.Position = w.ArenaCenter + new Vector2(-5f, 0f);
+        foreach (var m in w.Mobs) m.Hp = 0f;
+        var seal = w.Seals.First(s => s.Kind == SealKind.Boss);
+        for (int k = 0; k < 60 && !seal.Open; k++) w.DebugStrikeSeal(seal);
+        Assert.True(seal.Open);
+        Assert.True(w.Clear(seal.Rock.Center, 0.4f));
         Enter(w);
         w.Step(default);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.SealClosed && e.Position == seal.Rock.Center);
+        Assert.True(seal.Barred);
+        Assert.False(w.Clear(seal.Rock.Center, 0.4f));
+        // Her light cannot open it while the fight runs.
+        for (int k = 0; k < SealTuning.BossHits + 2; k++) w.DebugStrikeSeal(seal);
+        Assert.False(seal.Open);
+        Assert.Equal(0, seal.Hits);
+        // Freed, the boss lets it slide back down.
         Assert.True(StepUntil(w, PlaneEventType.BossLanded) > 0);
-        for (int i = 0; i < 60; i++) w.Step(default);
-        Assert.True(Vector2.Distance(mob.Position, w.ArenaCenter) >= w.ArenaRadius + PlaneCombatTuning.MobRadius - 0.01f);
-        Assert.True(mob.Alive);
-        // It hunts her but cannot come in.
-        mob.Aggro = true;
-        for (int i = 0; i < 60 * 5; i++)
-        {
-            w.Step(default);
-            Assert.True(Vector2.Distance(mob.Position, w.ArenaCenter) >= w.ArenaRadius + PlaneCombatTuning.MobRadius - 0.01f);
-        }
+        Assert.True(StepUntil(w, PlaneEventType.BossVolley) > 0);
+        w.Boss!.Phase = 2;
+        w.Boss.Hp = 5f;
+        w.Shots.Add(BubbleAt(w.Boss.Position));
+        Assert.True(StepUntil(w, PlaneEventType.BossFreed, 60) > 0);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.SealOpened && e.Position == seal.Rock.Center);
+        Assert.True(seal.Open);
+        Assert.False(seal.Barred);
+        Assert.True(w.Clear(seal.Rock.Center, 0.4f));
+    }
+
+    [Fact]
+    public void EveryDepthMeetsQueenClamTougherTheDeeper()
+    {
+        var bosses = Enumerable.Range(1, 6).Select(d => OctoShoots.Core.Bosses.BossRoster.For(7UL, 1, d)).ToList();
+        Assert.All(bosses, b => Assert.Equal("Queen Clam", b.Name));
+        Assert.All(bosses, b => Assert.True(b.Blockade));
+        Assert.Equal(PlaneBossTuning.Hp, bosses[0].Hp);
+        for (int i = 1; i < bosses.Count; i++) Assert.True(bosses[i].Hp > bosses[i - 1].Hp);
     }
 
     static PlaneShot BubbleAt(Vector2 at) => new()
@@ -185,7 +212,7 @@ public class PlaneBossTests
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.BossDefeated);
         Assert.DoesNotContain(w.Shots, s => s.BossPearl);
         Assert.True(StepUntil(w, PlaneEventType.BossFreed, 60) > 0);
-        Assert.False(w.ArenaSealed);
+        Assert.False(w.BossBattle);
         Assert.True(w.ExitOpen);
         Assert.Equal(pearlsBefore + 1, w.Pearls.Count);
         Assert.Contains(w.Pearls[^1].ItemId, PlaneRun.PortedPearls);

@@ -72,6 +72,11 @@ public sealed class BossSpec
     public BossConcept Concept { get; init; }
     /// <summary>Queen Clam: the hand-tuned roll of The Lid the others are held to.</summary>
     public bool Reference { get; init; }
+    /// <summary>
+    /// Its author's choice: while the fight runs, the sealed walls into its arena stand closed (they rise behind her as it
+    /// begins and slide down once it is freed). Without it the arena stays open and either of them may leave.
+    /// </summary>
+    public bool Blockade { get; set; }
     public string Name { get; set; } = "";
 
     // ── the body ──
@@ -128,6 +133,8 @@ public sealed class BossSpec
     public BossAttack Signature { get; set; }
     public List<BossAttack> Fillers { get; } = new();
     public BossMove Move { get; set; }
+    /// <summary>It goes after her (a creeper): it may follow her out of its arena. The others keep to it.</summary>
+    public bool Chaser => Move == BossMove.Creep;
     /// <summary>Creep speed (m/s) or turn rate (rad/s), by its move.</summary>
     public float MoveRate { get; set; }
     public BossTempo Tempo { get; set; }

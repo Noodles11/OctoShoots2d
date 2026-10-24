@@ -1,7 +1,8 @@
 // A sealed wall's carving (DESIGN-TOPDOWN §4.2; SealView): an X carved faintly in the wall, easy to miss (shape 0: a
 // secret's, a tunnel's), or a sword (shape 1: the way into the boss's arena), its crimson smouldering in the groove
 // (ember). Her light striking it fills the carving from its heart outward (the X's crossing, the sword's guard); each
-// strike flashes it. Drawn on a quad laid on the wall's face.
+// strike flashes it. Drawn on a patch of the wall's own surface (SealView.Carve), laid out as seen from above; its
+// vertex alpha keeps it to the rock (none on the seabed at the wall's foot).
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
 
@@ -57,7 +58,7 @@ void fragment() {
 		vec3 shade = vec3(0.04, 0.01, 0.015);
 		ALBEDO = mix(shade, light_color * 1.7, clamp(shine + smoulder, 0.0, 1.0));
 		float halo = (1.0 - smoothstep(0.0, 0.55, at)) * fill * 0.3 + smoulder * 0.15 + flash * 0.15 * (1.0 - smoothstep(0.0, 0.8, length(p)));
-		ALPHA = clamp(groove * (0.4 + 0.6 * clamp(shine + smoulder, 0.0, 1.0)) + halo, 0.0, 1.0) * fade;
+		ALPHA = clamp(groove * (0.4 + 0.6 * clamp(shine + smoulder, 0.0, 1.0)) + halo, 0.0, 1.0) * fade * COLOR.a;
 	} else {
 	float a1, a2;
 	float d1 = stroke(p, normalize(vec2(1.0, 1.0)), a1);
@@ -78,6 +79,6 @@ void fragment() {
 	ALBEDO = mix(shade, light_color * 1.6, clamp(shine, 0.0, 1.0));
 	// A soft halo round the lit carving.
 	float halo = (1.0 - smoothstep(0.0, 0.35, min(d1, d2))) * fill * 0.25 + flash * 0.15 * (1.0 - smoothstep(0.0, 0.6, length(p)));
-	ALPHA = clamp(groove * (0.32 + 0.68 * clamp(shine, 0.0, 1.0)) + halo, 0.0, 1.0) * fade;
+	ALPHA = clamp(groove * (0.32 + 0.68 * clamp(shine, 0.0, 1.0)) + halo, 0.0, 1.0) * fade * COLOR.a;
 	}
 }

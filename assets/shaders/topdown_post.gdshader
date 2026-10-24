@@ -306,7 +306,8 @@ void fragment() {
 		vec2 og = on_layer.xz - g.xy;
 		clam += clam_colors[i] * exp(-dot(og, og) / (g.z * g.z)) * g.w;
 	}
-	col = col * (1.0 + clam * 0.9) + clam * 0.22;
+	// (Gently: lifted hard, the room and its pearl wash out and the pearl's pattern is lost.)
+	col = col * (1.0 + clam * 0.45) + clam * 0.1;
 
 	// Rock rising toward the camera: a soft silhouette in the water's colour, darker as the depths darken.
 	vec3 shade = mix(reef_murk * 0.45, vec3(0.01, 0.015, 0.02), reef_menace);

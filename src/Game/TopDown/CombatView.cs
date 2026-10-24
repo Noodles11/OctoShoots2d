@@ -16,7 +16,11 @@ public partial class CombatView : Node3D
 {
     readonly List<MeshInstance3D> _shots = new();
     readonly List<Node3D> _pearls = new();
-    readonly List<MeshInstance3D> _shells = new();
+    /// <summary>The shells lying in the reef: each a silver nautilus (NautilusShell), lying as it fell — turned at random
+    /// in every axis — turning slowly about its own tilt, bobbing a little on the swim band.</summary>
+    readonly Dictionary<PlaneShell, (MeshInstance3D Mesh, Basis Lie, Vector3 Spin, float Phase)> _shells = new();
+    /// <summary>A shell's size on the plane (across, metres).</summary>
+    public const float ShellSize = 0.62f;
     /// <summary>Hearts dropped by freed mobs: a small red heart and its glow each, pooled.</summary>
     readonly List<Node3D> _hearts = new();
     readonly List<Node3D> _stands = new();
@@ -25,7 +29,6 @@ public partial class CombatView : Node3D
     StandardMaterial3D? _heart;
     static ImageTexture? _tagTexture;
     Poi? _shop;
-    StandardMaterial3D _shell = null!;
     StandardMaterial3D _herShot = null!, _theirShot = null!;
     Mesh _needleMesh = null!;
     ShaderMaterial _needle = null!;
@@ -247,35 +250,10 @@ public partial class CombatView : Node3D
         return ImageTexture.CreateFromImage(img);
     }
 
-    /// <summary>A small scallop shell: a flattened, ribbed dome.</summary>
-    static ArrayMesh ShellMesh()
-    {
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        const int ribs = 9;
-        const float fan = 2.4f, r = 0.24f;
-        var hinge = new Vector3(0f, 0.02f, r * 0.55f);
-        for (int i = 0; i < ribs; i++)
-        {
-            float a0 = -fan / 2f + fan * i / ribs, a1 = -fan / 2f + fan * (i + 1) / ribs, am = (a0 + a1) * 0.5f;
-            Vector3 P(float a, float lift) => new(Mathf.Sin(a) * r, lift, -Mathf.Cos(a) * r + r * 0.55f);
-            Vector3 e0 = P(a0, 0.02f), e1 = P(a1, 0.02f), ridge = P(am, 0.09f);
-            foreach (var (a, b) in new[] { (e0, ridge), (ridge, e1) })
-            {
-                var n = (b - hinge).Cross(a - hinge).Normalized();
-                st.SetNormal(n);
-                st.AddVertex(hinge);
-                st.AddVertex(b);
-                st.AddVertex(a);
-            }
-        }
-        return st.Commit();
-    }
-
     /// <param name="fresh">Pearls offered for the first time since an achievement unlocked them: they wear a NEW chip.</param>
     public void Show(PlaneWorld world, ItemCatalog? catalog, ISet<string>? fresh = null)
     {
-        foreach (var sh in _shells) sh.QueueFree();
+        foreach (var sh in _shells.Values) sh.Mesh.QueueFree();
         foreach (var st in _stands) st.QueueFree();
         foreach (var h in _hearts) h.QueueFree();
         _hearts.Clear();
@@ -283,15 +261,6 @@ public partial class CombatView : Node3D
         _stands.Clear();
         _prices.Clear();
         _shop = world.Map.Pois.FirstOrDefault(p => p.Kind == PoiKind.Shop);
-        _shell ??= new StandardMaterial3D
-        {
-            AlbedoColor = new Color(1f, 0.86f, 0.78f),
-            EmissionEnabled = true,
-            Emission = new Color(1f, 0.7f, 0.55f),
-            EmissionEnergyMultiplier = 0.9f,
-            Roughness = 0.35f,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-        };
         // The shop's goods float on their own (a clam room's pearl hangs still instead): pearls in their colours, the top-up a red
         // heart. Each hangs a little price tag on a string (its price and a shell), shown only while she is inside the shop.
         foreach (var stand in world.Stands)
@@ -418,6 +387,23 @@ public partial class CombatView : Node3D
         LightBurst(flat, 3.2f);
     }
     const float PearlFall = 1.4f, PearlFallHeight = 7f;
+    /// <summary>A pearl lying in the world: its glow from within (pearl_common's glow) and the light it sheds round it.</summary>
+    const float WorldPearlGlow = 0.55f, WorldPearlLight = 0.9f;
+
+    /// <summary>How a shell lying near this point is turned right now (for its flight to the counter), if one is.</summary>
+    public Basis? ShellLie(System.Numerics.Vector2 at)
+    {
+        Basis? best = null;
+        float near = 1.5f;
+        foreach (var (sh, view) in _shells)
+        {
+            float d = System.Numerics.Vector2.Distance(sh.Position, at);
+            if (d >= near) continue;
+            near = d;
+            best = view.Mesh.GlobalBasis.Orthonormalized();
+        }
+        return best;
+    }
 
     /// <summary>A pearl: glowing in its own colours, turning slowly.</summary>
     void AddPearl(PlanePearl pearl, float born)
@@ -433,12 +419,14 @@ public partial class CombatView : Node3D
             var node = new Node3D { Position = new Vector3(pearl.Position.X, LevelMap.SwimBand, pearl.Position.Y) };
             // Its own copy of the pearl's look (colours in its pattern), so its ritual can pale it alone.
             ShaderMaterial? look_ = catalog is not null && catalog.TryGet(pearl.ItemId, out var def) ? (ShaderMaterial)OctoShoots.Game.Fx.PearlMaterials.Get(def).Duplicate() : null;
+            // Glowing from within, but not so much that it burns white: its colours in their pattern must read.
+            look_?.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow"), WorldPearlGlow);
             node.AddChild(new MeshInstance3D
             {
                 Mesh = new SphereMesh { Radius = 0.42f, Height = 0.84f, RadialSegments = 24, Rings = 12 },
                 MaterialOverride = look_ is not null ? look_ : new StandardMaterial3D { AlbedoColor = a, EmissionEnabled = true, Emission = b, EmissionEnergyMultiplier = 1.4f, Roughness = 0.15f, Metallic = 0.3f, RimEnabled = true, Rim = 1f },
             });
-            var light = new OmniLight3D { LightColor = b.Lerp(Colors.White, 0.3f), LightEnergy = 1.8f, OmniRange = 5f, ShadowEnabled = false };
+            var light = new OmniLight3D { LightColor = b.Lerp(Colors.White, 0.3f), LightEnergy = WorldPearlLight, OmniRange = 5f, ShadowEnabled = false };
             node.AddChild(light);
             AddChild(node);
             _pearls.Add(node);
@@ -787,8 +775,12 @@ void fragment() {
         Firework(at, 2, System.Numerics.Vector2.Zero);
     }
 
-    /// <summary>Her light struck something (a creature, a vase, a vine...): a power surge arcs back to her for half a second.</summary>
-    public void Surge(System.Numerics.Vector2 at) => _trails.Strike(new Vector3(at.X, LevelMap.SwimBand, at.Y));
+    /// <summary>
+    /// Her light struck a body (its middle and the radius of its outline; the way the shot flew; the hit's strength, a
+    /// plain shot's 1): flares burst round its outline.
+    /// </summary>
+    public void Flares(System.Numerics.Vector2 at, float radius, System.Numerics.Vector2 dir, float strength) =>
+        _trails.Flares(new Vector3(at.X, LevelMap.SwimBand + 0.2f, at.Y), radius, new Vector3(dir.X, 0f, dir.Y), strength);
 
     /// <summary>
     /// Her light bursts like a small firework: a white flash, sparks flung out (more and faster for a bigger, merged
@@ -992,7 +984,6 @@ void fragment() {
                 _candidates.Add((ray.End, GroundStrength * 1.4f * surge.Power, GroundRadius * 1.6f));
             }
         SyncLights(world, dt);
-        _trails.Her = new Vector3(world.Player.Position.X, LevelMap.SwimBand, world.Player.Position.Y);
         _trails.Step(dt, _time, GetViewport().GetCamera3D());
         (_shed, _shedNext) = (_shedNext, _shed);
         _shedNext.Clear();
@@ -1112,7 +1103,7 @@ void fragment() {
                 float tremble = pearl.Ritual > PearlRitual.Mimic ? 0.04f * Mathf.Sin(_time * 70f) : 0f;
                 _pearls[i].Scale = Vector3.One * (0.85f + tremble);
                 look?.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pale"), pale);
-                light.LightEnergy = 1.8f * (1f - 0.85f * pale);
+                light.LightEnergy = WorldPearlLight * (1f - 0.85f * pale);
                 continue;
             }
             _pearls[i].Visible = !pearl.Taken;
@@ -1145,22 +1136,25 @@ void fragment() {
             sh.Mesh.Scale *= 1f - 1.5f * dt;
         }
 
-        // Shells: a pooled mesh each, turning slowly and bobbing a little on the swim band.
-        while (_shells.Count < world.Shells.Count)
+        // Shells: a nautilus each, lying as it fell (any way round), turning slowly about its tilt and bobbing a little.
+        foreach (var sh in world.Shells)
         {
-            var m = new MeshInstance3D { Mesh = ShellMesh(), MaterialOverride = _shell, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+            if (_shells.ContainsKey(sh)) continue;
+            var m = new MeshInstance3D { Mesh = OctoShoots.Game.Fx.NautilusShell.Mesh, MaterialOverride = OctoShoots.Game.Fx.NautilusShell.Material, CastShadow = GeometryInstance3D.ShadowCastingSetting.On, Scale = Vector3.One * ShellSize };
             AddChild(m);
-            _shells.Add(m);
+            var lie = Basis.FromEuler(new Vector3(GD.Randf(), GD.Randf(), GD.Randf()) * Mathf.Tau);
+            _shells[sh] = (m, lie, _fireworks.RandDir(), GD.Randf() * Mathf.Tau);
         }
-        for (int i = 0; i < _shells.Count; i++)
+        if (_shells.Count > world.Shells.Count)
+            foreach (var gone in _shells.Keys.Where(k => !world.Shells.Contains(k)).ToList())
+            {
+                _shells[gone].Mesh.QueueFree();
+                _shells.Remove(gone);
+            }
+        foreach (var (sh, view) in _shells)
         {
-            bool used = i < world.Shells.Count;
-            _shells[i].Visible = used;
-            if (!used) continue;
-            var sh = world.Shells[i];
-            _shells[i].Position = new Vector3(sh.Position.X, LevelMap.SwimBand - 0.25f + 0.08f * Mathf.Sin(_time * 2.2f + i * 0.7f), sh.Position.Y);
-            _shells[i].Rotation = new Vector3(0.35f, _time * 0.8f + i, 0f);
-            _shells[i].Scale = Vector3.One * 1.7f;
+            view.Mesh.Position = new Vector3(sh.Position.X, LevelMap.SwimBand - 0.25f + 0.08f * Mathf.Sin(_time * 2.2f + view.Phase), sh.Position.Y);
+            view.Mesh.Basis = (new Basis(view.Spin, 0.35f * _time + view.Phase) * view.Lie).Scaled(Vector3.One * ShellSize);
         }
         // Light orbs (the sim's hearts): a bubble with her light inside, breathing gently where they fell.
         while (_hearts.Count < world.Hearts.Count)

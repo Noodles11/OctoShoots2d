@@ -103,7 +103,7 @@ public sealed partial class PlaneWorld
         // Quick to start, easing out as it comes round.
         s.TurnRate = Math.Clamp(AngleDiff(want, s.Heading) * 5f, -max, max);
         s.Heading += s.TurnRate * Dt;
-        Move(ref s.Position, ref s.Velocity, radius, report: false, barrier: ArenaBarrier.Outside);
+        Move(ref s.Position, ref s.Velocity, radius, report: false);
     }
 
     /// <summary>Swims from spot to spot about its home, pausing at each to hover and look about.</summary>
@@ -155,7 +155,7 @@ public sealed partial class PlaneWorld
         float dist = to.Length();
         Vector2 dir = dist > 1e-4f ? to / dist : mob.Facing;
         float faceHer = MathF.Atan2(dir.Y, dir.X);
-        bool sees = dist <= PufferlingTuning.GiveUp && LineOfSight(mob.Position, p.Position) && !CrossesRim(mob.Position, p.Position);
+        bool sees = dist <= PufferlingTuning.GiveUp && LineOfSight(mob.Position, p.Position);
         mob.StateTime += Dt;
         mob.FireTimer -= Dt;
         float telegraph = MathF.Max(PufferlingTuning.MinTelegraph, PufferlingTuning.Telegraph - 0.35f * MathF.Min(Menace, 1f));

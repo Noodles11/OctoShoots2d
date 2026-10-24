@@ -70,10 +70,10 @@ public sealed class PlaneInk
 public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, MobDefeated, MobNoticed, PlayerHit, PlayerDefeated, Dived, PufferSwells, NeedlesFired, PearlCollected, ShellCollected, HeartCollected, Purchased, CannotAfford, AmbushSprung, ShotPopped, BubbleFull,
     ChargeFull, LightBurst, ShieldBlocked, ActiveUsed, ActiveNotReady, ActiveDenied,
     SurgeStarted, SurgeEnded, GeyserFizz, GeyserSpray, GeyserEnded, VaseHit, VaseBroken, FullBubbleFreed,
-    BlightrootDrank, BlightrootInflate, GuardiansWoke, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, ThumpWindup, ThumpLeap, ThumpLand, ThumpRoll, ThumpBurst, Warded, WardenFreed, LashWindup, LashOut, LashCatch, LashSwallow, LashBite, LashStun, LashFreed, SealLit, SealOpened, FishStruck, FishTurned, FishFreed,
+    BlightrootDrank, BlightrootInflate, GuardiansWoke, BlightrootPulse, BlightrootBurst, MurklingBud, MurklingEmerged, MurklingBurst, MurklingThrow, MurklingWindup, ThumpWindup, ThumpLeap, ThumpLand, ThumpRoll, ThumpBurst, Warded, WardenFreed, LashWindup, LashOut, LashCatch, LashSwallow, LashBite, LashStun, LashFreed, SealLit, SealOpened, SealClosed, FishStruck, FishTurned, FishFreed,
     MurklingCling, BlightrootSwing, BlightrootSlam, CrackOpened, CrustBroken, PlayerDrained, SpringEntered, SpringCleansed, SpringSpent, BlotterBorn, BlotterBurst, DenCleared, ShotOut, BombThrown, BombSplash, MurkShotLanded, MurkShotBurst, BossLeap, PearlTouched, PearlShattered,
     CurseEndReached, CurseLaugh, CurseCleared, FountainSpout, Cavitation, Necklace, SchoolPoints,
-    ArenaSealed, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
+    BattleBegan, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
     XpGained, LevelUp }
 
@@ -236,7 +236,7 @@ public sealed partial class PlaneWorld
         }
         p.JetTimer -= Dt;
 
-        Move(ref p.Position, ref p.Velocity, Radius, barrier: ArenaBarrier.Inside);
+        Move(ref p.Position, ref p.Velocity, Radius);
 
         StepReef();
         StepVases();
@@ -249,13 +249,15 @@ public sealed partial class PlaneWorld
         StepCombat(input);
         StepCorruption();
         StepKnocks();
-        StrikeBack();
         StepSprings();
         StepFish();
         StepReefFish();
         StepCurse();
         StepEconomy();
         StepExperience();
+        // Murklings made during the step (a prime's pieces) join the others now, never while a loop walks them.
+        Murklings.AddRange(_madeLater);
+        _madeLater.Clear();
     }
 
     readonly List<ReefEvent> _started = new(), _ended = new();
@@ -286,17 +288,17 @@ public sealed partial class PlaneWorld
 
         var p = Player;
         Vector2 flow = Director.FlowAt(p.Position, Time);
-        if (flow != Vector2.Zero) Move(ref p.Position, ref flow, Radius, report: false, barrier: ArenaBarrier.Inside);
+        if (flow != Vector2.Zero) Move(ref p.Position, ref flow, Radius, report: false);
         foreach (var mob in Mobs)
         {
             if (!mob.Alive) continue;
             flow = Director.FlowAt(mob.Position, Time);
-            if (flow != Vector2.Zero) Move(ref mob.Position, ref flow, PufferlingTuning.CalmRadius, report: false, barrier: ArenaBarrier.Outside);
+            if (flow != Vector2.Zero) Move(ref mob.Position, ref flow, PufferlingTuning.CalmRadius, report: false);
         }
         foreach (var fish in Fish)
         {
             flow = Director.FlowAt(fish.Position, Time);
-            if (flow != Vector2.Zero) Move(ref fish.Position, ref flow, PufferlingTuning.CalmRadius, report: false, barrier: ArenaBarrier.Outside);
+            if (flow != Vector2.Zero) Move(ref fish.Position, ref flow, PufferlingTuning.CalmRadius, report: false);
         }
         // The reef fish ride it too (a school's centre with them, so it keeps its shape); light, they only drift.
         foreach (var fish in ReefFish) Carry(ref fish.Position);
@@ -336,13 +338,9 @@ public sealed partial class PlaneWorld
         return VaseAt(p, radius) is null;
     }
 
-    /// <summary>Clear water that the arena's wall (if sealed) also allows.</summary>
-    bool Fits(Vector2 p, float radius, ArenaBarrier barrier) => Clear(p, radius) && BarrierAllows(p, radius, barrier);
-
-    /// <summary>Uphill direction at p: the terrain gradient, or away from weak rock (or into the arena's wall).</summary>
-    Vector2 WallNormal(Vector2 p, float radius, ArenaBarrier barrier = ArenaBarrier.None)
+    /// <summary>Uphill direction at p: the terrain gradient, or away from weak rock.</summary>
+    Vector2 WallNormal(Vector2 p, float radius)
     {
-        if (!BarrierAllows(p, radius, barrier)) return BarrierNormal(p, barrier);
         foreach (var rock in _rocks)
             if (rock.Contains(p, radius))
                 return rock.Inward(p);
@@ -359,10 +357,10 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>Moves a circle along its velocity, blocking against high terrain and sliding along the slope.</summary>
-    public void Move(ref Vector2 position, ref Vector2 velocity, float radius, bool report = true, ArenaBarrier barrier = ArenaBarrier.None)
+    public void Move(ref Vector2 position, ref Vector2 velocity, float radius, bool report = true)
     {
         // Pushed out of a wall (a crater or a spawn) first.
-        for (int i = 0; i < 20 && !Fits(position, radius, barrier); i++) position -= WallNormal(position, radius, barrier) * 0.05f;
+        for (int i = 0; i < 20 && !Clear(position, radius); i++) position -= WallNormal(position, radius) * 0.05f;
 
         Vector2 delta = velocity * Dt;
         int steps = Math.Max(1, (int)MathF.Ceiling(delta.Length() / (radius * 0.5f)));
@@ -371,19 +369,19 @@ public sealed partial class PlaneWorld
         for (int s = 0; s < steps; s++)
         {
             Vector2 next = position + step;
-            if (Fits(next, radius, barrier))
+            if (Clear(next, radius))
             {
                 position = next;
                 continue;
             }
             hit = true;
-            Vector2 n = WallNormal(next, radius, barrier);
+            Vector2 n = WallNormal(next, radius);
             float into = Vector2.Dot(step, n);
             if (into > 0f) step -= n * into;
             float vInto = Vector2.Dot(velocity, n);
             if (vInto > 0f) velocity -= n * vInto;
             next = position + step;
-            if (Fits(next, radius, barrier))
+            if (Clear(next, radius))
             {
                 position = next;
                 continue;
@@ -397,7 +395,7 @@ public sealed partial class PlaneWorld
             foreach (var t in new[] { new Vector2(wish.X, 0f), new Vector2(0f, wish.Y), tangent * Vector2.Dot(wish, tangent) })
             {
                 float gain = Vector2.Dot(t, wish);
-                if (gain <= bestGain || !Fits(position + t, radius, barrier)) continue;
+                if (gain <= bestGain || !Clear(position + t, radius)) continue;
                 best = t;
                 bestGain = gain;
             }

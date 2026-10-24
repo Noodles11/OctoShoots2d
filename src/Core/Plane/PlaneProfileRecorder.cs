@@ -110,7 +110,7 @@ public sealed class PlaneProfileRecorder
                 case PlaneEventType.BossHit:
                     s.DamageDealt += e.Size;
                     break;
-                case PlaneEventType.ArenaSealed:
+                case PlaneEventType.BattleBegan:
                     Profile.SeenBosses.Add(QueenClamId);
                     Profile.Creature(QueenClamId).Encounters++;
                     break;

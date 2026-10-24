@@ -16,7 +16,8 @@ namespace OctoShoots.Game.TopDown;
 public sealed class CorruptionTexture
 {
     const int N = CorruptionField.N;
-    const float Interval = 1f / 30f, BurnFade = 0.85f, BurnGain = 4f;
+    /// <summary>How often it uploads; how fast a cleansed cell's gold (and the last drops lit with it) fades, and how fast it lights.</summary>
+    const float Interval = 1f / 30f, BurnFade = 2.55f, BurnGain = 4f;
 
     readonly Image _image;
     readonly byte[] _bytes = new byte[N * N * 2];
