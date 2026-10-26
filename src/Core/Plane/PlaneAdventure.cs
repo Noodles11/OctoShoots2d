@@ -65,6 +65,16 @@ public static class AdventureTuning
     /// back to LightResume.
     /// </summary>
     public const float ShotCost = 0.07f, DashCost = 0.3f, SurgeCost = 0.45f, LightPause = 0.35f, LightRefill = 0.5f, LightResume = 0.25f;
+
+    /// <summary>
+    /// Her oral arm: ArmBase metres long, ArmPerUpgrade longer for each skill point she has spent (at most ArmMax). It
+    /// trails her along the way she swam (her last ArmMemory seconds of it, so it gathers in when she stops). A
+    /// corrupted creature it touches (within ArmWidth of it) takes ArmShare of a shot's damage, once every ArmEvery.
+    /// </summary>
+    public const float ArmBase = 1.5f, ArmPerUpgrade = 0.15f, ArmMax = 4f, ArmMemory = 1.5f, ArmWidth = 0.14f, ArmShare = 0.3f, ArmEvery = 0.4f;
+
+    /// <summary>Her oral arm's length after so many skill points spent.</summary>
+    public static float ArmLength(int upgrades) => System.MathF.Min(ArmBase + ArmPerUpgrade * upgrades, ArmMax);
 }
 
 /// <summary>
@@ -363,6 +373,7 @@ public sealed partial class PlaneWorld
     void StepAdventure()
     {
         StepInnerLight();
+        StepArm();
         if (Dots is not { } dots) return;
         StepVents(dots);
         StepSpread(dots);
@@ -723,6 +734,79 @@ public sealed partial class PlaneWorld
         if (wish.Length() > AdventureTuning.ShoalSpeed) wish = Vector2.Normalize(wish) * AdventureTuning.ShoalSpeed;
         m.Velocity = MoveToward(m.Velocity, wish, 40f * Dt);
         Move(ref m.Position, ref m.Velocity, m.Body, report: false);
+    }
+
+    // ───────────────────────── her oral arm ─────────────────────────
+
+    /// <summary>Where she has been lately (newest last) and when: the way her arm trails.</summary>
+    readonly List<(Vector2 At, float Time)> _trail = new();
+    readonly List<Vector2> _arm = new();
+
+    /// <summary>Her oral arm's length now (it grows with every skill point she spends).</summary>
+    public float ArmLength => AdventureTuning.ArmLength(Run.Upgrades);
+
+    /// <summary>Her oral arm as the sim has it: from her, back along the way she swam, as far as it reaches.</summary>
+    public IReadOnlyList<Vector2> Arm => _arm;
+
+    /// <summary>Her oral arm trails her; a corrupted creature it brushes takes a little of her light.</summary>
+    void StepArm()
+    {
+        var p = Player;
+        if (_trail.Count == 0 || Vector2.Distance(_trail[^1].At, p.Position) > 0.1f) _trail.Add((p.Position, Time));
+        while (_trail.Count > 0 && Time - _trail[0].Time > AdventureTuning.ArmMemory) _trail.RemoveAt(0);
+        _arm.Clear();
+        _arm.Add(p.Position);
+        float left = ArmLength;
+        for (int i = _trail.Count - 1; i >= 0 && left > 0f; i--)
+        {
+            var from = _arm[^1];
+            float d = Vector2.Distance(from, _trail[i].At);
+            if (d < 1e-4f) continue;
+            if (d >= left)
+            {
+                _arm.Add(from + (_trail[i].At - from) * (left / d));
+                break;
+            }
+            _arm.Add(_trail[i].At);
+            left -= d;
+        }
+        if (_arm.Count < 2 || Defeated) return;
+
+        float light = PlaneCombatTuning.ShotDamage * DamageScale * AdventureTuning.ArmShare;
+        foreach (var m in Murklings)
+        {
+            m.ArmCooldown -= Dt;
+            if (!m.Alive || m.Budding || m.Clinging || m.ArmCooldown > 0f || ArmDistance(m.Position) > m.Radius + AdventureTuning.ArmWidth) continue;
+            m.ArmCooldown = AdventureTuning.ArmEvery;
+            float dealt = Ward(m, m.Position, light);
+            bool emptied = dealt > 0f && m.Corruption.Hit(dealt);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, m.Position, SafeNormalize(m.Position - p.Position), dealt));
+            if (emptied) BurstMurkling(m, ember: true);
+        }
+        foreach (var w in Inkwardens)
+        {
+            w.ArmCooldown -= Dt;
+            if (!w.Alive || w.ArmCooldown > 0f || ArmDistance(w.Position) > WardenTuning.Radius + AdventureTuning.ArmWidth) continue;
+            w.ArmCooldown = AdventureTuning.ArmEvery;
+            bool emptied = w.Corruption.Hit(light);
+            Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, SafeNormalize(w.Position - p.Position), light));
+            if (emptied) FreeWarden(w);
+        }
+    }
+
+    /// <summary>How far a point is from her oral arm.</summary>
+    float ArmDistance(Vector2 at)
+    {
+        float best = float.MaxValue;
+        for (int i = 1; i < _arm.Count; i++) best = MathF.Min(best, Geo.SegmentDistance(at, _arm[i - 1], _arm[i]));
+        return best;
+    }
+
+    /// <summary>Tests: her trail laid out behind her (oldest first), as if she had just swum it.</summary>
+    public void DebugTrail(IEnumerable<Vector2> path)
+    {
+        _trail.Clear();
+        foreach (var at in path) _trail.Add((at, Time));
     }
 
     // ───────────────────────── her inner light ─────────────────────────

@@ -69,26 +69,29 @@ What changes is the protagonist's skin:
 ## 2. The Player — Clementine the Absorbent Jellyfish
 
 ### 2.1 Body
-- **Bell**: translucent tangerine dome, ~0.84 m across, with a scalloped
-  margin of sixteen lappets. Seen through it: four large gold gonad horseshoes
-  round the stomach, the ring canal, warts of stinging cells, and eight rim
+- **Bell**: translucent tangerine dome, ~1.1 m across, with a scalloped
+  margin of sixteen lappets. Seen through it: four large gold gonad horseshoes,
+  set well apart round the stomach, the ring canal, warts of stinging cells, and eight rim
   organs in the margin's notches; no radial canals, and none of her strands show
   through it (they appear only once out past its rim). Breathing rhythm at rest; every stroke is a
   contraction beat (quick squeeze, slow relax, a slight recoil flare) with a
   light wave running base→rim. The bell leans into the swim on a critically
   damped spring.
-- **Tentacles**: sixteen short, faint marginal tentacles (one per notch,
-  0.7–1 m, at 70% opacity) and her **oral arms** — one for each shot she throws
-  at once (her multishot: one with no pearl, three with Triple Tentacle) — long
-  (1.5–1.75 m), thick ribbons as a moon jelly's, each twisted about one and a
-  half turns along its length (the twist drifting slowly): a translucent blade
-  in her colour with a bright rib, its margins folded into crinkled ruffles coated
-  olive-gold like kelp, flecked with stinging cells; all on **verlet chains**
-  with a fixed 120 Hz step:
+- **Tentacles**: a moon jelly's fringe — about 140 fine hairs all round the
+  margin, short (0.08–0.15 m) and nearly invisible, an accent — and her one
+  **oral arm**: a long thick ribbon (1.5 m, growing 0.15 m with every skill
+  point she spends, at most 4 m) like withered lace — twisted about two and a
+  half turns along its length (the twist drifting slowly), a faint pale blade,
+  its margins crinkled, torn and pierced with holes in a faded kelp tone, almost
+  see-through; down its middle a thin wandering core alive with current, a
+  bright impulse shooting down it from the bell to the tip every couple of
+  seconds; all on **verlet chains** with a fixed 120 Hz step:
   they stream behind her in travelling S-waves while she swims, swing through
   turns, are pushed back by each stroke, and float out around her in a slow
   current when she stops. Drawn as camera-facing ribbons, always over the
-  scene (never cut away). Presentation only: the sim never sees them.
+  scene (never cut away), hidden only under her bell. Presentation only — but
+  in the adventure the sim keeps her oral arm too, as a line along the way she
+  swam, and it stings the corrupted creatures it brushes (docs/ADVENTURE.md §6).
 - **Bioluminescence**: a soft point light carried at the bell; the player's glow
   is the primary light source in dark depths (inherited rule: *Clementine is
   always the warm light in the scene*).

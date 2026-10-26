@@ -1,5 +1,5 @@
 // Clementine's bell (THEME-BIBLE §5, §6.3): a translucent tangerine dome lit from within. Through it show the four
-// gold gonad horseshoes round the stomach, the ring canal, warts of stinging cells, and eight rim
+// gold gonad horseshoes (clear inside), the ring canal, warts of stinging cells, and eight rim
 // organs in the notches of the scalloped margin. A light wave runs base→rim on every contraction. Unshaded: she is
 // her own light and never changes hue with depth.
 // Her vitals live on the bell (DESIGN-TOPDOWN §2.5): the four gonad rings are her health, a quarter each (warm gold,
@@ -88,31 +88,28 @@ void fragment() {
 	float u = along;
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
 
-	// The four gonads: horseshoes round the stomach, open toward the centre — her health, a quarter each. Ring k holds
+	// The four gonads: horseshoes round her middle, open toward the centre — her health, a quarter each. Ring k holds
 	// the quarter from k/4 up: always warm gold, breathing with her pulse, and as opaque as its quarter is full — a
 	// draining ring fades, an empty one is gone into the bell. When only the first is left its light pulses slowly in
 	// and out: a dying light at the centre of her. The first is a little larger and hotter than the rest: it leads — she
 	// turns to keep it toward her aim (BellView), so it is her pointer.
-	float gonad = 0.0, gonad_fill = 0.0, lead = 0.0;
+	float gonad = 0.0, lead = 0.0;
 	float critical = 1.0 - step(0.25, health);
 	vec3 gonad_col = mix(gold, vec3(1.0, 0.93, 0.8), 0.2) * (0.92 + 0.1 * pulse);
 	float dying = 0.25 + 0.75 * (0.5 + 0.5 * sin(TIME * 2.4));
 	for (int k = 0; k < 4; k++) {
 		float ka = 0.7853982 + float(k) * 1.5707963;
-		vec2 c = vec2(cos(ka), sin(ka)) * 0.33;
+		vec2 c = vec2(cos(ka), sin(ka)) * 0.43;
 		vec2 d = q - c;
 		float open = 1.0 - smoothstep(0.35, 0.75, dot(normalize(d + 1e-5), -normalize(c)));
 		float size = k == 0 ? 0.2 : 0.17;
 		float shape = line(length(d) - size, k == 0 ? 0.07 : 0.06) * open;
-		float fill = 1.0 - smoothstep(size * 0.55, size * 1.05, length(d));
 		float lit = clamp(health * 4.0 - float(k), 0.0, 1.0);
 		if (k == 0) lit *= mix(1.0, dying, critical);
 		gonad = max(gonad, shape * lit);
-		gonad_fill = max(gonad_fill, fill * lit);
-		if (k == 0) lead = max(shape, fill * 0.6) * lit;
+		if (k == 0) lead = shape * lit;
 	}
-	// The stomach: a soft cross at the centre.
-	float stomach = (1.0 - smoothstep(0.05, 0.16, r)) * 0.8;
+	// (No stomach drawn: her middle is clear.)
 
 	// No radial canals (her bell is clear between the gonads); only the ring canal near the margin.
 	float canals = 0.0;
@@ -164,9 +161,9 @@ void fragment() {
 	// The contraction's light wave, base → rim.
 	float swell = exp(-pow((u - wave) / 0.11, 2.0)) * (1.0 - wave * 0.6);
 
-	vec3 col = body * (0.55 + 0.25 * (1.0 - r));
-	col = mix(col, gold, stomach * 0.5);
-	col = mix(col, gonad_col, gonad_fill * 0.3);
+	// A radial gradient: lit pale at her heart, deepening into her own colour toward the rim.
+	vec3 col = mix(mix(body, vec3(1.0, 0.95, 0.85), 0.35) * 1.05, body * 0.62, smoothstep(0.0, 1.0, r * r * (3.0 - 2.0 * r)));
+	// The gonads are only their horseshoes (her gauge), clear inside.
 	col = mix(col, gonad_col, gonad);
 	col = mix(col, vec3(1.0, 0.97, 0.9), lead * 0.35);
 	col = mix(col, gold * 1.05, canals * 0.7 + ring * 0.6);

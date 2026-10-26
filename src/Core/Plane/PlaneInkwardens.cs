@@ -40,6 +40,8 @@ public sealed class Inkwarden
     public bool Alive = true, Roams;
     /// <summary>The adventure: the anemone it was (index into the world's anemones), -1 for none.</summary>
     public int Anemone = -1;
+    /// <summary>Until her oral arm may sting it again (the adventure).</summary>
+    public float ArmCooldown;
     public float Seed, LookTimer;
     public CorruptionMeter Corruption = new(WardenTuning.Meter, WardenTuning.Regen, WardenTuning.Delay);
 }

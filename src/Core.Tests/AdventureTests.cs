@@ -407,6 +407,42 @@ public class AdventureTests
     }
 
     [Fact]
+    public void Her_oral_arm_trails_her_stings_what_it_touches_and_grows_with_her_skills()
+    {
+        var w = Bare();
+        var her = OpenSpot(w);
+        w.Player.Position = w.Player.PrevPosition = her;
+        var behind = her - Vector2.UnitX * 1.4f;
+        var m = w.DebugBud(behind, prime: false);
+        m.Bud = 0f;
+        float full = m.Corruption.Value;
+        int stung = 0;
+        for (int i = 0; i < PlaneWorld.TickRate; i++)
+        {
+            // She has just swum in from the west; the murkling lies on her way, by her arm.
+            w.DebugTrail(new[] { her - Vector2.UnitX * 3f, her - Vector2.UnitX * 1.5f, her });
+            m.Position = behind;
+            m.Velocity = Vector2.Zero;
+            w.Player.Position = her;
+            w.Player.Velocity = Vector2.Zero;
+            w.Player.Hp = 100f;
+            w.Step(default);
+            stung += w.Events.Count(e => e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated);
+        }
+        // A share of a shot each ArmEvery: about two or three stings in a second.
+        Assert.InRange(stung, 2, 3);
+        Assert.True(m.Corruption.Value < full);
+        Assert.True(w.Arm.Count >= 2);
+
+        // Each skill point spent grows it a little, up to its most.
+        Assert.Equal(AdventureTuning.ArmBase, w.ArmLength, 3);
+        w.Run.Points = 3;
+        for (int i = 0; i < 3; i++) Assert.True(w.SpendSkill(OctoShoots.Core.Items.Stat.Damage));
+        Assert.Equal(AdventureTuning.ArmBase + 3 * AdventureTuning.ArmPerUpgrade, w.ArmLength, 3);
+        Assert.Equal(AdventureTuning.ArmMax, AdventureTuning.ArmLength(1000), 3);
+    }
+
+    [Fact]
     public void Her_inner_light_runs_out_with_shooting_and_comes_back()
     {
         var w = Bare();

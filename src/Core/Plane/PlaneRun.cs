@@ -59,6 +59,9 @@ public sealed class PlaneRun
     /// <summary>Her skill points, spent: how many on each modifier.</summary>
     public Dictionary<OctoShoots.Core.Items.Stat, int> Skills { get; } = new();
 
+    /// <summary>How many skill points she has spent in all (each grows her oral arm a little).</summary>
+    public int Upgrades => Skills.Values.Sum();
+
     /// <summary>The experience it takes to reach the next level.</summary>
     public int XpNeeded => ExperienceTuning.Need(XpLevel);
 

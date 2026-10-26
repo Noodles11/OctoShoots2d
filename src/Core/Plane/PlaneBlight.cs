@@ -217,8 +217,8 @@ public sealed class Murkling
     /// <summary>The ink it is drinking while it buds (null once drunk, or for one that drinks nothing), and the ink it is made of (field units, freed when it bursts).</summary>
     public InkDraw? Draw;
     public float Matter;
-    /// <summary>Metres swum since it last left a dot of ink behind (the adventure's trails).</summary>
-    public float Trail;
+    /// <summary>Metres swum since it last left a dot of ink behind (the adventure's trails); until her oral arm may sting it again.</summary>
+    public float Trail, ArmCooldown;
     /// <summary>How far it senses her (and fish), and how far it throws.</summary>
     public float Sense => Prime ? BlightTuning.Sense * BlightTuning.PrimeReach : BlightTuning.Sense;
     public float ThrowRange => Prime ? BlightTuning.ThrowRange * BlightTuning.PrimeReach : BlightTuning.ThrowRange;

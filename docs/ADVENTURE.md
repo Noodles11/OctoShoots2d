@@ -91,7 +91,11 @@ Lashjaws, Thumpsquirts, dens, curse dens, light springs, ambushes, murkling budd
   only on these.
 - **Everything at her plane:** the dots, the fish and the murklings swim there.
 
-## 6. Her inner light and the HUD
+## 6. Her oral arm, her inner light and the HUD
+
+- **Her oral arm** stings: it trails her along the way she swam (her last 1.5 s of it, so it gathers in when she
+  stops), 1.5 m long and 0.15 m longer for every skill point she spends (at most 4 m). A corrupted creature it brushes
+  (a murkling, an Inkwarden) takes 30% of a shot's damage, once every 0.4 s.
 
 - **Inner light** (her stamina, 0..1): a volley spends 0.07, a dash 0.3, a surge 0.45 a second. It refills 0.5 a
   second once 0.35 s pass without spending (about two seconds from empty). Emptied, she cannot shoot or dash until it
