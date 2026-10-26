@@ -69,6 +69,8 @@ public sealed class PlaneFish : PlaneSwimmer
 {
     public int Id;
     public bool Freed;
+    /// <summary>The adventure: its gauge of ink, 0..1 (full, it turns into an Inkwarden).</summary>
+    public float Ink;
     public float FreedTime;
     public bool Gone;
 }
@@ -260,6 +262,8 @@ public sealed partial class PlaneWorld
     {
         var rng = new Rng(Map.Seed ^ 0xF15A11UL ^ ((ulong)Map.Level << 20) ^ ((ulong)Map.Depth << 28) ^ ((ulong)Map.Attempt << 44));
         int want = PufferlingTuning.HealthyMin + rng.Int(PufferlingTuning.HealthyMax - PufferlingTuning.HealthyMin + 1);
+        // The adventure: about as many as there would be anemones (its Inkwardens are turned pufferfish).
+        if (Options.Adventure) want = AdventureTuning.PufferMin + rng.Int(AdventureTuning.PufferMax - AdventureTuning.PufferMin + 1);
         var anchors = Map.Plazas.Select(z => z.Center).Concat(Map.Spawns.Where(s => s.Role != SpawnRole.Ambush).Select(s => s.Position)).ToList();
         foreach (var c in Map.Corridors.Where(c => c.Kind == CorridorKind.Main))
             for (int i = 6; i < c.Points.Count - 6; i += 9) anchors.Add(c.Points[i]);

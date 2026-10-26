@@ -80,7 +80,9 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
     XpGained, LevelUp,
     /// <summary>The adventure: an ink dot cleared by her light or eaten by a fish; a vent lit (Size: its glow) or sealed (Size: vents still open); the way down opened; an anemone turned (Size: its scale); her inner light run out.</summary>
-    DotCleared, DotEaten, VentLit, VentSealed, ExitOpened, AnemoneTurned, LightOut }
+    DotCleared, DotEaten, VentLit, VentSealed, ExitOpened, AnemoneTurned, LightOut,
+    /// <summary>The adventure's Inkwarden: struck, it rouses (rolls its spikes out); it fires a spike (Direction: its way).</summary>
+    WardenRoused, WardenSpike }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run; saved by number, so Gloomvine stays though nothing deals it now).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse }
@@ -130,7 +132,7 @@ public sealed partial class PlaneWorld
         if (!adventure) PlaceAmbushes();
         if (!adventure) PlaceBoss();
         if (Options.Vases) PlaceVases();
-        if (!adventure) PlaceSprings();
+        PlaceSprings();
         PlaceSeals();
         if (Options.Corruption || adventure) PlaceCorruption();
         if (adventure) PlaceAdventure();

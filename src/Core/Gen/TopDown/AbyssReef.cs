@@ -46,6 +46,9 @@ public static class AbyssReef
         foreach (var corridor in map.Corridors)
             if (corridor.Roofed)
                 foreach (var p in corridor.Points) Mark(keep, p, corridor.HalfWidth + 1f);
+        // A light spring (only by her luck, here) keeps the seabed it wells up from.
+        map.Abyss = true;
+        foreach (var spring in OctoShoots.Core.Plane.LightSprings.Of(map)) Mark(keep, spring, OctoShoots.Core.Plane.SpringTuning.Radius + 3f);
         Dilate(keep, KeepMargin);
 
         // How far each open point is from the nearest rock (above the plane), out to the cliff's foot.

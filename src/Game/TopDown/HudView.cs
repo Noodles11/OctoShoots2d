@@ -20,10 +20,12 @@ namespace OctoShoots.Game.TopDown;
 /// Everything is laid out on a 1080-line screen and scaled with the window (TopDownMain's HUD root).
 /// Her health and her active pearl's charge are not here: they are on her bell (BellView, DESIGN-TOPDOWN §2.5).
 /// <para>
-/// The adventure (docs/ADVENTURE.md §6) adds the gonad gauge, top left: her emblem's four horseshoes, one stat each —
-/// health, inner light, experience (her level inside it), the active pearl's charge — the active pearl itself in the
-/// middle (an empty socket without one) and her shells under it (once she has any; the counter moves there). Top
-/// centre, a dot per vent: dark while it pours, gold once sealed.
+/// The adventure (docs/ADVENTURE.md §6) puts her on it, top left: Clementine seen from above — her bell a disc of glass
+/// with her four gonads and her glowing rim (hud_bell.gdshader), the active pearl's colours and pattern filling it when
+/// she holds one — and her four oral arms hanging under it, one stat each, left to right by urgency: health, inner
+/// light, the active pearl's charge, experience. Each arm is as long as its stat is full, over a faint track of its
+/// whole length, with a small sign at its foot; a hit frays the lost piece off health's arm. Her shells beside the
+/// bell (once she has any; the counter moves there). Top centre, a dot per vent: dark while it pours, gold once sealed.
 /// </para>
 /// </summary>
 public partial class HudView : Control
@@ -72,13 +74,16 @@ public partial class HudView : Control
     ItemDef? _active;
     /// <summary>The level's vents: sealed or not, in order.</summary>
     readonly List<bool> _vents = new();
-    MeshInstance3D _pearl = null!;
     float _time;
-    /// <summary>The gauge's middle, the horseshoes' distance from it, their radius and stroke; the pearl's and the shell's sizes.</summary>
-    static readonly Vector2 GaugeAt = new(Margin + 92f, Margin + 92f);
-    const float LobeOut = 58f, LobeRadius = 22f, LobeWidth = 8f, PearlSize = 32f, GaugeShell = 20f;
-    /// <summary>A horseshoe's gap toward the middle (half-angle, radians: as on her bell and the crosshair).</summary>
-    const float LobeGap = 0.99f;
+    /// <summary>Her bell on the HUD (hud_bell.gdshader): its middle and radius; her arms' roots under it, their spacing,
+    /// length and width (root → tip); the shell counter's size beside the bell.</summary>
+    static readonly Vector2 BellAt = new(Margin + 64f, Margin + 50f);
+    const float BellRadius = 42f, ArmTop = 30f, ArmGap = 17f, ArmLength = 150f, ArmRoot = 10f, ArmTip = 6.5f, GaugeShell = 22f;
+    ColorRect _bell = null!;
+    ShaderMaterial _bellLook = null!;
+    float _lastCharge = 1f, _used;
+    /// <summary>Health's arm frayed by a hit: the lost piece (as shares of its length) and how long it has been drifting off.</summary>
+    readonly List<(float From, float To, float Age)> _frays = new();
 
     public override void _Ready()
     {
@@ -106,8 +111,9 @@ public partial class HudView : Control
             },
         });
         _counterShell = ShellMesh();
-        _pearl = new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 32, Rings = 16 }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
-        _shellView.AddChild(_pearl);
+        _bellLook = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/hud_bell.gdshader") };
+        _bell = new ColorRect { Material = _bellLook, MouseFilter = MouseFilterEnum.Ignore, Visible = false, Position = BellAt - Vector2.One * BellRadius, Size = Vector2.One * BellRadius * 2f };
+        AddChild(_bell);
     }
 
     MeshInstance3D ShellMesh()
@@ -272,7 +278,13 @@ public partial class HudView : Control
         {
             float max = Mathf.Max(world.Run.MaxHp, 1f);
             float health = Mathf.Clamp(world.Player.Hp / max, 0f, 1f);
-            if (health < _health - 1e-4f) _hurt = 1f;
+            if (health < _health - 1e-4f)
+            {
+                _hurt = 1f;
+                // The lost piece frays off her arm.
+                _frays.Add((health, _healthShown, 0f));
+                _healthShown = health;
+            }
             _health = health;
             _healthShown = Mathf.MoveToward(_healthShown, _health, dt * 0.8f);
             _hurt = Mathf.MoveToward(_hurt, 0f, dt * 2.5f);
@@ -283,6 +295,17 @@ public partial class HudView : Control
             _xpLevel = world.Run.XpLevel;
             _active = world.Run.Active?.Active is not null ? world.Run.Active : null;
             _charge = _active is null ? 0f : world.Run.ActiveCharge;
+            if (_active is not null && _lastCharge >= 1f && _charge < 1f) _used = 1f;
+            _lastCharge = _active is null ? 1f : _charge;
+            _used = Mathf.MoveToward(_used, 0f, dt * 2.5f);
+            for (int i = _frays.Count - 1; i >= 0; i--)
+            {
+                var f = _frays[i];
+                f.Age += dt;
+                if (f.Age > FrayTime) _frays.RemoveAt(i);
+                else _frays[i] = f;
+            }
+            SyncBell();
             if (_shells > 0) _shellsSeen = true;
             _vents.Clear();
             foreach (var v in world.Vents) _vents.Add(v.Sealed);
@@ -345,14 +368,6 @@ public partial class HudView : Control
         // The adventure's counter shows only once she has a shell (or one is on its way).
         _counterShell.Visible = !_adventure || _shellsSeen || _flights.Count > 0;
         PlaceShell(_counterShell, ShellIcon, counter * (1f + 0.3f * k2), CounterLie);
-        // The active pearl in the gauge's middle, turning slowly.
-        _pearl.Visible = _adventure && _active is not null;
-        if (_pearl.Visible)
-        {
-            _pearl.MaterialOverride = OctoShoots.Game.Fx.PearlMaterials.Get(_active!);
-            float ready = _charge >= 1f ? 1f + 0.06f * Mathf.Sin(_time * 5f) : 0.92f;
-            PlaceShell(_pearl, PearlAt, PearlSize * ready, new Quaternion(Vector3.Up, _time * 0.6f) * new Quaternion(Vector3.Right, 0.4f));
-        }
         foreach (var f in _flights)
         {
             float e = FlightEase(f.T);
@@ -364,11 +379,8 @@ public partial class HudView : Control
         }
     }
 
-    /// <summary>The middle of the counter's shell icon (in the adventure, in the gauge under the pearl).</summary>
-    Vector2 ShellIcon => _adventure ? GaugeAt + new Vector2(0f, 50f) : new(Margin + 12f, Size.Y - Margin - 22f);
-
-    /// <summary>The active pearl's place in the gauge.</summary>
-    static Vector2 PearlAt => GaugeAt;
+    /// <summary>The middle of the counter's shell icon (in the adventure, beside her bell).</summary>
+    Vector2 ShellIcon => _adventure ? BellAt + new Vector2(BellRadius + 26f, -4f) : new(Margin + 12f, Size.Y - Margin - 22f);
 
     /// <summary>Where a flight is at progress e (0 → 1): a quadratic arc from its start to the counter, bowed to one side.</summary>
     Vector2 FlightAt(Vector2 from, float side, float e)
@@ -384,36 +396,61 @@ public partial class HudView : Control
     /// <summary>A flight's progress along its arc: it leaps off, then speeds in to the counter.</summary>
     static float FlightEase(float t) => t * t * (3f - 2f * t) * 0.6f + t * t * 0.4f;
 
+    /// <summary>Her bell on the HUD: the active pearl's colours and pattern filling it (none: clear glass).</summary>
+    void SyncBell()
+    {
+        _bell.Visible = _adventure;
+        var look = _active?.Pearl;
+        _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("has_pearl"), look is not null);
+        if (look is { Colors.Count: > 0 })
+        {
+            Color C(int i) => Color.FromHtml(look.Colors[Mathf.Min(i, look.Colors.Count - 1)]);
+            _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), C(0));
+            _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), C(1));
+            _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), C(2));
+            _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)look.Pattern);
+        }
+        _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ready"), _active is not null && _charge >= 1f ? 1f : 0f);
+        _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("flash"), _used);
+    }
+
+    /// <summary>How long a frayed piece of health's arm takes to drift off and fade.</summary>
+    const float FrayTime = 0.7f;
+
     /// <summary>
-    /// The gonad gauge: four horseshoes at the quarters, open toward the middle, each filling along its arc — health
-    /// (top left), inner light (top right), experience (bottom right, her level inside), the active pearl's charge
-    /// (bottom left, in the pearl's own colour); the pearl's socket in the middle; her shells under it.
+    /// Her arms under her bell: health (warm white-gold, ragged and pulsing when low, a hit fraying the lost piece off),
+    /// inner light (pale cyan, dim and flickering while spent out), the active pearl's charge (its own colour, breathing
+    /// when ready; curled up and dim without one), experience (amber, growing, pulsing with a point to spend; her level at
+    /// its foot). Her shells beside the bell.
     /// </summary>
     void DrawGauge(Font font)
     {
-        var c = GaugeAt;
-        // A soft shade behind it, so it reads on bright sand.
-        DrawCircle(c, LobeOut + LobeRadius + 8f, new Color(0f, 0f, 0f, 0.16f));
         float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 4f);
-        var pearlColor = _active is not null ? OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active) : new Color(0.6f, 0.6f, 0.65f);
-        // Health: warm light; what she has lost is ink, flashing violet on a hit.
-        Lobe(c, 3, _healthShown, new Color(1f, 0.88f, 0.62f), new Color(0.05f, 0.02f, 0.08f, 0.9f), _hurt);
-        // Inner light: pale cyan; spent out, it dims and flickers until it is back.
-        var lightColor = _lightOut ? new Color(0.45f, 0.55f, 0.65f, 0.6f + 0.3f * pulse) : new Color(0.72f, 0.96f, 1f);
-        Lobe(c, 0, _light, lightColor, new Color(0f, 0f, 0f, 0.55f), 0f);
-        // Experience: gold, pulsing full with a point to spend; her level inside it.
-        Lobe(c, 1, _xpShare, _xpFull ? new Color(1f, 0.85f, 0.45f).Lerp(Colors.White, 0.4f * pulse) : new Color(1f, 0.75f, 0.3f), new Color(0f, 0f, 0f, 0.55f), _xpFull ? 0.4f * pulse : 0f);
+        bool low = _healthShown < 0.25f;
+        var health = low ? new Color(1f, 0.88f, 0.62f).Lerp(new Color(1f, 0.42f, 0.58f), 0.4f + 0.4f * pulse) : new Color(1f, 0.88f, 0.62f);
+        Arm(0, _healthShown, health, _hurt, low ? 1f : 0f);
+        foreach (var (from, to, age) in _frays) Fray(0, from, to, age / FrayTime, health);
+        var light = _lightOut ? new Color(0.45f, 0.55f, 0.65f, 0.55f + 0.35f * pulse) : new Color(0.72f, 0.96f, 1f);
+        Arm(1, _light, light, 0f, 0f);
+        if (_active is not null)
+        {
+            var pearl = OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active);
+            bool ready = _charge >= 1f;
+            Arm(2, _charge, ready ? pearl.Lerp(Colors.White, 0.3f * pulse) : pearl * 0.85f, ready ? 0.25f * pulse : 0f, 0f);
+        }
+        else Curled(2);
+        var xp = _xpFull ? new Color(1f, 0.85f, 0.45f).Lerp(Colors.White, 0.4f * pulse) : new Color(1f, 0.72f, 0.3f);
+        Arm(3, _xpShare, xp, _xpFull ? 0.3f * pulse : 0f, 0f);
+
+        // The signs at the arms' feet: a heart, a spark, a pearl, her level.
+        SignHeart(Foot(0), health);
+        SignSpark(Foot(1), light);
+        SignPearl(Foot(2), _active is not null ? OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active) : new Color(0.6f, 0.62f, 0.66f, 0.6f));
         var lv = _xpLevel.ToString();
         var ls = font.GetStringSize(lv, HorizontalAlignment.Left, -1, 15);
-        Outlined(font, LobeCentre(c, 1) - new Vector2(ls.X * 0.5f, -5f), lv, 15, new Color(1f, 0.9f, 0.7f, 0.95f));
-        // The active pearl's charge, in its colour: bright and breathing when ready.
-        bool ready = _active is not null && _charge >= 1f;
-        Lobe(c, 2, _charge, ready ? pearlColor.Lerp(Colors.White, 0.3f * pulse) : pearlColor * 0.85f, new Color(0f, 0f, 0f, 0.55f), ready ? 0.3f * pulse : 0f);
-        // The socket: the pearl (drawn over this in 3D) sits in it; without one, an empty ring.
-        DrawCircle(PearlAt, PearlSize * 0.62f, new Color(0f, 0f, 0f, 0.35f));
-        DrawArc(PearlAt, PearlSize * 0.62f, 0f, Mathf.Tau, 40, new Color(1f, 0.95f, 0.85f, _active is null ? 0.55f : 0.25f), 1.5f, true);
-        if (ready) DrawCircle(PearlAt, PearlSize * (0.7f + 0.1f * pulse), pearlColor with { A = 0.18f });
-        // Her shells under it (the shell itself is drawn in 3D over this).
+        Outlined(font, Foot(3) + new Vector2(-ls.X * 0.5f, 5f), lv, 15, xp);
+
+        // Her shells beside the bell (the shell itself is drawn in 3D over this).
         if (_shellsSeen || _flights.Count > 0)
         {
             float k2 = _pulse * _pulse;
@@ -421,36 +458,109 @@ public partial class HudView : Control
             if (k2 > 0.01f) DrawCircle(at, 14f * (1f + 0.35f * k2), new Color(1f, 0.8f, 0.55f, 0.4f * k2));
             if (_ring > 0.01f) DrawArc(at, 12f * (1.3f + 2.2f * (1f - _ring)), 0f, Mathf.Tau, 40, new Color(1f, 0.92f, 0.7f, 0.8f * _ring * _ring), 2.5f * _ring + 0.5f, true);
             string count = Mathf.Max(_shells - _flights.Count, 0).ToString();
-            int fs = (int)(17f * (1f + 0.3f * k2));
-            var cs = font.GetStringSize(count, HorizontalAlignment.Left, -1, fs);
-            Outlined(font, at + new Vector2(-cs.X * 0.5f, 28f + 2f * k2), count, fs, new Color(1f, 0.9f, 0.8f).Lerp(new Color(1f, 1f, 0.75f), k2));
+            int fs = (int)(19f * (1f + 0.3f * k2));
+            Outlined(font, at + new Vector2(16f, 7f + 2f * k2), count, fs, new Color(1f, 0.9f, 0.8f).Lerp(new Color(1f, 1f, 0.75f), k2));
         }
     }
 
-    /// <summary>A horseshoe's middle: at a quarter (0 top right, then clockwise), out from the gauge's middle.</summary>
-    static Vector2 LobeCentre(Vector2 c, int quarter)
-    {
-        float a = -Mathf.Pi * 0.25f + quarter * Mathf.Pi * 0.5f;
-        return c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * LobeOut;
-    }
+    /// <summary>Where arm i hangs from (under the bell), and the point of it f (0 root → 1 its full length), swaying a little.</summary>
+    static Vector2 ArmRootOf(int i) => BellAt + new Vector2((i - 1.5f) * ArmGap, ArmTop);
 
-    /// <summary>One horseshoe: its dark track, then its fill along the arc (from one horn round to the other), a flash over it.</summary>
-    void Lobe(Vector2 c, int quarter, float share, Color fill, Color track, float flash)
+    Vector2 ArmAt(int i, float f) =>
+        ArmRootOf(i) + new Vector2(Mathf.Sin(_time * 1.3f + i * 1.9f + f * 3.2f) * 3.2f * f, f * ArmLength);
+
+    Vector2 Foot(int i) => ArmRootOf(i) + new Vector2(0f, ArmLength + 14f);
+
+    static float ArmWidth(float f) => Mathf.Lerp(ArmRoot, ArmTip, f);
+
+    /// <summary>
+    /// One arm: its faint track the whole length, then its fill as long as the stat, a lighter core line down it, a
+    /// rounded tip; a flash over it (a hit, a stat ready), ragged edges when it is low.
+    /// </summary>
+    void Arm(int i, float share, Color fill, float flash, float ragged)
     {
-        var at = LobeCentre(c, quarter);
-        float toMiddle = (c - at).Angle();
-        float from = toMiddle + LobeGap, span = Mathf.Tau - 2f * LobeGap;
-        DrawArc(at, LobeRadius, from, from + span, 48, new Color(0f, 0f, 0f, 0.6f), LobeWidth + 3f, true);
-        DrawArc(at, LobeRadius, from, from + span, 48, track, LobeWidth, true);
-        share = Mathf.Clamp(share, 0f, 1f);
-        if (share > 0.002f)
+        const int N = 30;
+        for (int k = 0; k < N; k++)
         {
-            int points = Mathf.Max(4, (int)(48 * share));
-            DrawArc(at, LobeRadius, from, from + span * share, points, fill, LobeWidth, true);
-            // A lighter lip along its outer edge, as a painted stroke catches the light.
-            DrawArc(at, LobeRadius + LobeWidth * 0.28f, from, from + span * share, points, Colors.White with { A = 0.22f * fill.A }, LobeWidth * 0.22f, true);
+            float f0 = k / (float)N, f1 = (k + 1f) / N;
+            DrawLine(ArmAt(i, f0), ArmAt(i, f1), new Color(0f, 0f, 0f, 0.42f), ArmWidth(f0) + 3f, true);
+            DrawLine(ArmAt(i, f0), ArmAt(i, f1), new Color(fill.R * 0.3f, fill.G * 0.3f, fill.B * 0.35f, 0.45f), ArmWidth(f0), true);
         }
-        if (flash > 0.01f) DrawArc(at, LobeRadius, from, from + span, 48, new Color(0.8f, 0.55f, 1f, 0.7f * flash), LobeWidth + 4f, true);
+        share = Mathf.Clamp(share, 0f, 1f);
+        if (share > 0.004f)
+        {
+            int n = Mathf.Max(2, (int)(N * share));
+            for (int k = 0; k < n; k++)
+            {
+                float f0 = share * k / n, f1 = share * (k + 1f) / n;
+                float jag = ragged > 0f ? 1f + 0.35f * Mathf.Sin(f0 * 90f + _time * 20f) * ragged : 1f;
+                DrawLine(ArmAt(i, f0), ArmAt(i, f1), fill, ArmWidth(f0) * jag, true);
+                DrawLine(ArmAt(i, f0), ArmAt(i, f1), fill.Lerp(Colors.White, 0.55f) with { A = fill.A * 0.8f }, 2f, true);
+            }
+            DrawCircle(ArmAt(i, share), ArmWidth(share) * 0.5f, fill);
+        }
+        if (flash > 0.01f)
+            for (int k = 0; k < N; k++)
+            {
+                float f0 = k / (float)N, f1 = (k + 1f) / N;
+                DrawLine(ArmAt(i, f0), ArmAt(i, f1), new Color(1f, 0.85f, 1f, 0.55f * flash), ArmWidth(f0) + 4f, true);
+            }
+    }
+
+    /// <summary>A piece of an arm frayed off by a hit: it drifts out sideways, breaking into flecks, and fades.</summary>
+    void Fray(int i, float from, float to, float k, Color fill)
+    {
+        if (to <= from) return;
+        float fade = 1f - k;
+        var off = new Vector2(10f + 26f * k, 6f * k);
+        const int n = 8;
+        for (int j = 0; j < n; j++)
+        {
+            float f0 = Mathf.Lerp(from, to, j / (float)n), f1 = Mathf.Lerp(from, to, (j + 0.7f) / n);
+            float scatter = (j % 2 == 0 ? 1f : -0.6f) * 10f * k;
+            var a = ArmAt(i, f0) + off + new Vector2(scatter, 0f);
+            var b = ArmAt(i, f1) + off + new Vector2(scatter, 0f);
+            DrawLine(a, b, fill with { A = 0.85f * fade }, ArmWidth(f0) * (1f - 0.6f * k), true);
+        }
+    }
+
+    /// <summary>No active pearl: its arm curled up short under the bell, dim.</summary>
+    void Curled(int i)
+    {
+        var root = ArmRootOf(i);
+        var col = new Color(0.6f, 0.62f, 0.66f, 0.45f);
+        DrawLine(root, root + new Vector2(0f, 12f), col, ArmRoot * 0.8f, true);
+        DrawArc(root + new Vector2(5f, 14f), 5f, Mathf.Pi * 0.2f, Mathf.Pi * 1.4f, 12, col, ArmTip * 0.8f, true);
+        // Its track, very faint, so the place reads.
+        for (int k = 0; k < 20; k++)
+            DrawLine(ArmAt(i, k / 20f), ArmAt(i, (k + 1f) / 20f), new Color(0f, 0f, 0f, 0.18f), ArmWidth(k / 20f), true);
+    }
+
+    void SignHeart(Vector2 c, Color col)
+    {
+        DrawCircle(c + new Vector2(-2.6f, -1.5f), 3.2f, new Color(0f, 0f, 0f, 0.5f));
+        DrawCircle(c + new Vector2(2.6f, -1.5f), 3.2f, new Color(0f, 0f, 0f, 0.5f));
+        DrawCircle(c + new Vector2(-2.6f, -1.5f), 2.5f, col);
+        DrawCircle(c + new Vector2(2.6f, -1.5f), 2.5f, col);
+        DrawColoredPolygon(new[] { c + new Vector2(-5f, -0.5f), c + new Vector2(5f, -0.5f), c + new Vector2(0f, 5.5f) }, col);
+    }
+
+    void SignSpark(Vector2 c, Color col)
+    {
+        var pts = new Vector2[8];
+        for (int k = 0; k < 8; k++)
+        {
+            float a = k * Mathf.Pi / 4f;
+            pts[k] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (k % 2 == 0 ? 6.5f : 2.2f);
+        }
+        DrawColoredPolygon(pts, col);
+    }
+
+    void SignPearl(Vector2 c, Color col)
+    {
+        DrawCircle(c, 5.5f, new Color(0f, 0f, 0f, 0.5f));
+        DrawCircle(c, 4.5f, col);
+        DrawCircle(c + new Vector2(-1.4f, -1.4f), 1.4f, new Color(1f, 1f, 1f, 0.8f));
     }
 
     /// <summary>The vents, top centre: a dot each, dark with a violet glint while it pours, gold once sealed.</summary>
@@ -486,7 +596,7 @@ public partial class HudView : Control
 
         DrawTitle(font);
         // The run's clock, with its setting on: small and faint, top left.
-        if (ShowClock) Outlined(font, _adventure ? new Vector2(Margin, GaugeAt.Y + 108f) : new Vector2(Margin, Margin + 16f), Clock(Elapsed), 16, new Color(1f, 1f, 1f, 0.7f));
+        if (ShowClock) Outlined(font, _adventure ? new Vector2(Margin, BellAt.Y + ArmTop + ArmLength + 46f) : new Vector2(Margin, Margin + 16f), Clock(Elapsed), 16, new Color(1f, 1f, 1f, 0.7f));
         if (_adventure) DrawVents();
 
         // The boss's health, top centre.

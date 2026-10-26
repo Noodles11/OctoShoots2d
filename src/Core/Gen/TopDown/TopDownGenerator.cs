@@ -84,9 +84,10 @@ public static class TopDownGenerator
 
     /// <param name="cosmeticSalt">Test hook: changes only the cosmetic stream (decoration), to prove it never touches gameplay.</param>
     /// <param name="background">Made while she plays (the level below): on one thread, leaving the rest to the game.</param>
-    public static LevelMap Generate(RunStreams streams, LevelId id, Action<string>? log = null, string cosmeticSalt = "", bool background = false)
+    /// <param name="luck">Her luck as she comes to the level (LuckTuning): it may add a clam room, drop ambushes, bring a spring.</param>
+    public static LevelMap Generate(RunStreams streams, LevelId id, Action<string>? log = null, string cosmeticSalt = "", bool background = false, float luck = 0f)
     {
-        var plan = LevelPlan.For(streams.Seed, id);
+        var plan = LevelPlan.For(streams.Seed, id, luck);
         var reasons = new List<string>();
         for (int attempt = 0; attempt < MaxAttempts; attempt++)
         {
@@ -95,7 +96,7 @@ public static class TopDownGenerator
             {
                 Seed = streams.Seed.Value, Id = id, Attempt = attempt, HasBoss = plan.HasBoss, Rift = plan.Rift, Menace = plan.Menace,
                 EntryStampSeed = plan.EntryStamp, ExitStampSeed = plan.ExitStamp, EntryFromArena = plan.EntryFromArena,
-                Template = plan.Template,
+                Template = plan.Template, Luck = luck,
             };
             Array.Fill(map.Heights, -PathDepth);
             // The wall tops come from the reef prototype's terrain for this text (the run's first try: the seed itself).

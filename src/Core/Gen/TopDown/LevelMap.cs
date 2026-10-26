@@ -293,6 +293,8 @@ public sealed class LevelMap
     public Shaft Shaft;
     /// <summary>The adventure's abyss reef (AbyssReef): the open floor dropped away outside the caves and tunnels.</summary>
     public bool Abyss;
+    /// <summary>Her luck as the level was made (LuckTuning): it may bring a light spring (LightSprings).</summary>
+    public float Luck;
     /// <summary>An abyss reef's shelves (AbyssReef): ledges just under the plane, jutting from the walls, where anemones grow.</summary>
     public List<Vector2> Shelves = new();
 

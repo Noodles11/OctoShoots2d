@@ -50,6 +50,12 @@ Every stat counts on the plane: damage, max HP, fire rate, shot speed, range, sh
 HP regeneration (her corruption ebbing), luck, glow and knockback. Stat pearls are never unique, so each copy stacks
 (including the drawbacks: Glass Squid, Sea Cucumber, Pufferfish Pout and Cannonball all trade something away).
 
+**Luck**, per point (each capped; `LuckTuning`): every freed foe leaves one more shell; a level without a clam room gets
+one with a 10% chance (at most 60%); each planned ambush is dropped with a 15% chance (at most 90%); each shell she picks
+up counts twice with an 8% chance (at most 60%; a second shell flies to her counter); a light spring is 10% likelier (at
+most +60%) — on an adventure level, where there are none otherwise, only by luck. A level is planned with her luck as she
+comes to it (the level below is laid out while she plays the one above); a run without luck gets the very same levels.
+
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
 | No | ✅ | **Coral Crown** | *A reef princess's lost tiara* | +20 max HP; +0.3 damage; Heals 20 HP | ★★ | treasure, boss |  |

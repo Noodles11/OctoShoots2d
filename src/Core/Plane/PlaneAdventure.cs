@@ -46,8 +46,9 @@ public static class AdventureTuning
     public const float FishSense = 1f, FishFill = 0.12f, FishEat = 0.2f, FishDrain = 0.05f;
     /// <summary>A spiked murkling's throw striking a fish fills its gauge (and those in the splash) this much.</summary>
     public const float ThrowFill = 0.6f;
-    /// <summary>An anemone's gauge: AnemoneFill a second with a dot within AnemoneSense; full, it is an Inkwarden.</summary>
-    public const float AnemoneSense = 1.6f, AnemoneFill = 0.05f, AnemoneDrain = 0.03f;
+    /// <summary>A pufferfish's gauge: PufferFill a second with a dot within PufferSense (and FishEat a dot it eats); full, it is an Inkwarden. PufferMin–Max a level.</summary>
+    public const float PufferSense = 1.4f, PufferFill = 0.06f, PufferDrain = 0.03f;
+    public const int PufferMin = 12, PufferMax = 18;
     /// <summary>Fish: this many times the depth's count of anemones, tangs and schools; schools of SchoolMin–SchoolMax.</summary>
     public const float FishMore = 3f;
     public const int SchoolMin = 12, SchoolMax = 24;
@@ -71,7 +72,7 @@ public static class AdventureTuning
     /// trails her along the way she swam (her last ArmMemory seconds of it, so it gathers in when she stops). A
     /// corrupted creature it touches (within ArmWidth of it) takes ArmShare of a shot's damage, once every ArmEvery.
     /// </summary>
-    public const float ArmBase = 1.5f, ArmPerUpgrade = 0.15f, ArmMax = 4f, ArmMemory = 1.5f, ArmWidth = 0.14f, ArmShare = 0.3f, ArmEvery = 0.4f;
+    public const float ArmBase = 3.2f, ArmPerUpgrade = 0.2f, ArmMax = 6f, ArmMemory = 1.5f, ArmWidth = 0.14f, ArmShare = 0.3f, ArmEvery = 0.4f;
 
     /// <summary>Her oral arm's length after so many skill points spent.</summary>
     public static float ArmLength(int upgrades) => System.MathF.Min(ArmBase + ArmPerUpgrade * upgrades, ArmMax);
@@ -551,7 +552,7 @@ public sealed partial class PlaneWorld
 
     /// <summary>
     /// Healthy fish eat the dots they touch and fill over ink (draining over clean water); full, a fish turns (a school
-    /// all together). An anemone in the ink fills too; full, it is an Inkwarden.
+    /// all together). A pufferfish fills the same way; full, it is an Inkwarden. (Anemones are only the reef's.)
     /// </summary>
     void StepGauges(InkDots dots)
     {
@@ -577,18 +578,27 @@ public sealed partial class PlaneWorld
             }
             else Turn(f);
         }
-        for (int a = 0; a < Anemones.Count; a++)
+        // Pufferfish: they eat the dots they touch and fill over ink; full, one is an Inkwarden (the spiky ring).
+        foreach (var f in Fish)
         {
-            var an = Anemones[a];
-            if (an.Turned || an.Freed) continue;
-            bool near = dots.Nearest(an.Position, AdventureTuning.AnemoneSense) >= 0;
-            if (an.Ink < 1f) an.Ink = Math.Clamp(an.Ink + (near ? AdventureTuning.AnemoneFill : -AdventureTuning.AnemoneDrain) * Dt, 0f, 1f);
-            if (an.Ink < 1f) continue;
-            an.Turned = true;
-            var w = NewWarden(an.Position, roams: false);
-            w.Anemone = a;
+            if (f.Freed || f.Gone) continue;
+            int near = dots.Nearest(f.Position, AdventureTuning.PufferSense);
+            if (near >= 0 && Vector2.Distance(InkDots.Centre(near), f.Position) < PufferlingTuning.CalmRadius + AdventureTuning.DotRadius + 0.1f)
+            {
+                dots.Remove(near);
+                Events.Add(new PlaneEvent(PlaneEventType.DotEaten, InkDots.Centre(near), Vector2.Zero));
+                f.Ink += AdventureTuning.FishEat;
+            }
+            if (f.Ink < 1f) f.Ink = Math.Clamp(f.Ink + (near >= 0 ? AdventureTuning.PufferFill : -AdventureTuning.PufferDrain) * Dt, 0f, 1f);
+            if (f.Ink < 1f) continue;
+            f.Gone = true;
+            var w = NewWarden(f.Position, roams: false);
+            w.Puffer = true;
+            w.Home = f.Position;
+            w.Target = f.Position;
+            w.Spin = f.Heading;
             Inkwardens.Add(w);
-            Events.Add(new PlaneEvent(PlaneEventType.AnemoneTurned, an.Position, Vector2.Zero, an.Scale));
+            Events.Add(new PlaneEvent(PlaneEventType.FishTurned, f.Position, Vector2.Zero, WardenTuning.Radius, DamageSource.None));
         }
 
         void Turn(PlaneReefFish f)

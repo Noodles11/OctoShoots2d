@@ -62,12 +62,12 @@ All numbers are first guesses (`AdventureTuning`).
   0.05 a second over clean water. Full, the fish **turns** (the ink creeps over it) into the murkling of its kind
   (§4); a chromis turns with its whole school. A spiked murkling's throw that strikes a fish adds 0.6 to the gauges in
   its splash. A freed fish cannot turn again that level.
-- **Anemones** fill too (0.05 a second with a dot within 1.6 m, draining 0.03): full, the anemone is an Inkwarden;
-  freed, it is an anemone again and cannot turn again that level.
+- **Pufferfish** (12–18 a level, in ones and twos) fill too: 0.06 a second with a dot within 1.4 m, 0.2 for each dot
+  they eat, draining 0.03; full, a pufferfish is an Inkwarden (§4). Anemones are only the reef's: they never turn.
 
 ## 4. The murklings
 
-All of them are fish (or an anemone) underneath; freed, they are themselves again and swim off. Her light frees them as
+All of them are fish underneath; freed, they are themselves again and swim off. Her light frees them as
 it frees any corrupted creature: a corruption meter each, emptied by her shots, holes torn and healing.
 
 | Mob | From | Core | Body | Behaviour |
@@ -75,10 +75,11 @@ it frees any corrupted creature: a corruption meter each, emptied by her shots, 
 | **Spiked murkling** | blue tang | blue | 0.38 m, short blowfish spikes all over | Keeps 6–9 m from her, circling, at 3.4 m/s; throws ink at her (the slingshot wind-up); never clings. Touching it hurts and knocks her off. |
 | **Tadpole murkling** | clownfish | orange | 0.22 m, a short wiggling tadpole tail | Only chases her (within 16 m), at 1.1 times her cruise; clings on and drains her; never throws. |
 | **Shoal murkling** | chromis | silver | 0.2 m, a whole school | Very fast (9 m/s). Within 14 m it rings her 1.8–2.6 m out, spread evenly all round in three layers, and the ring circles her (1.1 rad/s, each layer a little faster than the one inside it; each school its own way), never tied to her aim — she times her shots through the gaps, and a shot that meets one is spent on it. Harmless otherwise. |
-| **Inkwarden** | sea anemone | — | the Inkwarden | Wards the corrupted creatures round it. |
+| **Inkwarden** | pufferfish | yellow | an inflated ring of ink, eight spikes folded in toward its hole | Wards the corrupted creatures round it (8 m). Calm, it drifts slowly about its spot (within 5 m), turning lazily. Struck (by her light, her arm or a burst), it rolls its spikes out over its top (0.5 s), spins up (0.6 s) and fires them one by one, one every 0.15 s, each in a random direction (11 m/s, 6 damage, an ink spike: it falls as a throw does and her shots burst it); then it slows and grows them back inward (3 s), calm until struck again. Freed, it is a pufferfish, and swims off. |
 
 Switched off in the adventure (their code kept, to bring back one by one): pufferlings, Blightroots, Blotters,
-Lashjaws, Thumpsquirts, dens, curse dens, light springs, ambushes, murkling budding, Queen Clam and the boss arenas.
+Lashjaws, Thumpsquirts, dens, curse dens, ambushes, murkling budding, Queen Clam and the boss arenas. Light springs
+come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed it wells up from (§5).
 
 ## 5. The abyss reef
 
@@ -94,18 +95,24 @@ Lashjaws, Thumpsquirts, dens, curse dens, light springs, ambushes, murkling budd
 ## 6. Her oral arm, her inner light and the HUD
 
 - **Her oral arm** stings: it trails her along the way she swam (her last 1.5 s of it, so it gathers in when she
-  stops), 1.5 m long and 0.15 m longer for every skill point she spends (at most 4 m). A corrupted creature it brushes
+  stops), 3.2 m long and 0.2 m longer for every skill point she spends (at most 6 m). A corrupted creature it brushes
   (a murkling, an Inkwarden) takes 30% of a shot's damage, once every 0.4 s.
 
 - **Inner light** (her stamina, 0..1): a volley spends 0.07, a dash 0.3, a surge 0.45 a second. It refills 0.5 a
   second once 0.35 s pass without spending (about two seconds from empty). Emptied, she cannot shoot or dash until it
   is back to a quarter.
-- **The gonad gauge** (top left): her emblem's four horseshoes, open toward the middle, each filling along its arc:
-  health (top left; what she lost is ink, flashing violet on a hit), inner light (top right; dim and flickering while
-  spent out), experience (bottom right; her level inside it; pulsing full with a point to spend), the active pearl's
-  charge (bottom left, in the pearl's colour; breathing when ready). In its middle the **active pearl** itself, turning
-  (an empty socket without one); under it **her shells**, the shell and its count, shown once she has had one —
-  collected shells fly there.
+- **Her gauge** (top left): Clementine seen from above. Her bell, a disc of glass with her four gonads and her glowing
+  rim (static); holding an active pearl, its colours and pattern fill the glass (no pearl is drawn), whitening for a
+  beat when she uses it. Under it her four oral arms hang, one stat each, left to right by urgency, each as long as
+  its stat is full, over a faint track of its whole length, with a small sign at its foot:
+  1. **health** (warm white-gold; a heart) — a hit frays the lost piece off the arm, drifting away; low (under a
+     quarter), it turns ragged and pulses rose;
+  2. **inner light** (pale cyan; a spark) — dim and flickering while spent out;
+  3. **the active pearl's charge** (the pearl's own colour; a pearl) — breathing when ready; without one, the arm is
+     curled up short and dim;
+  4. **experience** (amber; her level at its foot) — growing toward the next level, pulsing full with a point to
+     spend.
+  Beside the bell **her shells** (the shell and its count — shown only once she has collected at least one).
 - **Maps:** the minimap and the whole level's map (Tab / Select) both hidden unless she has absorbed **Sea Chart Nautilus** ("Remembers every current"; shop and treasure).
   Never an experience ring or health bezel round it: a thin outline and the north mark only. The cleansing meter is
   gone.

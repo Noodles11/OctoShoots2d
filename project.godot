@@ -170,3 +170,7 @@ her_scatter={
 "type": "float",
 "value": 0.0
 }
+her_spot={
+"type": "vec4",
+"value": Vector4(0, -1, 0, -2)
+}

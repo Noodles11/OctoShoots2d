@@ -312,6 +312,10 @@ void fragment() {
 	vec3 on_layer = cam + ray * ((player_pos.y - cam.y) / min(ray.y, -1e-3));
 	float ign = fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))));
 	col += her_warm * her_inscatter(cam, ray, t0, open_deep ? t0 + 120.0 : t1, ign);
+	// Her searchlight: its beam down through the water, and the spot it throws where it meets the reef, lit through
+	// the murk however deep that lies.
+	col += her_warm * her_beam(cam, ray, t0, open_deep ? t0 + 120.0 : t1, ign) * 0.35;
+	if (!open_deep) col += her_warm * her_spot_on(world) * 0.14 * her_lantern;
 	// Her bubbles carry light: each a small halo of its own on the same layer, the same depth-darkness scaling as hers
 	// (subtle in the bright Shallows, glorious in the deep).
 	float bubbles = 0.0;

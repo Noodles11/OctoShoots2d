@@ -265,6 +265,8 @@ public sealed class MurkShot
     public float Traveled;
     /// <summary>Seconds it has been falling to the sand (0: still flying on her plane).</summary>
     public float Fall;
+    /// <summary>An Inkwarden's spike (the adventure's spiky ring), not a murkling's throw: drawn as a thin spine.</summary>
+    public bool Spike;
     public bool Airborne => Fall <= 0f;
 }
 
@@ -471,6 +473,9 @@ public sealed partial class PlaneWorld
     /// A burst of her light (the Starburst Gland): it cleanses the ground it floods and strikes every corrupted
     /// creature in reach, each taking the burst's light off its meter.
     /// </summary>
+    /// <summary>Tests: a burst of her light here (as the Starburst Gland's).</summary>
+    public void DebugBurst(Vector2 at, float reach, float light) => BurstOnCorruption(at, reach, light);
+
     void BurstOnCorruption(Vector2 at, float reach, float light, bool cleanse = true)
     {
         if (Corruption is not { } field) return;

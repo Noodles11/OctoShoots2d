@@ -29,7 +29,20 @@ public static class WardenTuning
     /// <summary>Freed: its light washes this wide, and it leaves ShellsMin–Max shells.</summary>
     public const float BurstRadius = 3f;
     public const int ShellsMin = 1, ShellsMax = 2;
+
+    /// <summary>
+    /// The adventure's Inkwarden (docs/ADVENTURE.md §4): a turned pufferfish, an inflated ring of ink with Spikes folded in.
+    /// Calm, it drifts at CalmSpeed about its home (within CalmRange). Struck, it rolls its spikes out (RollSeconds), spins
+    /// up (SpinUpSeconds) to SpinFast, then fires its spikes one every FireEvery in random directions (SpikeSpeed, each
+    /// SpikeDamage); then it slows and grows them back inward (SettleSeconds), calm until struck again.
+    /// </summary>
+    public const int Spikes = 8;
+    public const float CalmSpeed = 0.6f, CalmRange = 5f, RollSeconds = 0.5f, SpinUpSeconds = 0.6f, FireEvery = 0.15f, SettleSeconds = 3f;
+    public const float SpinCalm = 0.4f, SpinFast = 14f, SpikeSpeed = 11f, SpikeDamage = 6f, SpikeRadius = 0.09f;
 }
+
+/// <summary>The adventure's Inkwarden's cycle: calm; struck, rolling its spikes out, spinning up, firing them, settling.</summary>
+public enum WardenStage { Calm, Rolling, SpinUp, Firing, Settling }
 
 /// <summary>An Inkwarden: a corrupted anemone guarding the corrupted creatures round it.</summary>
 public sealed class Inkwarden
@@ -40,6 +53,22 @@ public sealed class Inkwarden
     public bool Alive = true, Roams;
     /// <summary>The adventure: the anemone it was (index into the world's anemones), -1 for none.</summary>
     public int Anemone = -1;
+    /// <summary>The adventure: a turned pufferfish (the spiky ring); freed, it is a pufferfish again.</summary>
+    public bool Puffer;
+    /// <summary>The spiky ring's cycle: its stage and how long it has been in it, its spin (angle, radians a second), the
+    /// spikes it still has to fire, and when the next goes.</summary>
+    public WardenStage Stage;
+    public float StageTime, Spin, SpinRate = WardenTuning.SpinCalm, FireTimer;
+    public int SpikesLeft = WardenTuning.Spikes;
+    public Vector2 Home;
+    /// <summary>How far its spikes have rolled out (0 folded in → 1 pointing out), and how grown its spikes are (0 → 1).</summary>
+    public float Out => Stage switch
+    {
+        WardenStage.Rolling => Math.Clamp(StageTime / WardenTuning.RollSeconds, 0f, 1f),
+        WardenStage.SpinUp or WardenStage.Firing => 1f,
+        _ => 0f,
+    };
+    public float Grown => Stage == WardenStage.Settling ? Math.Clamp(StageTime / WardenTuning.SettleSeconds, 0f, 1f) : 1f;
     /// <summary>Until her oral arm may sting it again (the adventure).</summary>
     public float ArmCooldown;
     public float Seed, LookTimer;
@@ -159,6 +188,11 @@ public sealed partial class PlaneWorld
         {
             if (!w.Alive) continue;
             w.Corruption.Step(Dt);
+            if (w.Puffer)
+            {
+                StepSpiky(w);
+                continue;
+            }
             if (!w.Roams) continue;
             // Roaming: toward where most of its kin gather, settling among them.
             w.LookTimer -= Dt;
@@ -197,6 +231,96 @@ public sealed partial class PlaneWorld
         Inkwardens.RemoveAll(w => !w.Alive);
     }
 
+    /// <summary>
+    /// The spiky ring: calm, it drifts about its home; struck (her light, her arm, a burst), it rolls its spikes out,
+    /// spins up, fires them one by one in random directions, then slows and grows them back inward.
+    /// </summary>
+    void StepSpiky(Inkwarden w)
+    {
+        w.StageTime += Dt;
+        bool struck = w.Corruption.LastHit > 0f && w.Corruption.Since < 2f * Dt;
+        switch (w.Stage)
+        {
+            case WardenStage.Calm:
+                if (struck)
+                {
+                    Enter(w, WardenStage.Rolling);
+                    Events.Add(new PlaneEvent(PlaneEventType.WardenRoused, w.Position, Vector2.Zero));
+                }
+                break;
+            case WardenStage.Rolling:
+                if (w.StageTime >= WardenTuning.RollSeconds) Enter(w, WardenStage.SpinUp);
+                break;
+            case WardenStage.SpinUp:
+                if (w.StageTime >= WardenTuning.SpinUpSeconds)
+                {
+                    Enter(w, WardenStage.Firing);
+                    w.FireTimer = 0f;
+                }
+                break;
+            case WardenStage.Firing:
+                w.FireTimer -= Dt;
+                if (w.FireTimer <= 0f && w.SpikesLeft > 0)
+                {
+                    w.FireTimer = WardenTuning.FireEvery;
+                    w.SpikesLeft--;
+                    float a = _blightRng.Range(0f, MathF.Tau);
+                    var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                    var at = w.Position + dir * (WardenTuning.Radius + 0.15f);
+                    MurkShots.Add(new MurkShot
+                    {
+                        Position = at, From = at, Velocity = dir * WardenTuning.SpikeSpeed, Radius = WardenTuning.SpikeRadius,
+                        Damage = WardenTuning.SpikeDamage, Spike = true,
+                    });
+                    Events.Add(new PlaneEvent(PlaneEventType.WardenSpike, at, dir));
+                }
+                if (w.SpikesLeft <= 0 && w.FireTimer <= 0f) Enter(w, WardenStage.Settling);
+                break;
+            case WardenStage.Settling:
+                if (w.StageTime >= WardenTuning.SettleSeconds)
+                {
+                    w.SpikesLeft = WardenTuning.Spikes;
+                    Enter(w, WardenStage.Calm);
+                }
+                break;
+        }
+        // Its spin: winding up fast as it rouses, easing down as it settles.
+        float spin = w.Stage switch
+        {
+            WardenStage.Calm => WardenTuning.SpinCalm,
+            WardenStage.Rolling => WardenTuning.SpinCalm,
+            WardenStage.SpinUp or WardenStage.Firing => WardenTuning.SpinFast,
+            _ => WardenTuning.SpinCalm,
+        };
+        float rate = w.Stage == WardenStage.Settling ? 8f : WardenTuning.SpinFast / WardenTuning.SpinUpSeconds;
+        w.SpinRate = MoveTowardF(w.SpinRate, spin, rate * Dt);
+        w.Spin += w.SpinRate * Dt;
+        // Calm, it drifts from spot to spot about its home, minding its own business; roused, it holds still.
+        if (w.Stage == WardenStage.Calm)
+        {
+            w.LookTimer -= Dt;
+            if (w.LookTimer <= 0f || Vector2.Distance(w.Position, w.Target) < 0.5f)
+            {
+                w.LookTimer = _blightRng.Range(3f, 7f);
+                float a = _blightRng.Range(0f, MathF.Tau), r = _blightRng.Range(0f, WardenTuning.CalmRange);
+                var q = w.Home + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
+                w.Target = Clear(q, WardenTuning.Radius + 0.3f) && LineOfSight(w.Position, q) ? q : w.Position;
+            }
+        }
+        var to = w.Target - w.Position;
+        var want = w.Stage == WardenStage.Calm && to.Length() > 0.3f ? Vector2.Normalize(to) * WardenTuning.CalmSpeed : Vector2.Zero;
+        w.Velocity = MoveToward(w.Velocity, want, 1.2f * Dt);
+        Move(ref w.Position, ref w.Velocity, WardenTuning.Radius, report: false);
+
+        static void Enter(Inkwarden w, WardenStage stage)
+        {
+            w.Stage = stage;
+            w.StageTime = 0f;
+        }
+    }
+
+    static float MoveTowardF(float from, float to, float max) => MathF.Abs(to - from) <= max ? to : from + MathF.Sign(to - from) * max;
+
     /// <summary>The corrupted creature (within Seek) with the most kin round it: where a roaming warden settles.</summary>
     Vector2? KinGathering(Inkwarden w)
     {
@@ -232,6 +356,9 @@ public sealed partial class PlaneWorld
     {
         w.Alive = false;
         Stats.MobsDefeated++;
+        // A turned pufferfish is a pufferfish again: it shudders, then swims off.
+        if (w.Puffer)
+            Fish.Add(new PlaneFish { Id = _fishIds++, Freed = true, Position = w.Position, Home = w.Position, Heading = w.Spin, Inflate = 1f, Rng = new Rng(_blightRng.NextU64()) });
         if (w.Anemone >= 0)
         {
             // An anemone again, that cannot turn again this level.

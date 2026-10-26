@@ -7,10 +7,11 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// Clementine (THEME-BIBLE §5.1, DESIGN-TOPDOWN §2.1), presentation only: the sim's position, nothing more.
-/// A translucent tangerine bell (clementine_bell.gdshader) with a short, nearly invisible fringe of fine hairs all round
-/// its margin (an accent, as a moon jelly's), and her one oral arm — a long, thick ribbon twisted like withered lace,
-/// an electric pulse running down its core now and then, growing with her skills (PlaneWorld.ArmLength) — on verlet
-/// chains (clementine_trail.gdshader). Every stroke is a contraction beat — quick squeeze, slow relax,
+/// A bell of living glass (clementine_bell.gdshader), nearly clear, only her gonads and her rim bioluminescent, with a
+/// short, nearly invisible fringe of fine hairs round its margin, eight long hair-thin fibre tentacles with light
+/// running down them, and four oral arms — long ribbons of thin cloth twisting freely, their ruffled margins glowing,
+/// growing with her skills (PlaneWorld.ArmLength) — on verlet chains (clementine_trail.gdshader). Swimming, she tips
+/// almost onto her side, apex first; her bell always beats a little. Every stroke is a contraction beat — quick squeeze, slow relax,
 /// a little recoil — paced by her speed; a jet or dash starts one at once. The bell leans into the swim on a soft
 /// spring, the strands trail behind and swing through turns, and when she stops they float out around her while she
 /// bobs. A hit flushes her magenta and whips the tentacles out; the ink dash turns her into a dark ghost.
@@ -19,8 +20,8 @@ namespace OctoShoots.Game.TopDown;
 public partial class BellView : Node3D
 {
     const float BellRadius = 0.546f, BellHeight = 0.39f;
-    /// <summary>Her fringe: this many fine hairs round the bell's margin.</summary>
-    const int Hairs = 140;
+    /// <summary>Her fringe: this many fine hairs round the bell's margin; her long fibre tentacles; her oral arms.</summary>
+    const int Hairs = 140, Fibers = 8, OralArms = 4;
     /// <summary>The strands' fixed step: steady motion at any frame rate.</summary>
     const float Step = 1f / 120f;
     /// <summary>Her glow in the water (HerColor: derived from her body colour).</summary>
@@ -30,7 +31,9 @@ public partial class BellView : Node3D
     {
         public Vector3[] Pos = null!, Prev = null!;
         public float Angle, Length, RootWidth, TipWidth, Stiffness;
-        public bool Arm;
+        public bool Arm, Fiber;
+        /// <summary>Its own seed (0..1), for its shader's beat.</summary>
+        public float Seed;
         /// <summary>Which way the strand floats when nothing moves it, in the bell's frame.</summary>
         public Vector3 Rest;
         public Vector3 Anchor, LastAnchor;
@@ -43,7 +46,15 @@ public partial class BellView : Node3D
     public bool Covered { get; set; }
     float _outline;
     ImmediateMesh _strandMesh = null!;
-    OmniLight3D _light = null!;
+    /// <summary>Her searchlight (a beam from her bell, down and a little ahead), and a faint glow round the bell itself.</summary>
+    SpotLight3D _light = null!;
+    OmniLight3D _halo = null!;
+    /// <summary>The beam's half-angle (degrees) and how far it reaches (before Lantern and glow).</summary>
+    const float BeamAngle = 17f, BeamRange = 26f;
+    Vector3 _beam = Vector3.Down;
+    /// <summary>Which way her searchlight points (world, unit), and the cosine of its half-angle.</summary>
+    public Vector3 BeamDirection => _beam;
+    public float BeamCos => Mathf.Cos(Mathf.DegToRad(_light.SpotAngle));
     /// <summary>How much of her light gets through (1 all; the curse den's dark fades it).</summary>
     public float Dim = 1f;
     /// <summary>The depth's lantern (ReefLook.Lantern): her light's strength and reach against the dark.</summary>
@@ -52,7 +63,7 @@ public partial class BellView : Node3D
     bool _dbgFalloff;
     /// <summary>Her light: where it is (world), how far it reaches and how strong it is now.</summary>
     public Vector3 LightPosition => _light.GlobalPosition;
-    public float LightRange => _light.OmniRange;
+    public float LightRange => _light.SpotRange;
     public float LightEnergy => _light.Visible ? _light.LightEnergy : 0f;
     /// <summary>Her light's heart, over the bell's origin (inside the dome).</summary>
     public const float LightHeight = 1.2f;
@@ -148,16 +159,38 @@ public partial class BellView : Node3D
                 Prev = new Vector3[4],
             });
         }
-
-        // Her glow is the lantern of the scene: a warm pool in the dark water around her. It casts shadows (soft, from a
-        // light the size of her bell's heart), so the reef's walls, rocks, kelp and creatures stand out against it and
-        // what lies behind them stays dark; her own bell and strands cast none.
-        _light = new OmniLight3D
+        for (int k = 0; k < Fibers; k++)
         {
-            LightColor = Glow, LightEnergy = 2.6f, OmniRange = 11f, OmniAttenuation = 1.4f, Position = new Vector3(0f, LightHeight, 0f),
-            ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, OmniShadowMode = OmniLight3D.ShadowMode.Cube, ShadowBias = 0.06f, ShadowNormalBias = 1.2f,
-            LightSize = 0.3f, ShadowBlur = 1f, LightSpecular = 0.8f,
+            // Long hair-thin tentacles from the margin, between the arms: optical fibres trailing far behind her.
+            float a = (k + 0.5f) * Mathf.Tau / Fibers + 0.2f * Hash(k + 500);
+            _strands.Add(new Strand
+            {
+                Fiber = true,
+                Angle = a,
+                Seed = Hash(k + 520),
+                Length = 1.8f + 0.8f * Hash(k + 540),
+                RootWidth = 0.014f,
+                TipWidth = 0.008f,
+                Stiffness = 1.4f,
+                Rest = new Vector3(Mathf.Cos(a) * 0.3f, -1f, Mathf.Sin(a) * 0.3f).Normalized(),
+                Pos = new Vector3[32],
+                Prev = new Vector3[32],
+            });
+        }
+
+        // Her light is the lantern of the scene: a searchlight from her bell, a focused beam down through the water and a
+        // little ahead of her, swinging after her as she swims, as a helicopter's does. It casts shadows (soft, from a
+        // light the size of her bell's heart), so the reef's walls, rocks, kelp and creatures stand out against it and
+        // what lies behind them stays dark; her own bell and strands cast none. A faint glow round the bell keeps what
+        // swims right beside her from going black.
+        _light = new SpotLight3D
+        {
+            LightColor = Glow, LightEnergy = 3.4f, SpotRange = BeamRange, SpotAngle = BeamAngle, SpotAngleAttenuation = 0.6f, SpotAttenuation = 0.9f,
+            ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, ShadowBias = 0.06f, ShadowNormalBias = 1.2f,
+            LightSize = 0.3f, ShadowBlur = 1f, LightSpecular = 0.8f, TopLevel = true,
         };
+        _halo = new OmniLight3D { LightColor = Glow, LightEnergy = 0.5f, OmniRange = 3f, OmniAttenuation = 1.6f, ShadowEnabled = false, Position = new Vector3(0f, LightHeight, 0f) };
+        AddChild(_halo);
         foreach (string arg in OS.GetCmdlineUserArgs())
             if (arg.StartsWith("--dbg-lantern="))
             {
@@ -166,7 +199,7 @@ public partial class BellView : Node3D
                 _dbgEnergy = float.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
                 if (parts.Length > 1)
                 {
-                    _light.OmniAttenuation = float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+                    _light.SpotAttenuation = float.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
                     _dbgFalloff = true;
                 }
             }
@@ -273,9 +306,9 @@ public partial class BellView : Node3D
         _lastHurt = p.HurtTimer;
         if ((jet || dash) && _phase > 0.3f) _phase = 0f;
         bool burst = p.JetTimer > 0f || p.IsDashing || DiveDepth > 0f;
-        float ampTarget = burst ? 1f : 0.3f + 0.55f * Mathf.Min(pace, 1f);
+        float ampTarget = burst ? 1f : 0.42f + 0.45f * Mathf.Min(pace, 1f);
         _amp = Mathf.Lerp(_amp, ampTarget, 1f - Mathf.Exp(-4f * h));
-        _phase = Mathf.PosMod(_phase + h * (burst ? 1.8f : 0.42f + 0.95f * Mathf.Min(pace, 1.3f)), 1f);
+        _phase = Mathf.PosMod(_phase + h * (burst ? 1.8f : 0.6f + 0.8f * Mathf.Min(pace, 1.3f)), 1f);
         float before = _pulse;
         _pulse = Mathf.Lerp(_pulse, Contraction(_phase) * _amp, 1f - Mathf.Exp(-25f * h));
         float pulseRate = h > 0f ? (_pulse - before) / h : 0f;
@@ -284,7 +317,8 @@ public partial class BellView : Node3D
 
         // The lean: the apex leads into the swim on a critically damped spring; at rest she tips a little toward where
         // she aims (curiosity).
-        Vector2 leanTarget = speed > 0.05f ? vel / speed * Mathf.Min(pace, 1.5f) * 0.42f : new Vector2(p.Aim.X, p.Aim.Y) * 0.07f;
+        // Swimming she tips almost onto her side (about 70° at her cruise), apex first, as a jelly swims.
+        Vector2 leanTarget = speed > 0.05f ? vel / speed * Mathf.Min(Mathf.Sqrt(pace) * 1.22f, 1.38f) : new Vector2(p.Aim.X, p.Aim.Y) * 0.07f;
         const float w = 6f;
         _leanVel += ((leanTarget - _lean) * w * w - _leanVel * 2f * w) * h;
         _lean += _leanVel * h;
@@ -329,10 +363,17 @@ public partial class BellView : Node3D
         // the sun, in the Trench and the Abyss about three times as strong and falling off more gently, so it reaches the
         // floor of the canyons she swims over.
         float deep = Mathf.Clamp((Lantern - 1f) / 0.85f, 0f, 1f);
-        _light.OmniRange = 11f * glow * Mathf.Sqrt(Lantern);
-        if (!_dbgFalloff) _light.OmniAttenuation = Mathf.Lerp(1.2f, 0.7f, deep);
-        _light.LightEnergy = 2.6f * _dbgEnergy * Mathf.Pow(Lantern, 1.8f) * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
+        _light.SpotRange = BeamRange * glow * Mathf.Sqrt(Lantern);
+        if (!_dbgFalloff) _light.SpotAttenuation = Mathf.Lerp(1f, 0.6f, deep);
+        _light.LightEnergy = 3.4f * _dbgEnergy * Mathf.Pow(Lantern, 1.8f) * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
         _light.LightColor = Glow.Lerp(new Color(1f, 0.3f, 0.55f), _hurt * 0.5f);
+        _halo.LightColor = _light.LightColor;
+        // The beam: she casts it from inside her bell, out of its opening — the way the inside of her bell points. At
+        // rest that is down; swimming (tipped apex first) it streams out behind her.
+        var axis = _body.GlobalBasis.Y.Normalized();
+        _beam = _beam.Lerp(-axis, 1f - Mathf.Exp(-12f * h)).Normalized();
+        var from = _body.GlobalPosition + axis * 0.12f;
+        _light.GlobalTransform = new Transform3D(Basis.LookingAt(_beam, Vector3.Back), from);
 
         if (speed > 0.3f) _across = new Vector3(-vel.Y, 0f, vel.X) / speed;
         _calm = Mathf.Lerp(_calm, 1f - 0.85f * Mathf.Min(pace, 1f), 1f - Mathf.Exp(-3f * h));
@@ -426,7 +467,8 @@ public partial class BellView : Node3D
         _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("burst"), _burst);
         // The pulse of light: her glow flares far out and falls back.
         _light.LightEnergy *= (1f + 4f * _burst + 0.4f * _mimic) * Dim;
-        _light.OmniRange *= (1f + 0.8f * _burst) * (0.4f + 0.6f * Dim);
+        _light.SpotRange *= (1f + 0.8f * _burst) * (0.4f + 0.6f * Dim);
+        _halo.LightEnergy = 0.5f * Mathf.Pow(Lantern, 1.2f) * (1f + 2f * _burst) * Dim;
     }
 
     public override void _ExitTree() => RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_glow_strength"), 0f);
@@ -437,6 +479,15 @@ public partial class BellView : Node3D
     /// </summary>
     void SyncVitals(PlaneWorld world, float h)
     {
+        // The adventure shows her health and her pearl's charge on the HUD's gonad gauge: her gonads and her rim are
+        // only hers then, always whole, never a gauge.
+        if (world.Options.Adventure)
+        {
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("health"), 1f);
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("charge"), -1f);
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("snuff"), 0f);
+            return;
+        }
         float target = world.Run.MaxHp > 0f ? Mathf.Clamp(world.Player.Hp / world.Run.MaxHp, 0f, 1f) : 0f;
         _health = Mathf.MoveToward(_health, target, h * (target < _health ? 0.8f : 1.5f));
         bool holds = world.Run.Active?.Active is not null;
@@ -551,31 +602,39 @@ public partial class BellView : Node3D
     // ───────────────────────── the strands ─────────────────────────
 
     /// <summary>
-    /// Her one oral arm: a long, thick ribbon hanging from her mouth, as long as the sim's (it grows with every skill
-    /// point she spends). A new length is taken up over a few strokes, the chain easing out to it.
+    /// Her oral arms: four long ribbons of thin cloth from round her mouth, one between each pair of gonads, a little
+    /// different in length about the sim's arm (it grows with every skill point she spends). A new length is taken up
+    /// over a few strokes, the chains easing out to it.
     /// </summary>
     void SetArm(float length)
     {
-        var arm = _strands.Find(s => s.Arm);
-        if (arm is null)
+        if (!_strands.Exists(s => s.Arm))
         {
-            const float a = 0.6f;
-            _strands.Insert(0, arm = new Strand
+            for (int k = 0; k < OralArms; k++)
             {
-                Arm = true,
-                Angle = a,
-                RootWidth = 0.52f,
-                TipWidth = 0.22f,
-                Stiffness = 3f,
-                Rest = new Vector3(Mathf.Cos(a) * 0.5f, -1f, Mathf.Sin(a) * 0.5f).Normalized(),
-                Pos = new Vector3[24],
-                Prev = new Vector3[24],
-            });
-            arm.Length = length;
+                float a = k * Mathf.Tau / OralArms;
+                _strands.Insert(k, new Strand
+                {
+                    Arm = true,
+                    Angle = a,
+                    Seed = Hash(k + 60),
+                    RootWidth = 0.34f,
+                    TipWidth = 0.12f,
+                    Stiffness = 2.2f,
+                    Rest = new Vector3(Mathf.Cos(a) * 0.35f, -1f, Mathf.Sin(a) * 0.35f).Normalized(),
+                    Pos = new Vector3[40],
+                    Prev = new Vector3[40],
+                });
+            }
             _strandsReady = false;
         }
-        arm.Length = length;
+        int i = 0;
+        foreach (var s in _strands)
+            if (s.Arm) s.Length = length * ArmShare[i++ % ArmShare.Length];
     }
+
+    /// <summary>Each oral arm's share of the sim's arm length.</summary>
+    static readonly float[] ArmShare = { 1f, 0.82f, 0.94f, 0.76f };
 
     Vector3 AnchorOf(Strand s, Transform3D body) => body * (s.Arm
         ? new Vector3(Mathf.Cos(s.Angle) * 0.08f, 0.12f + 0.05f * _pulse, Mathf.Sin(s.Angle) * 0.08f)
@@ -684,8 +743,8 @@ public partial class BellView : Node3D
         {
             int count = s.Pos.Length;
             // The fringe barely there (an accent), the arm as its shader has it.
-            var color = new Color(1f, 1f, 1f, s.Arm ? 1f : 0.16f);
-            var kind = new Vector2(s.Arm ? 1f : 0f, 0f);
+            var color = new Color(1f, 1f, 1f, s.Arm || s.Fiber ? 1f : 0.16f);
+            var kind = new Vector2(s.Arm ? 1f : s.Fiber ? 2f : 0f, s.Seed);
             Vector3 lastL = default, lastR = default;
             float turn = 0f;
             for (int i = 0; i < count; i++)
@@ -693,7 +752,7 @@ public partial class BellView : Node3D
                 float f = (float)i / (count - 1);
                 // The oral arm twists along its length (about two and a half turns, unevenly, drifting slowly): the
                 // ribbon pinches as it turns edge-on and opens wide again face-on.
-                turn = s.Arm ? Mathf.Pow(Mathf.Abs(Mathf.Cos(f * Mathf.Pi * 5f + 0.6f * Mathf.Sin(f * 7f) + _time * 0.5f + s.Angle * 2f)), 0.6f) : 1f;
+                turn = s.Arm ? Mathf.Pow(Mathf.Abs(Mathf.Cos(f * Mathf.Pi * 4f + 0.9f * Mathf.Sin(f * 5f + _time * 0.7f + s.Seed * 6f) + _time * 0.6f + s.Angle * 2f)), 0.6f) : 1f;
                 Vector3 tangent = s.Pos[Mathf.Min(i + 1, count - 1)] - s.Pos[Mathf.Max(i - 1, 0)];
                 Vector3 side = tangent.Cross(eye - s.Pos[i]);
                 side = side.LengthSquared() > 1e-10f ? side.Normalized() : Vector3.Right;

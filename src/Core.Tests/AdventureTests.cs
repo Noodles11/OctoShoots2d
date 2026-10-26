@@ -380,30 +380,60 @@ public class AdventureTests
     }
 
     [Fact]
-    public void An_anemone_in_the_ink_becomes_an_inkwarden_and_freed_is_an_anemone_again()
+    public void A_pufferfish_in_the_ink_becomes_a_spiky_inkwarden_that_fires_back_wards_and_is_freed_a_pufferfish()
     {
         var w = World();
         foreach (var v in w.Vents) v.Sealed = true;
-        Assert.NotEmpty(w.Anemones);
-        var an = w.Anemones[0];
-        an.Ink = 1f;
-        w.DebugDot(an.Position + Vector2.UnitX * AdventureTuning.Spacing);
-        if (w.Dots!.Count == 0) w.DebugDot(an.Position - Vector2.UnitX * AdventureTuning.Spacing);
+        w.ReefFish.Clear();
+        Assert.InRange(w.Fish.Count, AdventureTuning.PufferMin / 2, AdventureTuning.PufferMax);
+        var puffer = w.Fish[0];
+        puffer.Ink = 1f;
         Run(w, 1);
-        Assert.True(an.Turned);
         var warden = w.Inkwardens.Single();
-        Assert.Equal(0, warden.Anemone);
-        w.Player.Position = w.Player.PrevPosition = warden.Position + Vector2.UnitX * 4f;
-        warden.Corruption.Value = 0.5f;
-        var aim = Vector2.Normalize(warden.Position - w.Player.Position);
-        for (int i = 0; i < PlaneWorld.TickRate && warden.Alive; i++)
+        Assert.True(warden.Puffer);
+        Assert.DoesNotContain(puffer, w.Fish);
+        Assert.Equal(WardenStage.Calm, warden.Stage);
+
+        // Anemones never turn now.
+        foreach (var an in w.Anemones) an.Ink = 1f;
+        Run(w, 2);
+        Assert.Single(w.Inkwardens);
+
+        // It still wards the corrupted creatures round it.
+        var kin = w.DebugBud(warden.Position + Vector2.UnitX * 2f, prime: false);
+        kin.Bud = 0f;
+
+        // Struck: it rolls out, spins up, fires all its spikes one by one, then settles and grows them back.
+        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
+        warden.Corruption.Hit(1f);
+        int spikes = 0;
+        bool rolled = false, spun = false;
+        for (int i = 0; i < 6 * PlaneWorld.TickRate; i++)
         {
             w.Player.Hp = 100f;
-            w.Step(new PlaneInput { Aim = aim, Fire = true });
+            kin.Position = warden.Position + Vector2.UnitX * 2f;
+            w.Step(default);
+            spikes += w.Events.Count(e => e.Type == PlaneEventType.WardenSpike);
+            rolled |= warden.Stage == WardenStage.Rolling;
+            spun |= warden.SpinRate > WardenTuning.SpinFast * 0.9f;
         }
+        Assert.True(rolled && spun);
+        Assert.Equal(WardenTuning.Spikes, spikes);
+        Assert.Equal(WardenStage.Calm, warden.Stage);
+        Assert.Equal(WardenTuning.Spikes, warden.SpikesLeft);
+
+        var light = kin.Corruption.Value;
+        w.DebugBurst(kin.Position, 0.5f, 10f);
+        Assert.Equal(light, kin.Corruption.Value);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.Warded);
+
+        // Freed: a pufferfish again, swimming off (she is near: a freed one is gone once out of her sight).
+        w.Player.Position = w.Player.PrevPosition = warden.Position + Vector2.UnitY * 3f;
+        warden.Corruption.Value = 0.5f;
+        w.DebugBurst(warden.Position, 0.5f, 10f);
+        Run(w, 1);
         Assert.False(warden.Alive);
-        Assert.False(an.Turned);
-        Assert.True(an.Freed);
+        Assert.Contains(w.Fish, f => f.Freed && Vector2.Distance(f.Position, warden.Position) < 1f);
     }
 
     [Fact]

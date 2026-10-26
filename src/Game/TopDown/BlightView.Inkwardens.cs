@@ -12,6 +12,12 @@ namespace OctoShoots.Game.TopDown;
 /// When her light strikes a creature it guards, a tentacle's ink reaches out to it: a thin wavering tether that holds
 /// while the hits come and fades after, and the struck creature shimmers violet as the light fizzles on it. Freed, a
 /// healthy pale-pink anemone is left on the floor.
+/// <para>
+/// The adventure's Inkwarden (a turned pufferfish, Inkwarden.Puffer) is a ring instead: an inflated ring of ink at her
+/// plane, its core glowing the pufferfish's yellow, its spikes folded in toward its hole. Roused, the spikes roll over
+/// its top to point out, the ring spins up and they go one by one (each fired is gone from it); settling, it slows and
+/// they grow back, pointing in.
+/// </para>
 /// </summary>
 public partial class BlightView
 {
@@ -23,7 +29,15 @@ public partial class BlightView
         public Node3D Node = null!;
         public MeshInstance3D Body = null!, Ring = null!;
         public MeshInstance3D[] Tentacles = null!, Tips = null!;
+        /// <summary>The spiky ring's spikes (the adventure's Inkwarden).</summary>
+        public MeshInstance3D[] Spikes = System.Array.Empty<MeshInstance3D>();
     }
+
+    /// <summary>The spiky ring: its ring's middle line and tube (radius), and a spike's length and base.</summary>
+    const float RingMid = 0.5f, RingTube = 0.24f, SpikeLength = 0.5f;
+    readonly TorusMesh _ringBody = new() { InnerRadius = RingMid - RingTube, OuterRadius = RingMid + RingTube, Rings = 32, RingSegments = 14 };
+    readonly CylinderMesh _spikeMesh = new() { TopRadius = 0f, BottomRadius = 0.08f, Height = SpikeLength, RadialSegments = 8, Rings = 1 };
+    static readonly Color PufferCore = new(1f, 0.8f, 0.25f, 1f);
 
     sealed class Tether
     {
@@ -60,7 +74,12 @@ public partial class BlightView
         foreach (var w in gone) _wardens.Remove(w);
         foreach (var w in world.Inkwardens)
         {
-            if (!_wardens.TryGetValue(w, out var view)) _wardens[w] = view = MakeWarden(w);
+            if (!_wardens.TryGetValue(w, out var view)) _wardens[w] = view = w.Puffer ? MakeSpiky(w) : MakeWarden(w);
+            if (w.Puffer)
+            {
+                PoseSpiky(w, view);
+                continue;
+            }
             float baseY = WardenBase(w.Position);
             view.Node.Position = new Vector3(w.Position.X, baseY, w.Position.Y);
             // Its tentacles writhe slowly, each out of step; reaching out a little while it guards.
@@ -93,7 +112,7 @@ public partial class BlightView
         foreach (var t in _tethers)
         {
             var w = t.Warden;
-            var from = new Vector3(w.Position.X, WardenBase(w.Position) + 1.25f, w.Position.Y);
+            var from = w.Puffer ? new Vector3(w.Position.X, LevelMap.SwimBand + 0.2f, w.Position.Y) : new Vector3(w.Position.X, WardenBase(w.Position) + 1.25f, w.Position.Y);
             var to = new Vector3(t.To.X, LevelMap.SwimBand + 0.1f, t.To.Y);
             float fade = 1f - t.Age / TetherHold;
             const int segs = 14;
@@ -156,6 +175,71 @@ public partial class BlightView
         ring.SetInstanceShaderParameter(SN.Of("width"), 0.03f);
         AddChild(ring);
         return new WardenView { Node = node, Body = body, Ring = ring, Tentacles = tentacles, Tips = tips };
+    }
+
+    /// <summary>The spiky ring: its inflated body, its spikes, its reach's ring on the water.</summary>
+    WardenView MakeSpiky(Inkwarden w)
+    {
+        EnsureTethers();
+        var node = new Node3D();
+        AddChild(node);
+        var body = new MeshInstance3D { Mesh = _ringBody, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+        body.SetInstanceShaderParameter(SN.Of("ember"), 0.5f);
+        body.SetInstanceShaderParameter(SN.Of("ember_tint"), PufferCore);
+        body.SetInstanceShaderParameter(SN.Of("wobble"), 0.5f);
+        body.SetInstanceShaderParameter(SN.Of("seed"), w.Seed);
+        body.SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Inkwarden, 0.5f));
+        node.AddChild(body);
+        var spikes = new MeshInstance3D[WardenTuning.Spikes];
+        for (int i = 0; i < spikes.Length; i++)
+        {
+            spikes[i] = new MeshInstance3D { Mesh = _spikeMesh, MaterialOverride = _orb, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+            spikes[i].SetInstanceShaderParameter(SN.Of("ember"), 0f);
+            spikes[i].SetInstanceShaderParameter(SN.Of("wobble"), 0.1f);
+            spikes[i].SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Inkwarden, 0.8f));
+            node.AddChild(spikes[i]);
+        }
+        var ring = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Scale = new Vector3(WardenTuning.Reach, 1f, WardenTuning.Reach) };
+        ring.SetInstanceShaderParameter(SN.Of("tint"), new Color(0.22f, 0.08f, 0.35f, 0.22f));
+        ring.SetInstanceShaderParameter(SN.Of("width"), 0.03f);
+        AddChild(ring);
+        return new WardenView { Node = node, Body = body, Ring = ring, Tentacles = System.Array.Empty<MeshInstance3D>(), Tips = System.Array.Empty<MeshInstance3D>(), Spikes = spikes };
+    }
+
+    /// <summary>
+    /// The spiky ring this frame: at her plane, bobbing; spinning as the sim spins it; its spikes rolled from pointing in
+    /// (folded into its hole) over its top to pointing out; the fired ones gone; settling, the new ones growing in.
+    /// </summary>
+    void PoseSpiky(Inkwarden w, WardenView view)
+    {
+        float bob = 0.06f * Mathf.Sin(_time * 1.4f + w.Seed);
+        view.Node.Position = new Vector3(w.Position.X, LevelMap.SwimBand + bob, w.Position.Y);
+        view.Node.Rotation = new Vector3(0f, -w.Spin, 0f);
+        // Roused, it puffs up a little.
+        float puff = w.Stage is WardenStage.Rolling or WardenStage.SpinUp or WardenStage.Firing ? 1.12f : 1f;
+        view.Body.Scale = new Vector3(puff, puff * (1f + 0.04f * Mathf.Sin(_time * 3f + w.Seed)), puff);
+        float roll = w.Out;
+        float tilt = Mathf.Pi * (roll * roll * (3f - 2f * roll));
+        float grown = w.Grown;
+        int fired = w.Stage == WardenStage.Firing ? WardenTuning.Spikes - w.SpikesLeft : 0;
+        for (int i = 0; i < view.Spikes.Length; i++)
+        {
+            var spike = view.Spikes[i];
+            spike.Visible = i >= fired && grown > 0.02f;
+            if (!spike.Visible) continue;
+            float a = Mathf.Tau * i / view.Spikes.Length;
+            var d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            var t = new Vector3(-d.Z, 0f, d.X);
+            // From pointing in (−d) over the top (up) to pointing out (+d).
+            var dir = (-d * Mathf.Cos(tilt) + Vector3.Up * Mathf.Sin(tilt)).Normalized();
+            float len = grown;
+            var root = d * RingMid + dir * RingTube * 0.9f;
+            var y = dir;
+            var x = t;
+            var z = x.Cross(y).Normalized();
+            spike.Transform = new Transform3D(new Basis(x, y, z).Scaled(new Vector3(1f, len, 1f)), root + dir * SpikeLength * 0.5f * len);
+        }
+        view.Ring.Position = new Vector3(w.Position.X, LevelMap.SwimBand - 0.4f, w.Position.Y);
     }
 
     void EnsureTethers()

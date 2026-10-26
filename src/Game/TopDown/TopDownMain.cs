@@ -89,6 +89,8 @@ public partial class TopDownMain : Node3D
     bool _dbgTurn;
     /// <summary>Verification (the adventure): the vent nearest her seals two seconds in.</summary>
     bool _dbgSealVent;
+    /// <summary>Verification (the adventure): every Inkwarden is struck two seconds in (it rouses and fires its spikes).</summary>
+    bool _dbgRouse;
     bool _autoFire, _autoActive, _dbgPop, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
     /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
     string? _dbgBoss;
@@ -339,6 +341,7 @@ public partial class TopDownMain : Node3D
             else if (arg == "--dbg-murkfish") _dbgMurkFish = true;
             else if (arg == "--dbg-turn") _dbgTurn = true;
             else if (arg == "--dbg-sealvent") _dbgSealVent = true;
+            else if (arg == "--dbg-rouse") _dbgRouse = true;
             else if (arg == "--dbg-throw") _dbgThrow = true;
             else if (arg.StartsWith("--dbg-seal=") && int.TryParse(Value("--dbg-seal="), out int sealHits)) _dbgSeal = sealHits;
             else if (arg.StartsWith("--dbg-bud=")) _dbgBud = Value("--dbg-bud=");
@@ -470,7 +473,8 @@ public partial class TopDownMain : Node3D
     Task<LevelShape> Shape(LevelId id, bool background = false)
     {
         var streams = new RunStreams(_seed);
-        return Task.Run(() => LevelShape.Prepare(Abyss(TopDownGenerator.Generate(streams, id, background: background))));
+        float luck = _run?.Loadout.Stats.Luck ?? 0f;
+        return Task.Run(() => LevelShape.Prepare(Abyss(TopDownGenerator.Generate(streams, id, background: background, luck: luck))));
     }
 
     void GoToTitle()
@@ -731,7 +735,7 @@ public partial class TopDownMain : Node3D
             _seed = parsed;
         }
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var shape = LevelShape.Prepare(Abyss(TopDownGenerator.Generate(new RunStreams(_seed), _id)));
+        var shape = LevelShape.Prepare(Abyss(TopDownGenerator.Generate(new RunStreams(_seed), _id, luck: _run?.Loadout.Stats.Luck ?? 0f)));
         ShowLevel(shape, keepRun, watch.ElapsedMilliseconds);
     }
 
@@ -784,6 +788,14 @@ public partial class TopDownMain : Node3D
                     if (!_world.Clear(f.Position, 0.3f)) f.Position = spot;
                 }
                 fish.Ink = 1f;
+            }
+            // ...and a pufferfish, north of her, to be the spiky Inkwarden.
+            var puffer = _world.Fish.Where(f => !f.Freed).OrderBy(f => System.Numerics.Vector2.Distance(f.Position, her)).FirstOrDefault();
+            if (puffer is not null)
+            {
+                var at = her + new System.Numerics.Vector2(0f, -4.5f);
+                puffer.Position = _world.Clear(at, 0.8f) ? at : her + new System.Numerics.Vector2(0f, -2.5f);
+                puffer.Ink = 1f;
             }
             _dbgTurn = false;
         }
@@ -1219,6 +1231,9 @@ public partial class TopDownMain : Node3D
         float range = _bell.LightRange;
         _lantern.Update(_map, at, range);
         RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_light_at"), new Vector4(at.X, at.Y, at.Z, range));
+        // Her searchlight's beam: which way, how wide.
+        var beam = _bell.BeamDirection;
+        RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_spot"), new Vector4(beam.X, beam.Y, beam.Z, _bell.BeamCos));
         float murk = 0.5f + ReefLook.For(_id.Depth).Fog;
         RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_scatter"), OS.GetCmdlineUserArgs().Contains("--dbg-noscatter") ? 0f : 0.016f * _bell.LightEnergy / Mathf.Pow(_bell.Lantern, 1.3f) * murk * (1f - _bell.DiveTurn));
     }
@@ -1651,6 +1666,11 @@ public partial class TopDownMain : Node3D
         if (_seals.Sliding) _camera.Shake(0.22f);
         // A light spring healing her: a soft steady tremor.
         if (_world.Springs.Exists(sp => sp.Healing)) _camera.Shake(0.1f);
+        if (_dbgRouse && _world.Time >= 2f)
+        {
+            _dbgRouse = false;
+            foreach (var w in _world.Inkwardens) w.Corruption.Hit(0.5f);
+        }
         if (_dbgSealVent && _world.Time >= 2f)
         {
             _dbgSealVent = false;

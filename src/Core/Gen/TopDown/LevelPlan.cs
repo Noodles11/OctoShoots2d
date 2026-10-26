@@ -124,7 +124,8 @@ public sealed class LevelPlan
     public static float MenaceOf(LevelId id) =>
         id.Depth == Tutorial ? 0f : ((id.Cycle - 1) * (Depths - 1) + id.Depth - Tutorial - 1) / (float)(Depths - Tutorial - 1);
 
-    public static LevelPlan For(SeedCode seed, LevelId id)
+    /// <param name="luck">Her luck (LuckTuning): a chance of a clam room on a level without one, and of each ambush dropped.</param>
+    public static LevelPlan For(SeedCode seed, LevelId id, float luck = 0f)
     {
         var streams = new RunStreams(seed);
         var rng = streams.Plan(id);
@@ -160,6 +161,17 @@ public sealed class LevelPlan
         ambushes = Apply(PoiKind.Ambush, ambushes);
         // The general rule wins: a depth's first level has no shop and no shell cache.
         if (first) shops = caches = 0;
+        // Her luck: a clam room where there was none (unless the template forbids one), and ambushes dropped.
+        if (luck > 0f)
+        {
+            var lucky = streams.Luck(id);
+            if (treasures == 0 && !(template?.Forbids(PoiKind.TreasureCave) ?? false) && lucky.NextFloat() < OctoShoots.Core.Items.LuckTuning.ClamChance(luck))
+                treasures = 1;
+            int kept = 0;
+            for (int i = 0; i < ambushes; i++)
+                if (required.Contains(PoiKind.Ambush) || lucky.NextFloat() >= OctoShoots.Core.Items.LuckTuning.AmbushDrop(luck)) kept++;
+            ambushes = kept;
+        }
 
         // Over the cap: drop ambushes, then the curse den, the secret, the shell cache — what the template requires last.
         // Treasure rooms stay.

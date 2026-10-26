@@ -229,6 +229,13 @@ public partial class BlightView : Node3D
             // Pinched off, it rings as a drop does, and keeps a slow wobble as it flies.
             float jiggle = 1f + 0.3f * Mathf.Exp(-9f * age) * Mathf.Sin(30f * age) + 0.07f * Mathf.Sin(14f * age + i * 1.3f);
             view.Scale = new Vector3(s.Radius * 1.2f / Mathf.Sqrt(jiggle), s.Radius * 1.2f / Mathf.Sqrt(jiggle), s.Radius * 2.2f * jiggle);
+            // An Inkwarden's spike: a thin dark spine along its flight, no drip.
+            if (s.Spike)
+            {
+                view.Scale = new Vector3(s.Radius * 0.7f, s.Radius * 0.7f, s.Radius * 4.5f);
+                view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("drip"), 0f);
+                continue;
+            }
             if (((int)(_time * 60f) + i) % 3 == 0)
                 _droplets.Emit(view.Position, Vector3.Up * 0.2f, 0.35f, 0.16f, 0.04f, new Color(0.03f, 0.01f, 0.06f, 0.7f), new Color(0.05f, 0.02f, 0.1f, 0f), drag: 1f);
         }
@@ -428,7 +435,8 @@ public partial class BlightView : Node3D
             case PlaneEventType.WardenFreed:
                 // Freed: its ink pops off it, showering out violet and evaporating, and a healthy anemone is left.
                 Pop(at, 0.8f, Kin.Inkwarden);
-                LeaveFreedAnemone(e.Position);
+                // (The adventure's Inkwarden was a pufferfish: it swims off as one, PufferlingView.)
+                if (_lastWorld?.Options.Adventure != true) LeaveFreedAnemone(e.Position);
                 break;
             case PlaneEventType.ThumpLeap:
                 // It springs off: a puff of ink where it stood.

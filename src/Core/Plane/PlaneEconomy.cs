@@ -172,9 +172,12 @@ public sealed partial class PlaneWorld
             else shell.Velocity = Vector2.Zero;
             if (Vector2.Distance(shell.Position, p.Position) > Radius + PlaneEconomyTuning.ShellReach) continue;
             shell.Taken = true;
-            Run.Shells += shell.Value;
-            Stats.ShellsCollected += shell.Value;
-            Events.Add(new PlaneEvent(PlaneEventType.ShellCollected, shell.Position, Vector2.Zero));
+            // Her luck: now and then a shell counts twice (a second one flies to her counter).
+            float lucky = OctoShoots.Core.Items.LuckTuning.ShellChance(Run.Loadout.Stats.Luck);
+            int value = shell.Value + (lucky > 0f && _drops.NextFloat() < lucky ? 1 : 0);
+            Run.Shells += value;
+            Stats.ShellsCollected += value;
+            for (int i = 0; i < value; i++) Events.Add(new PlaneEvent(PlaneEventType.ShellCollected, shell.Position, Vector2.Zero));
         }
         Shells.RemoveAll(s => s.Taken);
 

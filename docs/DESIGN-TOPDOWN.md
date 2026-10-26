@@ -69,31 +69,36 @@ What changes is the protagonist's skin:
 ## 2. The Player — Clementine the Absorbent Jellyfish
 
 ### 2.1 Body
-- **Bell**: translucent tangerine dome, ~1.1 m across, with a scalloped
-  margin of sixteen lappets. Seen through it: four large gold gonad horseshoes,
-  set well apart round the stomach, the ring canal, warts of stinging cells, and eight rim
-  organs in the margin's notches; no radial canals, and none of her strands show
-  through it (they appear only once out past its rim). Breathing rhythm at rest; every stroke is a
-  contraction beat (quick squeeze, slow relax, a slight recoil flare) with a
-  light wave running base→rim. The bell leans into the swim on a critically
-  damped spring.
-- **Tentacles**: a moon jelly's fringe — about 140 fine hairs all round the
-  margin, short (0.08–0.15 m) and nearly invisible, an accent — and her one
-  **oral arm**: a long thick ribbon (1.5 m, growing 0.15 m with every skill
-  point she spends, at most 4 m) like withered lace — twisted about two and a
-  half turns along its length (the twist drifting slowly), a faint pale blade,
-  its margins crinkled, torn and pierced with holes in a faded kelp tone, almost
-  see-through; down its middle a thin wandering core alive with current, a
-  bright impulse shooting down it from the bell to the tip every couple of
-  seconds; all on **verlet chains** with a fixed 120 Hz step:
+- **Bell**: a dome of living glass, ~1.1 m across, with a scalloped margin of
+  sixteen lappets — nearly clear: only a faint warm light at its heart and its
+  edge catching the light. What glows is hers: the four gonad horseshoes
+  (bioluminescent lines, clear inside, set well apart, a soft halo round each),
+  the rim (a bright line round the margin, eight rim organs in its notches) and
+  a scatter of tiny twinkling specks — static, never a gauge in the adventure
+  (§2.5).
+  She casts her light from inside her bell, out of its opening (§5.3). It always beats a little (a slow pulse at rest,
+  quicker and deeper with speed), a light wave running base→rim on every
+  contraction. Swimming, she tips almost onto her side, apex first (about 70°
+  at her cruise), on a critically damped spring.
+- **Strands**, as a moon jelly's: a fringe of about 140 fine hairs round the
+  margin, short (0.08–0.15 m) and nearly invisible; four **oral arms** from
+  round her mouth, one between each pair of gonads — long ribbons of thin cloth
+  (their lengths about her arm's: 3.2 m, 0.2 m more for every skill point she
+  spends, at most 6 m — always longer than the fibres), twisting freely, nearly see-through, their ruffled
+  margins glowing, a faint current down their middles with a brighter impulse
+  now and then; and eight long **fibre tentacles** (1.8–2.6 m) from the margin,
+  hair-thin like optical fibres, beads of light running down them to a tip
+  twinkling in random colours, as an optical fibre's. All on **verlet chains** with a fixed 120 Hz step:
   they stream behind her in travelling S-waves while she swims, swing through
   turns, are pushed back by each stroke, and float out around her in a slow
   current when she stops. Drawn as camera-facing ribbons, always over the
-  scene (never cut away), hidden only under her bell. Presentation only — but
-  in the adventure the sim keeps her oral arm too, as a line along the way she
-  swam, and it stings the corrupted creatures it brushes (docs/ADVENTURE.md §6).
-- **Bioluminescence**: a soft point light carried at the bell; the player's glow
-  is the primary light source in dark depths (inherited rule: *Clementine is
+  scene (never cut away); under her bell they show faintly, through its glass.
+  Presentation only — but in the adventure the sim keeps her oral arm too, as a
+  line along the way she swam, and it stings the corrupted creatures it brushes
+  (docs/ADVENTURE.md §6).
+- **Bioluminescence**: a searchlight from her bell (§5.3) and a faint glow
+  round the bell itself; the player's light is the primary light source in dark
+  depths (inherited rule: *Clementine is
   always the warm light in the scene*).
 - **The Absorbent:** one of her kind. A pearl swallowed is a skill absorbed —
   the bell dissolves it into light and keeps the pattern forever (§2.4).
@@ -179,6 +184,8 @@ What changes is the protagonist's skin:
   jelly +30%).
 
 #### Diegetic vitals — the gonad rings and the bell rim
+In the adventure (docs/ADVENTURE.md §6) these gauges are on the HUD's gonad gauge instead, and her gonads and rim are
+only hers — always whole and lit, never a gauge. Without it:
 Clementine's body carries her two most important gauges; there is no HP bar and
 no active-item slot on the HUD (only a quiet echo of her health on the minimap's
 bezel, §9). Each uses a different part of her anatomy and a
@@ -891,11 +898,17 @@ stream only — never touches gameplay physics. Quality presets inherited.
 Every light that matters reaches only where it can: the reef is a heightfield, so visibility is worked out on it
 exactly and cheaply, and the water glows where light passes through it.
 
-- **Her lantern** (BellView): a shadowed point light inside her bell (soft shadows from a light the size of her heart;
-  her own bell and strands cast none). Its strength follows the depth's **Lantern** (`ReefLook.Lantern`, §5.1): 1 in the
-  Shallows, 1.1 Kelp, 1.35 Galleon, 1.5 Carnival, 1.85 Trench, 2 Abyss, 0.6 Tank; the light is 2.6 × Lantern^1.8 strong,
-  reaches 11 m × √Lantern (× Lantern Pearl's glow) and falls off more gently the deeper she is, so in the Trench and the
-  Abyss she lights the canyon floor, walls, kelp and creatures round her and they throw shadows away from her.
+- **Her lantern** (BellView): a **searchlight**, as a helicopter's: a shadowed spot light from her bell (soft shadows
+  from a light the size of her heart; her own bell and strands cast none), a focused beam (17° half-angle) she casts
+  from inside her bell out of its opening — always the way the inside of her bell points: down at rest, and streaming
+  out behind her as she swims, tipped apex first — toned down, a soft warm beam rather than a floodlight. A faint short glow round the bell (3 m) keeps what swims right beside her from going black. Its
+  strength follows the depth's **Lantern** (`ReefLook.Lantern`, §5.1): 1 in the Shallows, 1.1 Kelp, 1.35 Galleon,
+  1.5 Carnival, 1.85 Trench, 2 Abyss, 0.6 Tank; the beam is 3.4 × Lantern^1.8 strong, reaches 26 m × √Lantern (× Lantern
+  Pearl's glow, so it gets down into an abyss reef) and falls off more gently the deeper she is. The light-field
+  shaders share its cone (`her_spot`: its direction and the cosine of its half-angle): her pool and her glow in the
+  water keep inside it (a little glow round the bell aside), the **beam** itself glows down through the water along
+  every view ray that crosses it (14 samples evenly along the ray, cut by what shades it), and the **spot** it throws
+  on the reef is lit through the murk however deep it lies.
 - **Where her light reaches — the horizon map** (`HorizonMap.cs`): round her light, for 256 directions × 32 distances
   (out to its reach), the running steepest slope of the terrain (its height over the light ÷ the distance). A point is
   lit exactly when its own slope from the light clears that; one texture lookup (`her_vis`), soft at the edge. Redone
