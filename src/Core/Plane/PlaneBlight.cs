@@ -217,6 +217,8 @@ public sealed class Murkling
     /// <summary>The ink it is drinking while it buds (null once drunk, or for one that drinks nothing), and the ink it is made of (field units, freed when it bursts).</summary>
     public InkDraw? Draw;
     public float Matter;
+    /// <summary>Metres swum since it last left a dot of ink behind (the adventure's trails).</summary>
+    public float Trail;
     /// <summary>How far it senses her (and fish), and how far it throws.</summary>
     public float Sense => Prime ? BlightTuning.Sense * BlightTuning.PrimeReach : BlightTuning.Sense;
     public float ThrowRange => Prime ? BlightTuning.ThrowRange * BlightTuning.PrimeReach : BlightTuning.ThrowRange;
@@ -310,7 +312,9 @@ public sealed partial class PlaneWorld
     void PlaceCorruption()
     {
         _blightRng = new Rng(Map.Seed ^ 0xB1167UL ^ ((ulong)Map.Level << 22) ^ ((ulong)Map.Depth << 30) ^ ((ulong)Map.Attempt << 46));
-        var field = Corruption = CorruptionField.ForMap(Map);
+        // The adventure's ink is in the water (InkDots), not on the ground: its field starts clean.
+        var field = Corruption = Options.Adventure ? new CorruptionField() : CorruptionField.ForMap(Map);
+        if (Options.Adventure) return;
         // The tutorial's open rift has no arena to cleanse: its Crack is open from the start.
         if (Map.HasBoss && !Map.Rift)
         {
@@ -405,9 +409,14 @@ public sealed partial class PlaneWorld
         // Her light cleanses the ground beneath her (Lantern Pearl's glow reaches farther).
         float glow = Run.Loadout.Stats[Stat.Glow];
         field.Cleanse(p.Position, CorruptionTuning.HerRadius * (0.8f + 0.2f * glow), CorruptionTuning.HerRate * Dt);
+        LightDots(p.Position, CorruptionTuning.HerRadius * (0.8f + 0.2f * glow), CorruptionTuning.HerRate * Dt);
         // Her bubbles cleanse a burst where they pop, wider for a bigger bubble.
         foreach (var (at, bubbles, dim) in _pops)
-            field.Cleanse(at, MathF.Min(CorruptionTuning.PopRadius + CorruptionTuning.PopPerBubble * bubbles, CorruptionTuning.PopMax), CorruptionTuning.PopStrength * dim);
+        {
+            float popReach = MathF.Min(CorruptionTuning.PopRadius + CorruptionTuning.PopPerBubble * bubbles, CorruptionTuning.PopMax);
+            field.Cleanse(at, popReach, CorruptionTuning.PopStrength * dim);
+            LightDots(at, popReach, CorruptionTuning.PopStrength * dim * AdventureTuning.PopBite);
+        }
 
         StepBlightroots(field);
         StepBlotters(field);
@@ -465,7 +474,11 @@ public sealed partial class PlaneWorld
     void BurstOnCorruption(Vector2 at, float reach, float light, bool cleanse = true)
     {
         if (Corruption is not { } field) return;
-        if (cleanse) field.Cleanse(at, reach, 0.9f);
+        if (cleanse)
+        {
+            field.Cleanse(at, reach, 0.9f);
+            LightDots(at, reach, 0.9f * AdventureTuning.BurstBite);
+        }
         // Over a copy of each list: freeing one may change them.
         foreach (var m in Murklings.ToArray())
         {
@@ -866,7 +879,8 @@ public sealed partial class PlaneWorld
                 if (s.Fall >= BlightTuning.ThrowFallSeconds)
                 {
                     s.Life = 0f;
-                    Corruption?.Spread(s.Position, s.Stain, BlightTuning.ThrowStainInk, 1f);
+                    if (Dots is { } dots) dots.Add(InkDots.CellOf(s.Position));
+                    else Corruption?.Spread(s.Position, s.Stain, BlightTuning.ThrowStainInk, 1f);
                     Events.Add(new PlaneEvent(PlaneEventType.MurkShotLanded, s.Position, Vector2.Zero, s.Stain));
                 }
                 continue;

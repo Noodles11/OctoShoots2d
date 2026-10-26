@@ -202,6 +202,8 @@ public sealed class PlaneShot
     public object? Struck;
     /// <summary>It has struck a secret's seal (a bubble that bounces off counts once).</summary>
     public bool SealStruck;
+    /// <summary>It has struck a vent's mouth already (once a bubble).</summary>
+    public bool VentStruck;
     /// <summary>A pufferling's needle: fast, and it pops any bubble it meets (flying on).</summary>
     public bool Needle;
     public int PearlHp;
@@ -415,14 +417,17 @@ public sealed partial class PlaneWorld
         // Clementine's shots, toward her aim while fire is held, shaped by her pearls. Firefly Squid pours them out as
         // one continuous surge instead (PlaneSurge.cs).
         bool aimed = p.Aim.LengthSquared() > 0.5f;
+        // The adventure: her inner light run out, she cannot shoot until it is back.
+        bool fire = input.Fire && LightReady;
+        int shotsFrom = Events.Count;
         // String of Pearls (Sardine Run + Pearl Diver): no holding to charge — the stream fires as Sardine Run's does,
         // and each shot is a pearl charged as far as the stream has spun up.
         bool pearlStream = Run.Loadout.Has("string_of_pearls");
-        if (Run.Loadout.Flags.Contains("surge")) StepSurge(input.Fire && aimed);
+        if (Run.Loadout.Flags.Contains("surge")) StepSurge(fire && aimed);
         else if (Run.Loadout.Shot.Charge && !pearlStream)
         {
             // Pearl Diver: held, the next throw charges; let go, it flies.
-            if (input.Fire && aimed)
+            if (fire && aimed)
             {
                 if (p.ShotTimer <= 0f)
                 {
@@ -445,9 +450,9 @@ public sealed partial class PlaneWorld
             p.Charge = 0f;
             // Sardine Run: the stream spins up while she holds fire, and down when she lets go.
             if (Run.Loadout.Flags.Contains("minigun"))
-                p.Spin = input.Fire && aimed ? MathF.Min(1f, p.Spin + Dt / PlaneCombatTuning.SpinUp) : MathF.Max(0f, p.Spin - Dt / PlaneCombatTuning.SpinDown);
+                p.Spin = fire && aimed ? MathF.Min(1f, p.Spin + Dt / PlaneCombatTuning.SpinUp) : MathF.Max(0f, p.Spin - Dt / PlaneCombatTuning.SpinDown);
             else p.Spin = 0f;
-            if (input.Fire && p.ShotTimer <= 0f && aimed)
+            if (fire && p.ShotTimer <= 0f && aimed)
             {
                 p.ShotTimer = ShotInterval;
                 // Just short of a full charge: the full-charge pearl's own tricks (Pearl Necklace, Depth Charge) stay
@@ -456,7 +461,11 @@ public sealed partial class PlaneWorld
                 Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
             }
         }
-        p.WasFiring = input.Fire;
+        p.WasFiring = fire;
+        // Each volley spends her inner light (a surge, while it pours).
+        if (Run.Loadout.Flags.Contains("surge") && fire && aimed) SpendLight(AdventureTuning.SurgeCost * Dt);
+        for (int i = shotsFrom; i < Events.Count; i++)
+            if (Events[i].Type == PlaneEventType.Shot) SpendLight(AdventureTuning.ShotCost);
 
         // Pearls: touching one begins the absorbing ritual (one at a time); it plays round her as she swims on, and
         // the pearl is hers when its light bursts.
@@ -484,7 +493,13 @@ public sealed partial class PlaneWorld
 
         foreach (var shot in Shots)
         {
-            if (shot.FromPlayer) StepHerShot(shot);
+            if (shot.FromPlayer)
+            {
+                var was = shot.Position;
+                StepHerShot(shot);
+                // Her light clears the ink dots it flies through (they float at her plane), all along its way.
+                if (Dots is not null) ClearAlong(was, shot.Position, shot.Radius);
+            }
             else
             {
                 // The royal pearl homes on her.
@@ -757,7 +772,8 @@ public sealed partial class PlaneWorld
             // Wave shots all fly along the aim, weaving out of phase; the rest fan out (a cone spreads wider).
             float spread = spec.Pattern == ShotPattern.Cone ? spec.SpreadDeg * 1.6f : spec.SpreadDeg;
             Vector2 dir = spec.Wave || count == 1 ? aim : Rotate(aim, (i - (count - 1) * 0.5f) * spread * MathUtil.Deg2Rad);
-            Vector2 at = p.Position + dir * (Radius + 0.2f);
+            // It leaves from a little inside her bell's rim, as if born in it.
+            Vector2 at = p.Position + dir * (Radius * 0.6f);
             float hover = _bubbleRng.Range(PlaneCombatTuning.BubbleHoverMin, PlaneCombatTuning.BubbleHoverMax) * Run.Loadout.Stats[Stat.BubbleHover];
             var shot = new PlaneShot
             {
@@ -1063,6 +1079,8 @@ public sealed partial class PlaneWorld
                 shot.SealStruck = true;
                 StrikeSeal(next);
             }
+            // ...and a vent's mouth adds its light to the vent.
+            if (shot.FromPlayer && !shot.VentStruck && Vents.Count > 0 && StrikeVent(next)) shot.VentStruck = true;
             // A returning boomerang passes back over what it cleared.
             if (!(shot.Boomerang && shot.Returning))
             {

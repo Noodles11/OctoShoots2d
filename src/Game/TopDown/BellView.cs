@@ -7,8 +7,9 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// Clementine (THEME-BIBLE §5.1, DESIGN-TOPDOWN §2.1), presentation only: the sim's position, nothing more.
-/// A translucent tangerine bell (clementine_bell.gdshader) with sixteen thin marginal tentacles and eight ruffled oral
-/// arms on verlet chains (clementine_trail.gdshader). Every stroke is a contraction beat — quick squeeze, slow relax,
+/// A translucent tangerine bell (clementine_bell.gdshader) with sixteen short, faint marginal tentacles and her oral
+/// arms — long, thick ribbons with ruffled, kelp-coated margins, as a moon jelly's, one for each shot she throws at
+/// once — on verlet chains (clementine_trail.gdshader). Every stroke is a contraction beat — quick squeeze, slow relax,
 /// a little recoil — paced by her speed; a jet or dash starts one at once. The bell leans into the swim on a soft
 /// spring, the strands trail behind and swing through turns, and when she stops they float out around her while she
 /// bobs. A hit flushes her magenta and whips the tentacles out; the ink dash turns her into a dark ghost.
@@ -17,7 +18,9 @@ namespace OctoShoots.Game.TopDown;
 public partial class BellView : Node3D
 {
     const float BellRadius = 0.42f, BellHeight = 0.3f;
-    const int Tentacles = 16, OralArms = 8;
+    const int Tentacles = 16;
+    /// <summary>Her oral arms: as many as the shots she throws at once (her loadout's multishot).</summary>
+    int _arms;
     /// <summary>The strands' fixed step: steady motion at any frame rate.</summary>
     const float Step = 1f / 120f;
     /// <summary>Her glow in the water (HerColor: derived from her body colour).</summary>
@@ -128,22 +131,7 @@ public partial class BellView : Node3D
         _strandMesh = new ImmediateMesh();
         // The strands live in world space: they trail where she has been, not where she is.
         AddChild(new MeshInstance3D { Mesh = _strandMesh, TopLevel = true, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 8f });
-        for (int k = 0; k < OralArms; k++)
-        {
-            float a = k * Mathf.Tau / OralArms + 0.2f;
-            _strands.Add(new Strand
-            {
-                Arm = true,
-                Angle = a,
-                Length = 1.05f + 0.3f * Hash(k + 40),
-                RootWidth = 0.13f,
-                TipWidth = 0.05f,
-                Stiffness = 4f,
-                Rest = new Vector3(Mathf.Cos(a) * 0.6f, -1f, Mathf.Sin(a) * 0.6f).Normalized(),
-                Pos = new Vector3[10],
-                Prev = new Vector3[10],
-            });
-        }
+        SetArms(1);
         for (int k = 0; k < Tentacles; k++)
         {
             // One in each notch of the scalloped margin.
@@ -151,13 +139,13 @@ public partial class BellView : Node3D
             _strands.Add(new Strand
             {
                 Angle = a,
-                Length = 1.35f + 0.6f * Hash(k),
-                RootWidth = 0.075f,
-                TipWidth = 0.028f,
+                Length = 0.7f + 0.3f * Hash(k),
+                RootWidth = 0.07f,
+                TipWidth = 0.026f,
                 Stiffness = 2.2f,
                 Rest = new Vector3(Mathf.Cos(a), -0.45f, Mathf.Sin(a)).Normalized(),
-                Pos = new Vector3[16],
-                Prev = new Vector3[16],
+                Pos = new Vector3[11],
+                Prev = new Vector3[11],
             });
         }
 
@@ -263,6 +251,7 @@ public partial class BellView : Node3D
         _time += dt;
         float h = Mathf.Min(dt, 0.05f);
         var p = world.Player;
+        SetArms(System.Math.Max(1, world.Run.Loadout.Shot.Multishot));
         // A new level's body: its jet, dash and hurt timers start from zero, which must not read as a stroke or a hit.
         if (!ReferenceEquals(p, _drawnFor))
         {
@@ -561,6 +550,35 @@ public partial class BellView : Node3D
 
     // ───────────────────────── the strands ─────────────────────────
 
+    /// <summary>
+    /// Her oral arms, as many as the shots she throws at once: long, thick ribbons hanging from round her mouth, spread
+    /// evenly round it (one hangs a little to the side, so it trails clear of the bell). New ones are laid out at rest.
+    /// </summary>
+    void SetArms(int count)
+    {
+        count = Mathf.Clamp(count, 1, 8);
+        if (count == _arms) return;
+        _arms = count;
+        _strands.RemoveAll(s => s.Arm);
+        for (int k = 0; k < count; k++)
+        {
+            float a = k * Mathf.Tau / count + 0.6f;
+            _strands.Insert(k, new Strand
+            {
+                Arm = true,
+                Angle = a,
+                Length = 1.5f + 0.25f * Hash(k + 40),
+                RootWidth = 0.26f,
+                TipWidth = 0.1f,
+                Stiffness = 3f,
+                Rest = new Vector3(Mathf.Cos(a) * 0.5f, -1f, Mathf.Sin(a) * 0.5f).Normalized(),
+                Pos = new Vector3[16],
+                Prev = new Vector3[16],
+            });
+        }
+        _strandsReady = false;
+    }
+
     Vector3 AnchorOf(Strand s, Transform3D body) => body * (s.Arm
         ? new Vector3(Mathf.Cos(s.Angle) * 0.08f, 0.12f + 0.05f * _pulse, Mathf.Sin(s.Angle) * 0.08f)
         : MarginAt(s.Angle, _pulse));
@@ -658,21 +676,30 @@ public partial class BellView : Node3D
     /// <summary>Each strand as a ribbon turned to face the camera, oral arms first so the tentacles lie over them.</summary>
     void DrawStrands(Vector3 eye)
     {
+        // Under her bell the strands are hidden (only where they come out past its rim do they show).
+        var bell = _body.GlobalTransform;
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("bell_centre"), bell.Origin);
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("bell_radius"), BellRadius * bell.Basis.Scale.X);
         _strandMesh.ClearSurfaces();
         _strandMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _strandMaterial);
         foreach (var s in _strands)
         {
             int count = s.Pos.Length;
-            var color = new Color(1f, 1f, 1f, s.Arm ? 0.9f : 1f);
+            // The tentacles faint threads (70%), the arms nearly opaque.
+            var color = new Color(1f, 1f, 1f, s.Arm ? 0.95f : 0.7f);
             var kind = new Vector2(s.Arm ? 1f : 0f, 0f);
             Vector3 lastL = default, lastR = default;
+            float turn = 0f;
             for (int i = 0; i < count; i++)
             {
                 float f = (float)i / (count - 1);
+                // An oral arm twists along its length (about one and a half turns, drifting slowly): the ribbon narrows
+                // as it turns edge-on and widens again face-on.
+                turn = s.Arm ? Mathf.Abs(Mathf.Cos(f * Mathf.Pi * 3f + _time * 0.5f + s.Angle * 2f)) : 1f;
                 Vector3 tangent = s.Pos[Mathf.Min(i + 1, count - 1)] - s.Pos[Mathf.Max(i - 1, 0)];
                 Vector3 side = tangent.Cross(eye - s.Pos[i]);
                 side = side.LengthSquared() > 1e-10f ? side.Normalized() : Vector3.Right;
-                float width = Mathf.Lerp(s.RootWidth, s.TipWidth, f);
+                float width = Mathf.Lerp(s.RootWidth, s.TipWidth, f) * (s.Arm ? 0.3f + 0.7f * turn : 1f);
                 Vector3 l = s.Pos[i] - side * width * 0.5f, r = s.Pos[i] + side * width * 0.5f;
                 if (i > 0)
                 {
@@ -690,7 +717,8 @@ public partial class BellView : Node3D
 
             void Vertex(Vector3 at, float along, float across)
             {
-                _strandMesh.SurfaceSetColor(color);
+                // (Red carries how face-on the twist is there: the shader shades the turned-away part.)
+                _strandMesh.SurfaceSetColor(new Color(turn, color.G, color.B, color.A));
                 _strandMesh.SurfaceSetUV(new Vector2(along, across));
                 _strandMesh.SurfaceSetUV2(kind);
                 _strandMesh.SurfaceAddVertex(at);

@@ -16,7 +16,10 @@ public partial class MagicParticles : Node3D
         public Vector3 Position, Velocity;
         public float Life, MaxLife, Size, Angle, Spin, Gravity, Drag;
         public Color Color;
-        public bool Star;
+        /// <summary>Its drawing: 0 "+", 1 "*", 2–5 the ink's brackets "(", ")", "[", "]".</summary>
+        public int Shape;
+        /// <summary>No pop in or out: full size its whole life (a hop).</summary>
+        public bool Steady;
     }
 
     readonly Particle[] _particles;
@@ -69,7 +72,32 @@ public partial class MagicParticles : Node3D
             Angle = RandRange(0f, Mathf.Tau),
             Spin = RandRange(4f, 9f) * (_random.NextDouble() < 0.5 ? -1f : 1f),
             Color = _random.NextDouble() < 0.5 ? White : Ecru,
-            Star = _random.NextDouble() < 0.55,
+            Shape = _random.NextDouble() < 0.55 ? 1 : 0,
+        };
+    }
+
+    /// <summary>The ink's violet.</summary>
+    public static readonly Color Violet = new(0.42f, 0.16f, 0.72f), DeepViolet = new(0.26f, 0.08f, 0.48f), BrightViolet = new(0.78f, 0.5f, 1f);
+
+    /// <summary>The ink's dark counterpart of a magic particle: a violet bracket — "(", ")", "[" or "]" — popping in and twirling slowly.</summary>
+    /// <param name="popOut">False: no swell at its end, only a quick fade (a hop that carries on as the next).</param>
+    public void EmitBracket(Vector3 at, Vector3 velocity, float life, float size, float gravity = 0f, float drag = 2.5f, bool popOut = true, Color? color = null)
+    {
+        if (_count >= _particles.Length) return;
+        _particles[_count++] = new Particle
+        {
+            Position = at,
+            Velocity = velocity,
+            Life = life,
+            MaxLife = life,
+            Size = size,
+            Drag = drag,
+            Gravity = gravity,
+            Steady = !popOut,
+            Angle = RandRange(-0.6f, 0.6f),
+            Spin = RandRange(1f, 3f) * (_random.NextDouble() < 0.5 ? -1f : 1f),
+            Color = color ?? (_random.NextDouble() < 0.5 ? Violet : DeepViolet),
+            Shape = 2 + _random.Next(4),
         };
     }
 
@@ -95,7 +123,8 @@ public partial class MagicParticles : Node3D
             s.Angle += s.Spin * dt * (1f - 0.6f * t);
             // Popping in with an overshoot; holding; then the pop — a quick swell as it fades out.
             float scale, alpha = 1f;
-            if (t < 0.18f)
+            if (s.Steady) scale = 1f;
+            else if (t < 0.18f)
             {
                 float u = t / 0.18f;
                 scale = 1f + 0.35f * Mathf.Sin(u * Mathf.Pi) - (1f - u) * (1f - u);
@@ -111,7 +140,7 @@ public partial class MagicParticles : Node3D
             var basis = cameraBasis * new Basis(Vector3.Back, s.Angle);
             _multimesh.SetInstanceTransform(i, new Transform3D(basis.Scaled(new Vector3(size, size, size)), s.Position));
             _multimesh.SetInstanceColor(i, s.Color with { A = alpha });
-            _multimesh.SetInstanceCustomData(i, new Color(s.Star ? 1f : 0f, 0f, 0f, 0f));
+            _multimesh.SetInstanceCustomData(i, new Color(s.Shape, 0f, 0f, 0f));
             i++;
         }
         _multimesh.VisibleInstanceCount = _count;

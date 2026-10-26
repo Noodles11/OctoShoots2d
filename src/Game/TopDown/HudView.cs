@@ -19,6 +19,12 @@ namespace OctoShoots.Game.TopDown;
 /// follows. The run's clock shows only with its setting on (ShowClock), small and faint at the top left.
 /// Everything is laid out on a 1080-line screen and scaled with the window (TopDownMain's HUD root).
 /// Her health and her active pearl's charge are not here: they are on her bell (BellView, DESIGN-TOPDOWN §2.5).
+/// <para>
+/// The adventure (docs/ADVENTURE.md §6) adds the gonad gauge, top left: her emblem's four horseshoes, one stat each —
+/// health, inner light, experience (her level inside it), the active pearl's charge — the active pearl itself in the
+/// middle (an empty socket without one) and her shells under it (once she has any; the counter moves there). Top
+/// centre, a dot per vent: dark while it pours, gold once sealed.
+/// </para>
 /// </summary>
 public partial class HudView : Control
 {
@@ -57,6 +63,23 @@ public partial class HudView : Control
     const float FlightTime = 0.55f;
     int _side = 1;
 
+    // ───────────────────────── the adventure's gonad gauge ─────────────────────────
+
+    bool _adventure;
+    float _health = 1f, _healthShown = 1f, _light = 1f, _xpShare, _charge = 1f, _hurt;
+    bool _lightOut, _xpFull, _shellsSeen;
+    int _xpLevel = 1;
+    ItemDef? _active;
+    /// <summary>The level's vents: sealed or not, in order.</summary>
+    readonly List<bool> _vents = new();
+    MeshInstance3D _pearl = null!;
+    float _time;
+    /// <summary>The gauge's middle, the horseshoes' distance from it, their radius and stroke; the pearl's and the shell's sizes.</summary>
+    static readonly Vector2 GaugeAt = new(Margin + 92f, Margin + 92f);
+    const float LobeOut = 58f, LobeRadius = 22f, LobeWidth = 8f, PearlSize = 32f, GaugeShell = 20f;
+    /// <summary>A horseshoe's gap toward the middle (half-angle, radians: as on her bell and the crosshair).</summary>
+    const float LobeGap = 0.99f;
+
     public override void _Ready()
     {
         MouseFilter = MouseFilterEnum.Ignore;
@@ -83,6 +106,8 @@ public partial class HudView : Control
             },
         });
         _counterShell = ShellMesh();
+        _pearl = new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 32, Rings = 16 }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
+        _shellView.AddChild(_pearl);
     }
 
     MeshInstance3D ShellMesh()
@@ -134,7 +159,7 @@ public partial class HudView : Control
         var ts = font.GetStringSize(_banner, HorizontalAlignment.Left, -1, fs);
         var size = new Vector2(ts.X + 56f, 36f);
         // It drops in a short way to its place (never across the title or the boss's bar).
-        float rest = Margin + (_bossShown > 0.01f ? 50f : _titleShown > 0.01f ? 76f : 6f), hidden = rest - 22f;
+        float rest = Margin + (_bossShown > 0.01f ? 50f : _titleShown > 0.01f ? 76f : 6f) + (_adventure && _vents.Count > 0 ? 20f : 0f), hidden = rest - 22f;
         float stay = _banners.Count > 0 ? BannerStayQueued : BannerStay;
         float y, a;
         if (_bannerAge < BannerIn)
@@ -194,7 +219,7 @@ public partial class HudView : Control
     {
         if (_titleShown <= 0.01f) return;
         float a = _titleShown;
-        float drift = (1f - a) * -6f;
+        float drift = (1f - a) * -6f + (_adventure && _vents.Count > 0 ? 18f : 0f);
         var ss = font.GetStringSize(_subtitle, HorizontalAlignment.Left, -1, 17);
         Outlined(font, new Vector2((Size.X - ss.X) * 0.5f, Margin + 20f + drift), _subtitle, 17, new Color(1f, 0.9f, 0.75f, 0.85f * a), a);
         var ts = font.GetStringSize(_title, HorizontalAlignment.Left, -1, 34);
@@ -241,6 +266,27 @@ public partial class HudView : Control
         }
         _run = world.Run;
         _shells = world.Run.Shells;
+        _time += dt;
+        _adventure = world.Options.Adventure;
+        if (_adventure)
+        {
+            float max = Mathf.Max(world.Run.MaxHp, 1f);
+            float health = Mathf.Clamp(world.Player.Hp / max, 0f, 1f);
+            if (health < _health - 1e-4f) _hurt = 1f;
+            _health = health;
+            _healthShown = Mathf.MoveToward(_healthShown, _health, dt * 0.8f);
+            _hurt = Mathf.MoveToward(_hurt, 0f, dt * 2.5f);
+            _light = world.Player.Light;
+            _lightOut = world.Player.LightOut;
+            _xpFull = world.Run.Points > 0;
+            _xpShare = _xpFull ? 1f : Mathf.Clamp(world.Run.Xp / (float)Mathf.Max(world.Run.XpNeeded, 1), 0f, 1f);
+            _xpLevel = world.Run.XpLevel;
+            _active = world.Run.Active?.Active is not null ? world.Run.Active : null;
+            _charge = _active is null ? 0f : world.Run.ActiveCharge;
+            if (_shells > 0) _shellsSeen = true;
+            _vents.Clear();
+            foreach (var v in world.Vents) _vents.Add(v.Sealed);
+        }
         _titleAge += dt;
         _titleShown = _titleAge < TitleIn ? _titleAge / TitleIn : _titleAge < TitleIn + TitleStay ? 1f : Mathf.Max(0f, 1f - (_titleAge - TitleIn - TitleStay) / TitleOut);
         _pulse = Mathf.MoveToward(_pulse, 0f, dt * 2.5f);
@@ -295,20 +341,34 @@ public partial class HudView : Control
         if (_shellView is null) return;
         _shellCamera.Size = Mathf.Max(Size.Y, 1f);
         float k2 = _pulse * _pulse;
-        PlaceShell(_counterShell, ShellIcon, CounterSize * (1f + 0.3f * k2), CounterLie);
+        float counter = _adventure ? GaugeShell : CounterSize;
+        // The adventure's counter shows only once she has a shell (or one is on its way).
+        _counterShell.Visible = !_adventure || _shellsSeen || _flights.Count > 0;
+        PlaceShell(_counterShell, ShellIcon, counter * (1f + 0.3f * k2), CounterLie);
+        // The active pearl in the gauge's middle, turning slowly.
+        _pearl.Visible = _adventure && _active is not null;
+        if (_pearl.Visible)
+        {
+            _pearl.MaterialOverride = OctoShoots.Game.Fx.PearlMaterials.Get(_active!);
+            float ready = _charge >= 1f ? 1f + 0.06f * Mathf.Sin(_time * 5f) : 0.92f;
+            PlaceShell(_pearl, PearlAt, PearlSize * ready, new Quaternion(Vector3.Up, _time * 0.6f) * new Quaternion(Vector3.Right, 0.4f));
+        }
         foreach (var f in _flights)
         {
             float e = FlightEase(f.T);
             float pop = Mathf.Clamp(f.T / 0.1f, 0f, 1f);
-            float size = Mathf.Lerp(f.Size, CounterSize * 0.85f, e) * (1f + 0.25f * Mathf.Sin(Mathf.Pi * pop));
+            float size = Mathf.Lerp(f.Size, (_adventure ? GaugeShell : CounterSize) * 0.85f, e) * (1f + 0.25f * Mathf.Sin(Mathf.Pi * pop));
             var tumble = new Quaternion(new Vector3(0.3f, 1f, 0.2f).Normalized(), Mathf.Tau * e * f.Side);
             var lie = f.Lie.Slerp(CounterLie, e * e * (3f - 2f * e)) * tumble;
             PlaceShell(f.Mesh, FlightAt(f.From, f.Side, e), size, lie.Normalized());
         }
     }
 
-    /// <summary>The middle of the counter's shell icon.</summary>
-    Vector2 ShellIcon => new(Margin + 12f, Size.Y - Margin - 22f);
+    /// <summary>The middle of the counter's shell icon (in the adventure, in the gauge under the pearl).</summary>
+    Vector2 ShellIcon => _adventure ? GaugeAt + new Vector2(0f, 50f) : new(Margin + 12f, Size.Y - Margin - 22f);
+
+    /// <summary>The active pearl's place in the gauge.</summary>
+    static Vector2 PearlAt => GaugeAt;
 
     /// <summary>Where a flight is at progress e (0 → 1): a quadratic arc from its start to the counter, bowed to one side.</summary>
     Vector2 FlightAt(Vector2 from, float side, float e)
@@ -324,6 +384,98 @@ public partial class HudView : Control
     /// <summary>A flight's progress along its arc: it leaps off, then speeds in to the counter.</summary>
     static float FlightEase(float t) => t * t * (3f - 2f * t) * 0.6f + t * t * 0.4f;
 
+    /// <summary>
+    /// The gonad gauge: four horseshoes at the quarters, open toward the middle, each filling along its arc — health
+    /// (top left), inner light (top right), experience (bottom right, her level inside), the active pearl's charge
+    /// (bottom left, in the pearl's own colour); the pearl's socket in the middle; her shells under it.
+    /// </summary>
+    void DrawGauge(Font font)
+    {
+        var c = GaugeAt;
+        // A soft shade behind it, so it reads on bright sand.
+        DrawCircle(c, LobeOut + LobeRadius + 8f, new Color(0f, 0f, 0f, 0.16f));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 4f);
+        var pearlColor = _active is not null ? OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active) : new Color(0.6f, 0.6f, 0.65f);
+        // Health: warm light; what she has lost is ink, flashing violet on a hit.
+        Lobe(c, 3, _healthShown, new Color(1f, 0.88f, 0.62f), new Color(0.05f, 0.02f, 0.08f, 0.9f), _hurt);
+        // Inner light: pale cyan; spent out, it dims and flickers until it is back.
+        var lightColor = _lightOut ? new Color(0.45f, 0.55f, 0.65f, 0.6f + 0.3f * pulse) : new Color(0.72f, 0.96f, 1f);
+        Lobe(c, 0, _light, lightColor, new Color(0f, 0f, 0f, 0.55f), 0f);
+        // Experience: gold, pulsing full with a point to spend; her level inside it.
+        Lobe(c, 1, _xpShare, _xpFull ? new Color(1f, 0.85f, 0.45f).Lerp(Colors.White, 0.4f * pulse) : new Color(1f, 0.75f, 0.3f), new Color(0f, 0f, 0f, 0.55f), _xpFull ? 0.4f * pulse : 0f);
+        var lv = _xpLevel.ToString();
+        var ls = font.GetStringSize(lv, HorizontalAlignment.Left, -1, 15);
+        Outlined(font, LobeCentre(c, 1) - new Vector2(ls.X * 0.5f, -5f), lv, 15, new Color(1f, 0.9f, 0.7f, 0.95f));
+        // The active pearl's charge, in its colour: bright and breathing when ready.
+        bool ready = _active is not null && _charge >= 1f;
+        Lobe(c, 2, _charge, ready ? pearlColor.Lerp(Colors.White, 0.3f * pulse) : pearlColor * 0.85f, new Color(0f, 0f, 0f, 0.55f), ready ? 0.3f * pulse : 0f);
+        // The socket: the pearl (drawn over this in 3D) sits in it; without one, an empty ring.
+        DrawCircle(PearlAt, PearlSize * 0.62f, new Color(0f, 0f, 0f, 0.35f));
+        DrawArc(PearlAt, PearlSize * 0.62f, 0f, Mathf.Tau, 40, new Color(1f, 0.95f, 0.85f, _active is null ? 0.55f : 0.25f), 1.5f, true);
+        if (ready) DrawCircle(PearlAt, PearlSize * (0.7f + 0.1f * pulse), pearlColor with { A = 0.18f });
+        // Her shells under it (the shell itself is drawn in 3D over this).
+        if (_shellsSeen || _flights.Count > 0)
+        {
+            float k2 = _pulse * _pulse;
+            var at = ShellIcon;
+            if (k2 > 0.01f) DrawCircle(at, 14f * (1f + 0.35f * k2), new Color(1f, 0.8f, 0.55f, 0.4f * k2));
+            if (_ring > 0.01f) DrawArc(at, 12f * (1.3f + 2.2f * (1f - _ring)), 0f, Mathf.Tau, 40, new Color(1f, 0.92f, 0.7f, 0.8f * _ring * _ring), 2.5f * _ring + 0.5f, true);
+            string count = Mathf.Max(_shells - _flights.Count, 0).ToString();
+            int fs = (int)(17f * (1f + 0.3f * k2));
+            var cs = font.GetStringSize(count, HorizontalAlignment.Left, -1, fs);
+            Outlined(font, at + new Vector2(-cs.X * 0.5f, 28f + 2f * k2), count, fs, new Color(1f, 0.9f, 0.8f).Lerp(new Color(1f, 1f, 0.75f), k2));
+        }
+    }
+
+    /// <summary>A horseshoe's middle: at a quarter (0 top right, then clockwise), out from the gauge's middle.</summary>
+    static Vector2 LobeCentre(Vector2 c, int quarter)
+    {
+        float a = -Mathf.Pi * 0.25f + quarter * Mathf.Pi * 0.5f;
+        return c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * LobeOut;
+    }
+
+    /// <summary>One horseshoe: its dark track, then its fill along the arc (from one horn round to the other), a flash over it.</summary>
+    void Lobe(Vector2 c, int quarter, float share, Color fill, Color track, float flash)
+    {
+        var at = LobeCentre(c, quarter);
+        float toMiddle = (c - at).Angle();
+        float from = toMiddle + LobeGap, span = Mathf.Tau - 2f * LobeGap;
+        DrawArc(at, LobeRadius, from, from + span, 48, new Color(0f, 0f, 0f, 0.6f), LobeWidth + 3f, true);
+        DrawArc(at, LobeRadius, from, from + span, 48, track, LobeWidth, true);
+        share = Mathf.Clamp(share, 0f, 1f);
+        if (share > 0.002f)
+        {
+            int points = Mathf.Max(4, (int)(48 * share));
+            DrawArc(at, LobeRadius, from, from + span * share, points, fill, LobeWidth, true);
+            // A lighter lip along its outer edge, as a painted stroke catches the light.
+            DrawArc(at, LobeRadius + LobeWidth * 0.28f, from, from + span * share, points, Colors.White with { A = 0.22f * fill.A }, LobeWidth * 0.22f, true);
+        }
+        if (flash > 0.01f) DrawArc(at, LobeRadius, from, from + span, 48, new Color(0.8f, 0.55f, 1f, 0.7f * flash), LobeWidth + 4f, true);
+    }
+
+    /// <summary>The vents, top centre: a dot each, dark with a violet glint while it pours, gold once sealed.</summary>
+    void DrawVents()
+    {
+        if (_vents.Count == 0) return;
+        const float gap = 22f, r = 6.5f;
+        float x0 = Size.X * 0.5f - (_vents.Count - 1) * gap * 0.5f;
+        for (int i = 0; i < _vents.Count; i++)
+        {
+            var at = new Vector2(x0 + i * gap, Margin + 6f);
+            DrawCircle(at, r + 2.5f, new Color(0f, 0f, 0f, 0.5f));
+            if (_vents[i])
+            {
+                DrawCircle(at, r, new Color(1f, 0.82f, 0.42f));
+                DrawCircle(at + new Vector2(-1.5f, -1.5f), r * 0.35f, new Color(1f, 1f, 0.9f, 0.9f));
+            }
+            else
+            {
+                DrawCircle(at, r, new Color(0.06f, 0.02f, 0.1f));
+                DrawArc(at, r - 1f, 0f, Mathf.Tau, 20, new Color(0.55f, 0.25f, 0.95f, 0.6f + 0.3f * Mathf.Sin(_time * 3f + i)), 1.6f, true);
+            }
+        }
+    }
+
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
@@ -334,7 +486,8 @@ public partial class HudView : Control
 
         DrawTitle(font);
         // The run's clock, with its setting on: small and faint, top left.
-        if (ShowClock) Outlined(font, new Vector2(Margin, Margin + 16f), Clock(Elapsed), 16, new Color(1f, 1f, 1f, 0.7f));
+        if (ShowClock) Outlined(font, _adventure ? new Vector2(Margin, GaugeAt.Y + 108f) : new Vector2(Margin, Margin + 16f), Clock(Elapsed), 16, new Color(1f, 1f, 1f, 0.7f));
+        if (_adventure) DrawVents();
 
         // The boss's health, top centre.
         if (_bossShown > 0.01f)
@@ -367,8 +520,10 @@ public partial class HudView : Control
             DrawRect(new Rect2(b + new Vector2(bw * 0.5f - 1f, -2f), new Vector2(2f, bh + 4f)), new Color(0f, 0f, 0f, 0.7f * a));
         }
 
+        if (_adventure) DrawGauge(font);
         // Shells, bottom left (her pearls circle her bell instead: PearlOrbitView): brightens and swells with each one
         // collected.
+        else
         {
             float k2 = _pulse * _pulse;
             var c = ShellIcon;

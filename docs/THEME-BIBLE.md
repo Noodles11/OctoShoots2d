@@ -85,7 +85,7 @@ Corrupted creatures carry the tank from Depth 1 (neon GloFish colours, gravel, p
 
 ### 5.1 Body language (fixed)
 
-- Bell: translucent dome ~0.8 m across, slow breathing contract/relax cycle; eight oral arms plus marginal tentacles trailing beneath as verlet chains. Drawn floating 0.7 m above the swim plane.
+- Bell: translucent dome ~0.8 m across, slow breathing contract/relax cycle; short, faint marginal tentacles and her oral arms — one for each shot she throws at once, long thick ribbons as a moon jelly's, twisted, their ruffled margins coated like kelp — trailing beneath as verlet chains. Drawn floating 0.7 m above the swim plane.
 - Pulse propulsion: every move is a contraction beat with recoil — the signature lurch-then-glide. Input overrides pulse timing within 0.1 s (responsive first). First stroke from rest: a 1.8× jet over 0.38 s; sharp turns (>110°) re-trigger it.
 - Idle drift: no input → she slows, the bell relaxes, tentacles float up around her, and she bobs gently (~1 m) on the plane. The game should be beautiful to stop playing for a moment.
 - Ink dash: yes, a jellyfish inks — the Leak changed her, and the Sea-pedia entry says so. 3.4× speed, 0.32 s untouchable, a slowing ink cloud where she was. The dash is the Leak’s gift turned against it: the only mechanic where Clementine uses the corruption’s own medium.

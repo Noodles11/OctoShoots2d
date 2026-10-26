@@ -25,6 +25,13 @@ uniform float line_px = 2.4;            // the fineliner's width
 uniform float band_px = 14.0;           // the hatching band's depth into the rock
 uniform bool hatching = true;
 uniform bool use_fog = false;
+// The Tab map cut out of its square: the level's own outline — its water and the rock just round it, seen or not (the
+// unseen under fog as ever) — its edges fading softly into a dimming of the game behind (`backdrop` its darkness);
+// the solid rock past it is gone.
+uniform bool cutout = false;
+uniform float rock_keep = 2.5;
+uniform float rock_fade = 3.0;
+uniform float backdrop = 0.72;
 uniform sampler2D fog : filter_linear;
 const vec3 FOG = vec3(0.16, 0.19, 0.21);
 
@@ -124,7 +131,7 @@ float iso(float f, float px) {
 void fragment() {
 	vec2 w = view_origin + UV * view_size;
 	if (w.x < 0.0 || w.y < 0.0 || w.x > samples - 1.0 || w.y > samples - 1.0) {
-		COLOR = vec4(use_fog ? FOG : OUTSIDE, 1.0);
+		COLOR = cutout ? vec4(0.0, 0.0, 0.0, backdrop) : vec4(use_fog ? FOG : OUTSIDE, 1.0);
 	} else {
 		vec3 fld = field_at(w);
 		float h = fld.x;
@@ -156,6 +163,11 @@ void fragment() {
 			col = mix(col, SHORE, edge);
 		}
 		if (use_fog) col = mix(FOG, col, smoothstep(0.0, 1.0, texture(fog, (w + 0.5) / samples).r));
-		COLOR = vec4(col, 1.0);
+		if (cutout) {
+			// Water, or rock near it: drawn; its edges soft, a little ragged, as a chart torn from its sheet.
+			float keep = rock_keep + rock_fade * (0.35 * vnoise(w * 0.3) - 0.1);
+			float near = 1.0 - smoothstep(keep, keep + rock_fade, fld.y);
+			COLOR = mix(vec4(0.0, 0.0, 0.0, backdrop), vec4(col, 1.0), near);
+		} else COLOR = vec4(col, 1.0);
 	}
 }

@@ -35,6 +35,8 @@ public partial class BlightView : Node3D
     /// <summary>The swells in the water (WaterSwells): a Blightroot's head coming down shoves the water out in rings.</summary>
     public OctoShoots.Game.Fx.WaterSwells? Swells { get; set; }
     readonly SphereMesh _sphere = new() { Radius = 1f, Height = 2f, RadialSegments = 24, Rings = 12 };
+    /// <summary>A finer sphere for a spiked murkling (its spikes need the vertices).</summary>
+    readonly SphereMesh _spikySphere = new() { Radius = 1f, Height = 2f, RadialSegments = 64, Rings = 32 };
     readonly QuadMesh _quad = new() { Size = new Vector2(2f, 2f), Orientation = PlaneMesh.OrientationEnum.Y };
     FxParticles _motes = null!, _droplets = null!;
     LevelMap? _map;
@@ -178,6 +180,14 @@ public partial class BlightView : Node3D
                 }
             }
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("aim"), new Vector3(m.Aim.X, 0f, m.Aim.Y));
+            // The adventure's kinds: a spiked one (a blue tang), a tadpole (a clownfish) with its tail out behind.
+            bool adventure = world.Options.Adventure && m.Fish is not null;
+            bool spiked = adventure && m.Fish!.Kind == ReefFishKind.BlueTang, tadpole = adventure && m.Fish!.Kind == ReefFishKind.Clownfish;
+            view.Mesh = spiked ? _spikySphere : _sphere;
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("spikes"), spiked ? 1f : 0f);
+            view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("tadpole"), tadpole && !m.Clinging ? 1f : 0f);
+            if (m.Velocity.LengthSquared() > 0.04f)
+                view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("swim"), new Vector3(m.Velocity.X, 0f, m.Velocity.Y).Normalized());
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("pull"), pull);
             view.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("bud"), bud);
             view.Position = new Vector3(m.Position.X, y, m.Position.Y);
@@ -462,7 +472,7 @@ public partial class BlightView : Node3D
     /// <summary>A reef fish's colour, for the ember a lesser murkling carries and the burst when it is freed.</summary>
     static Color FishEmber(ReefFishKind kind) => kind switch
     {
-        ReefFishKind.Chromis => new Color(0.3f, 0.95f, 0.85f, 1f),
+        ReefFishKind.Chromis => new Color(0.82f, 0.88f, 1f, 1f),
         ReefFishKind.Clownfish => new Color(1f, 0.5f, 0.15f, 1f),
         _ => new Color(0.3f, 0.55f, 1f, 1f),
     };

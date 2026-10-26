@@ -64,6 +64,9 @@ public sealed class PlaneAnemone
 {
     public Vector2 Position;
     public float Scale = 1f;
+    /// <summary>The adventure: its gauge of ink (0..1); turned into an Inkwarden; freed (it cannot turn again this level).</summary>
+    public float Ink;
+    public bool Turned, Freed;
 }
 
 /// <summary>A school's centre: it roams the channels, and its fish swim round it.</summary>
@@ -91,6 +94,8 @@ public sealed class PlaneReefFish : PlaneSwimmer
     /// <summary>Struck and turning (seconds left), a lesser murkling now (out of the reef until freed), freed once.</summary>
     public float Turning;
     public bool Corrupted, Freed;
+    /// <summary>The adventure: its gauge of ink, 0..1 (full, it turns).</summary>
+    public float Ink;
     /// <summary>Healthy, out in the water: one a murkling may hunt (a clownfish tucked in its anemone is safe).</summary>
     public bool Huntable => !Corrupted && !Freed && Turning <= 0f && !(Kind == ReefFishKind.Clownfish && Hiding);
     /// <summary>A startled chromis darting off (seconds left), and which way.</summary>
@@ -136,6 +141,14 @@ public sealed partial class PlaneWorld
         var n = ReefFishTuning.ForDepth(Map.Depth);
         // The level's template may bring more fish (its fish rule).
         float more = Map.Template?.Rules.Fish is > 0f and var f ? f : 1f;
+        // The adventure's reef teems with them: the Shallows' numbers at every depth, three times over, in smaller schools.
+        if (Options.Adventure)
+        {
+            n = ReefFishTuning.ForDepth(1);
+            n.SizeMin = AdventureTuning.SchoolMin;
+            n.SizeMax = AdventureTuning.SchoolMax;
+            more *= AdventureTuning.FishMore;
+        }
         int More(int count) => (int)MathF.Round(count * more);
         int ids = 0;
         var exit = Map.Exit;
@@ -152,15 +165,23 @@ public sealed partial class PlaneWorld
 
         // Anemones on the seabed at the foot of the rock, a pair or trio of clownfish in each.
         int want = More(n.AnemoneMin + rng.Int(n.AnemoneMax - n.AnemoneMin + 1));
-        foreach (var anchor in anchors)
+        // An abyss reef has no seabed: its anemones grow only on the reef shelves along its walls.
+        var hosts = anchors;
+        if (Map.Abyss)
+        {
+            hosts = new List<Vector2>(Map.Shelves);
+            Shuffle(hosts, rng);
+        }
+        foreach (var anchor in hosts)
         {
             if (Anemones.Count >= want) break;
             for (int t = 0; t < 12; t++)
             {
-                float a = rng.Range(0f, MathF.Tau), d = rng.Range(2f, 7f);
+                float a = rng.Range(0f, MathF.Tau), d = Map.Abyss ? (t == 0 ? 0f : rng.Range(0.3f, 1.2f)) : rng.Range(2f, 7f);
                 var q = anchor + new Vector2(MathF.Cos(a), MathF.Sin(a)) * d;
                 // Open round it, with rock close by.
                 if (!Allowed(q) || !Clear(q, ReefFishTuning.ClownRange) || Clear(q, ReefFishTuning.ClownRange + 2.5f)) continue;
+                if (Map.Abyss && Map.HeightAt(q) < AbyssReef.ShelfDepth - 0.5f) continue;
                 if (Anemones.Any(o => Vector2.Distance(o.Position, q) < 12f)) continue;
                 Anemones.Add(new PlaneAnemone { Position = q, Scale = rng.Range(0.95f, 1.3f) });
                 int host = Anemones.Count - 1, size = 2 + rng.Int(2);

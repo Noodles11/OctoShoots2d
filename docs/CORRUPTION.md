@@ -1,5 +1,10 @@
 # The corruption war
 
+The adventure (`PlaneOptions.Adventure`, the game's default) replaces most of this: its ink is dots in the water poured
+by vents, its creatures are the reef's fish turned, and most of the war's creatures are switched off. See
+[ADVENTURE.md](ADVENTURE.md). What follows is the war as it runs with the adventure off (and the parts the adventure
+keeps: corruption meters, her light's holes, Inkwardens, lesser murklings' cling).
+
 How Ink Deep's corruption, its enemies and the boss arena are built. The design brief is "Corruption & Combat:
 Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruption.cs` (the field, its tuning and
 `PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, murklings, the arena). The

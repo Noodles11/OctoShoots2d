@@ -38,6 +38,8 @@ public sealed class Inkwarden
     public Vector2 Knock;
     public Vector2 Position, Velocity, Target;
     public bool Alive = true, Roams;
+    /// <summary>The adventure: the anemone it was (index into the world's anemones), -1 for none.</summary>
+    public int Anemone = -1;
     public float Seed, LookTimer;
     public CorruptionMeter Corruption = new(WardenTuning.Meter, WardenTuning.Regen, WardenTuning.Delay);
 }
@@ -228,6 +230,14 @@ public sealed partial class PlaneWorld
     {
         w.Alive = false;
         Stats.MobsDefeated++;
+        if (w.Anemone >= 0)
+        {
+            // An anemone again, that cannot turn again this level.
+            var an = Anemones[w.Anemone];
+            an.Turned = false;
+            an.Freed = true;
+            an.Ink = 0f;
+        }
         Corruption?.Cleanse(w.Position, WardenTuning.BurstRadius, 1f);
         int shells = WardenTuning.ShellsMin + _drops.Int(WardenTuning.ShellsMax - WardenTuning.ShellsMin + 1);
         for (int i = 0; i < shells; i++) Shells.Add(new PlaneShell { Position = w.Position, Velocity = Fling(2f, 4f) });

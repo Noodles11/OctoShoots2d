@@ -78,6 +78,11 @@ public sealed partial class PlaneWorld
         }
         if (struck is null) return false;
         Events.Add(new PlaneEvent(PlaneEventType.FishStruck, s.Position, SafeNormalize(s.Velocity)));
+        if (Options.Adventure)
+        {
+            InkFish(s, struck);
+            return true;
+        }
         float chance = MurkFishTuning.ChanceAt(Menace);
         foreach (var f in ReefFish)
         {
@@ -111,10 +116,13 @@ public sealed partial class PlaneWorld
         f.Turning = 0f;
         f.Corrupted = true;
         var (radius, meter, drain) = MurkFishTuning.Of(f.Kind);
+        if (Options.Adventure)
+            radius = f.Kind switch { ReefFishKind.Chromis => AdventureTuning.ShoalRadius, ReefFishKind.Clownfish => AdventureTuning.TadpoleRadius, _ => AdventureTuning.SpikedRadius };
         var m = new Murkling
         {
             Position = f.Position, Velocity = f.Velocity, Bud = 0f, Fish = f, Radius = radius, Body = radius, ClingDrain = drain,
             Swarm = f.Kind == ReefFishKind.Chromis ? f.Host : -1, Seed = _blightRng.Range(0f, 100f),
+            ThrowTimer = BlightTuning.ThrowEvery * _blightRng.Range(0.5f, 1f),
         };
         m.Corruption.Regen *= 1f + 0.5f * Menace;
         m.Corruption.Max = m.Corruption.Value = meter * (1f + BlightTuning.MeterPerMenace * Menace);
@@ -142,6 +150,11 @@ public sealed partial class PlaneWorld
     /// </summary>
     void StepLesser(Murkling m)
     {
+        if (Options.Adventure)
+        {
+            StepAdventureMurkling(m);
+            return;
+        }
         var p = Player;
         float speed = (BlightTuning.MurkSpeed + BlightTuning.MurkSpeedPerMenace * Menace) * MurkFishTuning.Speed;
         Vector2 centre = m.Position, apart = Vector2.Zero;

@@ -44,6 +44,8 @@ public partial class ReefFishView : Node3D
     readonly ShaderMaterial[] _materials = new ShaderMaterial[3];
     ShaderMaterial _anemone = null!;
     Mesh _anemoneMesh = null!;
+    /// <summary>Each anemone's own MultiMesh and where it stands (the adventure hides one while it is an Inkwarden).</summary>
+    readonly List<(MultiMesh Mesh, Transform3D At)> _anemones = new();
     readonly List<Group> _groups = new();
     readonly List<Node> _nodes = new();
     readonly List<Pose> _poses = new();
@@ -86,6 +88,7 @@ public partial class ReefFishView : Node3D
         _map = world.Map;
         foreach (var node in _nodes) node.QueueFree();
         _nodes.Clear();
+        _anemones.Clear();
         _groups.Clear();
         _poses.Clear();
         var index = new Dictionary<(ReefFishKind, int), int>();
@@ -112,7 +115,9 @@ public partial class ReefFishView : Node3D
             float floor = world.Map.HeightAt(a.Position);
             var basis = new Basis(Vector3.Up, i * 2.4f).Scaled(Vector3.One * a.Scale);
             var mm = Add(_anemoneMesh, _anemone, 1, shadow: true);
-            mm.SetInstanceTransform(0, new Transform3D(basis, new Vector3(a.Position.X, floor, a.Position.Y)));
+            var place = new Transform3D(basis, new Vector3(a.Position.X, floor, a.Position.Y));
+            mm.SetInstanceTransform(0, place);
+            _anemones.Add((mm, place));
             var c = AnemoneColours[i % AnemoneColours.Length];
             mm.SetInstanceCustomData(0, new Color(c.R, c.G, c.B, 0f));
             // Where its clownfish nestle: among the tentacles, a little under their tips.
@@ -123,6 +128,9 @@ public partial class ReefFishView : Node3D
     public void Sync(PlaneWorld world, float dt)
     {
         if (_map is null || _poses.Count != world.ReefFish.Count) return;
+        // An anemone turned (an Inkwarden now, BlightView draws it) is gone from its shelf until it is freed.
+        for (int i = 0; i < _anemones.Count && i < world.Anemones.Count; i++)
+            _anemones[i].Mesh.SetInstanceTransform(0, world.Anemones[i].Turned ? new Transform3D(Basis.Identity.Scaled(Vector3.Zero), _anemones[i].At.Origin) : _anemones[i].At);
         foreach (var g in _groups)
         {
             g.Min = Vector3.Inf;

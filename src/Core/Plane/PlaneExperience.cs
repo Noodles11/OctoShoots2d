@@ -102,6 +102,7 @@ public sealed partial class PlaneWorld
         foreach (var e in Events)
         {
             if (e.Type == PlaneEventType.FishFreed) gained += ExperienceTuning.FishXp;
+            else if (e.Type == PlaneEventType.VentSealed) gained += AdventureTuning.VentXp;
             else if (e.Type == PlaneEventType.BossFreed) gained += ExperienceTuning.BossXp;
             else if (e.Type == PlaneEventType.PlayerHit) hurt = true;
         }

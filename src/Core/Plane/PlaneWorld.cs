@@ -54,6 +54,9 @@ public sealed class PlaneBody
     public bool WasFiring;
     /// <summary>Bubble Shield: untouchable inside it while this counts down.</summary>
     public float ShieldTimer;
+    /// <summary>Her inner light (the adventure's stamina), 0..1; seconds since she last spent it; run out (until it is back to LightResume).</summary>
+    public float Light = 1f, LightRest;
+    public bool LightOut;
 
     public bool IsDashing => DashTimer > 0f;
 }
@@ -75,7 +78,9 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     CurseEndReached, CurseLaugh, CurseCleared, FountainSpout, Cavitation, Necklace, SchoolPoints,
     BattleBegan, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
-    XpGained, LevelUp }
+    XpGained, LevelUp,
+    /// <summary>The adventure: an ink dot cleared by her light or eaten by a fish; a vent lit (Size: its glow) or sealed (Size: vents still open); the way down opened; an anemone turned (Size: its scale); her inner light run out.</summary>
+    DotCleared, DotEaten, VentLit, VentSealed, ExitOpened, AnemoneTurned, LightOut }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run; saved by number, so Gloomvine stays though nothing deals it now).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse }
@@ -118,15 +123,17 @@ public sealed partial class PlaneWorld
         PlaceFish();
         PlaceReefFish();
         PlacePearls();
+        bool adventure = Options.Adventure;
         PlaceCurse();
         PlaceShop();
         PlaceShells();
-        PlaceAmbushes();
-        PlaceBoss();
+        if (!adventure) PlaceAmbushes();
+        if (!adventure) PlaceBoss();
         if (Options.Vases) PlaceVases();
-        PlaceSprings();
+        if (!adventure) PlaceSprings();
         PlaceSeals();
-        if (Options.Corruption) PlaceCorruption();
+        if (Options.Corruption || adventure) PlaceCorruption();
+        if (adventure) PlaceAdventure();
         PlaceExperience();
     }
 
@@ -177,8 +184,9 @@ public sealed partial class PlaneWorld
         p.DashInvulnerableTimer -= Dt;
 
         // Ink dash (DESIGN-2D §30): a burst that coasts, untouchable for a moment, leaving a slowing cloud.
-        if (input.Dash && p.DashCooldownTimer <= 0f)
+        if (input.Dash && p.DashCooldownTimer <= 0f && LightReady)
         {
+            SpendLight(AdventureTuning.DashCost);
             Vector2 dir = hasInput ? wishDir : p.Aim;
             p.DashTimer = t.DashCoast;
             p.DashInvulnerableTimer = t.DashInvulnerable;
@@ -248,6 +256,7 @@ public sealed partial class PlaneWorld
         StepBoss();
         StepCombat(input);
         StepCorruption();
+        if (Options.Adventure) StepAdventure();
         StepKnocks();
         StepSprings();
         StepFish();

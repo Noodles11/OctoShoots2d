@@ -30,6 +30,13 @@ public partial class TopoMap : Control
     public System.Numerics.Vector2 Player;
     public System.Numerics.Vector2 PlayerHeading = new(0f, -1f);
     public bool ShowLegend;
+    /// <summary>
+    /// The Tab map: cut out of its square along the level's outline (its water and the rock just round it, seen or not;
+    /// soft edges, over a dimming of the game), framed to fit that outline (<see cref="Frame"/>), its title (Title,
+    /// Subtitle) over it.
+    /// </summary>
+    public bool Cutout;
+    public string Title = "", Subtitle = "";
     /// <summary>With the legend (the Tab map): where the run stands, and its clock, at the top left.</summary>
     public string Caption = "", Clock = "";
     /// <summary>Dashed routes, arch symbols, area outlines (the rift's arena, cave chambers), peak crosses and spot heights — the minimap leaves them out.</summary>
@@ -72,6 +79,17 @@ public partial class TopoMap : Control
     {
         _map = map;
         const int N = LevelMap.Samples;
+        // The outline's box: all its open water.
+        var lo = new System.Numerics.Vector2(float.MaxValue);
+        var hi = new System.Numerics.Vector2(float.MinValue);
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+            if (map[x, y] <= LevelMap.BlockHeight)
+            {
+                lo = System.Numerics.Vector2.Min(lo, new System.Numerics.Vector2(x, y));
+                hi = System.Numerics.Vector2.Max(hi, new System.Numerics.Vector2(x, y));
+            }
+        _outline = lo.X <= hi.X ? (lo, hi) : (System.Numerics.Vector2.Zero, new System.Numerics.Vector2(LevelMap.Size));
         var shown = new float[N * N];
         for (int y = 0; y < N; y++)
         for (int x = 0; x < N; x++)
@@ -173,6 +191,7 @@ public partial class TopoMap : Control
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("line_px"), ppm > 3f ? 2.8f : 2.2f);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("band_px"), ppm > 4f ? Mathf.Clamp(ppm * 3.2f, 14f, 26f) : 16f);
         _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("use_fog"), Fog is not null);
+        _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("cutout"), Cutout);
         if (Fog is not null) _terrain.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fog"), Fog.Texture);
         QueueRedraw();
     }
@@ -281,6 +300,48 @@ public partial class TopoMap : Control
             DrawLegend(font);
             DrawCaption(font);
         }
+        if (Cutout) DrawTitle(font);
+    }
+
+    /// <summary>The Tab map's title, top centre: the template's name large, the depth and level small over it, the clock under it.</summary>
+    void DrawTitle(Font font)
+    {
+        void Line(string text, float y, int size, Color color)
+        {
+            if (text.Length == 0) return;
+            var ts = font.GetStringSize(text, HorizontalAlignment.Left, -1, size);
+            var at = new Vector2((Size.X - ts.X) * 0.5f, y);
+            DrawStringOutline(font, at, text, HorizontalAlignment.Left, -1, size, Mathf.Max(4, size / 4), new Color(0f, 0f, 0f, 0.7f));
+            DrawString(font, at, text, HorizontalAlignment.Left, -1, size, color);
+        }
+        Line(Subtitle, 60f, 18, new Color(1f, 0.9f, 0.75f, 0.9f));
+        Line(Title, 100f, 34, new Color(1f, 0.96f, 0.9f));
+        Line(Clock, 128f, 15, new Color(1f, 1f, 1f, 0.6f));
+    }
+
+    /// <summary>The Tab map's room for its title at the top (pixels).</summary>
+    public const float TitleRoom = 145f;
+    (System.Numerics.Vector2 Min, System.Numerics.Vector2 Max) _outline = (System.Numerics.Vector2.Zero, new System.Numerics.Vector2(LevelMap.Size));
+
+    /// <summary>
+    /// Fits the chart to the screen: this rect, framing the level's outline (its open water, a margin round it) as large
+    /// as it will go under the title.
+    /// </summary>
+    public void Frame(Rect2 screen)
+    {
+        Position = screen.Position;
+        Size = screen.Size;
+        var (min, max) = _outline;
+        const float margin = 8f;
+        min -= new System.Numerics.Vector2(margin);
+        max += new System.Numerics.Vector2(margin);
+        var span = max - min;
+        float room = Mathf.Max(Size.Y - TitleRoom - 30f, 50f);
+        float ppm = Mathf.Min((Size.X - 60f) / span.X, room / span.Y);
+        MetresAcross = Size.X / ppm;
+        // Its middle under the title's room.
+        var mid = (min + max) * 0.5f;
+        Center = mid - new System.Numerics.Vector2(0f, (TitleRoom - 30f) * 0.5f / ppm);
     }
 
     /// <summary>

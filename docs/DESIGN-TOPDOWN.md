@@ -32,6 +32,7 @@
 | Occlusion | Canopy layer (arch bodies, cave roofs, tunnel roofs, overhangs) **fades** as Clementine comes near and while she is underneath: she is always seen (§3, §4.5). |
 | Lighting | **The core visual pillar.** Atmospheric, volumetric, per-depth darkening (§5). |
 | Engine | **Godot 4 / C# retained** — plane-locked rework of the existing stack (§11). |
+| Adventure | **Vents, ink dots, fish that turn** (the game's default): the reef is poisoned from vents in its walls; the ink spreads as dots through the water and turns the fish; sealing every vent opens the way down; no seabed outside caves (docs/ADVENTURE.md). |
 | Story | **"Ink Deep" lore inherited** (DESIGN-2D §1): the Leak, the Crack, corrupted-not-killed creatures, the Tank, The Hand. Clementine, the one-of-her-kind absorbent jellyfish, dives after her bloom (§1). |
 
 ---
@@ -69,14 +70,21 @@ What changes is the protagonist's skin:
 
 ### 2.1 Body
 - **Bell**: translucent tangerine dome, ~0.84 m across, with a scalloped
-  margin of sixteen lappets. Seen through it: four gold gonad horseshoes round
-  the stomach, radial and ring canals, warts of stinging cells, and eight rim
-  organs in the margin's notches. Breathing rhythm at rest; every stroke is a
+  margin of sixteen lappets. Seen through it: four large gold gonad horseshoes
+  round the stomach, the ring canal, warts of stinging cells, and eight rim
+  organs in the margin's notches; no radial canals, and none of her strands show
+  through it (they appear only once out past its rim). Breathing rhythm at rest; every stroke is a
   contraction beat (quick squeeze, slow relax, a slight recoil flare) with a
   light wave running base→rim. The bell leans into the swim on a critically
   damped spring.
-- **Tentacles**: sixteen thin marginal tentacles (one per notch, 1.35–1.95 m)
-  and eight ruffled oral arms on **verlet chains** with a fixed 120 Hz step:
+- **Tentacles**: sixteen short, faint marginal tentacles (one per notch,
+  0.7–1 m, at 70% opacity) and her **oral arms** — one for each shot she throws
+  at once (her multishot: one with no pearl, three with Triple Tentacle) — long
+  (1.5–1.75 m), thick ribbons as a moon jelly's, each twisted about one and a
+  half turns along its length (the twist drifting slowly): a translucent blade
+  in her colour with a bright rib, its margins folded into crinkled ruffles coated
+  olive-gold like kelp, flecked with stinging cells; all on **verlet chains**
+  with a fixed 120 Hz step:
   they stream behind her in travelling S-waves while she swims, swing through
   turns, are pushed back by each stroke, and float out around her in a slow
   current when she stops. Drawn as camera-facing ribbons, always over the
@@ -110,7 +118,7 @@ What changes is the protagonist's skin:
 - **LMB** releases a bubble; hold for auto-fire at the fire-rate stat; hold-long
   for charge items (Pearl Diver, Sunbeam).
 - **Bubbles are ammunition**: each bubble rests as a **glowing orb beneath the
-  bell**, orbiting slowly between the oral arms — visible diegetic ammo. Base
+  bell**, orbiting slowly round her oral arms — visible diegetic ammo. Base
   8; they **regrow** one per 0.35 s starting 0.6 s after the last shot (inherited
   timings, DESIGN-3D §4.1). Items modify capacity/regrowth/multithrow exactly as
   in the 3D doc (Bubble Gland, Anemone Pump, Twin Siphon).

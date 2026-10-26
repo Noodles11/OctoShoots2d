@@ -140,7 +140,11 @@ public partial class TitleMain : Node3D
         _camera.SetReducedMotion(_view.ReducedMotion);
 
         var streams = new RunStreams(SeedCode.Parse(BackdropSeed));
-        _backdrop = Task.Run(() => LevelShape.Prepare(TopDownGenerator.Generate(streams, LevelId.First)));
+        _backdrop = Task.Run(() =>
+        {
+            var map = TopDownGenerator.Generate(streams, LevelId.First);
+            return LevelShape.Prepare(PlaneOptions.Default.Adventure ? AbyssReef.Apply(map) : map);
+        });
 
         BuildUi();
     }

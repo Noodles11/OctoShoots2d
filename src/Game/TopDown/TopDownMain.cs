@@ -85,6 +85,10 @@ public partial class TopDownMain : Node3D
     bool _introShown;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
+    /// <summary>Verification (the adventure): a blue tang, a clownfish and a school brought round her, full of ink, so all three murklings show.</summary>
+    bool _dbgTurn;
+    /// <summary>Verification (the adventure): the vent nearest her seals two seconds in.</summary>
+    bool _dbgSealVent;
     bool _autoFire, _autoActive, _dbgPop, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
     /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
     string? _dbgBoss;
@@ -166,6 +170,7 @@ public partial class TopDownMain : Node3D
     // The corruption (docs/CORRUPTION.md): its shards and creatures, the live texture, and the shards being laid out.
     CorruptionView _corruption = null!;
     BlightView _blight = null!;
+    AdventureView _adventure = null!;
     readonly OctoShoots.Game.Fx.WaterSwells _swells = new();
     SpringView _springs = null!;
     InkVapour _vapour = null!;
@@ -273,6 +278,8 @@ public partial class TopDownMain : Node3D
         AddChild(_corruption);
         _blight = new BlightView { Swells = _swells };
         AddChild(_blight);
+        _adventure = new AdventureView();
+        AddChild(_adventure);
         _springs = new SpringView();
         AddChild(_springs);
         _vapour = new InkVapour();
@@ -330,6 +337,8 @@ public partial class TopDownMain : Node3D
             else if (arg == "--dbg-geyser") _dbgGeyser = true;
             else if (arg == "--dbg-shells") _dbgShells = true;
             else if (arg == "--dbg-murkfish") _dbgMurkFish = true;
+            else if (arg == "--dbg-turn") _dbgTurn = true;
+            else if (arg == "--dbg-sealvent") _dbgSealVent = true;
             else if (arg == "--dbg-throw") _dbgThrow = true;
             else if (arg.StartsWith("--dbg-seal=") && int.TryParse(Value("--dbg-seal="), out int sealHits)) _dbgSeal = sealHits;
             else if (arg.StartsWith("--dbg-bud=")) _dbgBud = Value("--dbg-bud=");
@@ -406,7 +415,7 @@ public partial class TopDownMain : Node3D
         if (spec is null) return null;
         var d = PlaneOptions.Default;
         GD.Print($"Debug boss: {spec.Name} ({spec.Tier} {spec.Form}, {spec.Concept}, {spec.Theme}, {spec.Exposure}, {spec.Signature})");
-        return new PlaneOptions { Corruption = d.Corruption, Pufferlings = d.Pufferlings, Vases = d.Vases, Boss = spec };
+        return new PlaneOptions { Corruption = d.Corruption, Pufferlings = d.Pufferlings, Vases = d.Vases, Adventure = d.Adventure, Boss = spec };
     }
 
     /// <summary>Saves the run as it stands at the start of this level (continuing puts her back here).</summary>
@@ -452,10 +461,16 @@ public partial class TopDownMain : Node3D
     /// A level made and readied for showing, off the main thread (both steps are pure work on data). The level below is
     /// made in the <paramref name="background"/>, on one thread, so the game keeps its frame rate.
     /// </summary>
+    /// <summary>The maps (the minimap and the whole level's on Tab / Select) show: always, but in the adventure only once she has absorbed Sea Chart Nautilus.</summary>
+    bool HasMap => !_world.Options.Adventure || _world.Run.Loadout.Flags.Contains("minimap");
+
+    /// <summary>The adventure's levels are abyss reefs (AbyssReef): no seabed outside the caves and tunnels.</summary>
+    static LevelMap Abyss(LevelMap map) => PlaneOptions.Default.Adventure ? AbyssReef.Apply(map) : map;
+
     Task<LevelShape> Shape(LevelId id, bool background = false)
     {
         var streams = new RunStreams(_seed);
-        return Task.Run(() => LevelShape.Prepare(TopDownGenerator.Generate(streams, id, background: background)));
+        return Task.Run(() => LevelShape.Prepare(Abyss(TopDownGenerator.Generate(streams, id, background: background))));
     }
 
     void GoToTitle()
@@ -544,7 +559,7 @@ public partial class TopDownMain : Node3D
         // Tab: the whole level on one sheet, drawn by the minimap's rules (wall edges, fog, places only once spotted).
         _fullMap = new TopoMap
         {
-            Visible = OS.GetCmdlineUserArgs().Contains("--map"), ShowLegend = true, EmblemScale = 1.5f, MetresAcross = LevelMap.Size + 4f,
+            Visible = OS.GetCmdlineUserArgs().Contains("--map"), Cutout = true, EmblemScale = 1.5f, MetresAcross = LevelMap.Size + 4f,
             ShowDetail = false, EdgesOnly = true, ArrowScale = 1.3f, ArrowColor = new Color(1f, 0.72f, 0.35f),
         };
         layer.AddChild(_fullMap);
@@ -716,7 +731,7 @@ public partial class TopDownMain : Node3D
             _seed = parsed;
         }
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var shape = LevelShape.Prepare(TopDownGenerator.Generate(new RunStreams(_seed), _id));
+        var shape = LevelShape.Prepare(Abyss(TopDownGenerator.Generate(new RunStreams(_seed), _id)));
         ShowLevel(shape, keepRun, watch.ElapsedMilliseconds);
     }
 
@@ -749,6 +764,28 @@ public partial class TopDownMain : Node3D
                 _world.Shells.Add(new PlaneShell { Position = her + new System.Numerics.Vector2(MathF.Cos(a), MathF.Sin(a)) * (2f + 0.3f * i) });
             }
             _dbgShells = false;
+        }
+        if (_dbgTurn)
+        {
+            var her = _world.Player.Position;
+            var spots = new[] { new System.Numerics.Vector2(-5f, -3f), new System.Numerics.Vector2(5f, -3f), new System.Numerics.Vector2(0f, 5f) };
+            var kinds = new[] { ReefFishKind.BlueTang, ReefFishKind.Clownfish, ReefFishKind.Chromis };
+            for (int k = 0; k < kinds.Length; k++)
+            {
+                var spot = her + spots[k];
+                if (!_world.Clear(spot, 0.6f)) spot = her + spots[k] * 0.5f;
+                var fish = _world.ReefFish.Where(f => f.Kind == kinds[k] && !f.Corrupted).OrderBy(f => System.Numerics.Vector2.Distance(f.Position, her)).FirstOrDefault();
+                if (fish is null) continue;
+                var school = _world.ReefFish.Where(f => kinds[k] == ReefFishKind.Chromis && f.Kind == ReefFishKind.Chromis && f.Host == fish.Host).ToList();
+                if (school.Count == 0) school.Add(fish);
+                foreach (var f in school)
+                {
+                    f.Position = spot + (f.Position - fish.Position) * 0.3f;
+                    if (!_world.Clear(f.Position, 0.3f)) f.Position = spot;
+                }
+                fish.Ink = 1f;
+            }
+            _dbgTurn = false;
         }
         if (_dbgMurkFish && _world.Schools.Count > 0)
         {
@@ -920,8 +957,10 @@ public partial class TopDownMain : Node3D
         _hud.ShowTitle(title, where);
         // Heard through deeper water: more muffled.
         _sfx.SetDepth(_id.ShownDepth);
-        _fullMap.Caption = $"{where} · {title}";
-        GD.Print($"Top-down level {_seed} {_id}: attempt {_map.Attempt + 1}, {ms} ms, {_map.Pois.Count} POIs{(_map.HasBoss ? ", boss" : "")}, {_map.Canopies.Count} canopy pieces, {_map.Decor.Count} decor");
+        // The Tab map's title: the level's template (else what the arrival card calls it), and where it is.
+        _fullMap.Title = title;
+        _fullMap.Subtitle = _id.ToString();
+        GD.Print($"Top-down level {_seed} {_id}: attempt {_map.Attempt + 1}, {ms} ms, {_map.Pois.Count} POIs{(_map.HasBoss ? ", boss" : "")}, {_map.Canopies.Count} canopy pieces, {_map.Decor.Count} decor{(_world.Options.Adventure ? $", {_world.Vents.Count} vents, {_world.ReefFish.Count} fish" : "")}");
         _belowTask = Shape(LevelPlan.NextOf(_seed, _id), background: true);
     }
 
@@ -983,12 +1022,14 @@ public partial class TopDownMain : Node3D
             _level.SetCorruption(null);
             _corruption.Show(null, null);
             _blight.Show(_world);
+            _adventure.Show(_world);
             _springs.Show(_world);
             return;
         }
         _corruptTex = new CorruptionTexture(field);
         _level.SetCorruption(_corruptTex.Texture);
         _blight.Show(_world);
+        _adventure.Show(_world);
         _springs.Show(_world);
         // The shards were laid out already if she dived here; otherwise they are laid out now, off the main thread.
         if (_belowLayout is { } ready && ReferenceEquals(_belowLayoutMap, map)) _corruption.Show(ready, _corruptTex.Texture);
@@ -1021,6 +1062,7 @@ public partial class TopDownMain : Node3D
         _lastHp = hp;
         _vapour.Tick(dt, _camera.Camera);
         _blight.Sync(_world, dt, _camera.Camera);
+        _adventure.Sync(_world, dt, _camera.Camera);
         _springs.Sync(dt, _camera.Camera);
         _cleanse.Track(_world, dt);
         MinimapView.FillSprings(_fullMap, _world);
@@ -1083,6 +1125,8 @@ public partial class TopDownMain : Node3D
             "den" => _world.Dens.OrderByDescending(d => d.Heart != DenHeart.None).Select(d => (System.Numerics.Vector2?)(d.At + new System.Numerics.Vector2(0f, d.Radius + 3f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres south of the level's first Blotter.
             "blotter" => _world.Blotters.Select(b => (System.Numerics.Vector2?)(b.Position + new System.Numerics.Vector2(0f, 3.4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // A few metres out before the level's first vent, facing it.
+            "vent" => _world.Vents.Select(v => (System.Numerics.Vector2?)(v.Position + v.Facing * 4f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1384,6 +1428,7 @@ public partial class TopDownMain : Node3D
             foreach (var e in _world.Events)
             {
                 _blight.OnEvent(e);
+                _adventure.OnEvent(_world, e);
                 _seals.OnEvent(_world, e);
                 // A level reached: the ring fills and pulses; the drawer opens once she is out of the fight.
                 if (e.Type == PlaneEventType.LevelUp)
@@ -1606,6 +1651,18 @@ public partial class TopDownMain : Node3D
         if (_seals.Sliding) _camera.Shake(0.22f);
         // A light spring healing her: a soft steady tremor.
         if (_world.Springs.Exists(sp => sp.Healing)) _camera.Shake(0.1f);
+        if (_dbgSealVent && _world.Time >= 2f)
+        {
+            _dbgSealVent = false;
+            int from = _world.Events.Count;
+            var her = _world.Player.Position;
+            _world.DebugSealVent(_world.Vents.Where(v => !v.Sealed).OrderBy(v => System.Numerics.Vector2.Distance(v.Position, her)).FirstOrDefault());
+            for (int i = from; i < _world.Events.Count; i++)
+            {
+                _adventure.OnEvent(_world, _world.Events[i]);
+                CorruptionEvent(_world.Events[i]);
+            }
+        }
         if (_dbgSeal > 0 && _world.Time >= 1f)
         {
             int from = _world.Events.Count;
@@ -1658,6 +1715,11 @@ public partial class TopDownMain : Node3D
         if (_dark.Amount < 0.5f) _fog.Reveal(p.Position, MinimapView.RevealRadius * (1f + 0.5f * (glow - 1f)), MinimapView.RevealSoft);
         // Brass Compass: every place on both maps (secret rooms stay hidden).
         _minimap.Landmarks = _fullMap.Landmarks = _world.Run.Loadout.Flags.Contains("landmarks");
+        // The adventure: the minimap only with Sea Chart Nautilus, and never a ring round it (the gonad gauge says those).
+        bool adventure = _world.Options.Adventure;
+        _minimap.Visible = HasMap;
+        _minimap.Plain = adventure;
+        _cleanse.Visible = !adventure;
         // Entering a place names it under the minimap.
         var inside = _map.Pois.Where(poi => System.Numerics.Vector2.Distance(poi.Position, p.Position) <= poi.Radius + 1.5f)
             .OrderBy(poi => System.Numerics.Vector2.Distance(poi.Position, p.Position)).FirstOrDefault();
@@ -1665,9 +1727,8 @@ public partial class TopDownMain : Node3D
         bool named = inside is not null && inside.Kind != PoiKind.Start;
         _minimap.ShowPlace(named ? LevelView.PlaceName(_map, inside!.Kind) : null, named ? LevelView.PoiColor(inside!.Kind) : Colors.White);
         if (inside is not null) _visited.Add(_map.Pois.IndexOf(inside));
-        float side = Mathf.Min(GetViewport().GetVisibleRect().Size.X, GetViewport().GetVisibleRect().Size.Y) - 80f;
-        _fullMap.Size = new Vector2(side, side);
-        _fullMap.Position = (GetViewport().GetVisibleRect().Size - _fullMap.Size) * 0.5f;
+        // The Tab map: the whole screen, framing the level's outline.
+        _fullMap.Frame(new Rect2(Vector2.Zero, GetViewport().GetVisibleRect().Size));
         _fullMap.Player = p.Position;
         _fullMap.Clock = HudView.Clock(_elapsed);
         if (p.Velocity.LengthSquared() > 0.04f) _fullMap.PlayerHeading = p.Velocity;
@@ -2063,10 +2124,41 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>The corruption war's moments: shakes, sounds and words (the sights are BlightView's).</summary>
+    /// <summary>How lit the vent at this mouth is (0..1).</summary>
+    float VentGlowAt(System.Numerics.Vector2 mouth)
+    {
+        foreach (var v in _world.Vents)
+            if (v.Position == mouth) return v.Glow;
+        return 0f;
+    }
+
     void CorruptionEvent(in PlaneEvent e)
     {
         switch (e.Type)
         {
+            case PlaneEventType.VentLit:
+                // The vent takes her light: a chime rising as it fills.
+                _sfx.PlayPitched("bell_ring", 1.1f + 0.7f * VentGlowAt(e.Position), -13f);
+                break;
+            case PlaneEventType.VentSealed:
+                // It grinds shut: a shudder, felt; the count of those left.
+                _camera.Shake(0.4f);
+                _haptics.Pulse(0.7f, 0.5f, 0.4f);
+                _sfx.PlayPitched("pop", 0.35f, -2f);
+                _sfx.PlayPitched("bell_ring", 0.85f, -6f);
+                Say(e.Size > 0 ? $"Vent sealed · {(int)e.Size} left" : "Every vent sealed");
+                break;
+            case PlaneEventType.ExitOpened:
+                _sfx.PlayPitched("bell_ring", 0.6f, -4f);
+                Say("The way down is open");
+                break;
+            case PlaneEventType.AnemoneTurned:
+                _sfx.PlayPitched("curse_enter", 1.6f, -12f);
+                break;
+            case PlaneEventType.LightOut:
+                // Her inner light spent: a dull fizzle.
+                _sfx.PlayPitched("merge", 0.45f, -10f);
+                break;
             case PlaneEventType.GuardiansWoke:
                 // Its guardians wake: a low call.
                 _sfx.PlayPitched("curse_enter", 1.5f, -12f);
@@ -2373,7 +2465,8 @@ public partial class TopDownMain : Node3D
             _debugPanel.Visible = _debugMap.Visible;
         }
         _f3Latched = f3;
-        if (!OS.GetCmdlineUserArgs().Contains("--map")) _fullMap.Visible = Input.IsActionPressed(InputSetup.Review) && !typing;
+        // The whole level's map (Tab / Select): in the adventure only with Sea Chart Nautilus, as the minimap.
+        if (!OS.GetCmdlineUserArgs().Contains("--map")) _fullMap.Visible = Input.IsActionPressed(InputSetup.Review) && !typing && HasMap;
     }
 
     /// <summary>Verification (`--dbg-surge`): a full-strength surge through the canyon she is in, a second into the level.</summary>

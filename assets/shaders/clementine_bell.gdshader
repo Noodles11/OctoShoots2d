@@ -1,5 +1,5 @@
 // Clementine's bell (THEME-BIBLE §5, §6.3): a translucent tangerine dome lit from within. Through it show the four
-// gold gonad horseshoes round the stomach, the radial canals and the ring canal, warts of stinging cells, and eight rim
+// gold gonad horseshoes round the stomach, the ring canal, warts of stinging cells, and eight rim
 // organs in the notches of the scalloped margin. A light wave runs base→rim on every contraction. Unshaded: she is
 // her own light and never changes hue with depth.
 // Her vitals live on the bell (DESIGN-TOPDOWN §2.5): the four gonad rings are her health, a quarter each (warm gold,
@@ -102,8 +102,8 @@ void fragment() {
 		vec2 c = vec2(cos(ka), sin(ka)) * 0.33;
 		vec2 d = q - c;
 		float open = 1.0 - smoothstep(0.35, 0.75, dot(normalize(d + 1e-5), -normalize(c)));
-		float size = k == 0 ? 0.17 : 0.14;
-		float shape = line(length(d) - size, k == 0 ? 0.06 : 0.05) * open;
+		float size = k == 0 ? 0.2 : 0.17;
+		float shape = line(length(d) - size, k == 0 ? 0.07 : 0.06) * open;
 		float fill = 1.0 - smoothstep(size * 0.55, size * 1.05, length(d));
 		float lit = clamp(health * 4.0 - float(k), 0.0, 1.0);
 		if (k == 0) lit *= mix(1.0, dying, critical);
@@ -114,13 +114,8 @@ void fragment() {
 	// The stomach: a soft cross at the centre.
 	float stomach = (1.0 - smoothstep(0.05, 0.16, r)) * 0.8;
 
-	// Radial canals: eight straight, eight meandering between them; the ring canal near the margin.
-	float seg = 6.2831853 / 16.0;
-	float k16 = ang / seg;
-	float odd = mod(floor(k16 + 0.5), 2.0);
-	float wig = odd * 0.18 * sin(r * 34.0);
-	float canal_d = (fract(k16 + 0.5 + wig) - 0.5) * seg * r;
-	float canals = line(canal_d, 0.026) * smoothstep(0.38, 0.5, r) * (1.0 - smoothstep(0.9, 0.95, r));
+	// No radial canals (her bell is clear between the gonads); only the ring canal near the margin.
+	float canals = 0.0;
 	float ring = line(r - 0.9, 0.03);
 
 	// The rim: her active pearl's charge. Measured clockwise from the top of the screen (the bell's turn undone), lit

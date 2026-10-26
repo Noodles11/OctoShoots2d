@@ -161,6 +161,7 @@ public static class ItemCaption
         "mergeBubbles" => $"Her light lingers at the end of its range; shots that touch merge into one, adding their damage (+{Pct(PlaneCombatTuning.BubbleGrowth)} size for each)",
         "surge" => $"Fire pours out a continuous surge of light instead of shots: {Pct(SurgeTuning.Dps)} of your shots' damage per second to all it touches, clearing a little corruption where it ends. Your other pearls shape it",
         "landmarks" => "Every place shows on the maps before you reach it (secret rooms stay hidden)",
+        "minimap" => "Shows the minimap: the reef round you, top right",
         "inkTrail" => "Leaves an ink trail",
         "colorCycle" => "Shots cycle through neon colours",
         "richDrops" => "Foes drop more sand dollars",

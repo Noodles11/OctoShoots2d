@@ -17,8 +17,14 @@ public sealed class PlaneOptions
     public bool Vases = false;
     /// <summary>The boss to meet on a boss level (null: the boss generator's for its loop and depth). Tests and debug starts name one.</summary>
     public OctoShoots.Core.Bosses.BossSpec? Boss;
+    /// <summary>
+    /// The adventure (docs/ADVENTURE.md): vents in the walls pour ink dots into the water, the reef's fish turn as
+    /// it reaches them, and the way down opens once every vent is sealed. The older creatures (Blightroots, Blotters,
+    /// Lashjaws, Thumpsquirts, dens, curse dens, light springs, Queen Clam) and the ground's starting ink are off.
+    /// </summary>
+    public bool Adventure;
 
-    public static PlaneOptions Default { get; set; } = new();
+    public static PlaneOptions Default { get; set; } = new() { Adventure = true };
 }
 
 /// <summary>The corruption's numbers (docs/CORRUPTION.md). Provisional, like the rest of plane combat.</summary>

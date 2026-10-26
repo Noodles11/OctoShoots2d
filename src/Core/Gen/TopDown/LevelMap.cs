@@ -291,6 +291,10 @@ public sealed class LevelMap
     public bool EntryFromArena;
     /// <summary>Where the floor gives way to the level below.</summary>
     public Shaft Shaft;
+    /// <summary>The adventure's abyss reef (AbyssReef): the open floor dropped away outside the caves and tunnels.</summary>
+    public bool Abyss;
+    /// <summary>An abyss reef's shelves (AbyssReef): ledges just under the plane, jutting from the walls, where anemones grow.</summary>
+    public List<Vector2> Shelves = new();
 
     /// <summary>Heights in metres at the 141×141 grid points, row-major (index = y * Samples + x).</summary>
     public float[] Heights = new float[Samples * Samples];

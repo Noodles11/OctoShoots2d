@@ -246,8 +246,20 @@ public partial class MinimapView : Control
     /// o'clock with dark ink as corruption takes her (a full ring and she is lost), over a pale track of her light. The
     /// ink's leading edge glints violet; past three quarters it pulses. Draining (a light spring), it recedes.
     /// </summary>
+    /// <summary>A plain map (the adventure): its bezel a thin outline and its north mark only — no health, no experience round it.</summary>
+    public bool Plain
+    {
+        set
+        {
+            _frame.Plain = value;
+            _frame.QueueRedraw();
+            _xp.Visible = !value;
+        }
+    }
+
     partial class Frame : Control
     {
+        public bool Plain;
         /// <summary>Her health as a share of her max (her corruption is what is missing).</summary>
         public float Health = 1f;
         /// <summary>1 on a hit, fading.</summary>
@@ -324,6 +336,12 @@ public partial class MinimapView : Control
             float r = Size.X * 0.5f;
             // A thin outline.
             DrawArc(c, r - 0.75f, 0f, Mathf.Tau, 128, new Color(0.85f, 0.88f, 0.9f, 0.9f), 1.5f, true);
+            if (Plain)
+            {
+                var north = new Vector2(c.X, 3f);
+                DrawColoredPolygon(new[] { north + new Vector2(0f, -1f), north + new Vector2(5f, 8f), north + new Vector2(-5f, 8f) }, new Color(0.85f, 0.88f, 0.9f));
+                return;
+            }
             const float width = 10f;
             float rr = r - 7.5f;
             // The track: her light, pale gold, all round.

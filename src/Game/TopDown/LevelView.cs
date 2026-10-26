@@ -346,7 +346,10 @@ public partial class LevelView : Node3D
             float H(int i) => grid(Math.Clamp(i, 0, LevelMap.Size), yy);
             return CatmullRom(H(ix - 1), H(ix), H(ix + 1), H(ix + 2), fx);
         }
-        return CatmullRom(Row(iy - 1), Row(iy), Row(iy + 1), Row(iy + 2), fy);
+        float v = CatmullRom(Row(iy - 1), Row(iy), Row(iy + 1), Row(iy + 2), fy);
+        // Never past the cell's own corners: over a big drop the spline would ring (ridges and pits along a cliff).
+        float c00 = grid(ix, iy), c10 = grid(Math.Min(ix + 1, LevelMap.Size), iy), c01 = grid(ix, Math.Min(iy + 1, LevelMap.Size)), c11 = grid(Math.Min(ix + 1, LevelMap.Size), Math.Min(iy + 1, LevelMap.Size));
+        return Mathf.Clamp(v, Mathf.Min(Mathf.Min(c00, c10), Mathf.Min(c01, c11)), Mathf.Max(Mathf.Max(c00, c10), Mathf.Max(c01, c11)));
     }
 
     static float CatmullRom(float p0, float p1, float p2, float p3, float t) =>
@@ -431,9 +434,13 @@ public partial class LevelView : Node3D
         return SurfaceMesh((x, y) => SealHeight(map, rock, x, y) + 0.01f, x0, y0, x1, y1, (x, y) => SealHeight(map, rock, x, y) > SmoothHeight(map, x, y) + 0.04f);
     }
 
-    /// <summary>A chunk of the ground. The shaft has no floor: through it, the level below shows.</summary>
+    /// <summary>
+    /// A chunk of the ground. The shaft has no floor: through it, the level below shows. (An abyss reef's dropped floor is
+    /// drawn all the way down, so the water's murk takes it smoothly rather than at a cut edge.)
+    /// </summary>
     internal static LevelShape.Surface? ChunkSurface(LevelMap map, int x0, int y0, int x1, int y1) =>
-        SurfaceMesh((x, y) => SmoothHeight(map, x, y), x0, y0, x1, y1, (x, y) => SmoothHeight(map, x, y) > LevelMap.ShaftBottom + 0.3f);
+        SurfaceMesh((x, y) => SmoothHeight(map, x, y), x0, y0, x1, y1,
+            (x, y) => SmoothHeight(map, x, y) > LevelMap.ShaftBottom + 0.3f || map.Abyss && !map.Shaft.Contains(new System.Numerics.Vector2(x, y), 3f));
 
     /// <summary>How far (metres) the reef is drawn past the square on every side: wider than the view reaches.</summary>
     internal const int Skirt = 32;
@@ -512,8 +519,10 @@ public partial class LevelView : Node3D
         {
             int a = j * w + i, b = a + 1, c = a + w, d = c + 1;
             if (keep is not null && !keep(verts[a].X, verts[a].Z) && !keep(verts[b].X, verts[b].Z) && !keep(verts[c].X, verts[c].Z) && !keep(verts[d].X, verts[d].Z)) continue;
-            // Clockwise seen from above (Godot's front face).
-            indices.AddRange(new[] { a, b, c, b, d, c });
+            // Clockwise seen from above (Godot's front face), split along the flatter diagonal: on a steep edge (a wall's
+            // top over the abyss) the fixed split leaves a row of teeth along it.
+            if (Mathf.Abs(verts[a].Y - verts[d].Y) < Mathf.Abs(verts[b].Y - verts[c].Y)) indices.AddRange(new[] { a, b, d, a, d, c });
+            else indices.AddRange(new[] { a, b, c, b, d, c });
         }
         if (indices.Count == 0) return null;
         return new LevelShape.Surface(verts, normals, colors, indices.ToArray());

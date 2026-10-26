@@ -26,6 +26,11 @@ instance uniform vec4 skin = vec4(0.0);
 instance uniform float swell = 0.0;
 /// 1: a body with an inside (seen through its holes); 0: a solid part (an arm, a rootlet) shaded the same on both sides.
 instance uniform float hollow = 1.0;
+/// The adventure's murklings: short blowfish spikes all over (a spiked one, from a blue tang); a short wiggling tadpole
+/// tail out behind it along swim (a tadpole one, from a clownfish).
+instance uniform float spikes = 0.0;
+instance uniform float tadpole = 0.0;
+instance uniform vec3 swim = vec3(0.0, 0.0, 1.0);
 #ifdef OVER
 #include "res://assets/shaders/over_her.gdshaderinc"
 varying vec3 v_world;
@@ -83,6 +88,30 @@ void vertex() {
 		wsum += w;
 	}
 	VERTEX += NORMAL * (sum / max(wsum, 1e-4) + swell * 0.18);
+	if (spikes > 0.0) {
+		// Blowfish spikes on a Fibonacci sphere: short cones standing out of the ink.
+		float best = -1.0;
+		for (int i = 0; i < 32; i++) {
+			float y = 1.0 - (float(i) + 0.5) / 16.0;
+			float r = sqrt(max(0.0, 1.0 - y * y));
+			float phi = float(i) * 2.39996323 + seed;
+			best = max(best, dot(p, vec3(cos(phi) * r, y, sin(phi) * r)));
+		}
+		float spike = smoothstep(0.93, 1.0, best);
+		VERTEX += NORMAL * spikes * 0.55 * spike * spike;
+	}
+	if (tadpole > 0.0) {
+		// A tadpole's tail: the back of it drawn out into a short tapering fin that wiggles as it swims.
+		vec3 S = normalize(swim);
+		float back = dot(p, -S);
+		float k = smoothstep(0.35, 1.0, back);
+		vec3 side = normalize(vec3(-S.z, 0.0, S.x));
+		vec3 lat = VERTEX - S * dot(VERTEX, S);
+		VERTEX -= S * tadpole * 1.9 * k * k;
+		VERTEX -= lat * tadpole * 0.55 * k;
+		VERTEX.y *= 1.0 - 0.45 * tadpole * k;
+		VERTEX += side * tadpole * sin(TIME * 16.0 + seed * 5.0 - back * 3.0) * 0.45 * k * k;
+	}
 	// A torn hole's lip rolls in a little.
 	float rim;
 	float into = hole_at(p, rim);
