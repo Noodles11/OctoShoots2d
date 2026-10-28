@@ -25,6 +25,8 @@ public struct RigPose
     /// <summary>Moving (creeping, leaving) this fast, m/s.</summary>
     public float Speed;
     public float Time, Dt;
+    /// <summary>The boss itself, for a rig that draws more of its state (Drippus Prime's mass, bounce, tears, brood).</summary>
+    public PlaneBoss Boss;
 }
 
 /// <summary>
@@ -80,7 +82,7 @@ public abstract partial class BossRig : Node3D
     public abstract void Pose(in RigPose pose);
 
     /// <summary>The skin's state on every part: drained (1 corrupted → 0 freed), the hit flash, the ink surging, the fade.</summary>
-    public void SetSkin(float drained, float flash, float surge, float fade)
+    public virtual void SetSkin(float drained, float flash, float surge, float fade)
     {
         foreach (var g in Skinned)
         {

@@ -4,8 +4,8 @@
 // turns), raises, fires and regrows the spines, and paints it.
 //   Healthy: a sand-olive back with dark brown spots, a cream belly, gold stripes on the cheeks; dark eyes, gold rings.
 //   Corrupted (THEME-BIBLE §6.4): starfire red with acid-lime spots in a too-even pattern, a plastic gloss, a slow warm
-//   shimmer of the Leak, and a heavy brow over eyes ringed acid-green. `corrupt` blends between them: freeing washes
-//   the tank colours out.
+//   shimmer of the Leak, and a heavy brow over eyes ringed acid-green. `corrupt` blends between them; a freed fish is
+//   always the healthy skin (corrupt 0), never the tank colours.
 shader_type spatial;
 render_mode cull_disabled;
 

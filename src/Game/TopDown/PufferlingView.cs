@@ -11,8 +11,8 @@ namespace OctoShoots.Game.TopDown;
 /// The pufferlings on screen (docs/PUFFERLING-PROPOSAL.md), presentation only: every corrupted one (the plane's mobs) and
 /// every healthy or freed one (the world's fish) as the baked body (PufferlingMesh) in pufferling.gdshader, swum from the
 /// sim's position, heading and state — the stroke quickening with its speed, a bank into turns, a slow bob, the blow-up.
-/// The corrupted wear a pet-shop price tag clipped to the tail fin. Freed, a fish shudders while the tank colours wash
-/// out, bubbles burst round it and the tag comes off and sinks. (Its needles are shots, drawn by CombatView.)
+/// The corrupted wear a pet-shop price tag clipped to the tail fin. Freed, a fish is in its own plain colours at once
+/// (never the tank's), shudders, bubbles burst round it and the tag comes off and sinks. (Its needles are shots, drawn by CombatView.)
 /// </summary>
 public partial class PufferlingView : Node3D
 {
@@ -143,9 +143,9 @@ public partial class PufferlingView : Node3D
                 else f = Make(corrupted: false);
                 _fish[fish] = f;
             }
-            float wash = fish.Freed ? 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp((fish.FreedTime - 0.25f) / 0.8f, 0f, 1f)) : 0f;
+            // Freed, it is in its own plain colours at once: never the tank's over-saturated skin.
             float shudder = fish.Freed ? 1f - Mathf.Clamp(fish.FreedTime / PufferlingTuning.FreedShudder, 0f, 1f) : 0f;
-            Pose(f, fish, dt, corrupt: wash, flash: 0f, spines: 1f, shudder: shudder);
+            Pose(f, fish, dt, corrupt: 0f, flash: 0f, spines: 1f, shudder: shudder);
         }
         foreach (var key in _fish.Keys.Where(k => !seen.Contains(k)).ToList())
         {

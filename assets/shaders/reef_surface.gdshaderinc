@@ -10,6 +10,7 @@
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
 #include "res://assets/shaders/level_frame.gdshaderinc"
+#include "res://assets/shaders/reef_art.gdshaderinc"
 
 global uniform vec3 reef_water_shallow;
 global uniform vec3 reef_water_deep;
@@ -149,7 +150,8 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 	float apron = (1.0 - smoothstep(0.8, 0.97, up)) * sandK * smoothstep(-3.0, -1.8, h);
 	sand = mix(sand, sand * mix(vec3(0.72), reef_algae * 1.1, 0.4), apron);
 	c = mix(c, sand, sandK);
-	s.normal = normalize(mix(n, nn, sandK));
+	// (A painted look smooths the sand's ripples away.)
+	s.normal = normalize(mix(n, mix(nn, n, art_flatten()), sandK));
 	// Matte all over: rough rock and sand (no polish).
 	s.rough = mix(0.96, 0.98, sandK);
 

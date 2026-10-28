@@ -74,7 +74,8 @@ public class AdventureTests
             Assert.Empty(w.Lashjaws);
             Assert.Empty(w.Thumpsquirts);
             Assert.Empty(w.Inkwardens);
-            Assert.Null(w.Boss);
+            // A boss level holds its boss in its arena (Drippus Prime), and nothing else of the war.
+            Assert.Equal(boss, w.Boss is not null);
             Assert.True(w.ReefFish.Count > 60, $"only {w.ReefFish.Count} fish");
             Assert.Equal(0, w.Dots!.Count);
             // Every vent's mouth is in open water before a wall, apart from the others.
@@ -103,8 +104,26 @@ public class AdventureTests
             Assert.True(map.HeightAt(a.Position) >= AbyssReef.ShelfDepth - 0.5f, $"an anemone over the abyss at {a.Position}");
             Assert.Contains(map.Shelves, s => Vector2.Distance(s, a.Position) < 1.5f);
         });
-        // Away from the walls, shelves, caves and tunnels, there is no seabed.
-        Assert.Contains(Enumerable.Range(0, 140 * 140), i => map.IsOpen(new Vector2(i % 140, i / 140)) && map.HeightAt(new Vector2(i % 140, i / 140)) < -20f);
+        // Away from the walls, shelves, caves and tunnels, the floor lies at the menace's depth (give or take its dunes).
+        float depth = AbyssReef.DepthOf(map.Menace);
+        Assert.Contains(Enumerable.Range(0, 140 * 140), i => map.IsOpen(new Vector2(i % 140, i / 140)) && MathF.Abs(map.HeightAt(new Vector2(i % 140, i / 140)) - depth) < AbyssReef.DuneHeight);
+    }
+
+    [Fact]
+    public void The_dropped_floor_sinks_with_the_menace_and_its_shallows_have_dunes()
+    {
+        Assert.Equal(AbyssReef.ShallowDepth, AbyssReef.DepthOf(0f));
+        Assert.Equal(AbyssReef.DeepDepth, AbyssReef.DepthOf(1f));
+        Assert.Equal(AbyssReef.DeepDepth, AbyssReef.DepthOf(2.4f));
+        Assert.True(AbyssReef.DepthOf(0.4f) < AbyssReef.DepthOf(0.2f));
+        var id = TestLevels.Find(p => p.Id.Depth == 2 && !p.HasBoss);
+        var map = AbyssReef.Apply(OctoShoots.Core.Gen.TopDown.TopDownGenerator.Generate(new OctoShoots.Core.Run.RunStreams(TestLevels.Seed), id));
+        // The open floor rolls: its heights spread across most of the dunes' height, and never rise to her plane.
+        var floor = Enumerable.Range(0, 140 * 140).Select(i => new Vector2(i % 140, i / 140))
+            .Where(p => map.IsOpen(p) && map.HeightAt(p) < AbyssReef.ShallowDepth + AbyssReef.DuneHeight).Select(map.HeightAt).ToList();
+        Assert.NotEmpty(floor);
+        Assert.True(floor.Max() - floor.Min() > AbyssReef.DuneHeight * 0.6f, $"the dunes span {floor.Max() - floor.Min():0.00} m");
+        Assert.True(floor.Max() < -2f);
     }
 
     [Fact]
@@ -129,6 +148,56 @@ public class AdventureTests
         Run(w, (int)(1.5f * PlaneWorld.TickRate));
         foreach (var v in w.Vents)
             Assert.DoesNotContain(w.Dots.Live, i => Vector2.Distance(InkDots.Centre(i), v.Position) < 2f);
+    }
+
+    [Fact]
+    public void Deeper_levels_start_with_puddles_of_ink_round_their_vents()
+    {
+        PlaneWorld At(int depth) => new(TestLevels.Get(TestLevels.Find(p => p.Id.Depth == depth && !p.HasBoss)), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Adventure);
+        // Depth 1 (the first real depth) starts clean; deeper, each vent's puddle grows with Menace.
+        Assert.Equal(0, At(2).Dots!.Count);
+        var mid = At(4);
+        var deep = At(7);
+        Assert.True(deep.Menace > mid.Menace);
+        foreach (var w in new[] { mid, deep })
+        {
+            int each = (int)MathF.Round(AdventureTuning.PuddlePerMenace * w.Menace);
+            Assert.InRange(w.Dots!.Count, each * w.Vents.Count * 0.8f, each * w.Vents.Count);
+            // Every dot lies in a puddle joined to its vent (fed, so it spreads), close round its mouth.
+            foreach (int i in w.Dots.Live)
+            {
+                Assert.True(w.Dots.Fed[i]);
+                Assert.Contains(w.Vents, v => Vector2.Distance(v.Position, InkDots.Centre(i)) < 12f);
+            }
+        }
+        Assert.True(deep.Dots!.Count / deep.Vents.Count > mid.Dots!.Count / mid.Vents.Count);
+    }
+
+    [Fact]
+    public void A_boss_levels_way_down_opens_once_its_vents_are_sealed_and_its_boss_is_freed()
+    {
+        foreach (bool ventsFirst in new[] { true, false })
+        {
+            var w = World(boss: true);
+            var boss = w.Boss!;
+            Assert.Equal(OctoShoots.Core.Bosses.BossConcept.TheBrood, boss.Spec.Concept);
+            if (ventsFirst)
+            {
+                foreach (var v in w.Vents) w.DebugSealVent(v);
+                Assert.False(w.ExitOpen);
+            }
+            // In she goes; it rises out of the ink and fights; it is freed.
+            w.Player.Position = w.Player.PrevPosition = w.ArenaCenter + new Vector2(0f, w.ArenaRadius * 0.55f);
+            for (int i = 0; i < 6 * PlaneWorld.TickRate && boss.Stage != BossStage.Fight; i++) Run(w, 1);
+            Assert.Equal(BossStage.Fight, boss.Stage);
+            w.DebugFreeBoss();
+            Run(w, PlaneWorld.TickRate);
+            Assert.False(w.BossBattle);
+            Assert.Equal(ventsFirst, w.ExitOpen);
+            if (ventsFirst) continue;
+            foreach (var v in w.Vents) w.DebugSealVent(v);
+            Assert.True(w.ExitOpen);
+        }
     }
 
     [Fact]

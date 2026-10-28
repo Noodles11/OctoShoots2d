@@ -26,7 +26,7 @@ public static class PlaneCombatTuning
     /// band top to bottom). ShotLife is only a safety net. With Bubble Coral her light lingers instead (see
     /// LingerDrag): it slows to a hover near the end of its range, so later shots catch up and merge with it.
     /// </summary>
-    public const float ShotSpeed = 30f;
+    public const float ShotSpeed = 90f;
     public const float BubbleRange = 12.8f, MinReach = 1.5f, LightSettle = 8f;
     /// <summary>
     /// Below this speed a bubble hovers: still drifting and slowing, each bubble for its own time between BubbleHoverMin
@@ -192,6 +192,13 @@ public sealed class PlaneShot
     public float WavePhase;
     /// <summary>Wave shots: the point on their line (Position weaves around it).</summary>
     public Vector2 Line;
+    /// <summary>
+    /// Her light: where it was at the start of this step (NaN before its first). It flies fast enough to pass a small
+    /// creature between two steps, so what it meets is found along its whole flight since then (PlaneWorld.Reaches).
+    /// </summary>
+    public Vector2 From = new(float.NaN);
+    /// <summary>Prism Pearl: the colour of her split light it is (none: her own).</summary>
+    public PrismHue Hue;
     /// <summary>Queen Clam's pearls: corruption, which her light cannot clear; the royal one homes. (PearlHp is no longer used.)</summary>
     public bool BossPearl, Royal;
     /// <summary>Her bubbles' light, 1 → dimmer (a murkling, its throw, a Blightroot's ring); damage dims with it.</summary>
@@ -440,7 +447,7 @@ public sealed partial class PlaneWorld
             else if (p.Charge > 0f)
             {
                 p.ShotTimer = ShotInterval;
-                int thrown = Volley(p.Aim, p.Charge / PlaneCombatTuning.ChargeSeconds);
+                int thrown = Volley(p.Aim, p.Charge / PlaneCombatTuning.ChargeSeconds, from: HerBody);
                 p.Charge = 0f;
                 Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
             }
@@ -457,11 +464,13 @@ public sealed partial class PlaneWorld
                 p.ShotTimer = ShotInterval;
                 // Just short of a full charge: the full-charge pearl's own tricks (Pearl Necklace, Depth Charge) stay
                 // the held throw's.
-                int thrown = Volley(p.Aim, pearlStream ? p.Spin * PlaneCombatTuning.StreamCharge : 0f);
+                int thrown = Volley(p.Aim, pearlStream ? p.Spin * PlaneCombatTuning.StreamCharge : 0f, from: HerBody);
                 Events.Add(new PlaneEvent(PlaneEventType.Shot, p.Position, p.Aim, thrown));
             }
         }
         p.WasFiring = fire;
+        // Prism Pearl: the red and the blue beside her fire on their own beats.
+        StepPrism(fire && aimed);
         // Each volley spends her inner light (a surge, while it pours).
         if (Run.Loadout.Flags.Contains("surge") && fire && aimed) SpendLight(AdventureTuning.SurgeCost * Dt);
         for (int i = shotsFrom; i < Events.Count; i++)
@@ -527,7 +536,7 @@ public sealed partial class PlaneWorld
                 // Queen Clam's pearls are corruption: her light cannot clear them, and passes through.
                 foreach (var mob in Mobs)
                 {
-                    if (!mob.Alive || Vector2.Distance(mob.Position, shot.Position) > mob.Radius + shot.Radius) continue;
+                    if (!mob.Alive || !Reaches(shot, mob.Position, mob.Radius)) continue;
                     if (shot.Hit is not null && !shot.Hit.Add(mob)) continue;
                     bool fresh = mob.Hp >= PlaneCombatTuning.MobHp - 0.01f;
                     DamageMob(mob, HitDamage(shot), shot.Velocity);
@@ -542,11 +551,11 @@ public sealed partial class PlaneWorld
                     if (shot.Life <= 0f) break;
                 }
             }
-            else if (Vector2.Distance(p.Position, shot.Position) < Radius + shot.Radius)
+            else if (ReachesHer(shot.Position, shot.Radius, out var struck))
             {
                 shot.Life = 0f;
                 var source = shot.Royal ? DamageSource.RoyalPearl : shot.BossPearl ? DamageSource.BossPearl : DamageSource.PufferNeedle;
-                if (HurtPlayer(shot.Damage, shot.Velocity, source) && shot.Royal) p.SlowTimer = PlaneBossTuning.SlowSeconds;
+                if (HurtPlayer(shot.Damage, shot.Velocity, source, struck) && shot.Royal) p.SlowTimer = PlaneBossTuning.SlowSeconds;
             }
         }
         // Halves split off during the step join now (the shots were being walked).
@@ -689,6 +698,9 @@ public sealed partial class PlaneWorld
             case ActiveAction.BubbleShield:
                 p.ShieldTimer = spec.Duration;
                 break;
+            case ActiveAction.Prism:
+                BeginPrism(spec.Duration);
+                break;
             case ActiveAction.WhaleSong:
                 if (p.Hp >= Run.MaxHp)
                 {
@@ -709,8 +721,8 @@ public sealed partial class PlaneWorld
     /// <summary>Bubble Shield turned a hit away: told at most this often.</summary>
     float _shieldPing;
 
-    /// <summary>She is hurt, unless shielded, dashing or still in the grace after the last hit.</summary>
-    bool HurtPlayer(float damage, Vector2 dir, DamageSource source)
+    /// <summary>She is hurt, unless shielded, dashing or still in the grace after the last hit (at: where, if not at her: the red or the blue of her split light).</summary>
+    bool HurtPlayer(float damage, Vector2 dir, DamageSource source, Vector2? at = null)
     {
         var p = Player;
         if (Defeated) return false;
@@ -725,7 +737,7 @@ public sealed partial class PlaneWorld
         Stats.DamageTaken += damage;
         p.HurtTimer = PlaneCombatTuning.PlayerHurtGrace;
         LastHitSource = source;
-        Events.Add(new PlaneEvent(PlaneEventType.PlayerHit, p.Position, dir, damage, source));
+        Events.Add(new PlaneEvent(PlaneEventType.PlayerHit, at ?? p.Position, dir, damage, source));
         return true;
     }
 
@@ -754,7 +766,11 @@ public sealed partial class PlaneWorld
     /// One volley along the aim: her loadout's shot count, fan or cone, and every flag on each shot. Charge (Pearl
     /// Diver, 0–1) makes each one bigger and harder.
     /// </summary>
-    int Volley(Vector2 aim, float charge = 0f)
+    /// <remarks>
+    /// Prism Pearl: the red or the blue fire their own volleys, from where they are (<paramref name="from"/>), as far as
+    /// where she aims (<paramref name="reach"/>), in their colour; while her light is split her own are green.
+    /// </remarks>
+    int Volley(Vector2 aim, float charge = 0f, Vector2? from = null, PrismHue hue = PrismHue.None, float? reach = null)
     {
         LastVolleyDamage = 0f;
         var p = Player;
@@ -773,7 +789,7 @@ public sealed partial class PlaneWorld
             float spread = spec.Pattern == ShotPattern.Cone ? spec.SpreadDeg * 1.6f : spec.SpreadDeg;
             Vector2 dir = spec.Wave || count == 1 ? aim : Rotate(aim, (i - (count - 1) * 0.5f) * spread * MathUtil.Deg2Rad);
             // It leaves from a little inside her bell's rim, as if born in it.
-            Vector2 at = p.Position + dir * (Radius * 0.6f);
+            Vector2 at = (from ?? p.Position) + dir * (Radius * (Prism ? PrismTuning.Size : 1f) * 0.6f);
             float hover = _bubbleRng.Range(PlaneCombatTuning.BubbleHoverMin, PlaneCombatTuning.BubbleHoverMax) * Run.Loadout.Stats[Stat.BubbleHover];
             var shot = new PlaneShot
             {
@@ -781,7 +797,8 @@ public sealed partial class PlaneWorld
                 Line = at,
                 Velocity = dir * speed,
                 Speed0 = speed,
-                Range = ThrowReach,
+                Range = reach ?? ThrowReach,
+                Hue = hue == PrismHue.None && Prism ? PrismHue.Green : hue,
                 Life = PlaneCombatTuning.ShotLife + hover,
                 FromPlayer = true,
                 Damage = damage,
@@ -979,17 +996,53 @@ public sealed partial class PlaneWorld
 
     static Vector2 Rotate(Vector2 v, float a) => new(v.X * MathF.Cos(a) - v.Y * MathF.Sin(a), v.X * MathF.Sin(a) + v.Y * MathF.Cos(a));
 
+    /// <summary>
+    /// Her light meets a body (at, this radius) this step: anywhere along its flight since the last step, not only where
+    /// it is now (it flies 1.5 m a step). If it does, the shot is put back where it first touched it, so it bursts there.
+    /// </summary>
+    static bool Reaches(PlaneShot shot, Vector2 at, float radius)
+    {
+        float reach = radius + shot.Radius;
+        Vector2 from = float.IsNaN(shot.From.X) ? shot.Position : shot.From, d = shot.Position - from, f = from - at;
+        float c = f.LengthSquared() - reach * reach;
+        if (c <= 0f) return true;
+        float a = d.LengthSquared();
+        if (a < 1e-9f) return false;
+        float b = 2f * Vector2.Dot(f, d), disc = b * b - 4f * a * c;
+        if (disc < 0f) return false;
+        float t = (-b - MathF.Sqrt(disc)) / (2f * a);
+        if (t < 0f || t > 1f) return false;
+        shot.Position = from + d * t;
+        return true;
+    }
+
+    /// <summary>
+    /// The first point along a step from a to b where her light would meet rock, a sealed wall or a pot (sampled every
+    /// 0.4 m, so a fast shot cannot pass through a thin one), else b.
+    /// </summary>
+    Vector2 FirstBlocked(Vector2 a, Vector2 b, float radius)
+    {
+        int n = Math.Max(1, (int)MathF.Ceiling(Vector2.Distance(a, b) / 0.4f));
+        for (int k = 1; k < n; k++)
+        {
+            var q = Vector2.Lerp(a, b, k / (float)n);
+            if (!Map.IsOpen(q) || _rocks.Any(r => r.Contains(q)) || VaseAt(q, radius) is not null) return q;
+        }
+        return b;
+    }
+
     /// <summary>Moves one of her shots: boomerang return, homing turn, wave weave, bounces off rock.</summary>
     void StepHerShot(PlaneShot shot)
     {
         var p = Player;
+        shot.From = shot.Position;
         shot.Age += Dt;
         shot.Life -= Dt;
         float speed = shot.Velocity.Length();
         // Light has no friction: it flies at full speed to the end of its range and goes out there, like a match, and
         // it does not burst (unless a pearl makes it: the Starburst Gland's burst). With Bubble Coral it lingers instead.
         bool lingers = shot.Lingers && shot.Range > 0f && !shot.Boomerang;
-        if (shot.Life <= 0f || !lingers && shot.Range > 0f && !shot.Boomerang && shot.Traveled >= shot.Range)
+        if (shot.Life <= 0f || !lingers && shot.Range > 0f && !shot.Boomerang && shot.Traveled >= shot.Range - 1e-3f)
         {
             Extinguish(shot);
             return;
@@ -1064,7 +1117,11 @@ public sealed partial class PlaneWorld
         }
         shot.Velocity = dir * speed;
 
-        Vector2 next = shot.Line + shot.Velocity * Dt;
+        // It never flies past the end of its range (where it goes out), however far a step would carry it.
+        Vector2 step = shot.Velocity * Dt;
+        float left = shot.Range - shot.Traveled;
+        if (!lingers && shot.Range > 0f && !shot.Boomerang && step.Length() > left) step = SafeNormalize(step) * MathF.Max(left, 0f);
+        Vector2 next = FirstBlocked(shot.Line, shot.Line + step, shot.Radius);
         // A pot in the way: broken if the bubble is strong enough, else it rocks and the bubble pops or bounces off.
         if (VaseAt(next, shot.Radius) is { } vase && !(shot.Boomerang && shot.Returning))
         {

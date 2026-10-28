@@ -48,6 +48,11 @@ public sealed class PlaneBody
     public float HurtTimer;
     /// <summary>Slowed (Queen Clam's royal pearl) while this counts down.</summary>
     public float SlowTimer;
+    /// <summary>Prism Pearl: her light split apart while this counts down (out of PrismTotal; PlanePrism.cs).</summary>
+    public float PrismTimer, PrismTotal;
+    /// <summary>Bounced off Drippus Prime: tumbling out of her own control while this counts down, flung this way.</summary>
+    public float TumbleTimer;
+    public Vector2 TumbleDir;
     /// <summary>Pearl Diver: how long fire has been held, charging the next pearl (capped at ChargeSeconds).</summary>
     public float Charge;
     /// <summary>Fire was held last tick (letting go throws a charged pearl).</summary>
@@ -82,7 +87,11 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     /// <summary>The adventure: an ink dot cleared by her light or eaten by a fish; a vent lit (Size: its glow) or sealed (Size: vents still open); the way down opened; an anemone turned (Size: its scale); her inner light run out.</summary>
     DotCleared, DotEaten, VentLit, VentSealed, ExitOpened, AnemoneTurned, LightOut,
     /// <summary>The adventure's Inkwarden: struck, it rouses (rolls its spikes out); it fires a spike (Direction: its way).</summary>
-    WardenRoused, WardenSpike }
+    WardenRoused, WardenSpike,
+    /// <summary>Drippus Prime: a murkling born out of it (Direction: its way out); its near side dimpling to bounce her (Direction: toward her); the bounce (at its skin; Direction: the way she is flung).</summary>
+    BossBrood, BossBounceWarn, BossBounce,
+    /// <summary>Prism Pearl: her light splits into its three colours; they flow back together.</summary>
+    PrismSplit, PrismJoined }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run; saved by number, so Gloomvine stays though nothing deals it now).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse }
@@ -130,7 +139,7 @@ public sealed partial class PlaneWorld
         PlaceShop();
         PlaceShells();
         if (!adventure) PlaceAmbushes();
-        if (!adventure) PlaceBoss();
+        PlaceBoss();
         if (Options.Vases) PlaceVases();
         PlaceSprings();
         PlaceSeals();
@@ -177,6 +186,14 @@ public sealed partial class PlaneWorld
             wish /= wishLen;
             wishLen = 1f;
         }
+        // Tumbling (bounced off Drippus Prime), she has no say in her way for a moment, and no dash.
+        bool tumbling = p.TumbleTimer > 0f;
+        p.TumbleTimer -= Dt;
+        if (tumbling)
+        {
+            wish = Vector2.Zero;
+            wishLen = 0f;
+        }
         bool hasInput = wishLen > 0.01f;
         Vector2 wishDir = hasInput ? wish / wishLen : Vector2.Zero;
         float cruise = CruiseSpeed * (p.SlowTimer > 0f ? PlaneBossTuning.SlowFactor : 1f);
@@ -186,7 +203,7 @@ public sealed partial class PlaneWorld
         p.DashInvulnerableTimer -= Dt;
 
         // Ink dash (DESIGN-2D §30): a burst that coasts, untouchable for a moment, leaving a slowing cloud.
-        if (input.Dash && p.DashCooldownTimer <= 0f && LightReady)
+        if (input.Dash && !tumbling && p.DashCooldownTimer <= 0f && LightReady)
         {
             SpendLight(AdventureTuning.DashCost);
             Vector2 dir = hasInput ? wishDir : p.Aim;

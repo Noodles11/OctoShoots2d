@@ -176,15 +176,16 @@ stolen ember. It stands on the floor where the floor comes near her plane and ha
 ## Inkwardens (`Inkwarden`, `PlaneInkwardens.cs`)
 
 A corrupted sea anemone that shelters its kin as an anemone shelters clownfish: a squat column of matte ink crowned
-with ten slowly writhing tentacles tipped violet, a faint ring of ink on the floor round it marking how far it guards.
+with ten slowly writhing tentacles tipped violet. A faint, thin tether of ink wavers out of its crown to every creature
+it guards, always (nothing marks its reach itself).
 
 - **Where:** from Depth 2 (the Sunken Galleon) one sits beside each Blightroot (3–5 m from it). From Depth 3 on, 1 +
   Menace more roam the level (far from her start, 12 m apart, never in the arena), at most 6 in all. A roamer drifts
   at 0.6 m/s toward where most of its kin gather within 25 m (looked for every 2 s) and settles beside them.
 - **The ward:** every corrupted creature within 8 m of an Inkwarden — murklings (lesser ones and primes too), Blotters,
   Blightroots, Thumpsquirts — takes no harm from anything: her shots, pops, bursts, the Firefly Squid's surge, a dash's
-  burst (a clinging murkling is still thrown off). Each hit turned aside shows an ink tether from every warden guarding
-  the creature, wavering out of its crown, held while the hits come and fading 0.6 s after; the creature shimmers
+  burst (a clinging murkling is still thrown off). Each hit turned aside swells the tether from every warden guarding the
+  creature bold and dark, held while the hits come and settling back over 0.6 s; the creature shimmers
   violet, the hit counts 0 and a dull knock sounds. Inkwardens never guard each other and bosses are never guarded, so
   the wardens are always the way in. The ground round them can still be cleansed.
 - **Passive:** it never attacks and does not hurt to touch.
@@ -262,7 +263,7 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   rises as the murkling (see the look of a birth above). Guard buds drink the same way. Ambush buds gather a 1.2 m
   disc of dots but drink nothing: they are the trap's own ink.
 - **Cap:** 2 + 1.5 × Menace per area. An area cleansed past 80% stops budding for good.
-- **The arena** buds every 6 s, but only while its boss fights.
+- **The arena** never buds: its only murklings are Drippus Prime's brood (below).
 - **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
   shines brighter than her). This makes bait and herding possible.
 - **Its purpose is to corrupt every creature:** while she is more than 14 m off, it hunts the reef's fish instead. It
@@ -365,9 +366,73 @@ quickly (about 0.3 m for a murkling, a few centimetres for a Blotter), quick hit
 worth, and times her knockback stat. Rock stops it dead. A clinging, budding or leaping creature is not moved, nor
 the rooted ones (Blightroots, Lashjaws).
 
-## Queen Clam (the Depth 1 boss)
+## Drippus Prime (every depth's boss)
 
-Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no face.
+A murkling prime that never stopped drinking: it has gathered most of a level's ink into one body, a mother of
+murklings that spends herself, for every child she sends out is a piece of her (`PlaneDrippus.cs`, `DrippusTuning`;
+its spec `BossGenerator.DrippusPrime`, authored, never rolled; its body `DrippusRig`). Every depth's boss level holds it
+(`BossRoster`), in the adventure too; it bars its arena as Queen Clam did. Its health and damage grow with Menace as
+every boss's do (DESIGN-TOPDOWN §12.2). Tests: `DrippusTests`.
+
+- **Its body** is a murkling's (`murkling.gdshader`; the twelve points on springs, ringing when struck, sloshing when
+  it stops), 7 m across at full mass, a little flattened, with a prime's magenta ember dim deep in it and its glow on
+  the reef round it. Its corrupted pearl sits at its heart, unseen until it is freed. Its drip lifts off round its top.
+  It is solid to her at its skin (95% of its radius, where it meets her plane).
+- **It rises out of the ink:** once the battle begins it does not drop in. Over 2.5 s the arena's ink streams in from
+  all round to one point (a prime's bud writ large: it drinks 30 murklings' worth, the nearest first, leaving the floor
+  empty and dark; in the adventure, whose floor holds no ink, it streams in out of the water 7 m round), and from a
+  third of the way in it swells up there, solid to her as it grows. It meets her at full health (the explorer's easing
+  does not apply in the adventure, whose ink is in the water).
+- **Mass:** it holds 30 murklings' worth of ink. **Each murkling it births costs it one murkling's worth and 25 of its
+  meter** (2.3% of its starting meter, about 2.5 default shots), so each brood is a clear step toward freeing it. Its
+  area follows its mass (its radius is √(mass ÷ 30) of full): it eases to its new size with a slosh after each birth.
+  At 12 murklings' worth (63% of its radius, about 4.4 m across) it births no more: at most 18 births, 450 of its
+  meter. Only births take mass; her hits tear it but never shrink it.
+- **Its pace:** it creeps after her at 1.2 m/s at full size, up to 1.5 times that at its floor (smaller is quicker),
+  stopping 4 m off its skin, and keeps inside its arena; it crawls at a quarter of that while it warns or acts.
+- **Its fight:** rest (1.6 s) → a warning, its attack's own → the attack → rest. Every other act is a brood while it
+  can (ink above its floor, room in its brood, and meter enough that a birth never frees it); between them the others
+  in turn. Warnings shorten with Menace (÷ 1 + 0.3 × Menace, never under 0.45 s).
+
+  | Attack | The warning | What it does |
+  |---|---|---|
+  | **Brood** | 0.9 s: 2–4 bulges of its ink swell out of its rim, glowing magenta, drawn out on necks at the end; its whole body draws in. | Each bulge snaps off as a murkling (`Murkling.Brood`), out at once (no bud) and swimming off it at 5 m/s, and fights on as any murkling. It births 2, then 3, then 4 a brood by phase, never past its brood cap: 3 + 2 × Menace alive at once. |
+  | **Spray ring** | 0.7 s: it pulls in round and trembles. | 18 drops flung out all round, with a gap 3 drops wide; it springs back out round. |
+  | **Slingshot fan** | 0.9 s: the murklings' slingshot, writ large: it bends back into a C away from her, its aim following her, locked for the last 0.15 s. | A fan of 5 big drops across 50° along its aim (a prime's throw: 17.5 damage, 0.25 m), a little faster than its others; it snaps forward and rings back to round. |
+  | **Spiral** (from phase 2) | 0.6 s: ripples start running round it. | Three arms of drops spiralling out as it turns for 2.5 s. |
+  | **Bomb burst** | 0.8 s: its top swells. | It heaves 3, then 5, then 7 ink bombs by phase (the bosses' arc bombs), the first at where she will be 0.6 s on, the rest about it; each shows its landing and bursts in a ring of ink. |
+
+  Its drops are pieces of its ink (`corruption_orb` with its magenta ember), 12 damage at 7 m/s; her light cannot
+  clear them, and a bubble that meets one pops it.
+- **Phases** count everything it has lost from its starting meter, her light and its own births alike, so brooding
+  pushes it on: at 35% the spiral joins it, at 70% its rests shorten to three quarters. Each change staggers it 1.5 s.
+- **The bounce:** when she comes within 1.2 m of its skin, the side facing her dimples inward for 0.3 s like a drum
+  skin drawn back (a dash gets her out: out of reach by then, she is spared); then it springs out and flings her off at
+  12 m/s for 10 damage (its drops' × 10/12, so it grows with Menace), and she tumbles out of her own control (no
+  steering, no dash) for 0.35 s: squashed flat against it for a moment, then stretched along her flight, flipping
+  once. Touching it springs at once, with no warning. It rests 1.5 s before it can bounce again. Its skin rings
+  after each. It replaces the bosses' contact damage. A low rubbery creak on the warning; on the spring a deep boing,
+  a thump in the controller and a small shake.
+- **Her light:** its whole body takes it, as a murkling's does: every shot that reaches its skin counts against its
+  meter (less the crust's share, as for every boss) and tears it there (`BossTear`): a hole torn into it, its lip
+  glowing, a dent ringing back. **A shot through a tear still open reaches the pearl, for twice its light.** A tear
+  closes over 1.5 s; at most six are open. Its meter never grows back. Its meter is 1100 at Depth 1. A light blast
+  (Starburst, a cavitation) and Firefly Squid's surge strike it anywhere on its body.
+- **Freed:** its drops in the water burst, its brood still alive pop with it (they were its ink), and its body bursts
+  at once in the greatest shower of ink in the game, glowing magenta (the prime's burst, its size). Its pearl bursts
+  into white light where it sat, the arena's corruption is cleared, and out of the burst swim the reef fish it took
+  into itself, 14 chromis and 6 blue tangs in their own colours: they scatter, then swim slowly off, away from her,
+  sliding along the rock, never hunted, and are gone once 22 m from her (or after 40 s). The sword walls sink, and its
+  cleansed pearl waits where it sat. The way down opens as it does for every boss (in the adventure, once every vent
+  is sealed too).
+- **The intro** (DESIGN-TOPDOWN §6.4): it jiggles in like a water balloon; a drop plips off its flank and wriggles
+  into a tiny murkling, which it pats proudly with a little arm of ink.
+
+## Queen Clam (the generator's reference)
+
+Redesigned to fit the game (art rules in `CLAUDE.md`): a real giant clam, no face. No depth meets her now (Drippus
+Prime is every depth's boss); her fight stays in the code as the boss generator's reference roll
+(`BossGenerator.QueenClam`, `--boss=queen`).
 
 - **Look** (`BossView`, `clam_shell.gdshader`): two heavy valves with radial ribs, growth lines and a scalloped lip.
   The corruption drains their colour to ash and settles ink into every groove. The mantle inside is dark. In her
@@ -416,31 +481,34 @@ means a full meter. All damage, healing and items work unchanged.
 
 ## Light springs (`LightSpring`)
 
-A pool of clear, luminous water where her corruption washes away. Each level has a 50 % chance of one
-(`SpringTuning.Chance`). The level seed places it on open floor in a plaza or corridor, at least 22 m from the start,
-14 m from the exit, and clear of the shaft and other POIs (`LightSprings.Of`). Its 3 m radius is a safe place: the
-field never seeds there.
+A pool of light on the seabed where a god ray falls from the surface, and where she heals. Each level has a 50 % chance
+of one (`SpringTuning.Chance`). The level seed places it on open floor in a plaza or corridor, at least 22 m from the
+start, 14 m from the exit, and clear of the shaft and other POIs (`LightSprings.Of`). Its 3 m radius is a safe place:
+the field never seeds there.
 
-- While she is inside, her meter drains by 30 % of the whole each second until it is empty (`StepSprings`).
-- **It heals once a level.** The first visit on which it washes her uses it (a visit while she is already clean does
-  not); when she leaves the water it is spent (`SpringSpent`): it heals no more, and it fades away over 2.5 s and is
-  gone, from the maps too. So she must plan when to use it: going in early wastes most of it.
-- Entering it while corrupted raises `SpringEntered`: a chime. Reaching clean raises
-  `SpringCleansed`: a bell and "Wholly cleansed".
+- **It holds a store of healing:** 100 health points (`SpringTuning.Pool`; more with her luck, docs/PEARLS.md "Luck").
+  While she is inside and hurt, it gives her 30 % of her whole health each second out of that store (`StepSprings`).
+  She may leave and come back as often as she likes; it is gone only when the store runs dry (`SpringSpent`): then
+  the ray and the emblem fade quickly away (0.8 s), from the maps too.
+- **Too bright for the creatures of ink:** while it shines, no murkling, Inkwarden or pufferling may enter it. One that
+  swims in is put back at its edge, and one clinging to her is thrown off as she enters (`WardSprings`). Once it is
+  spent they move through the place freely. Their throws and spikes still fly through it.
+- When it starts healing her it raises `SpringEntered`: a chime. When she is whole it raises `SpringCleansed`: a bell
+  and "Wholly cleansed".
 - Visuals (`SpringView`):
-  - `light_spring.gdshader`: her emblem on the floor in white light — the four gonad horseshoes, open toward the
-    middle at the same quarters as on her bell, inside a white circle. Still: nothing moves in it.
-  - `spring_dome.gdshader`: a dome over it like a great jellyfish bell lying on the sand (2.6 m high, as wide as the
-    spring, a margin of 16 scallops), a clear, faint force field with no lines on it: only a soft sheen where it is
-    seen edge-on, fading out at the sand, breathing slowly.
-  - `light_column.gdshader`: only while she bathes, a burst of holy light: god rays blazing up from the emblem and
-    fanning out wide as they climb past her plane (from 0.45 to 2.3 times the spring's radius), 22 shafts of uneven
-    width and strength round a soft glow, each flaring and dimming on its own while the light streams up them,
-    brightest at the foot and thinning to nothing high up; bright enough to bloom. From above, a sunburst round her.
-  - Rising aqua and gold sparkles, and an aqua OmniLight.
-  - While she bathes, everything brightens and warms, the dome breathes faster, and the sparkles stream.
-    While it heals her (`LightSpring.Healing`: until she is wholly clean) the screen trembles softly and the controller
-    hums, swelling and easing like a slow breath.
+  - `god_ray.gdshader`: a single cone of sunlight falling slantwise (32° from upright, from the north-west, so it
+    rises up the screen) from the surface 17 m above onto the spring, as light finds its way down through deep water.
+    It is soft as a volume: it melts away at its silhouette, a few broad shafts drift round it, and a shimmer runs down
+    it. It comes faint out of the dark water at the top and is full low down. It is always there while the spring
+    holds healing, and dims a little as the store is used.
+  - A spotlight from high up the ray lights the floor it falls on, its cone just covering the spring; it is shadowed,
+    so the rocks and kelp round it cast long slanting shadows.
+  - `light_spring.gdshader`: her emblem on the floor in white light, where the ray lands: the four gonad horseshoes,
+    open toward the middle at the same quarters as on her bell, inside a white circle. Still: nothing moves in it.
+  - Motes drift slowly down the shaft, and a few aqua and gold sparkles rise from the floor.
+  - **While it heals her** (`LightSpring.Healing`), the ray, the spot and the emblem glow brighter and warmer, sparkles
+    stream up from the floor, gold sparkles twirl up round her bell, and the magic particles twinkle off her
+    (`InkVapour.FromHer`). The screen trembles softly and the controller hums, swelling and easing like a slow breath.
 - On both maps, once seen: an aqua dot with a gold heart.
 
 ## Evaporation: corruption clearing

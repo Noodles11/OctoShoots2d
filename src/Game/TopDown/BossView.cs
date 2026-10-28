@@ -234,8 +234,10 @@ public partial class BossView : Node3D
         float R = boss.Radius;
         _root.Visible = boss.Landed || boss.Stage == BossStage.Drop;
         float y = seat;
-        _shadow.Visible = boss.Stage == BossStage.Drop;
-        if (boss.Stage == BossStage.Drop)
+        // Drippus Prime does not drop in: it rises out of the arena's ink where it is (its rig swells it up).
+        bool rises = boss.Spec.Form == OctoShoots.Core.Bosses.BodyForm.Murkling;
+        _shadow.Visible = boss.Stage == BossStage.Drop && !rises;
+        if (boss.Stage == BossStage.Drop && !rises)
         {
             float k = Mathf.Clamp(boss.StageTime / PlaneBossTuning.ShadowSeconds, 0f, 1f);
             y = seat + DropHeight * (1f - k * k);
@@ -270,10 +272,10 @@ public partial class BossView : Node3D
         float speed = boss.Freed ? (boss.Gone ? 0f : PlaneBossTuning.LeaveSpeed) : boss.Spec.Move == OctoShoots.Core.Bosses.BossMove.Creep ? boss.Spec.MoveRate : 0f;
         rig.Pose(new OctoShoots.Game.TopDown.Bosses.RigPose
         {
-            Stage = boss.Stage, Act = boss.Act, ActTime = boss.ActTime, Telegraph = boss.Spec.Telegraph,
-            Warn = boss.Act == BossAct.Telegraph ? Mathf.Clamp(boss.ActTime / Mathf.Max(boss.Spec.Telegraph, 0.01f), 0f, 1f) : 0f,
+            Stage = boss.Stage, Act = boss.Act, ActTime = boss.ActTime, Telegraph = boss.TelegraphLength,
+            Warn = boss.Act == BossAct.Telegraph ? Mathf.Clamp(boss.ActTime / Mathf.Max(boss.TelegraphLength, 0.01f), 0f, 1f) : 0f,
             Open = boss.Open, Fired = fired, Pulsed = pulsed, Melt = melt, SnapWarn = boss.SnapTimer >= 0f, SnapSlam = _snapSlam,
-            Speed = speed, Time = _time, Dt = dt,
+            Speed = speed, Time = _time, Dt = dt, Boss = boss,
         });
         rig.SyncMutations(boss, melt, _time);
         if (world.Events.Exists(e => e.Type == PlaneEventType.BossMutates)) _surge = 1f;

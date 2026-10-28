@@ -426,7 +426,12 @@ its own.
   seabed in its middle, where the chamber is widest. She can dive only there,
   within 3 m of the middle; on the depth's boss level the **boss arena**, a round level
   chamber ~34 m across with **the Crack** across its middle, a fissure
-  14–18 m long.
+  14–18 m long. Once it is open, a small soft chevron in her light's colour
+  floats just inside the screen's edge while it is out of sight, pointing from
+  her toward it (`ExitPointer`): it glides along the edge as she swims, bobs
+  toward the way, and fades as the way comes into view. It is there with or
+  without the maps (Sea Chart Nautilus), and hides while the game is held (a
+  level-up, the boss's intro, a dive).
 - The cave's records: its tunnels are the level's corridors (main, side, and
   each room's spur), its chambers the plazas.
 
@@ -821,13 +826,14 @@ Deterministic and cheap: the same level always schedules the same events.
     reef fish (§12.2), every shot (her bubbles, needles, Queen Clam's pearls), shells, hearts, loose
     pearls, ink clouds — the swimmers sliding along rock as they go. Shop stands
     and Queen Clam hold fast.
-  - **Seen beyond it:** the moving water seen as her own swells are: strips of
-    denser water, each a long soft lens (3–5 m by 0.4–1 m, at her plane) that
-    magnifies what lies under it across its width — most in its middle, not at
-    all at its soft edges and ends, a faint bright line where it bends hardest —
-    race down the canyon and spill up to 5 m past its walls, where the current
-    is only cosmetic (`CurrentView`). They appear as the surge builds (the
-    warning), race at full strength, and thin out as it eases off.
+  - **Seen beyond it:** the moving water shimmers like the air over a hot road
+    seen from afar (`CurrentView`). One soft band of it lies along the canyon at
+    her plane, spilling up to 5 m past its walls (only seen there, not felt, and
+    fainter): the picture under it wavers, bent by eddies that roll down the
+    canyon with the flow and boil as they go, fine shivers riding slow swirls,
+    patchy, with no lines or edges, fading out at its sides and ends. It wakes
+    as the surge builds (the warning), rolls fastest and shimmers hardest at
+    full strength, and stills as it eases off.
 - **Bubble geysers** (`PlaneGeysers.cs`, `GeyserView`): each level has 2–4 small vents in the seabed (on open floor,
   18 m from the start, clear of the way down, the places and the light spring, 14 m apart), seeded. Each sprays on its
   own clock (from its own `geysers` stream, so the surges' schedule is untouched): the first spray 6–25 s into the
@@ -890,7 +896,7 @@ and 0.45; their look's Menace at most 0.6).
 
 ### 5.2 Living water (cosmetic, inherited §11.4 rules)
 Low-res 2D velocity field on the plane; drives bubbles, marine snow, kelp/fan
-sway, ink clouds, current strips. Bosses and dashes inject swirls. Cosmetic
+sway, ink clouds, the currents' shimmer. Bosses and dashes inject swirls. Cosmetic
 stream only — never touches gameplay physics. Quality presets inherited.
 
 ### 5.3 Light transport (`light_field.gdshaderinc`, `HorizonMap`, `SunMap`)
@@ -905,8 +911,11 @@ exactly and cheaply, and the water glows where light passes through it.
   strength follows the depth's **Lantern** (`ReefLook.Lantern`, §5.1): 1 in the Shallows, 1.1 Kelp, 1.35 Galleon,
   1.5 Carnival, 1.85 Trench, 2 Abyss, 0.6 Tank; the beam is 3.4 × Lantern^1.8 strong, reaches 26 m × √Lantern (× Lantern
   Pearl's glow, so it gets down into an abyss reef) and falls off more gently the deeper she is. The light-field
-  shaders share its cone (`her_spot`: its direction and the cosine of its half-angle): her pool and her glow in the
-  water keep inside it (a little glow round the bell aside), the **beam** itself glows down through the water along
+  shaders share its cone (`her_spot`: its direction and the cosine of its half-angle): her glow in the water keeps
+  inside it (a little glow round the bell aside), and the water's veil clears only as much as the beam's light
+  actually lands, falling off to its rim as the light does (`her_clear`), so no darker disc shows round the spot or
+  round the bell over a near floor. Her warm pool on the floor is her own glow all round her, shaded by the reef but
+  not cut by the cone. The **beam** itself glows down through the water along
   every view ray that crosses it (14 samples evenly along the ray, cut by what shades it), and the **spot** it throws
   on the reef is lit through the murk however deep it lies.
 - **Where her light reaches — the horizon map** (`HorizonMap.cs`): round her light, for 256 directions × 32 distances
@@ -942,13 +951,13 @@ exactly and cheaply, and the water glows where light passes through it.
   depths) and her lantern's (thrown outward from her) fall on the floor as soft bright spots, wider the farther they fall.
   The sea surface's own caustics are §5.1's.
 - **Glints**: wet rock and sand catch her light and the reef's other lights in soft specular glints.
-- **The reef's other lights** cast shadows too: a light spring's, a clam room's inner light and the Crack's
-  (dual-paraboloid, cheaper than hers). Her bubbles' small lights do not.
+- **The reef's other lights** cast shadows too: a light spring's god ray (a spotlight), a clam room's inner light and
+  the Crack's (dual-paraboloid, cheaper than hers). Her bubbles' small lights do not.
 - **What throws a shadow** (from the sun and from every shadowed light): every solid body — all the creatures (murklings
   and their chunks, the Blightroot's pole, head and rootlets and its octopus arms, blotters, inkwardens, lashjaws,
   thumpsquirts, pufferlings, the reef fish, the bosses' pearl and crust, thrown ink), the reef's boulders, kelp, flora,
   vases and their shards, and the shells she collects. What is light or water casts none: her own bell and strands,
-  glows, rings and halos, particles and trails, decals, the light springs' columns and the jellies' see-through
+  glows, rings and halos, particles and trails, decals, the light springs' god rays and the jellies' see-through
   bodies; nor do the copies drawn over her, so nothing is shadowed twice. Under the steep sun a creature's shadow
   lies close beneath it; round her lantern in the deep, shadows stretch away from her across the floor.
 - **Cost** (RTX 3090, 1600×900): about 0.4 ms of GPU per frame over the old look, and a quarter of a millisecond of CPU
@@ -1013,7 +1022,9 @@ where hiding among identical fish is visual, not camera-based.
      - the moon jelly wobbles in sparkles;
      - the siphonophore's bells hop in a conga line;
      - the sea hare chews a strand of weed, its ears twitching;
-     - the snail slides in, its eyestalks boinging.
+     - the snail slides in, its eyestalks boinging;
+     - Drippus Prime jiggles in like a water balloon, a drop plips off its flank and wriggles into a tiny murkling,
+       and it pats it proudly.
   4. A glowing **VS** punches in on the seam (3.2 s). Clementine sets her
      face and the boss taunts.
   5. The panels burst into bubbles that pop away into the game (4.6–5.4 s).
@@ -1309,7 +1320,9 @@ at mist distance (inherited fade rule).
 - **Passes** are chosen through the highest rock first (the thickest roof).
 - Boulders and bommies are decoration only, never collision.
 - Ridge walls between the camera and Clementine dissolve in a dithered cutout (a presentation rule for walls;
-  the canopy layer has its own fade). A canopy fading over Clementine is drawn unblurred while it fades.
+  the canopy layer has its own fade): any rock between the camera and her plane within 4.5 m of her — a wall in
+  front of her, a tunnel's roof, an arch — is carved away round her as she swims, gone in the middle, its edge
+  dissolving in the ordered dither (`lf_see_cut`). A canopy fading over Clementine is drawn unblurred while it fades.
 - **Combat** (`PlaneCombat.cs`; the Depth-1 bestiary is being ported onto the plane, the Pufferling first): Clementine has
   100 HP (shown by the gonad rings on her bell, §2.5; the run's play time, stopped while paused, §9) and shoots toward the mouse (held) or the
   arrow keys — 10 damage, 4–5 volleys a second. Her shots are translucent bubbles, and a bubble never stops dead:
@@ -1473,12 +1486,14 @@ at mist distance (inherited fade rule).
   as it lands, its shell swelling and a ring of light spreading from it. Shells carry down with her pearls and HP.
 - **Bosses are hardcoded, one per depth** (`BossRoster`, the fight in `PlaneBoss.cs`, the bodies in
   `src/Game/TopDown/Bosses`): the boss generator (docs/BOSS-GENERATOR.md) is parked until the hand-made roster grows.
-  For now **every depth's boss is Queen Clam** (adapted from DEPTH1-BESTIARY §5), tougher the deeper she is met and on
-  later loops: her health ×(1 + 0.6 × Menace) and her pearls' damage ×(1 + 0.4 × Menace) (Menace 0 at Depth 1, 1 at
-  Depth 6 of the first loop). The numbers below are hers at Depth 1. The arena is the exit's flat 15 m disc, and she
-  bars it (§6.4, §4.2).
+  For now **every depth's boss is Drippus Prime** (docs/CORRUPTION.md, "Drippus Prime": a murkling prime grown huge
+  whose every birth costs it some of its own body), in the adventure too, tougher the deeper it is met and on later
+  loops: its health ×(1 + 0.6 × Menace) and its damage ×(1 + 0.4 × Menace) (Menace 0 at Depth 1, 1 at Depth 6 of the
+  first loop). The arena is the exit's flat 15 m disc, and it bars it (§6.4, §4.2). Queen Clam (below, her numbers at
+  Depth 1) stays in the code as the boss generator's reference roll; no depth meets her.
   - **Entering.** The first time Clementine is wholly inside the disc, the battle begins: the sword walls rise behind
-    her (§4.2) and the boss intro plays (§6.4): **CLEMENTINE VS QUEEN CLAM**, the game held under it.
+    her (§4.2) and the boss intro plays (§6.4): **CLEMENTINE VS DRIPPUS PRIME**, the game held under it. Drippus Prime
+    then rises out of the arena's ink (docs/CORRUPTION.md); Queen Clam drops in:
   - **The drop.** 0.5 s later her shadow grows on the Crack for 0.8 s and she drops onto it, facing Clementine. The
     thump shakes the camera, puffs sand, and sends a wave out to the rim in 0.5 s that nudges Clementine outward.
   - **Her body.** A giant ribbed clam 5 m across with a pearl crown and grumpy eyes, her colours drained. Her shell
@@ -1550,8 +1565,13 @@ at mist distance (inherited fade rule).
   - **The interface** is laid out on a 1600×900 page and scaled to the window.
 - **Saves:**
   - **One profile and one run** (the save file, version 2, written atomically).
-  - **The run is saved at the start of every room.** Continuing regenerates that room from the seed with what she
-    carried in: pearls, HP, shells, the run clock and totals. Death clears the saved run.
+  - **The run is saved at the start of every room, and the room exactly as it stands when she leaves it** (Save &
+    quit, or closing the window; not while she is dying, diving or between rooms). Continuing regenerates the room
+    from its seed — with the luck it was made with — and puts it back at that very moment (`Snapshot`,
+    `PlaneSave.cs`): her, every creature, shot, cloud and current, the corruption, the broken rock and opened seals,
+    the random streams mid-sequence, the map's fog and visited places, the room's clock. The room's start is kept
+    beside it: a moment that cannot be restored (a save from another build that no longer fits) falls back to it,
+    with what she carried in: pearls, HP, shells, the run clock and totals. Death clears the saved run.
   - **The profile records:**
     - the statistics;
     - each pearl's and creature's record;
@@ -1586,7 +1606,8 @@ at mist distance (inherited fade rule).
 - **Depth focus** (the look, after Below):
   - **The focal plane** is the swim level. Within about 0.6 m below and 1.6 m above stays sharp.
   - **Below** that, the world blurs and sinks into the depth's water: clear turquoise in the Shallows, murk further
-    down.
+    down. The deeper, the softer: a few metres down only a little (a shallow seabed's dunes still read), the full
+    blur by about 14 m.
   - **Above** it, rock blurs into soft foreground silhouettes tinted by the water. Their edges are softened, so the
     mesh's steps never show.
   - **The tall tops** (above 4 m over her plane, fully by 10 m): softer still and faded toward the water's own

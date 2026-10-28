@@ -35,17 +35,34 @@ float her_cone(vec3 p) {
 	return max(cone, near * 0.45);
 }
 
-// 1 where her light reaches p, 0 behind the reef, soft over the edge.
-float her_vis(vec3 p) {
+// 1 inside her searchlight's beam proper (no glow round the bell), as its light actually falls off toward the beam's
+// rim (BellView's SpotLight3D: 1 − rim^0.6, its SpotAngleAttenuation), 0 at and past the rim.
+float her_beam_cone(vec3 p) {
+	if (her_spot.w < -1.0) return 1.0;
+	vec3 lq = p - her_light_at.xyz;
+	float c = dot(lq / max(length(lq), 1e-3), her_spot.xyz);
+	float rim = clamp((1.0 - c) / max(1.0 - her_spot.w, 1e-4), 0.0, 1.0);
+	return 1.0 - pow(rim, 0.6);
+}
+
+// 1 where nothing of the reef stands between her light and p, 0 behind it, soft over the edge (whichever way p lies).
+float her_sight(vec3 p) {
 	vec2 d = p.xz - her_light_at.xz;
 	float r = length(d);
-	if (r < 0.9) return her_cone(p);
+	if (r < 0.9) return 1.0;
 	float u = atan(d.y, d.x) / 6.2831853 + 0.5;
-	// The terrain short of the point itself (its own column would shade it).
-	float v = clamp((r - 0.8) / her_light_at.w - 0.5 / 32.0, 0.0, 1.0 - 0.5 / 32.0);
+	// The terrain short of the point itself (its own column would shade it). Kept to the first row's centre at the
+	// near end: the map repeats round (for the directions), and sampling below that row would blend in the farthest
+	// distances' horizon — a ring of false shadow round her.
+	float v = clamp((r - 0.8) / her_light_at.w - 0.5 / 32.0, 0.5 / 32.0, 1.0 - 0.5 / 32.0);
 	float horizon = texture(her_horizon, vec2(u, v)).r;
 	float slope = (p.y - her_light_at.y) / r;
-	return smoothstep(-0.14, 0.04, slope - horizon) * her_cone(p);
+	return smoothstep(-0.14, 0.04, slope - horizon);
+}
+
+// 1 where her light reaches p, 0 behind the reef, soft over the edge.
+float her_vis(vec3 p) {
+	return her_sight(p) * her_cone(p);
 }
 
 // How strongly her light falls on p (0..1): its reach, softening with distance, and only where it gets to.
@@ -54,6 +71,16 @@ float her_reach(vec3 p) {
 	float d = distance(p, her_light_at.xyz);
 	float fall = clamp(1.0 - d * d / (her_light_at.w * her_light_at.w), 0.0, 1.0);
 	return fall * fall / (1.0 + d * d * 0.05) * her_vis(p);
+}
+
+// How clearly her light shows p through the water (0..1): as her_reach, but only as much as her beam's light actually
+// lands there, so the water's veil never clears where no light comes (that would leave a darker disc round the beam's
+// spot, or round the bell over a near floor).
+float her_clear(vec3 p) {
+	if (her_light_at.w <= 0.0) return 0.0;
+	float d = distance(p, her_light_at.xyz);
+	float fall = clamp(1.0 - d * d / (her_light_at.w * her_light_at.w), 0.0, 1.0);
+	return fall * fall / (1.0 + d * d * 0.05) * her_sight(p) * her_beam_cone(p);
 }
 
 // Her searchlight's beam in the water: the view ray's stretch inside the cone, sampled evenly along it (the glow must

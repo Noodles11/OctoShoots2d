@@ -137,16 +137,20 @@ public partial class SaveCard : PanelContainer
         row.AddChild(info);
         info.AddChild(TitleStyle.Text(run.Where, 30, TitleStyle.Ink, TitleStyle.Display));
         info.AddChild(TitleStyle.Text($"{run.Seed}{(run.CustomSeed ? "  (seeded)" : "")}", 18, TitleStyle.Ink, TitleStyle.Mono));
-        info.AddChild(TitleStyle.Text($"{Mathf.RoundToInt(Mathf.Clamp(1f - run.Hp / Mathf.Max(OctoShoots.Core.Items.Loadout.Build(_catalog, run.Items, SettingsStore.LoadTuning(), SkillMods(run)).Stats.MaxHp, 1f), 0f, 1f) * 100f)}% corrupted  ·  {run.Shells} shells  ·  {TitleStyle.Clock(run.Elapsed)} played  ·  saved {When(run.SavedAt)}", 15, TitleStyle.InkSoft));
+        // As she left it: mid-level (its saved moment), else at the level's start.
+        var items = run.State?.Items ?? run.Items;
+        float hp = run.State?.Hp ?? run.Hp;
+        int shells = run.State?.Shells ?? run.Shells;
+        info.AddChild(TitleStyle.Text($"{Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(OctoShoots.Core.Items.Loadout.Build(_catalog, items, SettingsStore.LoadTuning(), SkillMods(run)).Stats.MaxHp, 1f), 0f, 1f) * 100f)}% corrupted  ·  {shells} shells  ·  {TitleStyle.Clock(run.Elapsed)} played  ·  saved {When(run.SavedAt)}", 15, TitleStyle.InkSoft));
         var pearls = new HBoxContainer();
         pearls.AddThemeConstantOverride("separation", 6);
-        foreach (string id in run.Items)
+        foreach (string id in items)
         {
             ItemDef? item = null;
             _catalog?.TryGet(id, out item);
             pearls.AddChild(MiniPearl(item));
         }
-        if (run.Items.Count == 0) pearls.AddChild(TitleStyle.Text("No pearls yet", 14, TitleStyle.InkSoft));
+        if (items.Count == 0) pearls.AddChild(TitleStyle.Text("No pearls yet", 14, TitleStyle.InkSoft));
         info.AddChild(pearls);
 
         var buttons = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };

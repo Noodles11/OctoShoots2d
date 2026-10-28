@@ -63,8 +63,12 @@ public static class BossGenerator
         BodyForm.GiantClam => BodyPlan.Bivalve,
         BodyForm.SeaStar or BodyForm.Urchin => BodyPlan.Echinoderm,
         BodyForm.MoonJelly or BodyForm.Siphonophore => BodyPlan.Cnidarian,
+        BodyForm.Murkling => BodyPlan.Ink,
         _ => BodyPlan.Gastropod,
     };
+
+    /// <summary>A body only authored, never rolled (Drippus Prime's).</summary>
+    public static bool Authored(BodyForm form) => form == BodyForm.Murkling;
 
     /// <summary>What each body can throw: an attack only comes from anatomy that could make it (§7.1).</summary>
     public static bool Can(BodyForm form, BossAttack attack) => attack switch
@@ -76,7 +80,8 @@ public static class BossGenerator
         BossAttack.Snap => form is BodyForm.GiantClam,
         BossAttack.ArcBombs => form is BodyForm.SeaStar or BodyForm.Urchin or BodyForm.SeaHare or BodyForm.Snail,
         BossAttack.PulseRing => form is BodyForm.SeaStar or BodyForm.Urchin or BodyForm.MoonJelly or BodyForm.SeaHare,
-        BossAttack.SacBurst => true,
+        BossAttack.SacBurst => form != BodyForm.Murkling,
+        BossAttack.Brood or BossAttack.Fan => form == BodyForm.Murkling,
         _ => false,
     };
 
@@ -90,6 +95,8 @@ public static class BossGenerator
         [BossAttack.ArcBombs] = new[] { "spreader", "ranged" },
         [BossAttack.PulseRing] = new[] { "radial", "spreader", "close" },
         [BossAttack.SacBurst] = new[] { "sac-heavy", "close" },
+        [BossAttack.Brood] = new[] { "spreader" },
+        [BossAttack.Fan] = new[] { "ranged" },
     };
 
     /// <summary>The mutation themes each body can grow (§5).</summary>
@@ -239,6 +246,39 @@ public static class BossGenerator
         spec.Sites.Add(new BodySite(MathF.PI, 0.85f, 0.5f, false));
         spec.Sites.Add(new BodySite(MathF.PI * 0.75f, 0.9f, 0.35f, false));
         spec.Sites.Add(new BodySite(-MathF.PI * 0.75f, 0.9f, 0.35f, false));
+        return spec;
+    }
+
+    /// <summary>
+    /// Drippus Prime (docs/CORRUPTION.md, "Drippus Prime"): a murkling prime grown huge, authored. Its own numbers are
+    /// DrippusTuning's; the spec carries what every boss's fight reads. Its whole body takes her light; it creeps after
+    /// her inside the arena it bars; it broods, and between broods throws a ring, a fan and a burst of bombs (the
+    /// spiral joins in its second phase, its rests shorten in its third).
+    /// </summary>
+    public static BossSpec DrippusPrime(ulong runSeed, int cycle, int depth)
+    {
+        var rng = new Rng(runSeed).Stream($"boss-generator/{cycle}/{depth}/drippus");
+        var spec = new BossSpec
+        {
+            Seed = rng.Seed, Cycle = cycle, Depth = depth, Menace = MenaceOf(cycle, depth), Tier = BossTier.Common,
+            Plan = BodyPlan.Ink, Form = BodyForm.Murkling, Concept = BossConcept.TheBrood, Blockade = true, Name = "Drippus Prime",
+            Radius = OctoShoots.Core.Plane.DrippusTuning.Radius, Stretch = 1f, Count = 0, Bulk = 0.5f,
+            // Ink, with a prime's magenta ember; it has no true body of its own (the fish it took swim out of it).
+            TrueColor = new Vector3(0.16f, 0.07f, 0.24f), Accent = new Vector3(1f, 0.2f, 0.66f), TrueScale = 1f,
+            Theme = MutationTheme.ExtraFlaps, Mutation = 0.5f,
+            Exposure = Exposure.Whole, Pearl = new BodySite(0f, 0f, 0.5f, false), PearlRadius = 0.9f,
+            Hp = OctoShoots.Core.Plane.DrippusTuning.Meter, Damage = 12f, Telegraph = 0.8f, Rest = 1.6f, Volleys = 1, VolleyInterval = 0.5f,
+            PearlSpeed = 7f, RingCount = 18, WallCount = 0, HelixArms = 3,
+            Signature = BossAttack.Brood, Move = BossMove.Creep, MoveRate = OctoShoots.Core.Plane.DrippusTuning.Pace,
+            Tempo = BossTempo.Duelist, Sense = BossSense.Water,
+        };
+        spec.Fillers.Add(BossAttack.Ring);
+        spec.Fillers.Add(BossAttack.Fan);
+        spec.Fillers.Add(BossAttack.ArcBombs);
+        spec.Phases.Add(new BossPhase(0.35f, PhaseChange.NewAttack, BossAttack.Helix));
+        spec.Phases.Add(new BossPhase(0.7f, PhaseChange.Quicken, null));
+        // Where its drip wells up most (no mutation drawn: it is all ink): round its top.
+        for (int i = 0; i < 6; i++) spec.Sites.Add(new BodySite(i * MathF.Tau / 6f + 0.3f, 0.55f, 0.4f, false));
         return spec;
     }
 

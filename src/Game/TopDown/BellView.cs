@@ -279,6 +279,16 @@ public partial class BellView : Node3D
     /// <summary>The player she was last drawn for: a new level brings a new one, and its timers start afresh.</summary>
     PlaneBody? _drawnFor;
 
+    /// <summary>
+    /// Prism Pearl (PlanePrism.cs): which of the red and the blue beside her this view draws (0 the red, 1 the blue;
+    /// −1: herself). Those are shown only while her light is split, smaller, in their colour, their searchlight unshadowed
+    /// and the floor's glow left to her.
+    /// </summary>
+    public int Part { get; init; } = -1;
+    /// <summary>How far she is split now (0 whole → 1), and the colour this one wears (herself: the green).</summary>
+    float _prism;
+    Color PrismColour => Part switch { 0 => CombatView.LightOf(PrismHue.Red), 1 => CombatView.LightOf(PrismHue.Blue), _ => CombatView.LightOf(PrismHue.Green) };
+
     public void Sync(PlaneWorld world, float alpha, float dt)
     {
         _time += dt;
@@ -294,6 +304,27 @@ public partial class BellView : Node3D
             _lastHurt = p.HurtTimer;
         }
         var at = System.Numerics.Vector2.Lerp(p.PrevPosition, p.Position, alpha);
+        _prism = world.PrismOpen;
+        if (Part >= 0)
+        {
+            // The red or the blue: only while her light is split, where it swims, growing out of her as she splits.
+            Visible = world.Prism;
+            if (!Visible)
+            {
+                _strandsReady = false;
+                return;
+            }
+            var part = world.PrismParts[Part];
+            at = System.Numerics.Vector2.Lerp(part.PrevPosition, part.Position, alpha);
+        }
+        else if (world.Prism)
+        {
+            // Herself, split: the green, at the triangle's front corner.
+            at = System.Numerics.Vector2.Lerp(world.PrismLead.PrevPosition, world.PrismLead.Position, alpha);
+        }
+        // Split, all three are smaller; the red and the blue come out of her (from nothing to their size).
+        float size = Mathf.Lerp(1f, PrismTuning.Size, _prism);
+        Scale = Vector3.One * (Part >= 0 ? PrismTuning.Size * Mathf.Clamp(_prism * 1.6f, 0.05f, 1f) : size);
         var vel = new Vector2(p.Velocity.X, p.Velocity.Y);
         float speed = vel.Length();
         float pace = Mathf.Clamp(speed / Mathf.Max(world.CruiseSpeed, 0.1f), 0f, 1.6f);
@@ -338,6 +369,18 @@ public partial class BellView : Node3D
         float lean = _lean.Length();
         var tilt = lean > 1e-4f ? new Basis(new Vector3(_lean.Y, 0f, -_lean.X) / lean, lean) : Basis.Identity;
         _body.Basis = tilt * new Basis(Vector3.Up, _spin);
+        // Bounced off Drippus Prime: squashed flat against it for a moment, then stretched along her flight, she flips
+        // once as she tumbles away.
+        if (p.TumbleTimer > 0f)
+        {
+            float k = 1f - p.TumbleTimer / DrippusTuning.Tumble;
+            var along = new Vector3(p.TumbleDir.X, 0f, p.TumbleDir.Y);
+            var across = new Vector3(-along.Z, 0f, along.X);
+            float stretch = k < 0.15f ? 1f - 0.4f * Mathf.Sin(k / 0.15f * Mathf.Pi) : 1f + 0.3f * Mathf.Sin((k - 0.15f) / 0.85f * Mathf.Pi);
+            var frame = new Basis(along, Vector3.Up, across);
+            var squash = frame * Basis.FromScale(new Vector3(stretch, 1f / Mathf.Sqrt(stretch), 1f / Mathf.Sqrt(stretch))) * frame.Transposed();
+            _body.Basis = new Basis(across, Mathf.Tau * Mathf.SmoothStep(0f, 1f, k)) * squash * _body.Basis;
+        }
         // Diving, she turns head-first (apex down), leaning south so the camera sees her turn.
         if (DiveTurn > 0f) _body.Basis = new Basis(Vector3.Right, -DiveTurn * Mathf.Pi * 0.85f) * _body.Basis;
 
@@ -366,7 +409,13 @@ public partial class BellView : Node3D
         _light.SpotRange = BeamRange * glow * Mathf.Sqrt(Lantern);
         if (!_dbgFalloff) _light.SpotAttenuation = Mathf.Lerp(1f, 0.6f, deep);
         _light.LightEnergy = 3.4f * _dbgEnergy * Mathf.Pow(Lantern, 1.8f) * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
-        _light.LightColor = Glow.Lerp(new Color(1f, 0.3f, 0.55f), _hurt * 0.5f);
+        _light.LightColor = Glow.Lerp(PrismColour, _prism).Lerp(new Color(1f, 0.3f, 0.55f), _hurt * 0.5f);
+        // The red and the blue: lighter lanterns, unshadowed (her own casts the reef's shadows).
+        if (Part >= 0)
+        {
+            _light.ShadowEnabled = false;
+            _light.LightEnergy *= 0.5f;
+        }
         _halo.LightColor = _light.LightColor;
         // The beam: she casts it from inside her bell, out of its opening — the way the inside of her bell points. At
         // rest that is down; swimming (tipped apex first) it streams out behind her.
@@ -384,7 +433,7 @@ public partial class BellView : Node3D
         SyncInk(world);
         SyncShield(p, h);
         SyncCharge(p);
-        SyncGlowPool(world);
+        if (Part < 0) SyncGlowPool(world);
     }
 
     /// <summary>
@@ -461,9 +510,24 @@ public partial class BellView : Node3D
         }
         _pull = Mathf.MoveToward(_pull, pull, h * (pull > _pull ? 3f : 6f));
         _burst = Mathf.MoveToward(_burst, 0f, h / 0.45f);
-        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic"), _mimic);
+        // Prism Pearl: split, each wears its own colour of her light (the pearl's look, worn as in the ritual).
+        float mimic = _mimic;
+        if (_prism > 0f)
+        {
+            var c = PrismColour;
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_c0"), c.Darkened(0.35f));
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_c1"), c);
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_c2"), c.Lightened(0.45f));
+            _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_pattern"), 7);
+            _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_c0"), c.Darkened(0.2f));
+            _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_c1"), c.Lightened(0.3f));
+            mimic = Mathf.Max(mimic, _prism);
+            // The ritual's colours are put back when it next wears a pearl.
+            _wearing = null;
+        }
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic"), mimic);
         _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("burst"), _burst);
-        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic"), _mimic);
+        _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic"), mimic);
         _strandMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("burst"), _burst);
         // The pulse of light: her glow flares far out and falls back.
         _light.LightEnergy *= (1f + 4f * _burst + 0.4f * _mimic) * Dim;

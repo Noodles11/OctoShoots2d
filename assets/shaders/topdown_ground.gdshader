@@ -16,9 +16,29 @@ void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
+
+// An art direction under study (reef_art.gdshaderinc): the reef painted another way.
+void art(inout ReefSkin s, vec3 local, float hw, float px) {
+	vec3 w = lf_pattern(local);
+	if (reef_art <= 0) {
+		// The game's own look: its shade stippled in a deeper shade of its own colour.
+		s.albedo = mix(s.albedo, art_dot_colour(s.albedo, reef_water_deep), 0.7 * art_dots(w, local, s.normal));
+		return;
+	}
+	s.albedo = art_paint(s.albedo, w, local, s.normal, reef_water_deep, reef_rock, reef_sand);
+	s.albedo = mix(s.albedo, s.albedo * 0.4 + vec3(0.85, 0.82, 0.74) * 0.6, art_rim(local, s.normal, hw));
+	vec2 ink = art_ink(w, local, s.normal, hw, px);
+	s.albedo = mix(s.albedo, art_beyond(reef_water_deep), ink.y);
+	s.albedo = mix(s.albedo, art_ink_colour(reef_water_deep), ink.x);
+	s.caustic = art_caustic(s.caustic);
+}
+
 void fragment() {
 	if (lf_portal_cut(world, FRAGCOORD.xy) || lf_see_cut(world, CAMERA_POSITION_WORLD, FRAGCOORD.xy)) discard;
-	ReefSkin s = reef_surface(lf_local(world), normalize(world_normal), TIME, length(fwidth(world.xz)));
+	vec3 local = lf_local(world);
+	float px = length(fwidth(world.xz));
+	ReefSkin s = reef_surface(local, normalize(world_normal), TIME, px);
+	art(s, local, fwidth(local.y), px);
 	// The caustics ride to light() in BACKLIGHT (this shader does its own lighting, so nothing else reads it).
 	BACKLIGHT = vec3(s.caustic * 1.5);
 	ALBEDO = s.albedo;
@@ -31,7 +51,7 @@ void fragment() {
 }
 
 void light() {
-	float ndl = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+	float ndl = art_light(clamp(dot(NORMAL, LIGHT), 0.0, 1.0));
 	// The sun also brings the caustics; other lights (her glow) light the reef plainly.
 	float extra = LIGHT_IS_DIRECTIONAL ? BACKLIGHT.x : 0.0;
 	DIFFUSE_LIGHT += (ndl + extra) * ATTENUATION * LIGHT_COLOR / PI;

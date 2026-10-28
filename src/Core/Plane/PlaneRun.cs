@@ -24,7 +24,7 @@ public sealed class PlaneRun
         "lucky_sea_glass", "pirates_doubloon",
         "squid_ink_espresso", "whale_lung", "pufferfish_pout", "cuttlebone", "cannonball", "dolphin_fin", "coral_polyp",
         "abyssal_glow", "glass_squid", "sea_cucumber", "sardine_run", "pistol_shrimp", "brass_compass", "sea_chart_nautilus",
-        "bubble_shield", "whale_song", "firefly_squid",
+        "bubble_shield", "whale_song", "firefly_squid", "prism_pearl",
     };
 
     public PlaneRun(ItemCatalog? catalog, Tuning tuning)

@@ -127,7 +127,9 @@ public partial class ReefFishView : Node3D
 
     public void Sync(PlaneWorld world, float dt)
     {
-        if (_map is null || _poses.Count != world.ReefFish.Count) return;
+        if (_map is null) return;
+        // Fish come into the reef (those Drippus Prime took, swimming out of it as it is freed): a pose for each.
+        if (_poses.Count != world.ReefFish.Count) Show(world);
         // An anemone turned (an Inkwarden now, BlightView draws it) is gone from its shelf until it is freed.
         for (int i = 0; i < _anemones.Count && i < world.Anemones.Count; i++)
             _anemones[i].Mesh.SetInstanceTransform(0, world.Anemones[i].Turned ? new Transform3D(Basis.Identity.Scaled(Vector3.Zero), _anemones[i].At.Origin) : _anemones[i].At);
@@ -141,9 +143,9 @@ public partial class ReefFishView : Node3D
             var f = world.ReefFish[i];
             var p = _poses[i];
             var st = Styles[(int)f.Kind];
-            if (f.Corrupted)
+            if (f.Corrupted || f.Gone)
             {
-                // A lesser murkling now (BlightView draws it): out of the reef until it is freed.
+                // A lesser murkling now (BlightView draws it): out of the reef until it is freed. Or swum off, gone.
                 _groups[p.Group].Mesh.SetInstanceTransform(p.Slot, new Transform3D(Basis.Identity.Scaled(Vector3.Zero), Vector3.Zero));
                 continue;
             }

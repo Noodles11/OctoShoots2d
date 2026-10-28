@@ -3,14 +3,17 @@ using System.Numerics;
 
 namespace OctoShoots.Core.Bosses;
 
-/// <summary>The body plans a boss can grow from (docs/BOSS-GENERATOR.md §3). Later passes add the rest.</summary>
-public enum BodyPlan { Bivalve, Echinoderm, Cnidarian, Gastropod }
+/// <summary>
+/// The body plans a boss can grow from (docs/BOSS-GENERATOR.md §3). Later passes add the rest. Ink is no animal: a
+/// creature of ink itself (Drippus Prime, authored, never generated).
+/// </summary>
+public enum BodyPlan { Bivalve, Echinoderm, Cnidarian, Gastropod, Ink }
 
-/// <summary>The real animal a plan is drawn as.</summary>
-public enum BodyForm { GiantClam, SeaStar, Urchin, MoonJelly, Siphonophore, SeaHare, Snail }
+/// <summary>The real animal a plan is drawn as (Murkling: Drippus Prime's body, a murkling prime grown huge).</summary>
+public enum BodyForm { GiantClam, SeaStar, Urchin, MoonJelly, Siphonophore, SeaHare, Snail, Murkling }
 
-/// <summary>The designed fight ideas (§4): every boss is one of these.</summary>
-public enum BossConcept { TheLid, SnappingGate, TurningStar, SlamAndSigh, PulseBell, TrailingCurtain, TheSpreader, ShyShell, BoilHeart }
+/// <summary>The designed fight ideas (§4): every boss is one of these (TheBrood: Drippus Prime's, authored).</summary>
+public enum BossConcept { TheLid, SnappingGate, TurningStar, SlamAndSigh, PulseBell, TrailingCurtain, TheSpreader, ShyShell, BoilHeart, TheBrood }
 
 public enum BossTier { Common, Rare, Legendary }
 
@@ -25,10 +28,15 @@ public enum Exposure
     MovingWindow,
     /// <summary>Buried: it surfaces once the ink sacs over it are burst.</summary>
     CoaxOut,
+    /// <summary>Always, all of it: a body of ink her light tears wherever it strikes (Drippus Prime).</summary>
+    Whole,
 }
 
-/// <summary>What it throws (§7.1). All of it is ink her light cannot clear.</summary>
-public enum BossAttack { Ring, Wall, Helix, Homing, Snap, ArcBombs, PulseRing, SacBurst }
+/// <summary>
+/// What it throws (§7.1). All of it is ink her light cannot clear. Brood and Fan are Drippus Prime's: murklings born out
+/// of its body, and a fan of big drops slung at her.
+/// </summary>
+public enum BossAttack { Ring, Wall, Helix, Homing, Snap, ArcBombs, PulseRing, SacBurst, Brood, Fan }
 
 public enum BossMove { Hold, Turn, Spin, Creep, DriftPulse, Circle }
 
@@ -133,8 +141,8 @@ public sealed class BossSpec
     public BossAttack Signature { get; set; }
     public List<BossAttack> Fillers { get; } = new();
     public BossMove Move { get; set; }
-    /// <summary>It goes after her (a creeper): it may follow her out of its arena. The others keep to it.</summary>
-    public bool Chaser => Move == BossMove.Creep;
+    /// <summary>It goes after her (a creeper): it may follow her out of its arena, unless it bars it. The others keep to it.</summary>
+    public bool Chaser => Move == BossMove.Creep && !Blockade;
     /// <summary>Creep speed (m/s) or turn rate (rad/s), by its move.</summary>
     public float MoveRate { get; set; }
     public BossTempo Tempo { get; set; }

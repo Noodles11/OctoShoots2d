@@ -561,35 +561,80 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void ASpringHealsOnceALevel_ItIsSpentWhenSheLeavesAfterUsingIt()
+    public void ASpringHealsFromItsStoreAcrossVisits_ItIsSpentWhenTheStoreRunsDry()
     {
         var map = TestLevels.Get(TestLevels.All(_ => true).First(id => LightSprings.Of(TestLevels.Get(id)).Count > 0));
         var w = World(map);
         Quiet(w);
         var spring = Assert.Single(w.Springs);
+        Assert.Equal(SpringTuning.Pool, spring.PoolMax);
         var outside = spring.Position + new Vector2(SpringTuning.Radius + 2f, 0f);
+        bool spentRaised = false;
         void Go(Vector2 at, int steps = 1)
         {
             w.Player.Position = w.Player.PrevPosition = at;
-            for (int i = 0; i < steps; i++) w.Step(default);
+            for (int i = 0; i < steps; i++)
+            {
+                w.Step(default);
+                spentRaised |= w.Events.Any(e => e.Type == PlaneEventType.SpringSpent);
+            }
         }
-        // Clean, she swims through: it is not used.
+        // Whole, she swims through: it gives nothing.
         w.Player.Hp = w.Run.MaxHp;
         Go(spring.Position, 10);
         Go(outside);
-        Assert.False(spring.Used || spring.Spent);
-        // Hurt, she bathes a moment and leaves: used, then spent.
-        w.Player.Hp = w.Run.MaxHp * 0.3f;
-        Go(spring.Position, 20);
-        Assert.True(spring.Used && !spring.Spent);
-        Go(outside);
-        Assert.True(spring.Spent);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.SpringSpent);
-        // Back in it, hurt: it heals no more.
+        Assert.Equal(spring.PoolMax, spring.Pool);
+        // Hurt, she bathes a moment and leaves: what it gave her is gone from its store, and it still shines.
         float hp = w.Player.Hp = w.Run.MaxHp * 0.3f;
+        Go(spring.Position, 20);
+        Go(outside);
+        float given = w.Player.Hp - hp;
+        Assert.True(given > 0f);
+        Assert.Equal(spring.PoolMax - given, spring.Pool, 2);
+        Assert.False(spring.Spent);
+        // She comes back as often as she likes, until the store runs dry: then it is spent.
+        for (int visit = 0; visit < 10 && !spring.Spent; visit++)
+        {
+            w.Player.Hp = w.Run.MaxHp * 0.1f;
+            Go(spring.Position, 4 * 60);
+            Go(outside);
+        }
+        Assert.True(spring.Spent);
+        Assert.Equal(0f, spring.Pool);
+        Assert.True(spentRaised);
+        // Back in it, hurt: it heals no more.
+        hp = w.Player.Hp = w.Run.MaxHp * 0.3f;
         Go(spring.Position, 60);
         Assert.Equal(hp, w.Player.Hp, 2);
         Assert.False(spring.Bathing);
+    }
+
+    [Fact]
+    public void NoCreatureOfInkMayEnterAShiningSpring_OnceSpentItMay()
+    {
+        var map = TestLevels.Get(TestLevels.All(_ => true).First(id => LightSprings.Of(TestLevels.Get(id)).Count > 0));
+        var w = World(map);
+        Quiet(w);
+        var spring = Assert.Single(w.Springs);
+        w.Player.Position = w.Player.PrevPosition = spring.Position;
+        // One swims at her from outside, another is clinging to her as she arrives.
+        var swimmer = new Murkling { Position = spring.Position + new Vector2(SpringTuning.Radius + 1f, 0f), Bud = 0f };
+        var clinger = new Murkling { Position = spring.Position + new Vector2(0.3f, 0f), Bud = 0f, Clinging = true, ClingOffset = new Vector2(0.3f, 0f) };
+        w.Murklings.Add(swimmer);
+        w.Murklings.Add(clinger);
+        for (int i = 0; i < 120; i++)
+        {
+            w.Step(default);
+            foreach (var m in w.Murklings.Where(m => m.Alive))
+                Assert.True(Vector2.Distance(m.Position, spring.Position) >= SpringTuning.Radius + m.Body - 1e-3f, $"a murkling in the light at {m.Position}");
+        }
+        Assert.False(clinger.Clinging);
+        // Spent, it wards nothing.
+        spring.Spent = true;
+        var after = new Murkling { Position = spring.Position + new Vector2(1f, 0f), Bud = 0f };
+        w.Murklings.Add(after);
+        w.Step(default);
+        Assert.True(Vector2.Distance(after.Position, spring.Position) < SpringTuning.Radius);
     }
 
     /// <summary>No budding or murklings, so a test sees only what it sets up.</summary>
@@ -619,6 +664,27 @@ public class CorruptionTests
         Assert.True(gone);
         Assert.InRange(shot.Traveled, reach - 0.1f, reach + 0.6f);
         Assert.True(field.At(shot.Position) < before - 0.3f, "its last light clears a little of the ground");
+    }
+
+    [Fact]
+    public void HerLightMeetsASmallCreatureItWouldPassBetweenTwoSteps()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss);
+        Quiet(w);
+        var from = w.Player.Position;
+        var aim = Enumerable.Range(0, 32).Select(i => new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f)))
+            .OrderByDescending(d => Enumerable.Range(0, 40).TakeWhile(k => w.Map.IsOpen(from + d * (k * 0.5f))).Count()).First();
+        // She throws it 1.5 m a step: a small murkling half a step past one of them is never where the light is at a
+        // step's end.
+        float step = PlaneCombatTuning.ShotSpeed * PlaneWorld.Dt;
+        Assert.True(step >= 1.4f);
+        var m = BudAt(w, from + aim * (0.25f + step * 2.5f), prime: false, drink: false)!;
+        m.Bud = 0f;
+        m.Radius = 0.08f;
+        m.Corruption.Max = m.Corruption.Value = 1000f;
+        w.Step(new PlaneInput { Aim = aim, AimReach = 10f, Fire = true });
+        for (int i = 0; i < 20; i++) w.Step(new PlaneInput { Aim = aim, AimReach = 10f });
+        Assert.True(m.Corruption.Value < 1000f, "her light struck it");
     }
 
     [Fact]
@@ -698,7 +764,7 @@ public class CorruptionTests
     }
 
     static Murkling? BudAt(PlaneWorld w, Vector2 at, bool prime, bool drink = true) =>
-        (Murkling?)typeof(PlaneWorld).GetMethod("Bud", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(w, new object[] { at, -1, prime, drink });
+        (Murkling?)typeof(PlaneWorld).GetMethod("Bud", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(w, new object[] { at, -1, prime, drink, false });
 
     /// <summary>The densest open cell of the level at least this far from her.</summary>
     /// <summary>A dense spot with a prime's ink within 7 m.</summary>
@@ -996,6 +1062,26 @@ public class CorruptionTests
         w.Shots.Add(Light(at, 500f));
         w.Step(default);
         Assert.False(m.Alive);
+    }
+
+    [Fact]
+    public void AnInkwardenIsLinkedToEveryCreatureItGuards()
+    {
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
+        Quiet(w);
+        var at = w.Player.Position + new Vector2(0f, -4f);
+        var warden = new Inkwarden { Position = at, Seed = 1f };
+        var other = new Inkwarden { Position = at + new Vector2(2f, 0f), Seed = 2f };
+        w.Inkwardens.Add(warden);
+        w.Inkwardens.Add(other);
+        var near = new Murkling { Position = at + new Vector2(0f, WardenTuning.Reach - 1f), Bud = 0f };
+        var far = new Murkling { Position = at + new Vector2(0f, -(WardenTuning.Reach + 3f)), Bud = 0f };
+        var gone = new Murkling { Position = at + new Vector2(1f, 0f), Bud = 0f, Alive = false };
+        w.Murklings.AddRange(new[] { near, far, gone });
+        // The creature within its reach only: never one out of reach, a dead one, or another warden.
+        Assert.Equal(new[] { near.Position }, w.GuardedBy(warden).ToArray());
+        warden.Alive = false;
+        Assert.Empty(w.GuardedBy(warden));
     }
 
     [Fact]

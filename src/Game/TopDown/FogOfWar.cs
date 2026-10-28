@@ -55,4 +55,33 @@ public sealed class FogOfWar
         }
         if (changed) Texture.Update(_image);
     }
+
+    /// <summary>What she has seen, for the save (base64).</summary>
+    public string Save()
+    {
+        var bytes = new byte[_reveal.Length * sizeof(float)];
+        Buffer.BlockCopy(_reveal, 0, bytes, 0, bytes.Length);
+        return Convert.ToBase64String(bytes);
+    }
+
+    /// <summary>What she had seen, from the save (as <see cref="Save"/> wrote it); nothing changes if it does not fit.</summary>
+    public void Load(string saved)
+    {
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(saved);
+        }
+        catch (FormatException)
+        {
+            return;
+        }
+        if (bytes.Length != _reveal.Length * sizeof(float)) return;
+        Buffer.BlockCopy(bytes, 0, _reveal, 0, bytes.Length);
+        for (int y = 0; y < N; y++)
+        for (int x = 0; x < N; x++)
+            _image.SetPixel(x, y, new Color(_reveal[y * N + x], 0f, 0f));
+        Texture.Update(_image);
+        _last = new(-1000f, -1000f);
+    }
 }

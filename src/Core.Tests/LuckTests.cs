@@ -87,4 +87,12 @@ public class LuckTests
         }
         Assert.True(with > 0, "luck should bring some light springs");
     }
+
+    [Fact]
+    public void Luck_fills_a_light_spring_with_more_healing()
+    {
+        Assert.Equal(0f, LuckTuning.SpringPool(0f));
+        Assert.Equal(0.3f, LuckTuning.SpringPool(2f), 4);
+        Assert.Equal(LuckTuning.PoolMax, LuckTuning.SpringPool(50f));
+    }
 }

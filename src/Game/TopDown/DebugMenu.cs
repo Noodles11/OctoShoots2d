@@ -12,8 +12,8 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// F1, any time in a run: the debug menu. The game stands still under it. Jump to any level of the seed (cycle, depth,
-/// level; a depth ends at its boss level), try Clementine's colour (HerColor: live, and savable to its file), and
-/// switch any pearl on or off. Pearls and colours apply at once.
+/// level; a depth ends at its boss level), switch the floor fog off (to see the floor clear), try Clementine's colour
+/// (HerColor: live, and savable to its file), and switch any pearl on or off. Everything applies at once.
 /// </summary>
 public partial class DebugMenu : Control
 {
@@ -24,6 +24,8 @@ public partial class DebugMenu : Control
     /// <summary>Every pearl on the plane on (true), or every pearl off.</summary>
     public event Action<bool>? AllPearls;
     public event Action? Closed;
+    /// <summary>The floor fog switched on (true) or off.</summary>
+    public event Action<bool>? FloorFogToggled;
 
     static readonly Color Ink = new(0.82f, 0.9f, 0.92f);
     static readonly Color Soft = new(0.55f, 0.65f, 0.68f);
@@ -33,7 +35,7 @@ public partial class DebugMenu : Control
     SeedCode _seed;
     SpinBox _cycle = null!, _depth = null!, _level = null!;
     Label _bossNote = null!, _where = null!;
-    CheckBox _fullHp = null!;
+    CheckBox _fullHp = null!, _floorFog = null!;
     VBoxContainer _pearlList = null!;
     readonly Dictionary<string, CheckBox> _pearls = new();
     ColorPickerButton _body = null!, _light = null!;
@@ -110,6 +112,14 @@ public partial class DebugMenu : Control
         _fullHp = new CheckBox { Text = "Arrive cleansed", ButtonPressed = true };
         _fullHp.AddThemeColorOverride("font_color", Ink);
         go.AddChild(_fullHp);
+
+        // The view: the floor's fog and depth blur, off to see the floor clear.
+        box.AddChild(new HSeparator());
+        box.AddChild(Caption("VIEW", 13, Head));
+        _floorFog = new CheckBox { Text = "Floor fog (the murk and blur below her plane)", ButtonPressed = true };
+        _floorFog.AddThemeColorOverride("font_color", Ink);
+        _floorFog.Toggled += on => FloorFogToggled?.Invoke(on);
+        box.AddChild(_floorFog);
 
         // Clementine's colour: her body, and her light (derived from it unless set).
         box.AddChild(new HSeparator());
@@ -200,8 +210,9 @@ public partial class DebugMenu : Control
     LevelId Selected => new((int)_cycle.Value, (int)_depth.Value, (int)_level.Value);
 
     /// <summary>Fills the menu from the run and shows it.</summary>
-    public void Open(PlaneRun run, ItemCatalog? catalog, SeedCode seed, LevelId current)
+    public void Open(PlaneRun run, ItemCatalog? catalog, SeedCode seed, LevelId current, bool floorFog)
     {
+        _floorFog.SetPressedNoSignal(floorFog);
         _seed = seed;
         if (!ReferenceEquals(catalog, _catalog) || _pearls.Count == 0)
         {

@@ -43,14 +43,14 @@ public partial class BlightView
         public MurkBody(ShaderMaterial material) { Material = material; }
     }
 
-    const int Lobes = 12;
+    internal const int Lobes = 12;
     /// <summary>Its surface tension (spring), its damping (low: it rings), its neighbours' pull, how hard its inertia shapes it, how far it may stand out.</summary>
     const float Tension = 170f, Damping = 5f, Coupling = 40f, Inertia = 0.03f, LobeMax = 0.45f;
     /// <summary>A hit: how deep it dents (per its share of the meter), and the holes' widths (radians: least, and per √share).</summary>
     const float HitDent = 8f, HoleLeast = 0.12f, HoleWide = 0.6f;
     const int MaxHoles = 6;
 
-    static readonly Vector3[] LobeDirs =
+    internal static readonly Vector3[] LobeDirs =
     {
         new(-0.5257f, 0.8507f, 0f), new(0.5257f, 0.8507f, 0f), new(-0.5257f, -0.8507f, 0f), new(0.5257f, -0.8507f, 0f),
         new(0f, -0.5257f, 0.8507f), new(0f, 0.5257f, 0.8507f), new(0f, -0.5257f, -0.8507f), new(0f, 0.5257f, -0.8507f),
@@ -58,7 +58,7 @@ public partial class BlightView
     };
 
     /// <summary>Each lobe's five neighbours (the icosahedron's edges).</summary>
-    static readonly int[][] LobeNear = BuildNear();
+    internal static readonly int[][] LobeNear = BuildNear();
 
     static int[][] BuildNear()
     {

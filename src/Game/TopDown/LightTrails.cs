@@ -108,7 +108,8 @@ public partial class LightTrails : Node3D
     {
         if (!_live.TryGetValue(shot, out var trail)) _live[shot] = trail = new Trail { Seed = _ids++ * 17 };
         trail.Fed = true;
-        trail.Color = HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth);
+        // (Prism Pearl: a third of her split light keeps its own colour.)
+        trail.Color = CombatView.LightOf(shot.Hue).Lerp(new Color(1f, 0.95f, 0.84f), shot.Hue == OctoShoots.Core.Plane.PrismHue.None ? warmth : warmth * 0.3f);
         trail.Strength = strength;
         trail.Style = style;
         var pts = trail.Points;

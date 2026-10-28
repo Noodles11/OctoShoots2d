@@ -182,6 +182,18 @@ public sealed partial class PlaneWorld
         return warded ? 0f : light;
     }
 
+    /// <summary>Where the corrupted creatures this warden guards are now (every one within its reach): its links.</summary>
+    public IEnumerable<Vector2> GuardedBy(Inkwarden w)
+    {
+        if (!w.Alive) yield break;
+        bool Near(Vector2 at) => Vector2.Distance(w.Position, at) <= WardenTuning.Reach;
+        foreach (var m in Murklings) if (m.Alive && Near(m.Position)) yield return m.Position;
+        foreach (var b in Blotters) if (b.Alive && Near(b.Position)) yield return b.Position;
+        foreach (var l in Lashjaws) if (l.Alive && Near(l.Position)) yield return l.Position;
+        foreach (var t in Thumpsquirts) if (t.Alive && Near(t.Position)) yield return t.Position;
+        foreach (var root in Blightroots) if (root.Alive && Near(root.Position)) yield return root.Position;
+    }
+
     void StepInkwardens()
     {
         foreach (var w in Inkwardens)
@@ -214,7 +226,7 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var w in Inkwardens)
             {
-                if (!w.Alive || shot.Struck == w || Vector2.Distance(w.Position, shot.Position) > WardenTuning.Radius + shot.Radius) continue;
+                if (!w.Alive || shot.Struck == w || !Reaches(shot, w.Position, WardenTuning.Radius)) continue;
                 float light = HitDamage(shot);
                 bool emptied = w.Corruption.Hit(light);
                 Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, SafeNormalize(shot.Velocity), light));

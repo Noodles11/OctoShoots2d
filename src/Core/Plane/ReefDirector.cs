@@ -19,7 +19,7 @@ public static class ReefDirectorTuning
     public const float SurgeSpeedMin = 3f, SurgeSpeedMax = 4.5f;
     /// <summary>
     /// The flow pushes at full strength inside the canyon's channel, fading to nothing this far past its walls; out
-    /// to CosmeticReach past them it is only seen (streaks), never felt.
+    /// to CosmeticReach past them it is only seen (its shimmer, CurrentView), never felt.
     /// </summary>
     public const float ForceFeather = 2f, CosmeticReach = 5f;
 }

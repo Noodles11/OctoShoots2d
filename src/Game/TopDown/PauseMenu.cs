@@ -74,7 +74,7 @@ public partial class PauseMenu : Control
         var restart = new Button { Text = "Restart run", CustomMinimumSize = new Vector2(170f, 40f) };
         restart.Pressed += () => RestartPressed?.Invoke();
         buttons.AddChild(restart);
-        var quit = new Button { Text = "Save & quit to title", CustomMinimumSize = new Vector2(190f, 40f), TooltipText = "You'll resume at the start of this level." };
+        var quit = new Button { Text = "Save & quit to title", CustomMinimumSize = new Vector2(190f, 40f), TooltipText = "You'll resume right where you are." };
         quit.Pressed += () => QuitPressed?.Invoke();
         buttons.AddChild(quit);
 

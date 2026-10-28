@@ -135,6 +135,25 @@ public sealed class PlaneBoss
     public float LostThisAct;
     public readonly List<BossSac> Sacs = new();
     public readonly List<BossRing> Rings = new();
+    /// <summary>How long its current warning lasts (Drippus Prime's is its next attack's own; the others' their spec's).</summary>
+    public float TelegraphLength;
+    /// <summary>
+    /// Drippus Prime (PlaneDrippus.cs): its mass (murklings' worth of ink) and its size (a share of its full radius: its
+    /// area follows its mass); its next attack, picked as its warning begins, its acts so far and its turn through the
+    /// others; where the brood's bulges swell; the way it aims (a fan's, locked at the end of its warning); the bounce's
+    /// warning (counting down, negative: none), its rest, the way it springs and the seconds since it last sprang; her
+    /// light's tears in it; the ink it drinks as it rises.
+    /// </summary>
+    public int Mass;
+    public float Size = 1f;
+    public BossAttack Next;
+    public int Acts, Turn;
+    public readonly List<Vector2> BudDirs = new();
+    public Vector2 Aim = Vector2.UnitY;
+    public float Bounce = -1f, BounceCool, Sprang = 10f;
+    public Vector2 BounceDir = Vector2.UnitY;
+    public readonly List<BossTear> Tears = new();
+    public InkDraw? Draw;
     public bool Freed => Stage == BossStage.Freed;
     /// <summary>The pearl can be struck now (by its exposure rule).</summary>
     public bool Open => Stage == BossStage.Fight && Spec.Exposure switch
@@ -142,11 +161,16 @@ public sealed class PlaneBoss
         Exposure.OpenMoments => Act is BossAct.Act or BossAct.Helix,
         Exposure.Stagger => Act == BossAct.Window,
         Exposure.MovingWindow => Act != BossAct.Stagger,
+        Exposure.Whole => true,
         _ => !Sacs.Exists(s => s.Alive) && Act != BossAct.Stagger,
     };
     /// <summary>On the floor of the arena (solid, and hurting while it fights).</summary>
     public bool Landed => Stage == BossStage.Fight || Stage == BossStage.Freed && !Gone;
-    public float Radius => Spec.Radius;
+    public float Radius => Spec.Radius * Size;
+
+    /// <summary>Where her light must strike it, and how near: its pearl (its whole body, for a body of ink).</summary>
+    public Vector2 LightAt => Spec.Exposure == Exposure.Whole ? Position : PearlAt;
+    public float LightReach => Spec.Exposure == Exposure.Whole ? Radius * DrippusTuning.Body : Spec.PearlRadius;
 
     /// <summary>
     /// Every boss holds a corrupted pearl (docs/CORRUPTION.md): it is what makes it fight, the one place her light can
@@ -200,7 +224,8 @@ public sealed partial class PlaneWorld
     {
         if (!Map.HasBoss || Map.Rift) return;
         var spec = Options.Boss ?? BossRoster.For(Map.Seed, Map.Cycle, Math.Max(1, Map.Depth - LevelPlan.Tutorial));
-        Boss = new PlaneBoss { Spec = spec, Position = ArenaCenter, Hp = spec.Hp, MaxHp = spec.Hp };
+        Boss = new PlaneBoss { Spec = spec, Position = ArenaCenter, Hp = spec.Hp, MaxHp = spec.Hp, TelegraphLength = spec.Telegraph };
+        if (IsDrippus(Boss)) Boss.Mass = DrippusTuning.Mass;
         // It lies with its opening toward the screen (south, the camera's side), so the pearl shows.
         ExitOpen = false;
         _bossRng = new Rng(Map.Seed ^ 0xB055C1A3UL ^ ((ulong)Map.Level << 24) ^ ((ulong)Map.Depth << 32) ^ ((ulong)Map.Attempt << 50));
@@ -237,10 +262,13 @@ public sealed partial class PlaneWorld
                 {
                     boss.Stage = BossStage.Drop;
                     boss.StageTime = 0f;
+                    // Drippus Prime does not drop in: it rises out of the arena's ink.
+                    if (IsDrippus(boss)) BeginRise(boss);
                 }
                 break;
             case BossStage.Drop:
-                if (boss.StageTime >= PlaneBossTuning.ShadowSeconds) Land(boss);
+                if (IsDrippus(boss)) StepRise(boss, boss.StageTime / DrippusTuning.Rise);
+                if (boss.StageTime >= (IsDrippus(boss) ? DrippusTuning.Rise : PlaneBossTuning.ShadowSeconds)) Land(boss);
                 break;
             case BossStage.Fight:
                 StepFight(boss);
@@ -258,6 +286,12 @@ public sealed partial class PlaneWorld
             if (boss.Wave >= ArenaRadius) boss.Wave = -1f;
         }
 
+        // Drippus Prime bounces her off (its body is solid to her too).
+        if (IsDrippus(boss))
+        {
+            if (boss.Stage == BossStage.Fight) StepBounce(boss);
+            return;
+        }
         // Its body is solid: Clementine is pushed off it (and hurt by it while the fight runs). Freed, only a clam
         // lying open stays solid; the others leave.
         bool solid = boss.Stage == BossStage.Fight || boss.Freed && boss.Spec.Form == BodyForm.GiantClam;
@@ -281,13 +315,17 @@ public sealed partial class PlaneWorld
 
     void Land(PlaneBoss boss)
     {
-        if (Corruption is not null)
+        if (Corruption is not null && !Options.Adventure)
         {
-            // An explorer who cleansed the level meets an easier boss (up to BossEase less health and pattern).
+            // An explorer who cleansed the level meets an easier boss (up to BossEase less health and pattern). (The
+            // adventure's ink is in the water, not on the ground: its boss is never eased.)
             float ease = 1f - CorruptionTuning.BossEase * Cleansed;
             boss.MaxHp = boss.Hp = boss.Hp * ease;
             boss.Pattern = ease;
         }
+        // Risen, Drippus Prime has drunk all its ink.
+        if (boss.Draw is { } draw && Corruption is { } ground) ground.Drink(draw, 1f);
+        boss.Draw = null;
         boss.Stage = BossStage.Fight;
         boss.StageTime = 0f;
         boss.Act = BossAct.Rest;
@@ -306,15 +344,25 @@ public sealed partial class PlaneWorld
     {
         BossBattle = false;
         if (boss.Spec.Blockade) UnbarArena();
-        // The Crack opens once the arena is cleansed enough too (StepCondensation).
-        ExitOpen = Corruption is null || ArenaCleansed >= CorruptionTuning.ArenaToOpen;
-        if (ExitOpen && Corruption is not null) Events.Add(new PlaneEvent(PlaneEventType.CrackOpened, ArenaCenter, Vector2.Zero));
+        // The Crack opens once the arena is cleansed enough too (StepCondensation); in the adventure, once every vent is
+        // sealed too (SealVent).
+        if (Options.Adventure)
+        {
+            ExitOpen = VentsOpen == 0;
+            if (ExitOpen) Events.Add(new PlaneEvent(PlaneEventType.ExitOpened, Map.Exit.Position, Vector2.Zero));
+        }
+        else
+        {
+            ExitOpen = Corruption is null || ArenaCleansed >= CorruptionTuning.ArenaToOpen;
+            if (ExitOpen && Corruption is not null) Events.Add(new PlaneEvent(PlaneEventType.CrackOpened, ArenaCenter, Vector2.Zero));
+        }
         var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id || q.Taken)).ToList();
         var boss_ = offer.Where(id => Run.Catalog!.TryGet(id, out var item) && item.Pools.Contains("boss")).ToList();
         var pick = boss_.Count > 0 ? boss_ : offer;
         var pearlAt = boss.PearlAt;
         boss.LeapFrom = boss.Position;
-        if (boss.Spec.Form == BodyForm.GiantClam)
+        if (IsDrippus(boss)) ReleaseSwallowed(boss);
+        else if (boss.Spec.Form == BodyForm.GiantClam)
         {
             // A clam leaps aside off the gateway (to its side, or the other if there is no room) and lies there, open.
             var side = new Vector2(boss.Facing.Y, -boss.Facing.X);
@@ -370,6 +418,13 @@ public sealed partial class PlaneWorld
         // A Vibration sense hears her shots and dashes.
         if (p.IsDashing || Events.Exists(e => e.Type == PlaneEventType.Shot)) boss.Heard = p.Position;
         if (spec.Exposure == Exposure.MovingWindow && boss.Act != BossAct.Stagger) boss.PearlTurn += spec.PearlOrbit * Dt;
+        if (IsDrippus(boss))
+        {
+            StepTears(boss);
+            // A fan's aim follows her through its warning, locked for the last moment of it.
+            if (boss.Act == BossAct.Telegraph && boss.Next == BossAttack.Fan && boss.TelegraphLength - boss.ActTime > DrippusTuning.FanLock)
+                boss.Aim = AimFrom(boss, boss.Position);
+        }
 
         switch (boss.Act)
         {
@@ -377,7 +432,7 @@ public sealed partial class PlaneWorld
                 if (boss.ActTime >= spec.Rest * boss.RestScale) BeginTelegraph(boss);
                 break;
             case BossAct.Telegraph:
-                if (boss.ActTime >= spec.Telegraph)
+                if (boss.ActTime >= boss.TelegraphLength)
                 {
                     SetAct(boss, BossAct.Act);
                     boss.Fired = 0;
@@ -468,6 +523,8 @@ public sealed partial class PlaneWorld
 
     void BeginTelegraph(PlaneBoss boss)
     {
+        if (IsDrippus(boss)) PickDrippusAct(boss);
+        else boss.TelegraphLength = boss.Spec.Telegraph;
         SetAct(boss, BossAct.Telegraph);
         Events.Add(new PlaneEvent(PlaneEventType.BossTelegraph, boss.Position, boss.Facing));
         // A drifting body pulses on each telegraph: toward her if it senses her, else somewhere across the arena.
@@ -499,6 +556,7 @@ public sealed partial class PlaneWorld
     BossAttack VolleyAt(PlaneBoss boss, int i)
     {
         var spec = boss.Spec;
+        if (IsDrippus(boss)) return boss.Next;
         var others = boss.Active.Skip(1 + spec.Fillers.Count).Where(IsVolley).Concat(spec.Fillers.Where(IsVolley)).ToList();
         bool signature = IsVolley(spec.Signature) || spec.Signature == BossAttack.Homing;
         if (i % 2 == 0 && signature || others.Count == 0) return spec.Signature;
@@ -550,8 +608,9 @@ public sealed partial class PlaneWorld
             case BossMove.Creep:
                 if (still) break;
                 var to = p.Position - boss.Position;
+                float rate = IsDrippus(boss) ? DrippusPace(boss) : spec.MoveRate;
                 if (to.Length() > boss.Radius + PlaneBossTuning.CreepStop)
-                    boss.Position = KeepInArena(boss, boss.Position + SafeNormalize(to) * spec.MoveRate * Dt);
+                    boss.Position = KeepInArena(boss, boss.Position + SafeNormalize(to) * rate * Dt);
                 boss.Facing = Turn(boss.Facing, SafeNormalize(to) == Vector2.Zero ? boss.Facing : SafeNormalize(to), 1.2f * Dt);
                 break;
             case BossMove.DriftPulse:
@@ -611,9 +670,17 @@ public sealed partial class PlaneWorld
                 }
                 break;
             }
+            case BossAttack.Brood:
+                Brood(boss);
+                break;
+            case BossAttack.Fan:
+                Fan(boss);
+                break;
             case BossAttack.ArcBombs:
             {
-                int n = PlaneBossTuning.Bombs + (spec.Menace >= 0.6f ? 1 : 0);
+                // Drippus Prime's burst grows by phase, and leads her.
+                bool drippus = IsDrippus(boss);
+                int n = drippus ? DrippusTuning.Bombs[Math.Min(boss.Phase, DrippusTuning.Bombs.Length) - 1] : PlaneBossTuning.Bombs + (spec.Menace >= 0.6f ? 1 : 0);
                 for (int i = 0; i < n; i++)
                 {
                     Vector2 to;
@@ -625,6 +692,7 @@ public sealed partial class PlaneWorld
                     else
                     {
                         var target = spec.Sense == BossSense.Water ? Player.Position : boss.Heard;
+                        if (drippus) target += Player.Velocity * DrippusTuning.BombLead;
                         float a = _bossRng.Range(0f, MathF.Tau);
                         to = target + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (i == 0 ? 0f : _bossRng.Range(1f, PlaneBossTuning.BombSpread));
                     }
@@ -717,14 +785,15 @@ public sealed partial class PlaneWorld
     {
         var boss = Boss;
         if (boss is null || boss.Stage != BossStage.Fight) return false;
+        if (IsDrippus(boss)) return ShotHitsDrippus(boss, shot);
         foreach (var sac in boss.Sacs)
         {
-            if (!sac.Alive || Vector2.Distance(shot.Position, boss.SacAt(sac)) > PlaneBossTuning.SacRadius * (0.6f + sac.Site.Size) + shot.Radius) continue;
+            if (!sac.Alive || !Reaches(shot, boss.SacAt(sac), PlaneBossTuning.SacRadius * (0.6f + sac.Site.Size))) continue;
             DamageSac(boss, sac, HitDamage(shot), shot.Velocity);
             Pop(shot, boss.SacAt(sac) - shot.Position);
             return true;
         }
-        if (boss.Open && Vector2.Distance(shot.Position, boss.PearlAt) <= boss.Spec.PearlRadius + shot.Radius)
+        if (boss.Open && Reaches(shot, boss.PearlAt, boss.Spec.PearlRadius))
         {
             // The crust absorbs most of a shot's light while it holds (each layer a sixth).
             DamageBoss(boss, HitDamage(shot) * (1f - 0.17f * boss.Crust), shot.Velocity);
@@ -734,7 +803,7 @@ public sealed partial class PlaneWorld
         // An open clam's raised lid lets light over its shell to the pearl; a moving-window body is all skin; a Coax-out
         // body is soft, and light passes over it to the sacs and the pearl.
         if (boss.Open || boss.Spec.Exposure == Exposure.CoaxOut) return false;
-        if (Vector2.Distance(shot.Position, boss.Position) > boss.Radius + shot.Radius) return false;
+        if (!Reaches(shot, boss.Position, boss.Radius)) return false;
         Pop(shot, boss.Position - shot.Position);
         return true;
     }
@@ -755,7 +824,7 @@ public sealed partial class PlaneWorld
         if (Boss is not { Stage: BossStage.Fight } boss) return;
         foreach (var sac in boss.Sacs)
             if (sac.Alive && Vector2.Distance(boss.SacAt(sac), at) < reach + PlaneBossTuning.SacRadius) DamageSac(boss, sac, damage, boss.SacAt(sac) - at);
-        if (boss.Open && Vector2.Distance(boss.PearlAt, at) < reach + boss.Spec.PearlRadius) DamageBoss(boss, damage, boss.PearlAt - at);
+        if (boss.Open && Vector2.Distance(boss.LightAt, at) < reach + boss.LightReach) DamageBoss(boss, damage, boss.LightAt - at);
     }
 
     /// <summary>Her light hurts the boss through its pearl; past each phase threshold it staggers into the next phase; at none it is freed.</summary>
@@ -778,6 +847,12 @@ public sealed partial class PlaneWorld
             SetAct(boss, BossAct.Rest);
             Events.Add(new PlaneEvent(PlaneEventType.BossClosed, boss.Position, boss.Facing, 1f));
         }
+        CheckPhase(boss);
+    }
+
+    /// <summary>Past its next phase threshold (the share of its meter lost, however it was lost), it staggers into that phase.</summary>
+    void CheckPhase(PlaneBoss boss)
+    {
         var t = boss.Thresholds;
         if (boss.Phase - 1 < t.Length && 1f - boss.Hp / boss.MaxHp >= t[boss.Phase - 1]) NextPhase(boss, t[boss.Phase - 1]);
     }
@@ -830,6 +905,7 @@ public sealed partial class PlaneWorld
         foreach (var s in Shots)
             if (s.BossPearl) s.Life = 0f;
         Bombs.RemoveAll(b => b.FromBoss);
+        if (IsDrippus(boss)) FreeDrippus(boss);
         if (Corruption is { } field && ArenaArea is { } arena) field.Clear(arena.Cells);
         Events.Add(new PlaneEvent(PlaneEventType.BossDefeated, boss.Position, boss.Facing, ArenaRadius));
     }

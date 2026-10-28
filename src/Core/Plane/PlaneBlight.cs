@@ -213,6 +213,8 @@ public sealed class Murkling
     public float Body = BlightTuning.MurkRadius;
     /// <summary>A murkling prime (rare, five times the size, every stat scaled up); its bud's length.</summary>
     public bool Prime;
+    /// <summary>One of Drippus Prime's brood: born out of its body (it pops when Drippus is freed).</summary>
+    public bool Brood;
     public float BudTotal = BlightTuning.BudSeconds;
     /// <summary>The ink it is drinking while it buds (null once drunk, or for one that drinks nothing), and the ink it is made of (field units, freed when it bursts).</summary>
     public InkDraw? Draw;
@@ -598,7 +600,7 @@ public sealed partial class PlaneWorld
             foreach (var shot in Shots)
             {
                 if (!shot.FromPlayer || shot.Life <= 0f) continue;
-                if (Vector2.Distance(shot.Position, root.Position) > BlightTuning.SacRadius + shot.Radius) continue;
+                if (!Reaches(shot, root.Position, BlightTuning.SacRadius)) continue;
                 float light = HitDamage(shot);
                 float dealt = Ward(root, root.Position, light);
                 bool emptied = dealt > 0f && root.Corruption.Hit(dealt);
@@ -894,10 +896,10 @@ public sealed partial class PlaneWorld
             s.Traveled += s.Velocity.Length() * Dt;
             if (s.Traveled >= BlightTuning.ThrowFallAt) s.Fall = Dt;
             if (!Map.IsOpen(s.Position)) s.Life = 0f;
-            else if (Vector2.Distance(s.Position, p.Position) < Radius + s.Radius)
+            else if (ReachesHer(s.Position, s.Radius, out var struck))
             {
                 s.Life = 0f;
-                HurtPlayer(s.Damage, SafeNormalize(s.Velocity), DamageSource.MurkShot);
+                HurtPlayer(s.Damage, SafeNormalize(s.Velocity), DamageSource.MurkShot, struck);
             }
             else if (StrikeFish(s)) s.Life = 0f;
         }
@@ -911,7 +913,7 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var m in Murklings)
             {
-                if (!m.Alive || m.Clinging || shot.Struck == m || Vector2.Distance(m.Position, shot.Position) > m.Radius + shot.Radius) continue;
+                if (!m.Alive || m.Clinging || shot.Struck == m || !Reaches(shot, m.Position, m.Radius)) continue;
                 float light = HitDamage(shot);
                 float dealt = Ward(m, m.Position, light);
                 bool emptied = dealt > 0f && m.Corruption.Hit(dealt);
@@ -928,7 +930,7 @@ public sealed partial class PlaneWorld
             if (shot.Life <= 0f) continue;
             foreach (var s in MurkShots)
             {
-                if (s.Life <= 0f || !s.Airborne || Vector2.Distance(s.Position, shot.Position) > s.Radius + shot.Radius) continue;
+                if (s.Life <= 0f || !s.Airborne || !Reaches(shot, s.Position, s.Radius)) continue;
                 SplatterThrow(s);
                 DimBubble(shot, BlightTuning.BubbleDim);
                 if (shot.Life <= 0f) break;
@@ -996,8 +998,9 @@ public sealed partial class PlaneWorld
     /// <summary>
     /// A murkling (or a prime) buds here, made of the nearest ink (<paramref name="drink"/>): null when the level no
     /// longer holds that much. Without drink it is made of nothing from the ground (an ambush's, a prime's pieces).
+    /// Born, it is out at once, out of a body rather than the ground (Drippus Prime's brood): no bud.
     /// </summary>
-    Murkling? Bud(Vector2 at, int area, bool prime = false, bool drink = true)
+    Murkling? Bud(Vector2 at, int area, bool prime = false, bool drink = true, bool born = false)
     {
         InkDraw? draught = null;
         if (drink && Corruption is { } ground)
@@ -1018,6 +1021,11 @@ public sealed partial class PlaneWorld
         }
         m.Draw = draught;
         (_budLater ? _madeLater : Murklings).Add(m);
+        if (born)
+        {
+            m.Bud = 0f;
+            return m;
+        }
         // The bud: its time, how far out it drinks and how thick that ink is (the view pulls dots in from the cells it drinks).
         float radius = draught?.Radius ?? BlightTuning.GatherRadius;
         float ink = draught?.Ink ?? (Corruption is { } field ? DenseShare(field, at, radius, 0.15f) : 0f);

@@ -17,10 +17,10 @@ public class ItemTests
     [Fact]
     public void CatalogLoadsTheFullSet()
     {
-        Assert.Equal(70, Catalog.Items.Count);
+        Assert.Equal(71, Catalog.Items.Count);
         Assert.Equal(20, Catalog.Synergies.Count);
         Assert.Equal(5, Catalog.Transformations.Count);
-        Assert.Equal(11, Catalog.Items.Count(i => i.Kind == ItemKind.Active));
+        Assert.Equal(12, Catalog.Items.Count(i => i.Kind == ItemKind.Active));
     }
 
     [Fact]

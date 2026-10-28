@@ -245,8 +245,8 @@ public partial class LevelView : Node3D
 
     /// <summary>The dive's portal: world xz centre, radius, and mode (0 off, 1 cut away inside, 2 only the inside).</summary>
     /// <summary>
-    /// In a curse den's tunnel: rock between the camera and the tunnel round her (world xz, this far round, at her plane's
-    /// height) thins away by this much (0 none), so the walls in front never hide the way (level_frame's lf_see_cut).
+    /// Rock between the camera and her plane round her (world xz, this far round, at her plane's height) is carved away by
+    /// this much (0 none), so no wall ever hides her (level_frame's lf_see_cut).
     /// </summary>
     public void SeeThrough(Vector3 her, float radius, float amount)
     {

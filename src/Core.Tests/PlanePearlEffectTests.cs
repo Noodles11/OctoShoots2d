@@ -67,7 +67,7 @@ public class PlanePearlEffectTests
             Assert.True(Catalog.Value.Contains(id), id);
             var item = Catalog.Value[id];
             if (item.Kind == ItemKind.Active)
-                Assert.Contains(item.Active!.Action, new[] { ActiveAction.BubbleShield, ActiveAction.WhaleSong });
+                Assert.Contains(item.Active!.Action, new[] { ActiveAction.BubbleShield, ActiveAction.WhaleSong, ActiveAction.Prism });
             else
                 Assert.True(item.Shot is not null || item.Stats.Count > 0 || item.Flags.Count > 0, id);
         }
@@ -225,6 +225,58 @@ public class PlanePearlEffectTests
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.ActiveNotReady);
         for (int i = 0; i < 20 * PlaneWorld.TickRate; i++) w.Step(default);
         Assert.Equal(1f, w.Run.ActiveCharge);
+    }
+
+    [Fact]
+    public void PrismPearlSplitsHerIntoRedGreenAndBlue_EachShoots_AHitOnAnyIsHers_ThenTheyRejoin()
+    {
+        var w = World("prism_pearl");
+        var p = w.Player;
+        // The way with the most room either side of it.
+        var from = p.Position;
+        var aim = Enumerable.Range(0, 32).Select(i => new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f)))
+            .OrderByDescending(d => Enumerable.Range(0, 12).TakeWhile(k => w.Clear(from + new Vector2(-d.Y, d.X) * (k * 0.25f), 0.4f) && w.Clear(from - new Vector2(-d.Y, d.X) * (k * 0.25f), 0.4f)).Count()).First();
+        w.Step(new PlaneInput { Aim = aim, UseActive = true });
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.PrismSplit);
+        Assert.True(w.Prism);
+        // Split: a triangle round where she steers, she (the green) at its front corner toward her aim, the red behind
+        // on her left, the blue behind on her right.
+        for (int i = 0; i < (int)(PrismTuning.Split * PlaneWorld.TickRate) + 2; i++) w.Step(new PlaneInput { Aim = aim });
+        Assert.Equal(1f, w.PrismOpen, 2);
+        var side = new Vector2(-aim.Y, aim.X);
+        Assert.True(Vector2.Dot(w.PrismParts[0].Position - p.Position, side) < -1f);
+        Assert.True(Vector2.Dot(w.PrismParts[1].Position - p.Position, side) > 1f);
+        Assert.All(w.PrismParts, part => Assert.True(Vector2.Dot(part.Position - p.Position, aim) < -0.3f));
+        Assert.True(Vector2.Dot(w.PrismLead.Position - p.Position, aim) > 0.5f);
+        Assert.Equal(w.PrismLead.Position, w.HerBody);
+        // Held fire: all three shoot, each in its own colour.
+        for (int i = 0; i < PlaneWorld.TickRate; i++)
+        {
+            p.Hp = 100f;
+            p.Light = 1f;
+            w.Step(new PlaneInput { Aim = aim, Fire = true });
+        }
+        foreach (var hue in new[] { PrismHue.Red, PrismHue.Green, PrismHue.Blue })
+            Assert.Contains(w.Shots, s => s.FromPlayer && s.Hue == hue);
+        // A needle striking the red is a hit on her.
+        w.Shots.Clear();
+        for (int i = 0; i < PlaneWorld.TickRate; i++) w.Step(new PlaneInput { Aim = aim });
+        var red = w.PrismParts[0].Position;
+        w.Shots.Add(new PlaneShot { Position = red, Line = red, Velocity = Vector2.UnitX * 0.01f, Life = 1f, Needle = true, Damage = 8f, Radius = 0.18f });
+        w.Step(new PlaneInput { Aim = aim });
+        Assert.Equal(92f, p.Hp, 2);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.PlayerHit && Vector2.Distance(e.Position, red) < 0.5f);
+        // Its time over, they flow back into her; her light is her own again.
+        bool joined = false;
+        for (int i = 0; i < 8 * PlaneWorld.TickRate && !joined; i++)
+        {
+            w.Step(new PlaneInput { Aim = aim });
+            joined = w.Events.Any(e => e.Type == PlaneEventType.PrismJoined);
+        }
+        Assert.True(joined);
+        Assert.False(w.Prism);
+        Assert.All(w.PrismParts, part => Assert.Equal(p.Position, part.Position));
+        Assert.Equal(p.Position, w.HerBody);
     }
 
     [Fact]

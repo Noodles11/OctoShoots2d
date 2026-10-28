@@ -38,6 +38,11 @@ public static class AdventureTuning
     /// </summary>
     public const int VentHits = 8, VentXp = 25;
     public const float VentHitsPerMenace = 2f, VentReach = 1.6f, VentHold = 1.4f, VentDrain = 0.3f;
+    /// <summary>
+    /// The deeper the level, the longer its vents have been pouring: each starts with a puddle of PuddlePerMenace ×
+    /// Menace dots grown out of its mouth (none at Depth 1, 12 at Depth 2, 60 at Depth 6), its edge ragged by PuddleRagged.
+    /// </summary>
+    public const float PuddlePerMenace = 60f, PuddleRagged = 0.45f;
 
     /// <summary>
     /// A fish's gauge: it fills FishFill a second with a dot within FishSense, FishEat for each dot it eats, and drains
@@ -309,13 +314,14 @@ public sealed partial class PlaneWorld
     Rng _inkRng = null!;
     readonly List<Vector2> _cleared = new();
 
-    /// <summary>The adventure's level: the dots' grid, the vents, the way down shut until they are sealed.</summary>
+    /// <summary>The adventure's level: the dots' grid, the vents, the way down shut until they are sealed (and its boss freed).</summary>
     void PlaceAdventure()
     {
         _inkRng = new Rng(Map.Seed ^ 0x1DC0757UL ^ ((ulong)Map.Level << 21) ^ ((ulong)Map.Depth << 29) ^ ((ulong)Map.Attempt << 45));
         Dots = InkDots.ForMap(Map);
         PlaceVents();
-        ExitOpen = Vents.Count == 0;
+        PlacePuddles(Dots);
+        ExitOpen = Vents.Count == 0 && Boss is null;
     }
 
     void PlaceVents()
@@ -368,6 +374,39 @@ public sealed partial class PlaneWorld
                     StreamTimer = _inkRng.Range(0.2f, AdventureTuning.VentEvery),
                 });
             }
+    }
+
+    /// <summary>
+    /// The ink a deeper level starts with: round each vent a puddle (PuddlePerMenace × Menace dots), grown out of its
+    /// mouth as the ink itself spreads — neighbour to neighbour through open water only, the nearest first, its edge
+    /// ragged (each cell's distance stretched by up to PuddleRagged at random) — so it lies joined to its vent, fed.
+    /// </summary>
+    void PlacePuddles(InkDots dots)
+    {
+        int size = (int)MathF.Round(AdventureTuning.PuddlePerMenace * Menace);
+        if (size <= 0) return;
+        foreach (var v in Vents)
+        {
+            int mouth = InkDots.CellOf(v.Position + v.Facing * 0.6f);
+            if (mouth < 0 || !dots.Open[mouth]) mouth = InkDots.CellOf(v.Position + v.Facing * 1.4f);
+            if (mouth < 0 || !dots.Open[mouth]) continue;
+            var reach = new PriorityQueue<int, float>();
+            var seen = new HashSet<int> { mouth };
+            reach.Enqueue(mouth, 0f);
+            int placed = 0;
+            while (placed < size && reach.TryDequeue(out int cell, out _))
+            {
+                if (dots.Add(cell) || dots.Has(cell)) placed++;
+                for (int k = 0; k < 4; k++)
+                {
+                    int next = dots.Neighbour(cell, k);
+                    if (next < 0 || !seen.Add(next)) continue;
+                    float far = Vector2.Distance(InkDots.Centre(next), v.Position) * (1f + AdventureTuning.PuddleRagged * _inkRng.NextFloat());
+                    reach.Enqueue(next, far);
+                }
+            }
+        }
+        dots.Feed(VentMouths(dots));
     }
 
     /// <summary>The adventure's turn, after the war's: vents pour, the ink spreads and trails, fish and anemones fill, her light refills.</summary>
@@ -443,7 +482,8 @@ public sealed partial class PlaneWorld
         v.Hits = v.Needed;
         v.Wave = 0f;
         Events.Add(new PlaneEvent(PlaneEventType.VentSealed, v.Position, v.Facing, VentsOpen));
-        if (VentsOpen > 0 || ExitOpen) return;
+        // A boss level's way down waits for its boss too (PlaneBoss's Release opens it once both are done).
+        if (VentsOpen > 0 || ExitOpen || Boss is { Freed: false }) return;
         ExitOpen = true;
         Events.Add(new PlaneEvent(PlaneEventType.ExitOpened, Map.Exit.Position, Vector2.Zero));
     }

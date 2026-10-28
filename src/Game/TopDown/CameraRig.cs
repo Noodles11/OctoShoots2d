@@ -62,6 +62,9 @@ public partial class CameraRig : Node3D
     Vector3 _player;
 
     /// <summary>The reduced-motion setting: no refraction wobble in the water.</summary>
+    /// <summary>Debug: the floor's fog and depth blur on (the game's look) or off (the floor seen clear).</summary>
+    public void SetFloorFog(bool on) => _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("floor_fog"), on);
+
     public void SetReducedMotion(bool reduced) => _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("wobble"), reduced ? 0f : 1f);
 
     /// <summary>Light bubbles: the halos her bubbles and their pop blooms cast on the swim layer (x, z, radius, strength).</summary>
@@ -181,6 +184,11 @@ public partial class CameraRig : Node3D
     /// <summary>A big-merge kill: the screen's edges lift toward white for 60 ms.</summary>
     public void EdgeFlash() => _edgeFlash = 1f;
     float _edgeFlash;
+
+    /// <summary>Prism Pearl: the picture's colours pulled apart for a moment (chromatic aberration), easing back over AberrationSeconds.</summary>
+    public void Aberrate(float strength = 1f) => _aberration = Mathf.Max(_aberration, strength);
+    float _aberration;
+    const float AberrationSeconds = 0.6f;
     const float EdgeFlashSeconds = 0.06f;
 
     /// <summary>The camera-shake setting.</summary>
@@ -232,5 +240,7 @@ public partial class CameraRig : Node3D
         _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("player_pos"), focus);
         _edgeFlash = Mathf.MoveToward(_edgeFlash, 0f, dt / EdgeFlashSeconds);
         _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("edge_flash"), _edgeFlash);
+        _aberration = Mathf.MoveToward(_aberration, 0f, dt / AberrationSeconds);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("aberration"), _aberration * _aberration);
     }
 }

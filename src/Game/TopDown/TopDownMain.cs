@@ -23,10 +23,11 @@ namespace OctoShoots.Game.TopDown;
 /// screen (RunLaunch); run directly with verification flags, it starts a run on its own and saves nothing.
 /// WASD swims (north is up), Space dashes, Shift dives (InputSetup), the mouse aims, F1 opens the debug menu (any
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
-/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|kelp|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss,
-/// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --boss-hp=, --paused, --map, --f3, --no-focus,
+/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|kelp|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss|spring|spring-in,
+/// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --luck=, --boss-hp=, --paused, --map, --f3, --no-focus, --dbg-nofog (no floor fog),
 /// --capture=dir --frames=a,b, --dbg-say=text (a message banner, a second in), --at=gate (swims into the boss arena through its
-/// opened way in), --dbg-free=seconds (the boss freed that long after it lands).
+/// opened way in), --dbg-free=seconds (the boss freed that long after it lands), --dbg-steer=x,y (she swims that way;
+/// --dbg-steer-fight: once the boss fights), --look=N (an art direction under study for the reef, docs/ART-LOOKS.md).
 /// </summary>
 public partial class TopDownMain : Node3D
 {
@@ -37,6 +38,7 @@ public partial class TopDownMain : Node3D
     CombatView _combat = null!;
     CurrentView _currents = null!;
     KelpView _kelp = null!;
+    AbyssView _abyss = null!;
     VaseView _vases = null!;
     /// <summary>Achievements: their data, what earns them on this run, and the banner that announces them (§8).</summary>
     AchievementCatalog? _achievementData;
@@ -44,12 +46,14 @@ public partial class TopDownMain : Node3D
     AchievementBanner _achievementBanner = null!;
     string? _debugAward;
     string? _debugSay;
-    /// <summary>Verification (`--dbg-steer=x,y`): she swims that way (map axes) the whole time.</summary>
+    /// <summary>Verification (`--dbg-steer=x,y`): she swims that way (map axes) the whole time (with `--dbg-steer-fight`, once the boss fights).</summary>
     Vector2? _dbgSteer;
+    bool _dbgSteerFight;
     bool _dbgGate;
-    /// <summary>How far the rock in front of a curse den's tunnel has thinned away (0..1), and how far round her.</summary>
-    float _seeThrough;
+    /// <summary>How far round her the rock between the camera and her is carved away.</summary>
     const float SeeThroughRadius = 4.5f;
+    /// <summary>Verification (--dbg-nocarve): the walls are not carved away round her.</summary>
+    readonly bool _dbgNoCarve = OS.GetCmdlineUserArgs().Contains("--dbg-nocarve");
     float _dbgFree;
     BossView _boss = null!;
     PufferlingView _puffers = null!;
@@ -82,6 +86,7 @@ public partial class TopDownMain : Node3D
     int _dbgGoTo;
     /// <summary>The boss's anime cut-in, played once as its battle begins (the game held meanwhile).</summary>
     BossIntro _intro = null!;
+    readonly BellView[] _prismBells = { new() { Part = 0 }, new() { Part = 1 } };
     bool _introShown;
     float? _bossHp;
     /// <summary>Verification: fire at the nearest mob; start the run with these pearls.</summary>
@@ -92,9 +97,9 @@ public partial class TopDownMain : Node3D
     /// <summary>Verification (the adventure): every Inkwarden is struck two seconds in (it rouses and fires its spikes).</summary>
     bool _dbgRouse;
     bool _autoFire, _autoActive, _dbgPop, _dbgSurge, _startPaused, _dbgBossLevel, _dbgGeyser, _dbgShells, _dbgMurkFish, _dbgThrow;
-    /// <summary>Verification: `--boss=<Concept>` (or `queen`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
+    /// <summary>Verification: `--boss=<Concept>` (or `queen`, or `drippus`) names the boss to meet; `--boss-level` starts on the depth's boss level.</summary>
     string? _dbgBoss;
-    float? _startHp;
+    float? _startHp, _dbgLuck;
     /// <summary>Verification (`--xp=n`): experience she starts the run with.</summary>
     int _startXp;
     /// <summary>Verification (`--dbg-levelup`): the drawer's first choice made for her, a moment after it opens.</summary>
@@ -117,6 +122,8 @@ public partial class TopDownMain : Node3D
     CameraRig _camera = null!;
     DebugMapOverlay _debugMap = null!;
     MinimapView _minimap = null!;
+    /// <summary>The way down, once open: an arrow at the screen's edge while the shaft is out of sight.</summary>
+    readonly ExitPointer _exitPointer = new();
     TopoMap _fullMap = null!;
     readonly HashSet<int> _visited = new();
     readonly FogOfWar _fog = new();
@@ -187,6 +194,23 @@ public partial class TopDownMain : Node3D
     /// </summary>
     float HudScale => Mathf.Clamp(Mathf.Pow(GetViewport().GetVisibleRect().Size.Y / 1080f, 0.6f), 0.7f, 2f);
 
+    /// <summary>
+    /// The way down, once it is open, pointed out from the screen's edge while the shaft is out of sight (not while the
+    /// game is held: a level-up, the boss's intro, a dive, between levels).
+    /// </summary>
+    void SyncExitPointer(float dt)
+    {
+        _exitPointer.Size = _hudRoot.Size;
+        bool open = _world.ExitOpen && _transition == Transition.None && !_deathSplash && !_diving && _lvl == LevelUpPhase.None && !_intro.Playing;
+        var cam = _camera.Camera;
+        var view = GetViewport().GetVisibleRect().Size;
+        Vector2 Shown(Vector3 at) => OctoShoots.Game.Fx.Fisheye.Shown(cam.UnprojectPosition(at), view) / HudScale;
+        var shaft = _map.Shaft.Center;
+        var her = _bell.GlobalPosition;
+        Vector2? target = open ? Shown(new Vector3(shaft.X, LevelMap.SwimBand, shaft.Y)) : null;
+        _exitPointer.Step(dt, target, Shown(new Vector3(her.X, LevelMap.SwimBand, her.Z)));
+    }
+
     /// <summary>Lays the HUD out for the window's size this frame.</summary>
     void FitHud()
     {
@@ -215,6 +239,10 @@ public partial class TopDownMain : Node3D
     string? _startAt;
     /// <summary>Verification: bud a murkling ("murk") or a prime ("prime") on the densest ink near her at the start.</summary>
     string? _dbgBud;
+    /// <summary>Verification (--dbg-exit): the way down is open from the start.</summary>
+    bool _dbgExit;
+    /// <summary>Verification: murklings bud round an Inkwarden (the first, or a turned pufferfish set 6 m ahead of her), so its tethers show.</summary>
+    bool _dbgWard;
     /// <summary>Verification: the first seal starts with this many hits less one, and takes the last a second in (0: off).</summary>
     int _dbgSeal;
     bool _autopilot, _autoDive, _calm;
@@ -251,6 +279,8 @@ public partial class TopDownMain : Node3D
         AddChild(_orbit);
         _bell = new BellView();
         AddChild(_bell);
+        // Prism Pearl: the red and the blue beside her while her light is split.
+        foreach (var part in _prismBells) AddChild(part);
         RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("her_horizon"), _lantern.Texture);
         _combat = new CombatView();
         AddChild(_combat);
@@ -258,6 +288,8 @@ public partial class TopDownMain : Node3D
         AddChild(_currents);
         _kelp = new KelpView();
         AddChild(_kelp);
+        _abyss = new AbyssView();
+        AddChild(_abyss);
         _vases = new VaseView();
         AddChild(_vases);
         _boss = new BossView();
@@ -345,6 +377,9 @@ public partial class TopDownMain : Node3D
             else if (arg == "--dbg-throw") _dbgThrow = true;
             else if (arg.StartsWith("--dbg-seal=") && int.TryParse(Value("--dbg-seal="), out int sealHits)) _dbgSeal = sealHits;
             else if (arg.StartsWith("--dbg-bud=")) _dbgBud = Value("--dbg-bud=");
+            else if (arg == "--dbg-ward") _dbgWard = true;
+            else if (arg == "--dbg-exit") _dbgExit = true;
+            else if (arg.StartsWith("--dbg-moment=")) _dbgMoment = float.Parse(Value("--dbg-moment="), CultureInfo.InvariantCulture);
             else if (arg.StartsWith("--boss=")) _dbgBoss = Value("--boss=");
             else if (arg == "--boss-level") _dbgBossLevel = true;
             else if (arg.StartsWith("--dbg-goto=") && int.TryParse(Value("--dbg-goto="), out int gotoLevel)) _dbgGoTo = gotoLevel;
@@ -355,6 +390,10 @@ public partial class TopDownMain : Node3D
             else if (arg.StartsWith("--dbg-steer=") && Value("--dbg-steer=").Split(',') is { Length: 2 } steer
                 && float.TryParse(steer[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float sx) && float.TryParse(steer[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float sy))
                 _dbgSteer = new Vector2(sx, sy).Normalized();
+            else if (arg == "--dbg-steer-fight") _dbgSteerFight = true;
+            // Verification: an art direction under study for the reef (docs/ART-LOOKS.md: 0 the game's own; 1–5).
+            else if (arg.StartsWith("--look=") && int.TryParse(Value("--look="), out int look))
+                RenderingServer.GlobalShaderParameterSet(OctoShoots.Game.Fx.SN.Of("reef_art"), look);
             else if (arg == "--reset-profile")
             {
                 // Verification: the saved profile's achievements (and so its unlocked pearls) are cleared.
@@ -366,6 +405,7 @@ public partial class TopDownMain : Node3D
             else if (arg == "--paused") _startPaused = true;
             else if (arg.StartsWith("--xp=") && int.TryParse(Value("--xp="), out int xp)) _startXp = xp;
             else if (arg.StartsWith("--hp=") && float.TryParse(Value("--hp="), NumberStyles.Float, CultureInfo.InvariantCulture, out float hp)) _startHp = hp;
+            else if (arg.StartsWith("--luck=") && float.TryParse(Value("--luck="), NumberStyles.Float, CultureInfo.InvariantCulture, out float luck)) _dbgLuck = luck;
             else if (arg.StartsWith("--pearls=")) _startPearls = Value("--pearls=").Split(',', StringSplitOptions.RemoveEmptyEntries);
             else if (arg.StartsWith("--capture=")) _captureDir = Value("--capture=");
             else if (arg.StartsWith("--frames="))
@@ -412,6 +452,8 @@ public partial class TopDownMain : Node3D
         if (_dbgBoss is null || !_map.HasBoss) return null;
         int depth = Math.Max(1, _map.Depth - LevelPlan.Tutorial);
         var spec = _dbgBoss == "queen" ? OctoShoots.Core.Bosses.BossGenerator.QueenClam(_map.Seed, _map.Cycle, depth)
+            : _dbgBoss is "drippus" || _dbgBoss.Equals(nameof(OctoShoots.Core.Bosses.BossConcept.TheBrood), StringComparison.OrdinalIgnoreCase)
+                ? OctoShoots.Core.Bosses.BossGenerator.DrippusPrime(_map.Seed, _map.Cycle, depth)
             : Enum.TryParse<OctoShoots.Core.Bosses.BossConcept>(_dbgBoss, true, out var concept)
                 ? OctoShoots.Core.Bosses.BossGenerator.ForConcept(_map.Seed, _map.Cycle, depth, concept)
                 : null;
@@ -425,7 +467,13 @@ public partial class TopDownMain : Node3D
     void SaveRun()
     {
         if (!_persist || _debugRun || _run is null) return;
-        GameSave.Current.Run = new SuspendedRun
+        GameSave.Current.Run = RunRecord();
+        GameSave.Write();
+    }
+
+    /// <summary>The run as it stands at the start of this level.</summary>
+    SuspendedRun RunRecord() =>
+        new()
         {
             Seed = _seed.ToString(),
             CustomSeed = _customSeed,
@@ -440,13 +488,12 @@ public partial class TopDownMain : Node3D
             XpLevel = _run.XpLevel,
             Points = _run.Points,
             Skills = _run.Skills.ToDictionary(k => k.Key.ToString(), k => k.Value),
+            Luck = _map.Luck,
             Elapsed = _elapsed,
             Foes = _runMobs,
             ShellsCollected = _runShells,
             SavedAt = DateTime.Now.ToString("s", CultureInfo.InvariantCulture),
         };
-        GameSave.Write();
-    }
 
     Task<LevelShape>? _firstMap;
 
@@ -473,21 +520,130 @@ public partial class TopDownMain : Node3D
     Task<LevelShape> Shape(LevelId id, bool background = false)
     {
         var streams = new RunStreams(_seed);
-        float luck = _run?.Loadout.Stats.Luck ?? 0f;
+        float luck = Luck;
         return Task.Run(() => LevelShape.Prepare(Abyss(TopDownGenerator.Generate(streams, id, background: background, luck: luck))));
     }
+
+    /// <summary>
+    /// Her luck as levels are made (--luck= overrides it, for verification). A resumed run's level is made again with the
+    /// luck it was made with the first time (else it would not be the same level).
+    /// </summary>
+    float Luck => _dbgLuck ?? _run?.Loadout.Stats.Luck ?? _resume?.Luck ?? 0f;
 
     void GoToTitle()
     {
         _haptics.Stop();
         Input.MouseMode = Input.MouseModeEnum.Visible;
-        if (_persist) GameSave.Write();
+        if (_persist)
+        {
+            SaveMoment();
+            GameSave.Write();
+        }
         GetTree().ChangeSceneToFile(RunLaunch.TitleScene);
+    }
+
+    /// <summary>Closing the game mid-level saves the moment too.</summary>
+    public override void _Notification(int what)
+    {
+        if (what != NotificationWMCloseRequest || !_persist) return;
+        SaveMoment();
+        GameSave.Write();
+    }
+
+    /// <summary>The objects a level made again from its seed shares with this one (Snapshot), found as it was made.</summary>
+    OctoShoots.Core.Saves.Snapshot.Anchors? _anchors;
+
+    /// <summary>
+    /// Saves the level as it stands this very moment, so continuing resumes it exactly (the save's level-start record
+    /// stays, to fall back on). Not while she is dying, diving or between levels: then the level's start is kept.
+    /// </summary>
+    void SaveMoment()
+    {
+        if (!_persist || _debugRun || GameSave.Current.Run is not { } saved) return;
+        if (saved.Cycle != _id.Cycle || saved.Depth != _id.Depth || saved.Level != _id.Level) return;
+        saved.State = Moment();
+        if (saved.State is null) return;
+        saved.Elapsed = _elapsed;
+        saved.Foes = _runMobs;
+        saved.ShellsCollected = _runShells;
+        saved.SavedAt = DateTime.Now.ToString("s", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>This very moment of the level (null while she is dying, diving or between levels, or if it cannot be saved).</summary>
+    LevelState? Moment()
+    {
+        if (_run is null || _anchors is null) return null;
+        if (_transition != Transition.None || _deathSplash || _diving || _world.Player.Hp <= 0f) return null;
+        try
+        {
+            return new LevelState
+            {
+                World = Convert.ToBase64String(_world.SaveState(_anchors)),
+                Fog = _fog.Save(),
+                Visited = _visited.ToList(),
+                LevelTime = _levelTime,
+                Items = _run.Items.ToList(),
+                Hp = _world.Player.Hp,
+                Shells = _run.Shells,
+            };
+        }
+        catch (Exception e)
+        {
+            GD.PushWarning($"The moment could not be saved ({e.Message}); continuing will start the level again.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Verification (--dbg-moment=seconds): that long into the first level, its moment is saved (in memory only) and the
+    /// level is made again from its seed and put back at it, as quitting and continuing would.
+    /// </summary>
+    float _dbgMoment;
+    SuspendedRun? _dbgMomentStart;
+
+    void DebugMoment()
+    {
+        if (_dbgMoment <= 0f || _levelTime < _dbgMoment || _dbgMomentStart is not { } start || Moment() is not { } moment) return;
+        _dbgMoment = 0f;
+        start.State = moment;
+        start.Elapsed = _elapsed;
+        GD.Print($"Moment saved: tick {_world.Tick}, her at {_world.Player.Position}, HP {_world.Player.Hp:F1}, {_world.Murklings.Count} murklings, {_world.Shots.Count} shots, {moment.World.Length / 1024} KB");
+        _resume = start;
+        _run = null;
+        Regenerate(keepRun: false);
+        GD.Print($"Moment restored: tick {_world.Tick}, her at {_world.Player.Position}, HP {_world.Player.Hp:F1}, {_world.Murklings.Count} murklings, {_world.Shots.Count} shots");
+    }
+
+    /// <summary>Puts the level back at the moment it was left; false (and the level as it starts) if that cannot be done.</summary>
+    bool RestoreMoment(LevelState moment)
+    {
+        try
+        {
+            _world.LoadState(_anchors!, Convert.FromBase64String(moment.World));
+            // Synergies she had by then are not news either.
+            foreach (string id in _run!.Loadout.Synergies) _announced.Add(id);
+            return true;
+        }
+        catch (Exception e)
+        {
+            GD.PushWarning($"The moment she left could not be restored ({e.Message}); back at the level's start.");
+            return false;
+        }
     }
 
     WorldEnvironment _environment = null!;
     MarineSnow _snow = null!;
     SunLight _sunLight = null!;
+
+    /// <summary>Debug (F1, --dbg-nofog): the floor's fog — the depth focus pass's murk and blur, and the water's fog.</summary>
+    bool _floorFog = !OS.GetCmdlineUserArgs().Contains("--dbg-nofog");
+
+    void SetFloorFog(bool on)
+    {
+        _floorFog = on;
+        _camera.SetFloorFog(on);
+        _environment.Environment.FogEnabled = on;
+    }
 
     void BuildEnvironment()
     {
@@ -502,6 +658,7 @@ public partial class TopDownMain : Node3D
     {
         look.Apply();
         look.ApplyTo(_environment.Environment);
+        SetFloorFog(_floorFog);
         _sunLight.Configure(look.Sun, look.SunEnergy);
         _bell.Lantern = look.Lantern;
         BlightView.Lantern = look.Lantern;
@@ -555,6 +712,8 @@ public partial class TopDownMain : Node3D
         // The HUD is laid out on a 1080-line screen and scaled with the window (HudScale), so it keeps its share of it.
         _hudRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         layer.AddChild(_hudRoot);
+        // (Under the rest of the HUD.)
+        _hudRoot.AddChild(_exitPointer);
         _hudRoot.AddChild(_hud);
         _minimap = new MinimapView();
         _hudRoot.AddChild(_minimap);
@@ -573,6 +732,7 @@ public partial class TopDownMain : Node3D
             var arrow = OctoShoots.Game.Fx.HerColor.Light.Lerp(OctoShoots.Game.Fx.HerColor.Body, 0.35f);
             _minimap.ArrowColor = arrow;
             _fullMap.ArrowColor = arrow;
+            _exitPointer.Tint = OctoShoots.Game.Fx.HerColor.Light;
         }
         Arrows();
         OctoShoots.Game.Fx.HerColor.Changed += Arrows;
@@ -633,6 +793,7 @@ public partial class TopDownMain : Node3D
         pauseLayer.AddChild(_debug);
         _debug.Closed += CloseDebug;
         _debug.GoTo += DebugGoTo;
+        _debug.FloorFogToggled += SetFloorFog;
         _debug.PearlToggled += (id, on) =>
         {
             MarkDebugRun();
@@ -649,7 +810,7 @@ public partial class TopDownMain : Node3D
                     if (_catalog?.Contains(id) == true) _run.Add(id);
             DebugPearlsChanged();
         };
-        // The run was saved at the start of this level: she resumes there.
+        // The level is saved as it stands (SaveMoment): she resumes right there.
         _pause.QuitPressed += GoToTitle;
 
         // The debug panel (seed field, numbers, controls): hidden unless F3 is on.
@@ -735,7 +896,7 @@ public partial class TopDownMain : Node3D
             _seed = parsed;
         }
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var shape = LevelShape.Prepare(Abyss(TopDownGenerator.Generate(new RunStreams(_seed), _id, luck: _run?.Loadout.Stats.Luck ?? 0f)));
+        var shape = LevelShape.Prepare(Abyss(TopDownGenerator.Generate(new RunStreams(_seed), _id, luck: Luck)));
         ShowLevel(shape, keepRun, watch.ElapsedMilliseconds);
     }
 
@@ -827,6 +988,20 @@ public partial class TopDownMain : Node3D
             }
             _dbgBud = null;
         }
+        if (_dbgWard && _world.Corruption is not null)
+        {
+            if (_world.Inkwardens.Count == 0)
+                _world.Inkwardens.Add(new Inkwarden { Position = _world.Player.Position + new System.Numerics.Vector2(0f, -6f), Puffer = _world.Options.Adventure, Seed = 1f });
+            var warden = _world.Inkwardens[0];
+            for (int k = 0; k < 8; k++)
+            {
+                float a = Mathf.Tau * k / 8f;
+                var at = warden.Position + new System.Numerics.Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (3f + k % 3 * 1.5f);
+                if (_world.Clear(at, 1f)) _world.DebugBud(at, prime: false);
+            }
+            _dbgWard = false;
+        }
+        if (_dbgExit) _world.ExitOpen = true;
         if (_dbgSeal > 0 && _world.Seals.Count > 0) _world.Seals[0].Hits = Math.Max(0, _dbgSeal - 1);
         if (_dbgThrow)
         {
@@ -853,6 +1028,8 @@ public partial class TopDownMain : Node3D
     {
         _map = map;
         _levelTime = 0f;
+        // Continuing a run left mid-level: the moment it was left (restored once the level is made again).
+        var moment = keepRun ? null : _resume?.State;
         ApplyLook();
         // Where the sun reaches into this level's water (its god rays and caustics end at the rock that shades them).
         OctoShoots.Game.Fx.SunMap.Build(map, OctoShoots.Game.Fx.SunLight.Direction);
@@ -895,6 +1072,7 @@ public partial class TopDownMain : Node3D
         }
         _run.Level = _id;
         _world = new PlaneWorld(_map, _tuning, _run, DebugBoss());
+        _anchors = _world.SaveAnchors(_recorder.Profile, _achievements, _recorder);
         // Synergies she came in with (a resumed run, debug pearls) are not news.
         foreach (string id in _run.Loadout.Synergies) _announced.Add(id);
         if (arriveAt is { } at) _world.Player.Position = _world.Player.PrevPosition = at;
@@ -920,11 +1098,16 @@ public partial class TopDownMain : Node3D
             foreach (string pid in _world.Pearls.Select(q => q.ItemId).Concat(_world.Stands.Where(st => st.Kind == StandKind.Pearl).Select(st => st.ItemId)))
                 if (_catalog.TryGet(pid, out var offered) && offered.Unlock is not null && !_recorder.Profile.SeenItems.Contains(pid)) fresh.Add(pid);
         _recorder.EnterLevel(_world, _id);
-        SaveRun();
+        // Back at the moment she left (the save keeps it, should she leave again before saving anew); else the level's
+        // start is saved.
+        if (moment is not null && !RestoreMoment(moment)) moment = null;
+        if (moment is null) SaveRun();
+        if (_dbgMoment > 0f && _dbgMomentStart is null) _dbgMomentStart = RunRecord();
         _combat.Show(_world, _catalog, fresh);
         _currents.Clear();
         _swells.Clear();
         _kelp.Build(map, ReefLook.For(map.Id.Depth));
+        _abyss.Build(map, ReefLook.For(map.Id.Depth));
         _vases.Show(_world);
         _puffers.Show(_world);
         _reefFish.Show(_world);
@@ -956,6 +1139,13 @@ public partial class TopDownMain : Node3D
         _visited.Add(_map.Pois.IndexOf(_map.Start));
         _minimap.SetVisited(_visited);
         _fog.Reset();
+        if (moment is not null)
+        {
+            foreach (int place in moment.Visited) _visited.Add(place);
+            _minimap.SetVisited(_visited);
+            _fog.Load(moment.Fog);
+            _levelTime = (float)moment.LevelTime;
+        }
         _minimap.SetFog(_fog);
         _fullMap.Fog = _fog;
         _fullMap.Seen = _fog;
@@ -1075,7 +1265,7 @@ public partial class TopDownMain : Node3D
         _vapour.Tick(dt, _camera.Camera);
         _blight.Sync(_world, dt, _camera.Camera);
         _adventure.Sync(_world, dt, _camera.Camera);
-        _springs.Sync(dt, _camera.Camera);
+        _springs.Sync(dt, _camera.Camera, Focus(alpha) with { Y = LevelMap.SwimBand });
         _cleanse.Track(_world, dt);
         MinimapView.FillSprings(_fullMap, _world);
         _minimap.SetSprings(_world);
@@ -1108,6 +1298,11 @@ public partial class TopDownMain : Node3D
             "shop" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 1.5f)).FirstOrDefault(),
             // Beside the level's light spring, if it has one.
             "spring" => _world.Springs.Select(sp => (System.Numerics.Vector2?)(sp.Position + new System.Numerics.Vector2(0f, SpringTuning.Radius + 1.5f))).FirstOrDefault(),
+            "spring-in" => _world.Springs.Select(sp => (System.Numerics.Vector2?)sp.Position).FirstOrDefault(),
+            // A few metres south of a tall wall facing her (captures of its face).
+            "wall" => Enumerable.Range(0, 70 * 70).Select(i => new System.Numerics.Vector2(i % 70 * 2f, i / 70 * 2f))
+                .Where(v => _world.Clear(v, 1f) && _map.HeightAt(v - new System.Numerics.Vector2(0f, 5f)) > 4f && _map.HeightAt(v - new System.Numerics.Vector2(0f, 3f)) < 0f)
+                .Select(v => (System.Numerics.Vector2?)v).FirstOrDefault(),
             // Beside the level's first bubble geyser.
             "geyser" => _world.Director.Geysers.Count > 0 ? _world.Director.Geysers[0] + new System.Numerics.Vector2(0f, 3f) : null,
             // Out in front of a secret room's sealed way in.
@@ -1160,6 +1355,9 @@ public partial class TopDownMain : Node3D
             "school" => _world.Schools.Select(sc => (System.Numerics.Vector2?)(sc.Position + new System.Numerics.Vector2(0f, 2.5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "edge" => Enumerable.Range(0, LevelMap.Size).SelectMany(y => Enumerable.Range(0, LevelMap.Size).Select(x => new System.Numerics.Vector2(x, y)))
                 .Where(q => _world.Clear(q, 0.8f)).OrderBy(q => q.X).Select(q => (System.Numerics.Vector2?)q).FirstOrDefault(),
+            // A point of the level's grid, "x,y" (metres).
+            _ when where?.Split(',') is [var sx, var sy] && float.TryParse(sx, NumberStyles.Float, CultureInfo.InvariantCulture, out float ax)
+                && float.TryParse(sy, NumberStyles.Float, CultureInfo.InvariantCulture, out float ay) => new System.Numerics.Vector2(ax, ay),
             _ => null,
         };
         if (at is not { } p) return;
@@ -1316,7 +1514,7 @@ public partial class TopDownMain : Node3D
             else
             {
                 if (_pause.Visible) _pause.Close();
-                _debug.Open(_run, _catalog, _seed, _id);
+                _debug.Open(_run, _catalog, _seed, _id, _floorFog);
             }
         }
         _f1Latched = f1;
@@ -1399,6 +1597,7 @@ public partial class TopDownMain : Node3D
             return;
         }
 
+        DebugMoment();
         // A level-up holds the sea still (and the clock): only the views go on, so she still moves in place.
         StepLevelUp(dt);
         bool held = _lvl != LevelUpPhase.None || _intro.Playing;
@@ -1632,8 +1831,18 @@ public partial class TopDownMain : Node3D
         _minimap.SetHealth(health);
         _minimap.SetExperience(_world.Run.Xp / (float)Math.Max(_world.Run.XpNeeded, 1), _world.Run.XpLevel, _world.Run.Points > 0);
         _lowHealth.Sync(health, dt);
+        SyncExitPointer(dt);
         // Each view on its own: one that fails is reported (once) and the rest carry on.
         Guard("bell", () => _bell.Sync(_world, alpha, dt));
+        Guard("prism", () =>
+        {
+            foreach (var part in _prismBells)
+            {
+                part.Lantern = _bell.Lantern;
+                part.Dim = _bell.Dim;
+                part.Sync(_world, alpha, dt);
+            }
+        });
         Guard("lantern", SyncLantern);
         OctoShoots.Game.Fx.SunMap.Poll(_map);
         Guard("orbit", () => _orbit.Sync(_world.Run.Items, _catalog, _bell.GlobalPosition, dt, _bell.Visible));
@@ -1654,6 +1863,7 @@ public partial class TopDownMain : Node3D
         // Behind a blade, she wears a thin outline.
         _bell.Covered = _kelp.Covers(_bell.GlobalPosition, _camera.Camera) || _blight.Covers(_bell.GlobalPosition, _camera.Camera);
         Guard("currents", () => _currents.Sync(_world, dt));
+        Guard("abyss", () => _abyss.Sync(_world, dt));
         Guard("vases", () => _vases.Sync(dt));
         Guard("pufferlings", () => _puffers.Sync(_world, dt));
         Guard("reef fish", () => _reefFish.Sync(_world, dt));
@@ -1706,9 +1916,8 @@ public partial class TopDownMain : Node3D
         _camera.Zoom = Mathf.Lerp(1f, LevelUpZoom, framing);
         _camera.Track(Focus(alpha), dt, look: new Vector3(LevelUpShift() * framing, 0f, 0f));
         _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
-        // In a curse den's tunnel the rock in front of it thins away round her, so the way her light shows is never hidden.
-        _seeThrough = Mathf.MoveToward(_seeThrough, _world.CurseDepth >= 0f ? 1f : 0f, dt / 0.4f);
-        _level.SeeThrough(_bell.GlobalPosition, SeeThroughRadius, _seeThrough);
+        // Any wall between the camera and her (a tunnel's roof, a wall in front) is carved away round her as she swims.
+        _level.SeeThrough(_bell.GlobalPosition, SeeThroughRadius, _dbgNoCarve ? 0f : 1f);
         // In the curse den's dark her own light is dimmed too, to about half.
         _bell.Dim = 1f - 0.475f * _dark.Amount;
         _minimap.Blackout = _dark.Amount;
@@ -1880,7 +2089,7 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>The views of a level's life: its creatures, pickups and shots, Queen Clam, damage numbers, currents.</summary>
-    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _clamRooms, _geysers, _boss, _damage, _currents, _vases };
+    IEnumerable<Node> LevelLife => new Node[] { _combat, _puffers, _reefFish, _curseDen, _clamRooms, _geysers, _boss, _damage, _currents, _vases, _abyss };
 
     /// <summary>
     /// Fades the old level's life during the dive: each piece fades out over a few metres as the iris's dissolving edge
@@ -2226,6 +2435,37 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.SpringCleansed:
                 _sfx.PlayPitched("bell_ring", 1.4f, -10f);
                 Say("Wholly cleansed");
+                break;
+            case PlaneEventType.PrismSplit:
+            case PlaneEventType.PrismJoined:
+                // Her light splits into its colours (or they flow back together): a jolt, the picture's colours pulled
+                // apart for a moment, and a burst of light from her.
+                _camera.Shake(0.35f);
+                if (!_view.ReducedMotion)
+                {
+                    _camera.Aberrate();
+                    _camera.EdgeFlash();
+                }
+                _combat.LightBurst(e.Position, 3.5f);
+                _sfx.PlayPitched("bell_ring", e.Type == PlaneEventType.PrismSplit ? 1.5f : 1.25f, -6f);
+                _sfx.PlayPitched("synergy", 1.2f, -10f);
+                _haptics.Pulse(0.5f, 0.4f, 0.25f);
+                break;
+            case PlaneEventType.BossBrood:
+                // Drippus Prime births a murkling: a wet pop as the piece snaps off it.
+                _sfx.PlayPitched("pop", 0.5f, -7f);
+                _sfx.PlayPitched("merge", 0.7f, -12f);
+                break;
+            case PlaneEventType.BossBounceWarn:
+                // Its side dimples toward her: a low, rubbery creak.
+                _sfx.PlayPitched("merge", 0.35f, -10f);
+                break;
+            case PlaneEventType.BossBounce:
+                // The bounce: a deep rubbery boing, a thump in the controller and a small shake.
+                _sfx.PlayPitched("pop", 0.3f, -3f);
+                _sfx.PlayPitched("spout", 0.55f, -9f);
+                _haptics.Pulse(0.7f, 0.5f, 0.2f);
+                _camera.Shake(0.3f);
                 break;
             case PlaneEventType.BombSplash:
                 _sfx.PlayPitched("merge", 0.45f, -8f);
@@ -2579,7 +2819,7 @@ public partial class TopDownMain : Node3D
             _world.DebugFreeBoss();
             _dbgFree = 0f;
         }
-        if (_dbgSteer is { } steerTo)
+        if (_dbgSteer is { } steerTo && !(_dbgSteerFight && _world.Boss is not { Stage: BossStage.Fight }))
         {
             input.Move = new System.Numerics.Vector2(steerTo.X, steerTo.Y);
             return input;
@@ -2615,9 +2855,11 @@ public partial class TopDownMain : Node3D
         Vector2 aim = Input.GetVector(InputSetup.AimLeft, InputSetup.AimRight, InputSetup.AimUp, InputSetup.AimDown);
         if (_pad)
         {
-            // Controller: the right stick aims (she keeps the last aim when it is let go), the trigger shoots; the
-            // further the stick is pushed, the further her light flies.
+            // Controller: the right stick aims, the trigger shoots; the further the stick is pushed, the further her light
+            // flies. Left alone, she aims the way she swims, at her full range (standing still, the way she last aimed).
             if (aim.LengthSquared() > 0.04f) _padAim = new System.Numerics.Vector2(aim.X, aim.Y);
+            else if (stick.LengthSquared() > 0.04f) _padAim = System.Numerics.Vector2.Normalize(new System.Numerics.Vector2(stick.X, stick.Y));
+            else if (_padAim.LengthSquared() > 1e-6f) _padAim = System.Numerics.Vector2.Normalize(_padAim);
             input.Aim = _padAim.LengthSquared() > 1e-6f ? System.Numerics.Vector2.Normalize(_padAim) : _world.Player.Aim;
             input.AimReach = PadReach();
             input.Fire = held && !_fireBlocked;
@@ -2777,7 +3019,9 @@ public partial class TopDownMain : Node3D
                   .Concat(_world.Lashjaws.Where(l => l.Alive).Select(l => l.Position))
                   .Where(q => System.Numerics.Vector2.Distance(q, from) < 14f)
                   .OrderBy(q => System.Numerics.Vector2.Distance(q, from)).Select(q => (System.Numerics.Vector2?)q).FirstOrDefault()
-              // With no creature to shoot, the nearest standing pot.
+              // With no creature to shoot, the nearest open vent near her (the adventure's), else the nearest standing pot.
+              ?? _world.Vents.Where(v => !v.Sealed && System.Numerics.Vector2.Distance(v.Wall, from) < 14f)
+                  .OrderBy(v => System.Numerics.Vector2.Distance(v.Wall, from)).Select(v => (System.Numerics.Vector2?)v.Wall).FirstOrDefault()
               ?? _world.Vases.Where(v => !v.Broken).OrderBy(v => System.Numerics.Vector2.Distance(v.Position, from)).Select(v => (System.Numerics.Vector2?)v.Position).FirstOrDefault();
         // Nothing to shoot at: straight ahead, the way she faces.
         input.Aim = target is { } at && System.Numerics.Vector2.DistanceSquared(at, from) > 1e-4f ? System.Numerics.Vector2.Normalize(at - from) : _world.Player.Aim;
@@ -2827,6 +3071,8 @@ public partial class TopDownMain : Node3D
         var vp = GetViewport().GetViewportRid();
         GD.Print(string.Format(CultureInfo.InvariantCulture, "Captured {0}  pos {1:0.0},{2:0.0}  canopy {3}  {4:0} FPS  gpu {6:0.0} ms  {7}  sim {5:0.00} s", path, p.X, p.Y, _map.CanopyAt(p), Engine.GetFramesPerSecond(), _elapsed,
             RenderingServer.ViewportGetMeasuredRenderTimeGpu(vp), GetViewport().GetVisibleRect().Size));
+        if (_world.Boss is { } boss)
+            GD.Print(string.Format(CultureInfo.InvariantCulture, "  boss {0} {1} {2} ({8}) at {3:0.0},{4:0.0}  hp {5:0}/{6:0}  phase {7}  mass {9}  buds {10}", boss.Spec.Name, boss.Stage, boss.Act, boss.Position.X, boss.Position.Y, boss.Hp, boss.MaxHp, boss.Phase, boss.Next, boss.Mass, boss.BudDirs.Count));
         if (_captureFrames.Count == 0) GetTree().Quit();
     }
 }

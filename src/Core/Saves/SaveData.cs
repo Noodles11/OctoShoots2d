@@ -118,6 +118,8 @@ public sealed class SuspendedRun
     public int XpLevel { get; set; } = 1;
     public int Points { get; set; }
     public Dictionary<string, int> Skills { get; set; } = new();
+    /// <summary>Her luck as the level was made: it is made again with it (her luck can bring a light spring).</summary>
+    public float Luck { get; set; }
     /// <summary>Play time of the run so far (the HUD clock).</summary>
     public double Elapsed { get; set; }
     /// <summary>The run's totals so far, for the death splash.</summary>
@@ -125,6 +127,28 @@ public sealed class SuspendedRun
     public int ShellsCollected { get; set; }
     /// <summary>When it was saved, as an ISO 8601 local time.</summary>
     public string SavedAt { get; set; } = "";
+
+    /// <summary>
+    /// The level as she left it, mid-play (null: she left it at its start): continuing resumes that very moment. The
+    /// fields above stay as the level's start, to fall back on if the moment cannot be restored.
+    /// </summary>
+    public LevelState? State { get; set; }
+}
+
+/// <summary>A level in play, exactly (<see cref="Snapshot"/>), with what the game keeps beside it.</summary>
+public sealed class LevelState
+{
+    /// <summary>The level's state (the Snapshot's bytes, base64).</summary>
+    public string World { get; set; } = "";
+    /// <summary>The map's fog: what she has seen of the level (base64), and the places she has visited.</summary>
+    public string Fog { get; set; } = "";
+    public List<int> Visited { get; set; } = new();
+    /// <summary>Time on the level so far.</summary>
+    public double LevelTime { get; set; }
+    /// <summary>What she carried, her HP and shells then (for the save card).</summary>
+    public List<string> Items { get; set; } = new();
+    public float Hp { get; set; }
+    public int Shells { get; set; }
 }
 
 /// <summary>

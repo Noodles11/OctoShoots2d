@@ -372,7 +372,7 @@ public sealed partial class PlaneWorld
         {
             foreach (var sac in boss.Sacs)
                 if (sac.Alive && Vector2.Distance(boss.SacAt(sac), p) < PlaneBossTuning.SacRadius * (0.6f + sac.Site.Size) + r) yield return sac;
-            if (boss.Open && Vector2.Distance(boss.PearlAt, p) < boss.Spec.PearlRadius + r) yield return boss;
+            if (boss.Open && Vector2.Distance(boss.LightAt, p) < boss.LightReach + r) yield return boss;
         }
     }
 
@@ -412,7 +412,7 @@ public sealed partial class PlaneWorld
         Inkwarden w when w.Alive => w.Position,
         Lashjaw l when l.Alive => l.Position,
         Blightroot r when r.Alive => r.Position,
-        PlaneBoss { Stage: BossStage.Fight, Open: true } boss => boss.PearlAt,
+        PlaneBoss { Stage: BossStage.Fight, Open: true } boss => boss.LightAt,
         BossSac sac when sac.Alive && Boss is { } owner => owner.SacAt(sac),
         _ => null,
     };

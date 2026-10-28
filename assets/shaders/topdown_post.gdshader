@@ -42,6 +42,13 @@ uniform float focus_below = 0.6;
 uniform float below_blur = 5.2;
 uniform float above_blur = 3.4;
 uniform float deep_fog = 0.06;
+// Debug (F1 "Floor fog", --dbg-nofog): off, the floor below her plane is seen clear — no murk, no depth blur.
+uniform bool floor_fog = true;
+// Prism Pearl's split (CameraRig.Aberrate): the picture's red and blue pulled apart from its middle for a moment, 0..1.
+uniform float aberration = 0.0;
+// An art direction under study (reef_art.gdshaderinc, docs/ART-LOOKS.md): painted, depth is told by flat layers of
+// water, not by a lens's blur (look 4: by felt-tip stippling, the water a light veil; 0 and 5: the game's own water).
+global uniform int reef_art;
 // The mountains' tall tops (DESIGN-TOPDOWN §4.1): above peak_from metres over her plane, rock softens further out of
 // focus and fades toward the water's blue, rising to full over peak_span — so the range reads as distant and calm, and
 // the floor she plays on stays the sharpest thing on screen.
@@ -130,6 +137,7 @@ void fragment() {
 	// Nothing drawn (reverse-Z far plane): the open deep.
 	bool open_deep = depth <= 1e-6;
 	float below = open_deep ? 40.0 : max(-h - focus_below, 0.0);
+	if (!floor_fog && !open_deep) below = 0.0;
 	float above = open_deep ? 0.0 : max(h - focus_above, 0.0);
 	// Soften the blur's edge where high rock meets lower ground: take the highest of a few nearby depths, so the
 	// boundary is a smooth margin instead of the mesh's stair-stepped silhouette.
@@ -179,7 +187,15 @@ void fragment() {
 		suv += bend * 0.004 * wobble;
 	}
 
-	float lod = below_blur * (below > 0.0 ? 0.55 + 0.45 * smoothstep(0.0, 10.0, below) : 0.0) * smoothstep(0.0, 0.8, below)
+	// Painted, the depths below her are stated as flat layers of water (each a step deeper, hazier), barely blurred.
+	float layered = below;
+	if (reef_art > 0 && reef_art != 4 && reef_art != 5 && !open_deep) {
+		float x = below / 2.2;
+		layered = (floor(x) + smoothstep(0.8, 1.0, fract(x))) * 2.2;
+	}
+	// The deeper, the softer: a few metres down (a shallow seabed's dunes) only a little, its full blur by about 14 m.
+	// Drawn in felt tip (look 4), the deep is not blurred at all: the stippling states it.
+	float lod = below_blur * (reef_art == 4 ? 0.0 : reef_art > 0 && reef_art != 5 ? 0.12 : 1.0) * (below > 0.0 ? 0.2 + 0.8 * smoothstep(0.0, 14.0, below) : 0.0) * smoothstep(0.0, 0.8, below)
 		+ above_blur * smoothstep(0.0, 9.0, above);
 	float peak = open_deep ? 0.0 : smoothstep(peak_from, peak_from + peak_span, h);
 	lod += peak_blur * peak;
@@ -208,15 +224,17 @@ void fragment() {
 	// surface and what this pixel shows (rock tops near the surface keep more of their colour).
 	float column_in = clamp((sea_surface_y - (open_deep ? -40.0 : world.y)) / 20.0, 0.0, 1.5);
 	// What her own light falls on keeps its warmth: her light travels a few metres, not down from the surface.
-	float lit = open_deep ? 0.0 : her_reach(world);
+	float lit = open_deep ? 0.0 : her_clear(world);
 	col *= mix(vec3(1.0), vec3(0.64, 0.9, 1.05), column_in * (1.0 - 0.85 * lit));
 	col = mix(col, reef_water_deep * 0.7, 0.13 * column_in);
 
 	// The deeps sink into the water: turquoise just under the layer, the depth's murk far below. Clear water in the
 	// Shallows (a light veil), thick murk deeper down (reef_fog).
-	vec3 water = mix(reef_water_deep, reef_murk, smoothstep(2.0, 16.0, below));
-	float veil = mix(0.18, 0.5, reef_fog);
-	float fog = smoothstep(0.0, 1.8, below) * (veil + (0.85 - veil) * (1.0 - exp(-below * deep_fog * (0.6 + reef_fog))));
+	vec3 water = mix(reef_water_deep, reef_murk, smoothstep(2.0, 16.0, layered));
+	float veil = mix(0.18, 0.5, reef_fog) * (reef_art > 0 && reef_art != 5 ? 0.7 : 1.0);
+	float fog = smoothstep(0.0, 1.8, layered) * (veil + (0.85 - veil) * (1.0 - exp(-layered * deep_fog * (0.6 + reef_fog))));
+	// Drawn in felt tip (look 4), the water a lighter veil, so the stippling under it still reads.
+	if (reef_art == 4) fog *= 0.55;
 	// The water she lights is not a veil of murk over what she shows.
 	col = mix(col, water, fog * (1.0 - 0.7 * lit));
 	// Tall tops take on the water's blue (the shallow turquoise toward the depth's own deep water).
@@ -236,14 +254,15 @@ void fragment() {
 		float d = distance(world.xz, her_glow.xz);
 		float k = her_glow_strength * smoothstep(0.1, 0.5, gap) * (1.0 - smoothstep(5.0, 10.0, gap));
 		// Only where her light reaches: the reef's walls and rises keep it from what lies behind them.
-		float pool = exp(-pow(d / (her_glow.w * 0.55), 2.0)) * k * her_vis(world);
+		// (Her own glow, all round her: the reef shades it, the searchlight's cone does not cut it.)
+		float pool = exp(-pow(d / (her_glow.w * 0.55), 2.0)) * k * her_sight(world);
 		vec3 warm = her_warm;
 		col = mix(col, col * warm * 1.15 + warm * 0.06, pool * 0.65);
 		// Her bell is a lens: the light leaving it is gathered into bright filaments that play over what lies below her,
 		// wider and softer the farther the floor, quickening as she swims.
 		vec2 rel = (world.xz - her_glow.xz) / (0.7 + gap * 0.3);
 		float web = sl_caustic_layer(rel * 0.32 + vec2(0.37, 0.11), TIME * 0.55 + her_glow_strength * 0.8);
-		float lens_pool = exp(-pow(d / (her_glow.w * 0.75), 2.0)) * k * her_vis(world);
+		float lens_pool = exp(-pow(d / (her_glow.w * 0.75), 2.0)) * k * her_sight(world);
 		col += her_warm * pow(web, 1.4) * lens_pool * 0.3 * her_lantern;
 		float shadow = (1.0 - smoothstep(0.1, 0.62, d)) * k * (1.0 - smoothstep(2.0, 5.0, gap));
 		col *= 1.0 - 0.6 * shadow;
@@ -355,6 +374,14 @@ void fragment() {
 	col = mix(col, reef_murk * 0.25, v * reef_vignette);
 	// A big-merge kill lifts the screen's edges toward white for an instant (never its middle).
 	col = mix(col, vec3(1.0, 0.97, 0.9), edge_flash * 0.55 * smoothstep(0.45, 1.15, length(d) * 1.3));
+
+	// Chromatic aberration: red pushed out, blue pulled in, more toward the edges (the prism's split).
+	if (aberration > 0.001) {
+		vec2 dir = (uv - 0.5) * aberration * 0.035;
+		vec3 base = textureLod(screen_tex, uv, 0.0).rgb;
+		float r = textureLod(screen_tex, uv + dir, 0.0).r, b = textureLod(screen_tex, uv - dir, 0.0).b;
+		col += (vec3(r, base.g, b) - base);
+	}
 
 	if (debug_view == 1 && !open_deep) {
 		float g = dot(textureLod(screen_tex, uv, 0.0).rgb, vec3(0.3, 0.6, 0.1));

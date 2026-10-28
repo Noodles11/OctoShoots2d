@@ -259,7 +259,7 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var b in Blotters)
             {
-                if (!b.Alive || b.Rise > 0f || shot.Struck == b || !b.Touches(shot.Position, shot.Radius)) continue;
+                if (!b.Alive || b.Rise > 0f || shot.Struck == b || !Reaches(shot, b.Position, BlotterTuning.ShellRadius)) continue;
                 float light = HitDamage(shot);
                 b.SinceStruck = 0f;
                 float dealt = Ward(b, b.Position, light);

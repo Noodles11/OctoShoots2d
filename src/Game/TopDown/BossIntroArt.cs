@@ -259,11 +259,64 @@ public static class BossIntroArt
             case BodyForm.MoonJelly: Jelly(ci, s, g, menace, mood, t, body, accent, iris, blink); break;
             case BodyForm.Siphonophore: Siphonophore(ci, spec, s, g, menace, mood, t, body, accent, iris, blink); break;
             case BodyForm.SeaHare: SeaHare(ci, spec, s, g, menace, mood, t, body, accent, iris, blink); break;
+            case BodyForm.Murkling: Drippus(ci, s, g, menace, mood, t, body, accent, iris, blink); break;
             default: Snail(ci, spec, s, g, menace, mood, t, body, accent, iris, blink); break;
         }
         if (spec.Theme == MutationTheme.InkSacs || spec.Minor == MutationTheme.InkSacs)
             for (int i = 0; i < 3; i++)
                 Blob(ci, new Vector2(-s * 0.55f + s * 0.5f * i, s * 0.55f + (i == 1 ? s * 0.12f : 0f)), s * 0.13f, s * 0.11f, new Color(0.12f, 0.03f, 0.2f), s, 0.04f);
+    }
+
+    /// <summary>
+    /// Drippus Prime: jiggles in like a water balloon; a drop plips off its bottom and wriggles into a tiny murkling,
+    /// which it pats proudly. Gumdrop-soft at Depth 1; deeper its rim goes ragged and its ember burns colder.
+    /// </summary>
+    static void Drippus(CanvasItem ci, float s, float g, float menace, Mood mood, float t, Color body, Color accent, Color iris, float blink)
+    {
+        // The jiggle: it lands wobbling and settles into a slow slosh.
+        float w = Mathf.Sin(g * 11f) * Mathf.Exp(-g * 2.2f) * 0.16f + 0.03f * Mathf.Sin(t * 3.5f);
+        float rx = s * 1.2f * (1f + w), ry = s * 1.05f * (1f - w);
+        var pts = Ellipse(new Vector2(0f, s * 0.05f), rx, ry, 40);
+        // Deeper, a ragged rim.
+        for (int i = 0; i < pts.Length; i++) pts[i] *= 1f + menace * 0.05f * Mathf.Sin(i * 2.7f + t * 3f);
+        Inked(ci, pts, body.Darkened(0.35f), s);
+        // Its ember, deep in it, and the violet stroke of its rim.
+        var ember = accent.Lerp(new Color(0.6f, 0.75f, 1f), 0.4f * menace);
+        for (int k = 3; k >= 1; k--) ci.DrawCircle(new Vector2(s * 0.25f, s * 0.35f), s * 0.16f * k, ember with { A = 0.12f });
+        ci.DrawArc(new Vector2(0f, s * 0.05f), rx * 0.92f, 0.15f * Mathf.Pi, 0.95f * Mathf.Pi, 20, ember with { A = 0.55f }, s * 0.06f, true);
+        ci.DrawColoredPolygon(Ellipse(new Vector2(-s * 0.45f, -s * 0.5f), s * 0.28f, s * 0.11f, 14), new Color(1f, 1f, 1f, 0.3f));
+        Face(ci, new Vector2(0f, -s * 0.1f), s * 0.8f, mood, menace, 0.4f * Mathf.Sin(Mathf.Clamp((g - 1.2f) * 3f, 0f, 1f) * Mathf.Pi * 0.5f), blink, iris, t);
+        // The drop: swelling on its flank (above the name ribbon), pinching off, falling, then a tiny murkling with tiny eyes.
+        var foot = new Vector2(-rx * 0.9f, s * 0.45f);
+        if (g > 0.5f && g < 0.85f)
+        {
+            float k = (g - 0.5f) / 0.35f;
+            Blob(ci, foot + new Vector2(0f, s * 0.12f * k), s * 0.12f, s * (0.12f + 0.1f * k), body.Darkened(0.35f), s, 0.04f);
+        }
+        else if (g >= 0.85f)
+        {
+            float fall = Mathf.Clamp((g - 0.85f) / 0.3f, 0f, 1f);
+            var at = foot + new Vector2(-s * 0.25f * fall, s * 0.32f * fall * fall + s * 0.12f);
+            // Patted: it squishes under each pat.
+            float pat = g > 1.3f ? Mathf.Max(0f, Mathf.Sin((g - 1.3f) * 9f)) : 0f;
+            float r = s * (0.13f + 0.07f * Mathf.Clamp((g - 1.15f) * 5f, 0f, 1f));
+            Blob(ci, at, r * (1f + 0.2f * pat), r * (1f - 0.25f * pat), body.Darkened(0.3f), s, 0.04f);
+            if (g > 1.15f)
+                for (int k = -1; k <= 1; k += 2)
+                {
+                    ci.DrawCircle(at + new Vector2(k * r * 0.4f, -r * 0.15f), r * 0.24f, Colors.White);
+                    ci.DrawCircle(at + new Vector2(k * r * 0.4f + r * 0.05f, -r * 0.1f), r * 0.12f, Line);
+                }
+            // Its pat: a little arm of ink reaching down over the tiny one.
+            if (g > 1.3f)
+            {
+                var root = new Vector2(-rx * 0.6f, s * 0.2f);
+                var hand = at + new Vector2(0f, -r * (1.3f + 0.6f * (1f - pat)));
+                ci.DrawLine(root, hand, Line, s * 0.19f, true);
+                ci.DrawLine(root, hand, body.Darkened(0.35f), s * 0.13f, true);
+                Blob(ci, hand, s * 0.1f, s * 0.08f, body.Darkened(0.35f), s, 0.035f);
+            }
+        }
     }
 
     /// <summary>The giant clam: snaps its shell twice, then blows a bubble raspberry; a pearl crown on top.</summary>

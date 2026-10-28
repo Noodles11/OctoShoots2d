@@ -88,7 +88,7 @@ diagonally — they cluttered the view and made the real ones hard to read).
 ### 3.4 Being freed
 
 When its health runs out (THEME-BIBLE §6.5, the freeing moment):
-1. It stops and shudders for 0.3 s as the tank colours wash out of it.
+1. It stops and shudders for 0.3 s, in its own plain colours at once: a freed pufferfish never shows the tank colours.
 2. A poof of bright bubbles; the price tag comes off and sinks, spinning.
 3. Its natural colours come back, it deflates, and it drops its shells (as now).
 4. It swims away slowly as a healthy pufferling, and once it is off the screen it is gone. It never helps her.

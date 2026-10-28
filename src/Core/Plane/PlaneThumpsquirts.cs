@@ -205,7 +205,7 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var t in Thumpsquirts)
             {
-                if (!t.Alive || t.Airborne || shot.Struck == t || Vector2.Distance(t.Position, shot.Position) > ThumpTuning.Radius + shot.Radius) continue;
+                if (!t.Alive || t.Airborne || shot.Struck == t || !Reaches(shot, t.Position, ThumpTuning.Radius)) continue;
                 float light = HitDamage(shot);
                 float dealt = Ward(t, t.Position, light);
                 bool emptied = dealt > 0f && t.Corruption.Hit(dealt);

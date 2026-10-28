@@ -53,7 +53,8 @@ HP regeneration (her corruption ebbing), luck, glow and knockback. Stat pearls a
 **Luck**, per point (each capped; `LuckTuning`): every freed foe leaves one more shell; a level without a clam room gets
 one with a 10% chance (at most 60%); each planned ambush is dropped with a 15% chance (at most 90%); each shell she picks
 up counts twice with an 8% chance (at most 60%; a second shell flies to her counter); a light spring is 10% likelier (at
-most +60%) — on an adventure level, where there are none otherwise, only by luck. A level is planned with her luck as she
+most +60%) — on an adventure level, where there are none otherwise, only by luck — and holds 15% more healing (at most
+twice as much). A level is planned with her luck as she
 comes to it (the level below is laid out while she plays the one above); a run without luck gets the very same levels.
 
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
@@ -131,6 +132,7 @@ comes to it (the level below is laid out while she plays the one above); a run w
 
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
+| Yes | ✅ | **Prism Pearl** | *One light, three colours* | Splits her light into three smaller Clementines for 6 s, in a triangle round the point she steers (each corner 1.4 m from it, the triangle turning with her aim): she is the green one at its front corner toward her aim, a red at the back corner on her left and a blue on her right, keeping their corners (her own controls) round the rock. Each fires its own volleys, on its own beat, at where she aims, its light and shots in its colour (only her own spend her inner light). A hit on any of them is a hit on her, one body of health. Splitting and flowing back together each take 0.45 s, with a jolt, the picture's colours pulled apart for a moment and a burst of light (PlanePrism.cs); recharges in 45 s | ★★★ | treasure, boss |  |
 | Yes |  | **Conch Horn** | *The sea answers* | Stuns and knocks back every foe within 8 m for 2 s; recharges in 30 s | ★★ | treasure, shop |  |
 | Yes | ✅ | **Bubble Shield** | *Pop-proof, mostly* | An untouchable bubble round her for 3 s; recharges in 20 s | ★★ | treasure, shop |  |
 | Yes |  | **Tidal Wave** | *Surf's up* | A wave that pushes and hurts everything ahead (10, 12 m); recharges in 40 s | ★★ | treasure |  |

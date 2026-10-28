@@ -160,6 +160,8 @@ public enum ActiveAction
     InkCloud,
     WhaleSong,
     AnchorDrop,
+    /// <summary>Prism Pearl: her light splits into red, green and blue Clementines for its duration (PlanePrism.cs).</summary>
+    Prism,
 }
 
 public sealed class ActiveSpec

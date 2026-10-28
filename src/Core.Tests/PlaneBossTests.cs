@@ -119,12 +119,12 @@ public class PlaneBossTests
     }
 
     [Fact]
-    public void EveryDepthMeetsQueenClamTougherTheDeeper()
+    public void EveryDepthMeetsDrippusPrimeTougherTheDeeper()
     {
         var bosses = Enumerable.Range(1, 6).Select(d => OctoShoots.Core.Bosses.BossRoster.For(7UL, 1, d)).ToList();
-        Assert.All(bosses, b => Assert.Equal("Queen Clam", b.Name));
+        Assert.All(bosses, b => Assert.Equal("Drippus Prime", b.Name));
         Assert.All(bosses, b => Assert.True(b.Blockade));
-        Assert.Equal(PlaneBossTuning.Hp, bosses[0].Hp);
+        Assert.Equal(DrippusTuning.Meter, bosses[0].Hp);
         for (int i = 1; i < bosses.Count; i++) Assert.True(bosses[i].Hp > bosses[i - 1].Hp);
     }
 

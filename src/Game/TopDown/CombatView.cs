@@ -33,7 +33,7 @@ public partial class CombatView : Node3D
     Mesh _needleMesh = null!;
     ShaderMaterial _needle = null!;
     /// <summary>Queen Clam's pearls are corruption (art rules in CLAUDE.md): glossy ink orbs, the royal one bigger with a violet ember.</summary>
-    ShaderMaterial _clamPearl = null!, _royalPearl = null!;
+    ShaderMaterial _clamPearl = null!, _royalPearl = null!, _inkDrop = null!;
     float _time;
 
     // Light bubbles (docs/LIGHT-BUBBLES.md): every bubble of hers carries a lantern, glows in the water and lights the
@@ -105,6 +105,9 @@ public partial class CombatView : Node3D
         _clamPearl.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.4f, 0.2f, 0.6f));
         _royalPearl = new ShaderMaterial { Shader = orb };
         _royalPearl.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), new Color(0.7f, 0.35f, 1f));
+        // Drippus Prime's drops: pieces of its ink, glowing with its magenta ember.
+        _inkDrop = new ShaderMaterial { Shader = orb };
+        _inkDrop.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ember_color"), BlightView.Kin.PrimeCore);
 
     }
 
@@ -707,6 +710,15 @@ void fragment() {
         return new LightTrails.Style(jag, life, width, twin: shot.Wave);
     }
 
+    /// <summary>Her light's colour in a shot: her own, or (Prism Pearl) the red, green or blue third of it.</summary>
+    public static Color LightOf(PrismHue hue) => hue switch
+    {
+        PrismHue.Red => new Color(1f, 0.28f, 0.3f),
+        PrismHue.Green => new Color(0.32f, 1f, 0.45f),
+        PrismHue.Blue => new Color(0.3f, 0.52f, 1f),
+        _ => HerColor.Light,
+    };
+
     /// <summary>
     /// A shot of her light sheds light as it flies: every so often (never on a beat) a burst of motes breaks off it and
     /// drifts back, cooling from white-gold to ember as it fades, a ghost of the shot left glowing where it was; now
@@ -719,7 +731,7 @@ void fragment() {
         var back = speed > 1e-3f ? -heading / speed : Vector3.Zero;
         var side = new Vector3(-back.Z, 0f, back.X);
         var hot = new Color(1.6f, 1.45f, 1.1f);
-        var gold = HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth) * 1.25f;
+        var gold = LightOf(shot.Hue).Lerp(new Color(1f, 0.95f, 0.84f), shot.Hue == PrismHue.None ? warmth : warmth * 0.3f) * 1.25f;
         var ember = new Color(1f, 0.4f, 0.1f, 0f);
         float k = Mathf.Clamp(light, 0.3f, 1.3f);
         bool first = !_shed.TryGetValue(shot, out var was);
@@ -921,6 +933,8 @@ void fragment() {
                 float warmth = charged ? Mathf.Max(Warmth(shot.Bubbles), 0.5f) : Warmth(shot.Bubbles);
                 _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("seed"), seed);
                 _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ink"), 0f);
+                var hue = LightOf(shot.Hue);
+                _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("prism_hue"), shot.Hue == PrismHue.None ? new Color(0f, 0f, 0f, 0f) : hue with { A = 1f });
                 // A full one burns white: a small star.
                 _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("lantern"), Mathf.Max(light, 0.35f * shot.Dim) * (shot.Bubbles >= PlaneCombatTuning.BubbleCap ? 1.25f : 1f));
                 _shots[i].SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("warmth"), warmth);
@@ -943,7 +957,7 @@ void fragment() {
                 halo.Visible = true;
                 halo.Position = _shots[i].Position;
                 halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("strength"), Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 1.3f : 1f));
-                halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("color"), HerColor.Light.Lerp(new Color(1f, 0.95f, 0.84f), warmth));
+                halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("color"), LightOf(shot.Hue).Lerp(new Color(1f, 0.95f, 0.84f), shot.Hue == PrismHue.None ? warmth : warmth * 0.3f));
                 _candidates.Add((shot.Position, GroundStrength * Mathf.Min(k, 1f) * (shot.Explosive ? 1.3f : 1f), GroundRadius));
                 if (LensCount < MaxLenses)
                 {
@@ -953,9 +967,9 @@ void fragment() {
             }
             else if (shot.BossPearl)
             {
-                // Queen Clam's pearls: lustrous, the royal one big and golden.
+                // Queen Clam's pearls: lustrous, the royal one big and golden. Drippus Prime's: drops of its ink.
                 _shots[i].Scale = Vector3.One * shot.Radius * (shot.Royal ? 1f + 0.08f * Mathf.Sin(_time * 9f) : 1f);
-                _shots[i].MaterialOverride = shot.Royal ? _royalPearl : _clamPearl;
+                _shots[i].MaterialOverride = shot.Royal ? _royalPearl : world.Boss?.Spec.Form == OctoShoots.Core.Bosses.BodyForm.Murkling ? _inkDrop : _clamPearl;
             }
             else
             {

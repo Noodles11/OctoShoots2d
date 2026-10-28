@@ -8,10 +8,10 @@ namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// Inkwardens on screen (docs/CORRUPTION.md): a corrupted sea anemone, a squat column of glossy ink crowned with a ring
-/// of slowly writhing tentacles tipped violet, a faint ring of ink on the floor round it marking how far it guards.
-/// When her light strikes a creature it guards, a tentacle's ink reaches out to it: a thin wavering tether that holds
-/// while the hits come and fades after, and the struck creature shimmers violet as the light fizzles on it. Freed, a
-/// healthy pale-pink anemone is left on the floor.
+/// of slowly writhing tentacles tipped violet. A faint thin tether of ink wavers out of it to every creature it guards,
+/// always; when her light strikes one, that tether swells bold and dark while the hits come and settles back after, and
+/// the struck creature shimmers violet as the light fizzles on it. Freed, a healthy pale-pink anemone is left on the
+/// floor.
 /// <para>
 /// The adventure's Inkwarden (a turned pufferfish, Inkwarden.Puffer) is a ring instead: an inflated ring of ink at her
 /// plane, its core glowing the pufferfish's yellow, its spikes folded in toward its hole. Roused, the spikes roll over
@@ -27,7 +27,7 @@ public partial class BlightView
     sealed class WardenView
     {
         public Node3D Node = null!;
-        public MeshInstance3D Body = null!, Ring = null!;
+        public MeshInstance3D Body = null!;
         public MeshInstance3D[] Tentacles = null!, Tips = null!;
         /// <summary>The spiky ring's spikes (the adventure's Inkwarden).</summary>
         public MeshInstance3D[] Spikes = System.Array.Empty<MeshInstance3D>();
@@ -55,8 +55,11 @@ public partial class BlightView
     MeshInstance3D? _tetherNode;
     StandardMaterial3D? _tetherMat, _paleAnemone;
 
-    /// <summary>How long a tether holds after the last blocked hit.</summary>
-    const float TetherHold = 0.6f;
+    /// <summary>How long a tether holds bold after the last blocked hit; how strong it is at rest (0..1).</summary>
+    const float TetherHold = 0.6f, LinkRest = 0.35f;
+
+    /// <summary>This frame's tethers: the warden, the creature's place, how strong (0..1).</summary>
+    readonly List<(Inkwarden Warden, System.Numerics.Vector2 To, float Strength)> _links = new();
 
     float WardenBase(System.Numerics.Vector2 at) => Mathf.Max(Floor(at), LevelMap.SwimBand - WardenHang);
 
@@ -68,7 +71,6 @@ public partial class BlightView
             if (!live.Contains(w))
             {
                 view.Node.QueueFree();
-                view.Ring.QueueFree();
                 gone.Add(w);
             }
         foreach (var w in gone) _wardens.Remove(w);
@@ -95,10 +97,10 @@ public partial class BlightView
                 view.Tentacles[i].Transform = new Transform3D(basis.Scaled(new Vector3(0.06f, len * 0.5f, 0.06f)), root + basis * new Vector3(0f, len * 0.5f, 0f));
                 view.Tips[i].Position = root + basis * new Vector3(0f, len, 0f);
             }
-            view.Ring.Position = new Vector3(w.Position.X, baseY + 0.05f, w.Position.Y);
         }
 
-        // The tethers: from the warden's crown to the creature it guards, a thin wavering ribbon of ink.
+        // The tethers: from the warden's crown to every creature it guards, a thin wavering ribbon of ink — faint at rest,
+        // bold while her hits are turned aside on it (held, then settling back).
         for (int i = _tethers.Count - 1; i >= 0; i--)
         {
             _tethers[i].Age += dt;
@@ -106,15 +108,24 @@ public partial class BlightView
         }
         if (_tetherMesh is null || camera is null) return;
         _tetherMesh.ClearSurfaces();
-        if (_tethers.Count == 0) return;
+        _links.Clear();
+        foreach (var w in world.Inkwardens)
+            foreach (var at in world.GuardedBy(w))
+            {
+                var hit = _tethers.Find(t => t.Warden == w && System.Numerics.Vector2.Distance(t.To, at) < 1.5f);
+                _links.Add((w, at, LinkRest + (1f - LinkRest) * (hit is null ? 0f : 1f - hit.Age / TetherHold)));
+            }
+        // A struck creature no longer guarded (gone, or out of reach): its tether fades out where it was.
+        foreach (var t in _tethers)
+            if (!_links.Exists(l => l.Warden == t.Warden && System.Numerics.Vector2.Distance(l.To, t.To) < 1.5f))
+                _links.Add((t.Warden, t.To, 1f - t.Age / TetherHold));
+        if (_links.Count == 0) return;
         _tetherMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
         var eye = camera.GlobalPosition;
-        foreach (var t in _tethers)
+        foreach (var (w, at, fade) in _links)
         {
-            var w = t.Warden;
             var from = w.Puffer ? new Vector3(w.Position.X, LevelMap.SwimBand + 0.2f, w.Position.Y) : new Vector3(w.Position.X, WardenBase(w.Position) + 1.25f, w.Position.Y);
-            var to = new Vector3(t.To.X, LevelMap.SwimBand + 0.1f, t.To.Y);
-            float fade = 1f - t.Age / TetherHold;
+            var to = new Vector3(at.X, LevelMap.SwimBand + 0.1f, at.Y);
             const int segs = 14;
             Vector3 prevL = default, prevR = default;
             for (int k = 0; k <= segs; k++)
@@ -125,7 +136,7 @@ public partial class BlightView
                 // A sag and a wave running along it.
                 var p = from + along * u + Vector3.Up * (0.6f * 4f * u * (1f - u)) + side * (0.18f * Mathf.Sin(u * 9f - _time * 7f + w.Seed) * Mathf.Sin(u * Mathf.Pi));
                 var view = (eye - p).Normalized();
-                var across = along.Cross(view).Normalized() * (0.05f + 0.04f * Mathf.Sin(u * Mathf.Pi)) * fade;
+                var across = along.Cross(view).Normalized() * (0.05f + 0.04f * Mathf.Sin(u * Mathf.Pi)) * (0.5f + 0.5f * fade);
                 var l = p - across;
                 var r = p + across;
                 if (k > 0)
@@ -169,15 +180,10 @@ public partial class BlightView
             node.AddChild(tentacles[i]);
             node.AddChild(tips[i]);
         }
-        // Its reach: a faint ring of ink on the floor.
-        var ring = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Scale = new Vector3(WardenTuning.Reach, 1f, WardenTuning.Reach) };
-        ring.SetInstanceShaderParameter(SN.Of("tint"), new Color(0.22f, 0.08f, 0.35f, 0.22f));
-        ring.SetInstanceShaderParameter(SN.Of("width"), 0.03f);
-        AddChild(ring);
-        return new WardenView { Node = node, Body = body, Ring = ring, Tentacles = tentacles, Tips = tips };
+        return new WardenView { Node = node, Body = body, Tentacles = tentacles, Tips = tips };
     }
 
-    /// <summary>The spiky ring: its inflated body, its spikes, its reach's ring on the water.</summary>
+    /// <summary>The spiky ring: its inflated body and its spikes.</summary>
     WardenView MakeSpiky(Inkwarden w)
     {
         EnsureTethers();
@@ -199,11 +205,7 @@ public partial class BlightView
             spikes[i].SetInstanceShaderParameter(SN.Of("skin"), Kin.Skin(Kin.Inkwarden, 0.8f));
             node.AddChild(spikes[i]);
         }
-        var ring = new MeshInstance3D { Mesh = _quad, MaterialOverride = _ring, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Scale = new Vector3(WardenTuning.Reach, 1f, WardenTuning.Reach) };
-        ring.SetInstanceShaderParameter(SN.Of("tint"), new Color(0.22f, 0.08f, 0.35f, 0.22f));
-        ring.SetInstanceShaderParameter(SN.Of("width"), 0.03f);
-        AddChild(ring);
-        return new WardenView { Node = node, Body = body, Ring = ring, Tentacles = System.Array.Empty<MeshInstance3D>(), Tips = System.Array.Empty<MeshInstance3D>(), Spikes = spikes };
+        return new WardenView { Node = node, Body = body, Tentacles = System.Array.Empty<MeshInstance3D>(), Tips = System.Array.Empty<MeshInstance3D>(), Spikes = spikes };
     }
 
     /// <summary>
@@ -239,7 +241,6 @@ public partial class BlightView
             var z = x.Cross(y).Normalized();
             spike.Transform = new Transform3D(new Basis(x, y, z).Scaled(new Vector3(1f, len, 1f)), root + dir * SpikeLength * 0.5f * len);
         }
-        view.Ring.Position = new Vector3(w.Position.X, LevelMap.SwimBand - 0.4f, w.Position.Y);
     }
 
     void EnsureTethers()
@@ -284,7 +285,6 @@ public partial class BlightView
         foreach (var view in _wardens.Values)
         {
             view.Node.QueueFree();
-            view.Ring.QueueFree();
         }
         _wardens.Clear();
         _tethers.Clear();

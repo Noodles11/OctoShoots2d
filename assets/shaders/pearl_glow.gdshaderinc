@@ -47,8 +47,9 @@ vec3 pearl_glow(vec3 at) {
 	vec3 col = t < 0.5 ? mix(glow_c0, glow_c1, t * 2.0) : mix(glow_c1, glow_c2, t * 2.0 - 1.0);
 	// Strong contrast between the pattern's parts, its dark parts near dark, so it reads; falling off gently with the distance from the pearl, so
 	// it reaches across the whole chamber (6.5 m) to the wall.
-	// (Held flat over the first 2 m, so the clam right round the pearl doesn't burn white.)
+	// (Held flat over the first 2 m, so the clam right round the pearl doesn't burn white.) Its own fade has no end:
+	// whatever lays it on fades it out before its own edge.
 	float near = max(d, 2.0);
-	float fall = 1.0 / (1.0 + near * near * 0.03) * (1.0 - smoothstep(8.0, 12.0, d));
+	float fall = 1.0 / (1.0 + near * near * 0.03);
 	return col * (0.06 + 1.1 * t) * fall * glow_strength;
 }

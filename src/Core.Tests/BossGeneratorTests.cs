@@ -51,8 +51,9 @@ public class BossGeneratorTests
     public void EveryConceptAndBodyOccurs_TiersNearTheirWeights_EveryBossHasThreeTells()
     {
         var all = Many().ToList();
-        foreach (var c in Enum.GetValues<BossConcept>()) Assert.Contains(all, s => s.Concept == c);
-        foreach (var f in Enum.GetValues<BodyForm>()) Assert.Contains(all, s => s.Form == f);
+        // (Drippus Prime's body and fight are authored, never rolled.)
+        foreach (var c in Enum.GetValues<BossConcept>().Where(c => c != BossConcept.TheBrood)) Assert.Contains(all, s => s.Concept == c);
+        foreach (var f in Enum.GetValues<BodyForm>().Where(f => !BossGenerator.Authored(f))) Assert.Contains(all, s => s.Form == f);
         Assert.Contains(all, s => s.Reference);
         float rare = all.Count(s => s.Tier == BossTier.Rare) / (float)all.Count, legendary = all.Count(s => s.Tier == BossTier.Legendary) / (float)all.Count;
         Assert.InRange(rare, 0.18f, 0.32f);

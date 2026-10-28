@@ -14,16 +14,29 @@ All numbers are first guesses (`AdventureTuning`).
 
 ## 1. Corruption vents
 
-- **What:** geyser-like openings in the reef walls, 3–5 a level, at least 30 m apart (closer only if the level has no
-  room) and 24 m from her start, never at safe places or the way down. Each is a short cone of rock standing out of a
-  wall face at her plane, its mouth toward open water, a dark throat glowing violet.
+- **What:** wounds in the reef walls, 3–5 a level, at least 30 m apart (closer only if the level has no room) and 24 m
+  from her start, never at safe places or the way down. Each is a gash torn along a wall face at her plane (2.6 m
+  long, pinched at its ends, its edges ragged, each its own), turned up out of the wall's slope so it shows from above,
+  its torn rock lips standing out along both edges. A blister of thick ink goo plugs it, bulging out into the water
+  and swelling more here than there (`vent_goo.gdshader`): an oily, iridescent film (violet, teal and magenta sliding
+  over near-black, marbled like an oil slick, brightest seen edge-on), and through it the reef's inside deep down, a
+  current running along the gash and pushing streaks and specks of corruption toward its middle. It breathes, ripples
+  run along it, a few drips of goo run out of its lower edge down the wall, stretching and drawing back, and its
+  current pushes dark motes of corruption out into the water (while she is within 30 m). A violet light throbs over it.
 - **Open, it floods:** from the level's first second every vent wells out an ink dot (§2) every 1.6 s (faster with
   Menace: ÷ 1 + 0.5 × Menace) into the nearest empty cell before its mouth, so the stream pushes out into the water.
+- **It has been pouring a while:** the deeper the level, the more ink it starts with. Each vent starts with a puddle of
+  60 × Menace dots round its mouth (`PlacePuddles`: none at Depth 1, 12 at Depth 2, 36 at Depth 4, 60 at Depth 6, more
+  on later loops), grown out of its mouth as the ink spreads — neighbour to neighbour through open water only, the
+  nearest first, its edge ragged — so it lies joined to its vent and spreads from the start.
 - **Sealing it:** her shots striking the wall within 1.6 m of its mouth count once each, as a seal wall's carving
-  does; the hits must come one after another (1.4 s after the last, one drains away every 0.3 s). Filled (8 hits,
-  + 2 per Menace) the vent **seals**: with a shudder and a puff of magic particles flung out of its mouth, its cone
-  sinks back into the wall, the glow going out, until only a small rounded bump of rock is left; the stream stops. A
-  gold ring round its mouth shows her hits. A sealed vent stays sealed; each is worth 25 XP.
+  does; the hits must come one after another (1.4 s after the last, one drains away every 0.3 s). Each hit dents its
+  goo where her light met it, ringing out over it, splashes goo off it (dark drops in its oily colours, flying out and
+  sinking, glinting) and flings magic particles. Her hits show as thin veins of gold light creeping into the goo from
+  its torn edges, further the more she has struck. Filled (8 hits, + 2 per Menace) the vent **seals**: with a shudder,
+  a puff of magic particles flung out of its mouth and the last of its goo bursting off it, the goo shrinks back into
+  the gash and the gash closes to a scar on a small rounded bump of rock, the glow going out; the stream stops. A
+  sealed vent stays sealed; each is worth 25 XP.
 - **Its ring of light:** sealing sends an unseen ring of her light out from its mouth, 6 m in 0.6 s, clearing the
   ink it crosses (each dot going up in magic particles).
 - **Sealing stops the source, not the ink:** the dots it spread beyond its ring stay until cleared, but no longer
@@ -77,20 +90,38 @@ it frees any corrupted creature: a corruption meter each, emptied by her shots, 
 | **Shoal murkling** | chromis | silver | 0.2 m, a whole school | Very fast (9 m/s). Within 14 m it rings her 1.8–2.6 m out, spread evenly all round in three layers, and the ring circles her (1.1 rad/s, each layer a little faster than the one inside it; each school its own way), never tied to her aim — she times her shots through the gaps, and a shot that meets one is spent on it. Harmless otherwise. |
 | **Inkwarden** | pufferfish | yellow | an inflated ring of ink, eight spikes folded in toward its hole | Wards the corrupted creatures round it (8 m). Calm, it drifts slowly about its spot (within 5 m), turning lazily. Struck (by her light, her arm or a burst), it rolls its spikes out over its top (0.5 s), spins up (0.6 s) and fires them one by one, one every 0.15 s, each in a random direction (11 m/s, 6 damage, an ink spike: it falls as a throw does and her shots burst it); then it slows and grows them back inward (3 s), calm until struck again. Freed, it is a pufferfish, and swims off. |
 
+Each depth's boss level holds its boss in its arena, Drippus Prime (docs/CORRUPTION.md); its brood are murklings like
+any other. On a boss level the way down opens once every vent is sealed **and** the boss is freed, in either order.
+
 Switched off in the adventure (their code kept, to bring back one by one): pufferlings, Blightroots, Blotters,
-Lashjaws, Thumpsquirts, dens, curse dens, ambushes, murkling budding, Queen Clam and the boss arenas. Light springs
-come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed it wells up from (§5).
+Lashjaws, Thumpsquirts, dens, curse dens, ambushes and murkling budding. Light springs
+(docs/CORRUPTION.md: a god ray onto the seabed, a store of healing she may come back to, too bright for any murkling)
+come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed under it (§5).
 
 ## 5. The abyss reef
 
-- **No seabed:** the open floor between the walls drops away below her plane (`AbyssReef`): the walls carry on down,
-  steepening, to 26 m deep 8 m out from the rock, and the water's deep murk takes it. Caves and tunnels (and their
-  mouths) keep their floors; the way down keeps its own drop. The flora, kelp and buried coins of the dropped floor go
-  with it.
+- **The seabed sinks with the menace:** the open floor between the walls drops away below her plane (`AbyssReef`),
+  the deeper the greater the menace: 4 m down at Menace 0, sinking evenly to 26 m at Menace 1 and no further (about
+  4.5 m deeper each depth). The walls carry on down, steepening, to the floor's depth 4 m out from the rock on the
+  shallowest floor, 8 m on the deepest. Caves and tunnels (and their mouths) keep their floors; the way down keeps its
+  own drop. The flora, kelp and buried coins of the dropped floor go with it.
+- **Sand dunes** cover the dropped floor, taking over as the walls' feet give onto it: irregular ridges across a wind
+  rolled per level, 7 m from crest to crest, each with a long gentle back and a short steep face (a quarter of it),
+  up to 1.8 m from crest to trough on the shallowest floor (half that on the deepest). Their lines wander and their
+  crests rise and die away patch by patch, and a finer set (a quarter as high, 3.5 m apart) runs across them at an
+  angle. Seen clearly on the first depths; the deep water's blur and murk take them further down.
 - **Reef shelves:** here and there a rounded ledge of rock juts from a wall just under her plane (1.2 m down, 3 m
   across, its rim falling away into the deep), at least 12 m apart, none within 20 m of her start. The anemones grow
   only on these.
 - **Everything at her plane:** the dots, the fish and the murklings swim there.
+- **Life in the deep** (`AbyssView`, cosmetic, seeded per level), seen only through the water's blur and murk:
+  - **Kelp fields** rise from the deep floor (where it lies 19 m down or more, clear of the way down: only on the
+    deepest depths): up to 14 a level, 15 m apart at least, 3.5–7 m across, their strands 11–17 m tall (tallest in the middle), their tips never
+    higher than 8.5 m under her plane. Fronds up either side, swaying with a slow swell that rolls through each field.
+  - **Big fish** cruise round her as dark shadows 12–17 m down, only where the floor lies deep enough to clear them:
+    five at a time, long fish (5–8 m, the tail swinging)
+    and rays (3.5–5 m long, their wings beating). Each comes in 18–30 m from her over the deep, crosses near her, turns
+    away from rock ahead, and fades out after 20–40 s or once 40 m away; another comes in elsewhere.
 
 ## 6. Her oral arm, her inner light and the HUD
 

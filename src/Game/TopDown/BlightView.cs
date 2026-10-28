@@ -470,8 +470,9 @@ public partial class BlightView : Node3D
             }
             case PlaneEventType.MurklingBurst:
                 // Freed: it pops like a water balloon, its ink showering out in its core's colour and evaporating (a
-                // prime's a great shower). Where its ember blooms, the floor's own cleansing shows it.
-                if (e.Direction.X > 0.5f) Pop(at, BlightTuning.MurkRadius * BlightTuning.PrimeScale, Kin.PrimeCore);
+                // prime's a great shower, Drippus Prime's the greatest: Direction.Y its size). Where its ember blooms,
+                // the floor's own cleansing shows it.
+                if (e.Direction.X > 0.5f) Pop(at, e.Direction.Y > 0f ? e.Direction.Y : BlightTuning.MurkRadius * BlightTuning.PrimeScale, Kin.PrimeCore);
                 else Pop(at, BlightTuning.MurkRadius, Kin.MurklingCore);
                 break;
         }

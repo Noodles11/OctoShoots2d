@@ -2,7 +2,8 @@ namespace OctoShoots.Core.Bosses;
 
 /// <summary>
 /// The bosses met, hardcoded one per depth (docs/BOSS-GENERATOR.md §1: the generator is parked until the hand-made
-/// roster grows). For now every depth's boss is Queen Clam, tougher the deeper she is met and on later loops.
+/// roster grows). For now every depth's boss is Drippus Prime (docs/CORRUPTION.md), tougher the deeper it is met and on
+/// later loops. Queen Clam stays the generator's reference roll.
 /// </summary>
 public static class BossRoster
 {
@@ -12,7 +13,7 @@ public static class BossRoster
     /// <summary>The boss of this loop's depth (as the player numbers them, 1–6).</summary>
     public static BossSpec For(ulong runSeed, int cycle, int depth)
     {
-        var spec = BossGenerator.QueenClam(runSeed, cycle, depth);
+        var spec = BossGenerator.DrippusPrime(runSeed, cycle, depth);
         spec.Hp *= 1f + HpGrowth * spec.Menace;
         spec.Damage *= 1f + DamageGrowth * spec.Menace;
         return spec;

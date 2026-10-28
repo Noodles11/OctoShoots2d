@@ -18,7 +18,9 @@ instance uniform float spin = 1.0;
 instance uniform float pearl = 0.0;
 // Her light (HerColor.cs, data/clementine_color.cfg).
 global uniform vec3 her_light;
-#define gold her_light
+// Prism Pearl: a third of her split light, in its own colour (rgb; a > 0.5), instead of her own.
+instance uniform vec4 prism_hue = vec4(0.0);
+#define gold (prism_hue.a > 0.5 ? prism_hue.rgb : her_light)
 
 varying vec2 v_dir;
 

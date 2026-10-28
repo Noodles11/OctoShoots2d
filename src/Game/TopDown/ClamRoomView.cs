@@ -129,7 +129,10 @@ public partial class ClamRoomView : Node3D
         var light = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/pearl_floor_light.gdshader"), RenderPriority = 1 };
         light.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_pos"), new Vector3(at.X, RestHeight, at.Y));
         light.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("facing"), new Vector2(facing.X, facing.Z));
-        root.AddChild(new MeshInstance3D { Mesh = FloorPatch(map, at, chamber + 2.5f), MaterialOverride = light, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+        // Reaching well out of the chamber's mouth: the light floods out and fades away before the patch ends.
+        float reach = chamber + 9f;
+        light.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("reach"), reach);
+        root.AddChild(new MeshInstance3D { Mesh = FloorPatch(map, at, reach), MaterialOverride = light, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
 
         // A spotlight of its colour out of the clam's mouth, toward the entrance, down a little: shadowed, so the clam
         // and whatever stands in the light throw shadows.
@@ -155,7 +158,7 @@ public partial class ClamRoomView : Node3D
     /// <summary>A patch of the ground's own surface round a point (this far), lifted a hair off it, for light laid on it.</summary>
     static ArrayMesh FloorPatch(LevelMap map, System.Numerics.Vector2 at, float radius)
     {
-        const int n = 40;
+        const int n = 64;
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
         for (int y = 0; y <= n; y++)

@@ -257,6 +257,10 @@
       "flags": ["mergeBubbles"] },
 
     // ── Active (F) — recharge over time ─────────────────────────────
+    { "id": "prism_pearl", "name": "Prism Pearl", "tagline": "One light, three colours",
+      "pearl": { "colors": ["#ff4d6d", "#52e08a", "#4d8bff"], "pattern": "stripes" },
+      "kind": "active", "quality": 3, "pools": ["treasure", "boss"],
+      "active": { "recharge": 45, "action": "prism", "duration": 6 } },
     { "id": "conch_horn", "name": "Conch Horn", "tagline": "The sea answers",
       "pearl": { "colors": ["#ffb5a7", "#fcd5ce", "#f8edeb"], "pattern": "swirl" },
       "kind": "active", "quality": 2, "pools": ["treasure", "shop"],

@@ -6,13 +6,15 @@ using OctoShoots.Core.Gen.TopDown;
 
 namespace OctoShoots.Core.Plane;
 
-/// <summary>Light springs (docs/CORRUPTION.md): pools of clear water where her corruption washes away.</summary>
+/// <summary>Light springs (docs/CORRUPTION.md): pools of light where she heals, until their store of healing runs dry.</summary>
 public static class SpringTuning
 {
     /// <summary>The chance a level has one.</summary>
     public const float Chance = 0.5f;
-    /// <summary>The pool's radius: inside it, her corruption drains at CleansePerSecond of her whole meter a second.</summary>
+    /// <summary>The pool's radius: inside it, she heals CleansePerSecond of her whole health a second.</summary>
     public const float Radius = 3f, CleansePerSecond = 0.3f;
+    /// <summary>How much healing a spring holds, in health points (more with her luck): it lasts until all of it is given.</summary>
+    public const float Pool = 100f;
     /// <summary>Where it may lie: open water this wide round it, away from the start and the way down.</summary>
     public const float Clearance = 3.2f, FromStart = 22f, FromExit = 14f;
 }
@@ -60,17 +62,17 @@ public static class LightSprings
 }
 
 /// <summary>
-/// A light spring in the world: whether she is in it now, and whether its one washing is used. It heals her once a
-/// level: from the first time it washes her until she leaves it; then it is spent, and fades away.
+/// A light spring in the world: whether she is in it now, and how much healing it still holds. She may come back to it
+/// as often as she likes; once it has given all of it, it is spent, and fades away.
 /// </summary>
 public sealed class LightSpring
 {
     public Vector2 Position;
-    /// <summary>She is in it, and whether it is healing her this moment (she is not yet wholly clean).</summary>
+    /// <summary>She is in it, and whether it is healing her this moment (she is not yet whole).</summary>
     public bool Bathing, Healing;
-    /// <summary>It has washed her on this visit: when she leaves, it is spent.</summary>
-    public bool Used;
-    /// <summary>Its washing is gone: it heals no more, and fades away.</summary>
+    /// <summary>The healing it still holds, and all it held (health points).</summary>
+    public float Pool, PoolMax;
+    /// <summary>Its healing is all given: it heals no more, and fades away; the creatures of ink may cross it again.</summary>
     public bool Spent;
 }
 
@@ -80,13 +82,14 @@ public sealed partial class PlaneWorld
 
     void PlaceSprings()
     {
-        foreach (var at in LightSprings.Of(Map)) Springs.Add(new LightSpring { Position = at });
+        float pool = SpringTuning.Pool * (1f + OctoShoots.Core.Items.LuckTuning.SpringPool(Map.Luck));
+        foreach (var at in LightSprings.Of(Map)) Springs.Add(new LightSpring { Position = at, Pool = pool, PoolMax = pool });
     }
 
     /// <summary>
-    /// A light spring washes her corruption away: inside it, her meter drains (a share of the whole each second) until
-    /// she is wholly clean. It does so once: the first visit on which it washes her uses it, and when she leaves the
-    /// water it is spent (it fades away). A visit while she is already clean does not use it.
+    /// A light spring heals her: inside it, while she is hurt, it gives her a share of her whole health each second out
+    /// of its store. She may leave and come back; when the store runs dry it is spent and fades away. While it shines,
+    /// it is too bright for the creatures of ink: none may enter it (WardSprings).
     /// </summary>
     void StepSprings()
     {
@@ -97,20 +100,64 @@ public sealed partial class PlaneWorld
             bool was = spring.Bathing;
             spring.Bathing = inside;
             spring.Healing = false;
-            if (!inside && spring.Used && !spring.Spent)
-            {
-                spring.Spent = true;
-                Events.Add(new PlaneEvent(PlaneEventType.SpringSpent, spring.Position, Vector2.Zero));
-            }
             if (!inside || Defeated) continue;
             float max = Run.MaxHp;
             if (p.Hp >= max) continue;
-            spring.Used = true;
             spring.Healing = true;
             if (!was) Events.Add(new PlaneEvent(PlaneEventType.SpringEntered, spring.Position, Vector2.Zero));
-            p.Hp = MathF.Min(max, p.Hp + max * SpringTuning.CleansePerSecond * Dt);
+            float heal = MathF.Min(MathF.Min(max * SpringTuning.CleansePerSecond * Dt, max - p.Hp), spring.Pool);
+            p.Hp += heal;
             Run.Hp = p.Hp;
+            spring.Pool -= heal;
             if (p.Hp >= max) Events.Add(new PlaneEvent(PlaneEventType.SpringCleansed, spring.Position, Vector2.Zero));
+            if (spring.Pool <= 1e-3f)
+            {
+                spring.Pool = 0f;
+                spring.Spent = true;
+                spring.Bathing = spring.Healing = false;
+                Events.Add(new PlaneEvent(PlaneEventType.SpringSpent, spring.Position, Vector2.Zero));
+            }
         }
+        WardSprings();
+    }
+
+    /// <summary>
+    /// A shining spring is too bright for the creatures of ink: any that swims into it is put back at its edge, its way
+    /// in stopped; one clinging to her is thrown off as she enters.
+    /// </summary>
+    void WardSprings()
+    {
+        foreach (var spring in Springs)
+        {
+            if (spring.Spent) continue;
+            foreach (var m in Murklings)
+            {
+                if (!m.Alive) continue;
+                if (m.Clinging)
+                {
+                    if (Vector2.Distance(m.Position, spring.Position) > SpringTuning.Radius) continue;
+                    m.Clinging = false;
+                    m.Shaken = BlightTuning.ShakeSeconds;
+                }
+                KeepOut(spring.Position, ref m.Position, ref m.Velocity, m.Body);
+            }
+            foreach (var w in Inkwardens)
+                if (w.Alive) KeepOut(spring.Position, ref w.Position, ref w.Velocity, WardenTuning.Radius);
+            foreach (var mob in Mobs)
+                if (mob.Alive) KeepOut(spring.Position, ref mob.Position, ref mob.Velocity, mob.Radius);
+        }
+    }
+
+    /// <summary>Puts a creature back at a spring's edge (its body just outside), stopping its way in.</summary>
+    static void KeepOut(Vector2 centre, ref Vector2 at, ref Vector2 velocity, float body)
+    {
+        float reach = SpringTuning.Radius + body;
+        var from = at - centre;
+        float d = from.Length();
+        if (d >= reach) return;
+        var away = d > 1e-4f ? from / d : new Vector2(1f, 0f);
+        at = centre + away * reach;
+        float inward = Vector2.Dot(velocity, away);
+        if (inward < 0f) velocity -= away * inward;
     }
 }

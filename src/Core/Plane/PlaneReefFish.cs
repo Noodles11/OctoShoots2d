@@ -97,7 +97,7 @@ public sealed class PlaneReefFish : PlaneSwimmer
     /// <summary>The adventure: its gauge of ink, 0..1 (full, it turns).</summary>
     public float Ink;
     /// <summary>Healthy, out in the water: one a murkling may hunt (a clownfish tucked in its anemone is safe).</summary>
-    public bool Huntable => !Corrupted && !Freed && Turning <= 0f && !(Kind == ReefFishKind.Clownfish && Hiding);
+    public bool Huntable => !Corrupted && !Freed && !Gone && Leaving == Vector2.Zero && Turning <= 0f && !(Kind == ReefFishKind.Clownfish && Hiding);
     /// <summary>A startled chromis darting off (seconds left), and which way.</summary>
     public float Dart;
     public Vector2 DartAway;
@@ -112,6 +112,13 @@ public sealed class PlaneReefFish : PlaneSwimmer
     public float Pace;
     /// <summary>A chromis's place in its school (its spot in the arrow).</summary>
     public int Slot;
+    /// <summary>
+    /// Leaving (one Drippus Prime took, swimming out of it as it is freed): the way it swims off, and the seconds it has
+    /// swum; gone once out of sight.
+    /// </summary>
+    public Vector2 Leaving;
+    public float Left;
+    public bool Gone;
 }
 
 public sealed partial class PlaneWorld
@@ -260,7 +267,12 @@ public sealed partial class PlaneWorld
         foreach (var s in Schools) StepSchool(s);
         foreach (var f in ReefFish)
         {
-            if (f.Corrupted) continue;
+            if (f.Corrupted || f.Gone) continue;
+            if (f.Leaving != Vector2.Zero)
+            {
+                StepLeaving(f);
+                continue;
+            }
             if (f.Turning > 0f)
             {
                 // Struck: it falters as the ink creeps over it, then it is a lesser murkling.
@@ -277,6 +289,27 @@ public sealed partial class PlaneWorld
                 default: StepChromis(f); break;
             }
         }
+    }
+
+    /// <summary>
+    /// A fish swimming off (freed out of Drippus Prime): it scatters out of the burst, then swims its way at an easy
+    /// pace, sliding along the rock, a little wander in it; gone once far from her (or after LeaveMax, wherever it is).
+    /// </summary>
+    void StepLeaving(PlaneReefFish f)
+    {
+        f.Left += Dt;
+        float cruise = f.Kind == ReefFishKind.Chromis ? 2.2f : ReefFishTuning.TangSpeed * 1.2f;
+        var way = Rotate(f.Leaving, 0.35f * MathF.Sin(f.Left * 0.9f + f.Id));
+        f.Velocity = MoveToward(f.Velocity, way * cruise, 3f * Dt);
+        float radius = f.Kind == ReefFishKind.Chromis ? ReefFishTuning.ChromisRadius : ReefFishTuning.TangRadius;
+        Move(ref f.Position, ref f.Velocity, radius, report: false);
+        if (f.Velocity.LengthSquared() > 0.01f)
+        {
+            float want = MathF.Atan2(f.Velocity.Y, f.Velocity.X), before = f.Heading;
+            f.Heading = before + Math.Clamp(AngleBetween(before, want), -4f * Dt, 4f * Dt);
+            f.TurnRate = (f.Heading - before) / Dt;
+        }
+        if (Vector2.Distance(f.Position, Player.Position) > DrippusTuning.LeaveFar || f.Left > DrippusTuning.LeaveMax) f.Gone = true;
     }
 
     /// <summary>The push away from her: none past the reach, growing to full right beside her.</summary>
