@@ -219,9 +219,12 @@ public partial class BlightView : Node3D
             var s = world.MurkShots[i];
             // Flown its range, it drops to the sand, falling faster as it goes.
             float drop = s.Airborne ? 0f : Mathf.Clamp(s.Fall / BlightTuning.ThrowFallSeconds, 0f, 1f);
-            float y = Mathf.Lerp(LevelMap.SwimBand, Floor(s.Position) + s.Radius * 0.5f, drop * drop);
+            // A Hearthguard's drop leaves its flank on the shelf below and arcs up to her plane over its first metre.
+            float rise = s.Lobbed ? 1f - Mathf.Clamp(System.Numerics.Vector2.Distance(s.Position, s.From) / 1f, 0f, 1f) : 0f;
+            float flying = Mathf.Lerp(LevelMap.SwimBand, FlounderBed(s.From) + 0.1f, rise * rise);
+            float y = Mathf.Lerp(flying, Floor(s.Position) + s.Radius * 0.5f, drop * drop);
             view.Position = new Vector3(s.Position.X, y, s.Position.Y);
-            var along = new Vector3(s.Velocity.X, -drop * 6f, s.Velocity.Y);
+            var along = new Vector3(s.Velocity.X, -drop * 6f + rise * 5f, s.Velocity.Y);
             // Stretched along its flight, a smear of dark.
             view.Basis = along.LengthSquared() > 1e-4f ? Basis.LookingAt(along.Normalized(), Vector3.Up).Scaled(new Vector3(1f, 1f, 1.8f)) : Basis.Identity;
             // Just thrown, it pinches off from the murkling's body on a neck that thins and snaps, then wobbles into its

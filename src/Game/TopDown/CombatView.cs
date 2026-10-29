@@ -18,9 +18,11 @@ public partial class CombatView : Node3D
     readonly List<Node3D> _pearls = new();
     /// <summary>The shells lying in the reef: each a silver nautilus (NautilusShell), lying as it fell — turned at random
     /// in every axis — turning slowly about its own tilt, bobbing a little on the swim band.</summary>
-    readonly Dictionary<PlaneShell, (MeshInstance3D Mesh, Basis Lie, Vector3 Spin, float Phase)> _shells = new();
+    readonly Dictionary<PlaneShell, (MeshInstance3D Mesh, Basis Lie, Vector3 Spin, float Phase, MeshInstance3D Halo)> _shells = new();
     /// <summary>A shell's size on the plane (across, metres).</summary>
     public const float ShellSize = 0.62f;
+    /// <summary>The soft glow round a shell lying in the reef (its radius).</summary>
+    const float ShellHalo = 0.75f;
     /// <summary>Hearts dropped by freed mobs: a small red heart and its glow each, pooled.</summary>
     readonly List<Node3D> _hearts = new();
     readonly List<Node3D> _stands = new();
@@ -258,7 +260,11 @@ public partial class CombatView : Node3D
     /// <param name="fresh">Pearls offered for the first time since an achievement unlocked them: they wear a NEW chip.</param>
     public void Show(PlaneWorld world, ItemCatalog? catalog, ISet<string>? fresh = null)
     {
-        foreach (var sh in _shells.Values) sh.Mesh.QueueFree();
+        foreach (var sh in _shells.Values)
+        {
+            sh.Mesh.QueueFree();
+            sh.Halo.QueueFree();
+        }
         foreach (var st in _stands) st.QueueFree();
         foreach (var h in _hearts) h.QueueFree();
         _hearts.Clear();
@@ -1138,20 +1144,30 @@ void fragment() {
         {
             if (_shells.ContainsKey(sh)) continue;
             var m = new MeshInstance3D { Mesh = OctoShoots.Game.Fx.NautilusShell.Mesh, MaterialOverride = OctoShoots.Game.Fx.NautilusShell.Material, CastShadow = GeometryInstance3D.ShadowCastingSetting.On, Scale = Vector3.One * ShellSize };
+            float phase = GD.Randf() * Mathf.Tau;
+            // Lying in the reef it shimmers (a sweep of light over it, a breathing sheen) inside a soft pearly glow.
+            m.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("shimmer"), 1f);
+            m.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("shimmer_seed"), phase / Mathf.Tau);
             AddChild(m);
+            var halo = new MeshInstance3D { Mesh = _haloQuad, MaterialOverride = _halo, Scale = Vector3.One * ShellHalo, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("color"), new Vector3(1f, 0.95f, 0.85f));
+            AddChild(halo);
             var lie = Basis.FromEuler(new Vector3(GD.Randf(), GD.Randf(), GD.Randf()) * Mathf.Tau);
-            _shells[sh] = (m, lie, _fireworks.RandDir(), GD.Randf() * Mathf.Tau);
+            _shells[sh] = (m, lie, _fireworks.RandDir(), phase, halo);
         }
         if (_shells.Count > world.Shells.Count)
             foreach (var gone in _shells.Keys.Where(k => !world.Shells.Contains(k)).ToList())
             {
                 _shells[gone].Mesh.QueueFree();
+                _shells[gone].Halo.QueueFree();
                 _shells.Remove(gone);
             }
         foreach (var (sh, view) in _shells)
         {
             view.Mesh.Position = new Vector3(sh.Position.X, LevelMap.SwimBand - 0.25f + 0.08f * Mathf.Sin(_time * 2.2f + view.Phase), sh.Position.Y);
             view.Mesh.Basis = (new Basis(view.Spin, 0.35f * _time + view.Phase) * view.Lie).Scaled(Vector3.One * ShellSize);
+            view.Halo.Position = view.Mesh.Position;
+            view.Halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("strength"), 0.27f + 0.12f * Mathf.Sin(_time * 2.6f + view.Phase));
         }
         // Light orbs (the sim's hearts): a bubble with her light inside, breathing gently where they fell.
         while (_hearts.Count < world.Hearts.Count)

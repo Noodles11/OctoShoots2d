@@ -10,7 +10,7 @@ namespace OctoShoots.Core.Plane;
 /// reef shelf just under her plane) from the Kelp Jungle down. Healthy, it lies still and now and then shimmies itself
 /// into the sand; over ink it fills and turns. The Hearthguard never leaves its patch and never chases her: it shimmies
 /// left and right as if burying itself, flinging a pattern of ink drops round it at short range, and when she comes
-/// close its flat disc draws out into a needle that stabs at her.
+/// close the back of its flat disc draws up into a sting that stabs at her.
 /// </summary>
 public static class FlounderTuning
 {
@@ -29,11 +29,15 @@ public static class FlounderTuning
     public const float RestMin = 2.5f, RestMax = 4f, RestPerMenace = 0.4f;
     /// <summary>A shimmy: Shimmy seconds of wriggling left and right (Wiggle radians, WiggleRate radians a second).</summary>
     public const float Shimmy = 1.4f, Wiggle = 0.35f, WiggleRate = 22f;
-    /// <summary>Its ink drops: flung at InkSpeed, they fall after InkReach metres and leave a dot where they land.</summary>
+    /// <summary>A shimmy's swings (its wriggle's peaks): the moment of the k-th, and the flank it swings to (+1 its left).</summary>
+    public const int Swings = 10;
+    public static float SwingAt(int k) => (MathF.PI / 2f + k * MathF.PI) / WiggleRate;
+    public static float SwingSide(int k) => k % 2 == 0 ? 1f : -1f;
+    /// <summary>Its ink drops: flung off its flanks at InkSpeed, they fall after InkReach metres and leave a dot where they land.</summary>
     public const float InkSpeed = 3.5f, InkReach = 2.4f, InkDamage = 5f, InkRadius = 0.09f;
     /// <summary>
-    /// The needle: she within Notice (and in sight) and it Cool since the last, its disc draws out pointing at her for
-    /// Windup (the telegraph), stabs out to NeedleReach over Strike, holds Hold, draws back over Retract.
+    /// The sting: she within Notice (and in sight) and it Cool since the last, its back draws up into a cone leaning at
+    /// her for Windup (the telegraph), stabs out to NeedleReach over Strike, holds Hold, draws back over Retract.
     /// </summary>
     public const float Notice = 2.8f, NeedleReach = 3.2f, Windup = 0.45f, Strike = 0.12f, Hold = 0.15f, Retract = 0.45f, Cool = 1f;
     /// <summary>The stab: Bite damage and a shove of Knock along the needle.</summary>
@@ -45,8 +49,12 @@ public static class FlounderTuning
 /// <summary>A flounder's moment: lying still, shimmying, and (corrupted) its needle drawn, stabbing, drawing back.</summary>
 public enum FlounderStage { Rest, Shimmy, Windup, Strike, Retract }
 
-/// <summary>The ink patterns a Hearthguard flings as it shimmies: a ring, a spiral, a cross turned twice.</summary>
-public enum InkPattern { Ring, Spiral, Cross }
+/// <summary>
+/// The ink a Hearthguard flings off its flanks as it shimmies, a side at each swing: a fan of three at four of its
+/// swings, one drop at every swing sweeping from its head to its tail, or a burst of five off each side at the height
+/// of the shimmy.
+/// </summary>
+public enum InkPattern { Fan, Sweep, Burst }
 
 /// <summary>A flounder on its patch, healthy or a Hearthguard.</summary>
 public sealed class PlaneFlounder
@@ -63,10 +71,10 @@ public sealed class PlaneFlounder
     public FlounderStage Stage;
     /// <summary>Seconds in its stage; how long this rest lasts; until it may stab again.</summary>
     public float Timer, Rest, Cool;
-    /// <summary>This shimmy's pattern, and how many of its drops are flung.</summary>
+    /// <summary>This shimmy's pattern, and how many of its swings have flung theirs.</summary>
     public InkPattern Pattern;
     public int Flung;
-    /// <summary>The needle: the way it points, and how far its tip reaches from its middle (0: a disc).</summary>
+    /// <summary>The sting: the way it points, and how far its tip reaches from its middle (0: drawn in).</summary>
     public Vector2 Aim = Vector2.UnitX;
     public float Reach;
     /// <summary>Whether this stab has struck her.</summary>
@@ -75,9 +83,9 @@ public sealed class PlaneFlounder
     public float ArmCooldown;
     public CorruptionMeter Corruption = new(FlounderTuning.Meter, BlightTuning.MurkRegen, BlightTuning.MurkDelay);
 
-    /// <summary>The needle's tip.</summary>
+    /// <summary>The sting's tip.</summary>
     public Vector2 Tip => Home + Aim * Reach;
-    /// <summary>How far it has drawn into a needle: 0 a disc → 1 a needle.</summary>
+    /// <summary>How far its back has drawn up into the sting: 0 a flat disc → 1 drawn.</summary>
     public float Needle => Stage switch
     {
         FlounderStage.Windup => Math.Clamp(Timer / FlounderTuning.Windup, 0f, 1f),
@@ -96,8 +104,8 @@ public sealed partial class PlaneWorld
     public List<PlaneFlounder> Flounders { get; } = new();
 
     /// <summary>
-    /// Flounders on their patches: on the reef shelves (an abyss reef; else on the seabed by the rock), before the anemones
-    /// take theirs, away from her start and from each other.
+    /// Flounders on their patches: on the reef shelves (an abyss reef; else on the seabed by the rock, clear of the coral
+    /// boulders), before the anemones take theirs, away from her start and from each other.
     /// </summary>
     void PlaceFlounders(Rng rng, List<Vector2> anchors, Func<Vector2, bool> allowed)
     {
@@ -116,6 +124,8 @@ public sealed partial class PlaneWorld
                 if (!allowed(q) || !Clear(q, 1.2f) || Clear(q, 4f)) continue;
                 if (Map.Abyss && Map.HeightAt(q) < AbyssReef.ShelfDepth - 0.5f) continue;
                 if (Flounders.Exists(o => Vector2.Distance(o.Home, q) < 12f)) continue;
+                // Not on a coral boulder (its patch is open sand).
+                if (Map.Decor.Exists(d => d.Kind == DecorKind.Bommie && Vector2.Distance(d.Position, q) < 1.6f + 1.2f * d.Scale)) continue;
                 Flounders.Add(new PlaneFlounder
                 {
                     Position = q, Home = q, Heading = rng.Range(0f, MathF.Tau), Seed = rng.Range(0f, 100f),
@@ -224,7 +234,7 @@ public sealed partial class PlaneWorld
 
     /// <summary>
     /// The Hearthguard: on its patch, never chasing. It rests, then shimmies, flinging its pattern of ink round it; she
-    /// close by (and in sight), its disc draws into a needle at her and stabs.
+    /// close by (and in sight), its back draws up into a sting leaning at her, and stabs.
     /// </summary>
     void StepHearthguard(PlaneFlounder f)
     {
@@ -261,7 +271,7 @@ public sealed partial class PlaneWorld
                 break;
             case FlounderStage.Strike:
             {
-                // The tip flies out along the needle; it stabs her if it passes through her.
+                // The tip flies out along the sting; it stabs her if it passes through her.
                 var was = f.Tip;
                 float reach = FlounderTuning.Radius + (FlounderTuning.NeedleReach - FlounderTuning.Radius) * MathF.Min(1f, f.Timer / FlounderTuning.Strike);
                 // Rock stops it.
@@ -307,37 +317,34 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>
-    /// Its shimmy's ink: the drops of its pattern, each flung when its moment in the shimmy comes — a ring all at once
-    /// halfway; a spiral one by one, sweeping round once and a quarter; a cross, then the cross turned an eighth.
+    /// Its shimmy's ink, flung off its flanks: at each swing of the shimmy (its wriggle at a peak, one side then the
+    /// other) the side it swings to throws that swing's drops of its pattern.
     /// </summary>
     void FlingInk(PlaneFlounder f)
     {
-        float u = f.Timer / FlounderTuning.Shimmy;
-        int count = f.Pattern switch { InkPattern.Ring => 8, InkPattern.Spiral => 10, _ => 8 };
-        while (f.Flung < count)
+        while (f.Flung < FlounderTuning.Swings && f.Timer >= FlounderTuning.SwingAt(f.Flung))
         {
-            int k = f.Flung;
-            float when = f.Pattern switch
+            int k = f.Flung++;
+            float side = FlounderTuning.SwingSide(k);
+            // Straight out of that flank (0), toward its head (+) or its tail (−), in radians.
+            float[] fan = f.Pattern switch
             {
-                InkPattern.Ring => 0.5f,
-                InkPattern.Spiral => (k + 0.5f) / count,
-                _ => k < 4 ? 1f / 3f : 2f / 3f,
+                InkPattern.Fan => k is 2 or 3 or 6 or 7 ? new[] { -0.6f, 0f, 0.6f } : Array.Empty<float>(),
+                InkPattern.Sweep => new[] { 1f - 2f * k / (FlounderTuning.Swings - 1f) },
+                _ => k is 4 or 5 ? new[] { -1.2f, -0.6f, 0f, 0.6f, 1.2f } : Array.Empty<float>(),
             };
-            if (u < when) break;
-            float a = f.Heading + f.Pattern switch
+            float flank = f.Heading + side * MathF.PI / 2f;
+            var from = f.Home + new Vector2(MathF.Cos(flank), MathF.Sin(flank)) * FlounderTuning.Radius;
+            foreach (float off in fan)
             {
-                InkPattern.Ring => MathF.Tau * k / 8f,
-                InkPattern.Spiral => MathF.Tau * 1.25f * k / count,
-                _ => MathF.Tau * (k % 4) / 4f + (k < 4 ? 0f : MathF.PI / 4f),
-            };
-            var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-            var at = f.Home + dir * (FlounderTuning.Radius + 0.1f);
-            MurkShots.Add(new MurkShot
-            {
-                Position = at, From = at, Velocity = dir * FlounderTuning.InkSpeed, Radius = FlounderTuning.InkRadius,
-                Damage = FlounderTuning.InkDamage, FallAt = FlounderTuning.InkReach,
-            });
-            f.Flung++;
+                float a = flank - side * off;
+                var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+                MurkShots.Add(new MurkShot
+                {
+                    Position = from, From = from, Velocity = dir * FlounderTuning.InkSpeed, Radius = FlounderTuning.InkRadius,
+                    Damage = FlounderTuning.InkDamage, FallAt = FlounderTuning.InkReach, Lobbed = true,
+                });
+            }
         }
     }
 

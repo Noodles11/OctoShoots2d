@@ -2,6 +2,8 @@
 // wavy, tarnished dark in their grooves and bright on their crests; the older, inner whorls a little duller. The metal
 // mirrors a fixed surround of its own (a bright sky, a dark horizon band, warm sand below, a sharp glint), so it reads
 // as polished silver in the shallows and in the dark deeps alike, and the ambient water alone never leaves it grey.
+// Lying in the reef (shimmer 1; the HUD's counter 0), a band of light sweeps over it now and then and its pearly sheen
+// breathes, so it catches the eye from across the screen.
 shader_type spatial;
 render_mode cull_disabled;
 
@@ -9,6 +11,14 @@ render_mode cull_disabled;
 uniform float lines = 64.0;
 uniform vec3 silver : source_color = vec3(0.82, 0.82, 0.85);
 uniform vec3 tarnish : source_color = vec3(0.36, 0.34, 0.32);
+instance uniform float shimmer = 0.0;
+instance uniform float shimmer_seed = 0.0;
+
+varying vec3 local_pos;
+
+void vertex() {
+	local_pos = VERTEX;
+}
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -45,4 +55,12 @@ void fragment() {
 	ROUGHNESS = 0.2 + 0.3 * dark + 0.06 * grain;
 	SPECULAR = 0.8;
 	EMISSION = col * env * 0.62 * (1.0 - 0.55 * dark);
+	if (shimmer > 0.0) {
+		// A band of light sweeping across it every couple of seconds, and a pearly sheen breathing over it.
+		float t = fract(TIME * 0.45 + shimmer_seed);
+		float band = 1.0 - smoothstep(0.0, 0.12, abs(dot(local_pos, normalize(vec3(1.0, 0.6, 0.3))) * 1.4 - (t * 3.0 - 1.5)));
+		float breathe = 0.5 + 0.5 * sin(TIME * 2.6 + shimmer_seed * 6.28);
+		vec3 pearl = mix(vec3(1.0, 0.93, 0.78), vec3(0.85, 0.92, 1.0), 0.5 + 0.5 * sin(TIME * 1.3 + local_pos.y * 8.0));
+		EMISSION += shimmer * (pearl * (0.25 + 0.2 * breathe) + vec3(1.2, 1.15, 1.05) * band * 1.6 * (1.0 - dark));
+	}
 }

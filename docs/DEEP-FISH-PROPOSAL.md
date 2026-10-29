@@ -33,7 +33,7 @@
 | Depth | Mob | Fish | What it does | What she learns |
 |---|---|---|---|---|
 | 2 Kelp | **Frondlurk** | leafy seadragon | Hangs among the kelp, looking like a frond; whips out a lash of leafy streamers when she passes close | Read the drip, not the shape |
-| 2 Kelp | **Hearthguard** (built) | flounder | Lies on its patch; shimmies, flinging short patterns of ink; draws into a needle and stabs her when she comes close | Territory: keep your distance, strike from range |
+| 2 Kelp | **Hearthguard** (built) | flounder | Lies on its patch; shimmies, flinging short patterns of ink; draws its back up into a sting and stabs her when she comes close | Territory: keep your distance, strike from range |
 | 3 Galleon | **Veilspine** | lionfish | Spreads its fins into a wall of spines that blocks her shots from the front; advances slowly, shedding fans of spines | Flank it |
 | 3 Galleon | **Wreckgulp** | grouper | Lurks in wreck holes; flares its gills and inhales, dragging her, her shots and the ink in; breathes the ink back out as a cloud | Watch the gills, dash clear |
 | 4 Carnival | **Mender** | cleaner wrasse | Never attacks: darts between corrupted creatures and "cleans" them, closing their holes and refilling their meters | Priority target |
@@ -63,8 +63,8 @@
 
 ### Hearthguard (flounder) — built
 
-A flounder lying on its patch (a reef shelf), shimmying into the sand; corrupted, a flat disc with a crown of ink
-spines that holds its patch, flings short patterns of ink as it shimmies, and draws out into a needle to stab her
+A flounder lying on its patch (a reef shelf), shimmying into the sand; corrupted, a plain flat oval of ink that holds
+its patch, flings short patterns of ink off its flanks as it shimmies, and draws its back up into a sting to stab her
 when she comes close. Its numbers and behaviour are in docs/ADVENTURE.md §3–§4.
 
 ## 4. Depth 3 — Sunken Galleon

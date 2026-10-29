@@ -269,6 +269,8 @@ public sealed class MurkShot
     public float Fall;
     /// <summary>An Inkwarden's spike (the adventure's spiky ring), not a murkling's throw: drawn as a thin spine.</summary>
     public bool Spike;
+    /// <summary>A Hearthguard's drop: flung up off its flank from the shelf under her plane (the view lifts it).</summary>
+    public bool Lobbed;
     public bool Airborne => Fall <= 0f;
 }
 

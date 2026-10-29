@@ -162,11 +162,13 @@ public partial class LevelView : Node3D
         foreach (var child in GetChildren())
             if (child != _flora) child.QueueFree();
         _canopies.Clear();
+        _spans.Clear();
         _materials.Clear();
         _seeThrough = default;
         Track(_ground);
         foreach (var m in _flora.Materials) Track(m);
         var map = _map = shape.Map;
+        _rockCeiling = null;
         _below = below;
 
         foreach (var surface in shape.Ground) AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = _ground });
@@ -260,6 +262,40 @@ public partial class LevelView : Node3D
         }
     }
     Vector4 _seeThrough;
+
+    /// <summary>How far round her middle (metres) rock counts as hiding her: her bell and the strands under it.</summary>
+    const float HerReach = 0.8f;
+
+    /// <summary>
+    /// Whether rock (the reef, a tunnel's roof, a cave's lid) stands between the camera and her, over any part of her
+    /// (her middle, and round it to HerReach): only then is the rock in front carved away (SeeThrough), so walls she
+    /// merely swims beside stay whole.
+    /// </summary>
+    public bool Hides(Vector3 her, Vector3 camera)
+    {
+        her -= Position;
+        camera -= Position;
+        for (int k = 0; k <= 8; k++)
+        {
+            float a = k * Mathf.Tau / 8f;
+            var at = k == 0 ? her : her + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * HerReach;
+            var d = camera - at;
+            if (d.Y <= 0.1f) continue;
+            for (float h = at.Y + 0.3f; h < Mathf.Min(camera.Y, RockCeiling); h += 0.35f)
+            {
+                var p = at + d * ((h - at.Y) / d.Y);
+                if (RockTop(p.X, p.Z) > h) return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>The level's highest rock (nothing above it can hide her).</summary>
+    float RockCeiling => _rockCeiling ??= _map.Heights.Concat(_map.Roof).Concat(_map.Lid).Where(h => !float.IsNaN(h)).Max() + 0.5f;
+    float? _rockCeiling;
+
+    /// <summary>The highest rock at a point: the reef, or a tunnel's roof or a cave's lid over it.</summary>
+    float RockTop(float x, float y) => Mathf.Max(SmoothHeight(_map, x, y), Mathf.Max(SmoothTunnelRoof(_map, x, y), SmoothRoof(_map, x, y)));
 
     public void SetPortal(Vector2 centre, float radius, int mode)
     {
@@ -544,7 +580,7 @@ public partial class LevelView : Node3D
             if (_tunnelRoofs.TryGetValue(c.Corridor, out var roof)) _canopies.Add((c, roof, 1f));
             return;
         }
-        var material = Rock(0.35f);
+        var material = Rock(0.25f);
         if (c.Radius > 0f)
         {
             // An overhang: a lumpy shelf of rock.
@@ -562,46 +598,68 @@ public partial class LevelView : Node3D
     }
 
     /// <summary>
-    /// An arch: a stone bridge springing from the ground at one footing, swelling up over the corridor, and coming down
-    /// at the other; thick at the feet, slimmer over the span, with a rounded cross-section (lumped in the shader).
+    /// An arch: a slab of the reef's own rock bridging the corridor from wall top to wall top, its top running on level
+    /// with the rock it springs from (a gentle crown over the span) so the walls' tops carry straight across it in the
+    /// same skin, its ends sunk into the walls, thicker at the feet; flat on top with rounded shoulders, rounded beneath.
+    /// Its height span (the underside's lowest to its top) is kept for the occlusion rule.
     /// </summary>
     ArrayMesh ArchMesh(Canopy c)
     {
-        const int along = 40, around = 14;
+        const int along = 48, around = 20;
         var a = c.EndA;
         var b = c.EndB;
-        float groundA = _map.HeightAt(a) - 0.6f, groundB = _map.HeightAt(b) - 0.6f;
-        float mid = (c.Bottom + c.Top) * 0.5f, half = (c.Top - c.Bottom) * 0.5f;
+        float topA = SmoothHeight(_map, a.X, a.Y), topB = SmoothHeight(_map, b.X, b.Y);
         var side = new Vector3(-c.Axis.Y, 0f, c.Axis.X);
         var verts = new List<Vector3>();
         var normals = new List<Vector3>();
         var indices = new List<int>();
-        Vector3 Centre(float t)
+        float lo = float.MaxValue, hi = float.MinValue;
+        // Its line runs on past each footing, diving into the wall.
+        const float sink = 0.15f;
+        float Top(float t)
+        {
+            float u = Mathf.Clamp(t, 0f, 1f);
+            float y = Mathf.Lerp(topA, topB, Mathf.SmoothStep(0f, 1f, u)) + 0.3f * Mathf.Sin(u * Mathf.Pi);
+            // Over the corridor never so low that its underside crowds her plane; at its feet, on the rock it springs from.
+            float span = Mathf.SmoothStep(0f, 0.2f, Mathf.Min(u, 1f - u));
+            y = Mathf.Max(y, Mathf.Lerp(y, LevelMap.SwimBand + ArchClear + ArchThick, span));
+            return y - 20f * Mathf.Max(Mathf.Max(-t, t - 1f), 0f);
+        }
+        Vector3 Line(float t)
         {
             var p = System.Numerics.Vector2.Lerp(a, b, t);
-            // Up from the ground fast, a gentle crown over the span, down fast at the far end.
-            float rise = Mathf.SmoothStep(0f, 0.2f, t), fall = Mathf.SmoothStep(1f, 0.8f, t);
-            float y = Mathf.Lerp(groundA, mid, rise) * (1f - t) + Mathf.Lerp(groundB, mid, fall) * t;
-            y = Mathf.Lerp(y, mid + 0.6f * Mathf.Sin(t * Mathf.Pi), rise * fall);
-            return new Vector3(p.X, y, p.Y);
+            return new Vector3(p.X, Top(t), p.Y);
         }
         for (int i = 0; i <= along; i++)
         {
-            float t = i / (float)along;
-            var p = Centre(t);
-            var tangent = (Centre(Mathf.Min(t + 0.01f, 1f)) - Centre(Mathf.Max(t - 0.01f, 0f))).Normalized();
-            var upish = tangent.Cross(side).Normalized();
-            if (upish.Y < 0f) upish = -upish;
-            float feet = 1f - Mathf.SmoothStep(0f, 0.25f, Mathf.Min(t, 1f - t));
-            float w = c.HalfWidth * (0.95f + 0.45f * feet), hgt = half * (1f + 0.6f * feet);
+            float t = Mathf.Lerp(-sink, 1f + sink, i / (float)along);
+            var p = Line(t);
+            var tangent = (Line(t + 0.01f) - Line(t - 0.01f)).Normalized();
+            // Its side taken so that tangent × side is up: the rings then wind facing out whichever way it runs.
+            var across = tangent.Cross(side).Y < 0f ? -side : side;
+            var up = tangent.Cross(across).Normalized();
+            float feet = 1f - Mathf.SmoothStep(0f, 0.3f, Mathf.Min(Mathf.Abs(t), Mathf.Abs(1f - t)));
+            // A little ragged along it, as rock is.
+            float wobble = 1f + 0.1f * Mathf.Sin(t * 9f + c.Center.X) + 0.05f * Mathf.Sin(t * 23f + c.Center.Y);
+            float w = c.HalfWidth * (1f + 0.5f * feet) * wobble, thick = ArchThick * (1f + 0.9f * feet);
+            // The section hangs from the top: its middle half its thickness down.
+            var mid = p - up * (thick * 0.5f);
+            float half = thick * 0.5f;
             for (int j = 0; j < around; j++)
             {
                 float ang = j * Mathf.Tau / around;
-                // A rounded box (superellipse) cross-section.
                 float cx = Mathf.Cos(ang), cy = Mathf.Sin(ang);
-                float sx = Mathf.Sign(cx) * Mathf.Pow(Mathf.Abs(cx), 0.6f), sy = Mathf.Sign(cy) * Mathf.Pow(Mathf.Abs(cy), 0.6f);
-                verts.Add(p + side * (sx * w) + upish * (sy * hgt));
-                normals.Add((side * cx * hgt + upish * cy * w).Normalized());
+                // Flat on top with rounded shoulders (a squarer superellipse above), rounder beneath.
+                float e = cy > 0f ? 0.3f : 0.75f;
+                float sx = Mathf.Sign(cx) * Mathf.Pow(Mathf.Abs(cx), e), sy = Mathf.Sign(cy) * Mathf.Pow(Mathf.Abs(cy), e);
+                var v = mid + across * (sx * w) + up * (sy * half);
+                verts.Add(v);
+                normals.Add((across * cx * half + up * cy * w).Normalized());
+                if (t >= 0f && t <= 1f)
+                {
+                    lo = Mathf.Min(lo, v.Y);
+                    hi = Mathf.Max(hi, v.Y);
+                }
             }
         }
         for (int i = 0; i < along; i++)
@@ -611,6 +669,23 @@ public partial class LevelView : Node3D
             int p0 = i * around + j, p1 = i * around + j1, p2 = (i + 1) * around + j, p3 = (i + 1) * around + j1;
             indices.AddRange(new[] { p0, p2, p1, p1, p2, p3 });
         }
+        // Its ends capped (buried in the wall as a rule, but closed where the wall falls away).
+        foreach (int i in new[] { 0, along })
+        {
+            var centre = Vector3.Zero;
+            for (int j = 0; j < around; j++) centre += verts[i * around + j];
+            centre /= around;
+            int ci = verts.Count;
+            verts.Add(centre);
+            normals.Add((Line(i == 0 ? -sink : 1f + sink) - Line(i == 0 ? 0f : 1f)).Normalized());
+            for (int j = 0; j < around; j++)
+            {
+                int j1 = (j + 1) % around;
+                if (i == 0) indices.AddRange(new[] { ci, j, j1 });
+                else indices.AddRange(new[] { ci, i * around + j1, i * around + j });
+            }
+        }
+        _spans[c] = (lo, hi);
         var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
@@ -621,12 +696,17 @@ public partial class LevelView : Node3D
         return mesh;
     }
 
+    /// <summary>An arch's slab: its thickness over the span (more at its feet), and the least room under it above her plane.</summary>
+    const float ArchThick = 1.5f, ArchClear = 1.6f;
+    /// <summary>The heights a canopy's rock really spans, where its mesh is not the map's Bottom–Top (an arch).</summary>
+    readonly Dictionary<Canopy, (float Lo, float Hi)> _spans = new();
+
     /// <summary>
     /// The occlusion rule (DESIGN-TOPDOWN §3): she is always seen. Any canopy (arch, cave roof, tunnel roof, overhang)
-    /// that stands over Clementine, or between her and the camera, dissolves, and returns once it no longer does — and
-    /// already as she comes near it: her line of sight to the camera is followed up through each canopy's height, and a
-    /// canopy within OcclusionMargin of it fades, well before her bell is under the rock. A cave's roof, and a tunnel's,
-    /// fade whole.
+    /// that stands over Clementine, or between her and the camera, dissolves, and returns once it no longer does: her
+    /// line of sight to the camera is followed up through each canopy's height, and a canopy within OcclusionMargin of
+    /// it (her bell and the strands under it) fades. One she only swims beside stays whole. A cave's roof, and a
+    /// tunnel's, fade whole.
     /// </summary>
     public void UpdateCanopy(System.Numerics.Vector2 player, float dt, Vector3 camera)
     {
@@ -638,7 +718,8 @@ public partial class LevelView : Node3D
         for (int i = 0; i < _canopies.Count; i++)
         {
             var c = _canopies[i].Canopy;
-            if (!Blocks(c, her, sight)) continue;
+            var (lo, hi) = _spans.TryGetValue(c, out var span) ? span : (c.Bottom, c.Top);
+            if (!Blocks(c, lo, hi, her, sight)) continue;
             hide[i] = true;
             if (c.Kind == CanopyKind.CaveRoof && CaveOf(c) is int cave and >= 0) hiddenCaves.Add(cave);
             if (c.Kind == CanopyKind.TunnelRoof) hiddenTunnels.Add(c.Corridor);
@@ -659,13 +740,13 @@ public partial class LevelView : Node3D
     }
 
     /// <summary>How near (metres) her line of sight may pass a canopy's footprint before it fades, and how much of it stays then.</summary>
-    const float OcclusionMargin = 4.5f, Cleared = 0.08f;
+    const float OcclusionMargin = 1f, Cleared = 0.08f;
     static readonly bool _noCanopy = OS.GetCmdlineUserArgs().Contains("--dbg-nocanopy");
 
-    /// <summary>Whether a canopy stands in (or within OcclusionMargin of) her line of sight to the camera, over its height.</summary>
-    static bool Blocks(Canopy c, Vector3 her, Vector3 sight)
+    /// <summary>Whether a canopy stands in (or within OcclusionMargin of) her line of sight to the camera, over its height (bottom–top).</summary>
+    static bool Blocks(Canopy c, float bottom, float top, Vector3 her, Vector3 sight)
     {
-        float lo = Mathf.Max(c.Bottom - 0.5f, her.Y), hi = c.Top + 0.5f;
+        float lo = Mathf.Max(bottom - 0.5f, her.Y), hi = top + 0.5f;
         if (sight.Y <= 1e-3f) return Near(c, new System.Numerics.Vector2(her.X, her.Z));
         for (float h = lo; h <= hi + 1e-3f; h += 0.75f)
         {
@@ -891,9 +972,25 @@ public partial class LevelView : Node3D
 
     // ───────────────────────── decoration ─────────────────────────
 
+    IReadOnlyList<FloraItem> _floraItems = Array.Empty<FloraItem>();
+
+    /// <summary>
+    /// No corals or grass within this far of these spots (map coordinates): a flounder's patch is open sand, and the
+    /// scatter (drawn here, unseen by the sim) may have put a coral head on it.
+    /// </summary>
+    public void KeepClear(IEnumerable<System.Numerics.Vector2> spots, float radius)
+    {
+        var clear = spots.ToList();
+        bool Near(FloraItem f) => clear.Any(c => new Vector2(f.Transform.Origin.X - c.X, f.Transform.Origin.Z - c.Y).LengthSquared() < radius * radius);
+        if (clear.Count == 0 || !_floraItems.Any(Near)) return;
+        _floraItems = _floraItems.Where(f => !Near(f)).ToList();
+        _flora.Show(_floraItems);
+    }
+
     void ShowDecor(LevelShape shape)
     {
         PaintFlora(ReefLook.For(shape.Map.Depth));
+        _floraItems = shape.Flora;
         _flora.Show(shape.Flora);
         AddChild(Instances(new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 18, Rings = 9 }, Rock(0.22f), shape.Rocks));
         if (shape.Glows.Count > 0)

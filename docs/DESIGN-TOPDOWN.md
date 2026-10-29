@@ -29,7 +29,7 @@
 | Shooting | **Bubbles**, mouse-aim (twin-stick optional), ammo visible as orbs under the bell. |
 | Levels | **Seeded caves of 6,000 m² of water (±15%) in a 140×140 m square**, reef-ringed; free swimming inside; one way down — a blue hole, or on a depth's boss level the Crack in the boss arena; caves as special rooms (§4). |
 | Level gen | **Plan → POIs → 3–4 intersecting paths → topographic reef**; the rock around the start and the hole shared with the levels above and below; mountains never on paths; arches over paths; caves & passes in ridges (§4.1, §4.6). |
-| Occlusion | Canopy layer (arch bodies, cave roofs, tunnel roofs, overhangs) **fades** as Clementine comes near and while she is underneath: she is always seen (§3, §4.5). |
+| Occlusion | Canopy layer (arch bodies, cave roofs, tunnel roofs, overhangs) **fades** while it stands over Clementine or between her and the camera: she is always seen (§3, §4.5). |
 | Lighting | **The core visual pillar.** Atmospheric, volumetric, per-depth darkening (§5). |
 | Engine | **Godot 4 / C# retained** — plane-locked rework of the existing stack (§11). |
 | Adventure | **Vents, ink dots, fish that turn** (the game's default): the reef is poisoned from vents in its walls; the ink spreads as dots through the water and turns the fish; sealing every vent opens the way down; no seabed outside caves (docs/ADVENTURE.md). |
@@ -307,11 +307,10 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
   gameplay plane. Any canopy over Clementine, or between her and the camera (it looks
   down at a slant, so rock a few metres to the camera's side of her hides her too),
   **dissolves** (a dithered fade, down to a faint 8% ghost of the rock) and stays
-  gone while it does, restoring after — and it starts **as she comes near**: her
-  line of sight to the camera is followed up through each canopy's height, and a
-  canopy within 4.5 m of it fades, so it has cleared before her bell is under
-  the rock. Overlapping canopies all fade; a cave's roof, and a tunnel's, fade
-  whole. It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
+  gone while it does, restoring after: her line of sight to the camera is followed
+  up through each canopy's height, and a canopy within 1 m of it (her bell and the
+  strands under it) fades. One she only swims beside stays whole. Overlapping
+  canopies all fade; a cave's roof, and a tunnel's, fade whole. It clears quickly (in about 0.13 s) and returns gently (about 0.3 s)
   (`LevelView.UpdateCanopy`). This is what makes the reef read as
   layered and physical rather than painted flat (§4.5, §11). What may pass over
   her is what really stands tall between her and the camera: kelp (Stage 5) and
@@ -472,7 +471,11 @@ its own.
   flanking a main or side tunnel (the first ground at least 5 m high, else 4, 3 or 2.5 m), 15 m or more apart along
   the water, get arch spans (10–24 m) across the path. Swimming under one triggers the canopy fade (§3). Where
   no flank stands high enough, a pair of short rock ridges is raised either
-  side of a corridor to carry one.
+  side of a corridor to carry one. Drawn (`LevelView.ArchMesh`), an arch is a slab of the reef's own rock in the
+  reef's skin: its top runs level with the rock at its footings (a 0.3 m crown over the span), so the walls' tops
+  carry straight across it; it is 1.5 m thick over the span and nearly twice that at its feet, flat on top with
+  rounded shoulders and rounded beneath, its ends diving into the walls. Over the corridor its underside is never
+  lower than 1.6 m above her plane.
 - **Caves:** small dead-end pockets (×1–2) and larger multi-chamber caves
   (×1–2) carved into ridge flanks; mouths face a corridor or open water;
   ≥ 25 m apart. Cave interiors host the special rooms (§4.2); where the ridge
@@ -598,10 +601,10 @@ Running after the checks, it never changes what she can reach.
   into the ridge behind its spur, 16–32 m long (about 2.8 m wide, in bending legs of 5–10 m), ending in a small end
   chamber. Black fog seeps out of its mouth into the canyon: the sign of what is inside.
   - **Going in is safe:** no dark, no curse, all the way to the end.
-  - **The walls in front thin away** (`LevelView.SeeThrough`, level_frame's `lf_see_cut`): while she is in the
-    tunnel, the rock standing between the camera and the tunnel round her (4.5 m) is dithered away — up to 85% of it,
-    soft at the edge, only rock above her plane and on the camera's side of her, fading in and out over 0.4 s — so a
-    leg running across the screen never hides the way her light shows.
+  - **The walls in front thin away** (`LevelView.SeeThrough`, level_frame's `lf_see_cut`): wherever the rock in
+    front hides her in the tunnel, the rock standing between the camera and the tunnel round her (4.5 m) is dithered
+    away, soft at the edge, only rock above her plane and on the camera's side of her, so a leg running across the
+    screen never hides the way her light shows.
   - **The end always rewards her** (rolled per level): **20%** a **pearl** (from any pool), else the **shell fountain**,
     a small vent of rock with a pale glow in its throat, spouting a shell a second whenever the last one has been
     taken, for as long as she stays in the den's dark.
@@ -1320,9 +1323,10 @@ at mist distance (inherited fade rule).
 - **Passes** are chosen through the highest rock first (the thickest roof).
 - Boulders and bommies are decoration only, never collision.
 - Ridge walls between the camera and Clementine dissolve in a dithered cutout (a presentation rule for walls;
-  the canopy layer has its own fade): any rock between the camera and her plane within 4.5 m of her — a wall in
-  front of her, a tunnel's roof, an arch — is carved away round her as she swims, gone in the middle, its edge
-  dissolving in the ordered dither (`lf_see_cut`). A canopy fading over Clementine is drawn unblurred while it fades.
+  the canopy layer has its own fade): while rock (the reef, a tunnel's roof, a cave's lid) stands between the camera
+  and any part of her (her middle and 0.8 m round it; `LevelView.Hides`), the rock between the camera and her plane
+  within 4.5 m of her is carved away round her, gone in the middle, its edge dissolving in the ordered dither
+  (`lf_see_cut`); it opens in about 0.17 s and closes over 0.5 s. A wall she only swims beside stays whole. A canopy fading over Clementine is drawn unblurred while it fades.
 - **Combat** (`PlaneCombat.cs`; the Depth-1 bestiary is being ported onto the plane, the Pufferling first): Clementine has
   100 HP (shown by the gonad rings on her bell, §2.5; the run's play time, stopped while paused, §9) and shoots toward the mouse (held) or the
   arrow keys — 10 damage, 4–5 volleys a second. Her shots are translucent bubbles, and a bubble never stops dead:
@@ -1478,7 +1482,9 @@ at mist distance (inherited fade rule).
   round nautilus coated in silver (`NautilusShell`, nautilus.gdshader), 0.62 m across: a plump planispiral coil, its
   aperture open, fine wavy growth lines across its whorls, polished so it mirrors a bright sky, a dark horizon band and
   warm sand (its own surround, so it reads as silver in every depth); each lies as it fell, turned at random in every
-  axis, turning slowly about its tilt and bobbing a little. The HUD counter sits bottom left: the same silver nautilus
+  axis, turning slowly about its tilt and bobbing a little. Lying in the reef it shimmers so it catches the eye: a
+  band of light sweeps across it about every 2 s and a pearly sheen breathes over it, inside a soft warm-white glow
+  (0.75 m, breathing with it); the HUD's shell does not. The HUD counter sits bottom left: the same silver nautilus
   (in 3D, still, its coil to the eye) and the number. Each shell she picks up flies there itself, so a pickup
   is never missed: in 0.55 s, from where she took it, the very shell — as big as it lay on screen, turned as it lay —
   shrinking to the counter's size and righting itself to the counter's turn with a tumble on the way, a short wisp of

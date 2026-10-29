@@ -552,15 +552,21 @@ public class AdventureTests
         Assert.True(f.Corrupted);
         Assert.Equal(f.Home, f.Position);
 
-        // Left alone, it shimmies now and then, flinging ink drops round it that fall close and leave dots.
+        // Left alone, it shimmies now and then, flinging ink drops off its flanks that fall close and leave dots.
         int drops = 0;
         float far = 0f;
+        var head = new Vector2(MathF.Cos(f.Heading), MathF.Sin(f.Heading));
         for (int i = 0; i < 10 * PlaneWorld.TickRate; i++)
         {
             int before = w.MurkShots.Count;
             Run(w, 1);
             drops += Math.Max(0, w.MurkShots.Count - before);
-            foreach (var s in w.MurkShots) far = MathF.Max(far, Vector2.Distance(s.Position, f.Home));
+            foreach (var s in w.MurkShots)
+            {
+                far = MathF.Max(far, Vector2.Distance(s.Position, f.Home));
+                Assert.True(s.Lobbed);
+                Assert.InRange(MathF.Abs(Vector2.Dot(s.From - f.Home, head)), 0f, 0.01f);
+            }
         }
         Assert.True(drops >= 8, $"only {drops} drops");
         Assert.InRange(far, 1f, FlounderTuning.InkReach + 1.5f);

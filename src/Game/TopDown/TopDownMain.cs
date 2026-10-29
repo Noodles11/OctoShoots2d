@@ -23,7 +23,7 @@ namespace OctoShoots.Game.TopDown;
 /// screen (RunLaunch); run directly with verification flags, it starts a run on its own and saves nothing.
 /// WASD swims (north is up), Space dashes, Shift dives (InputSetup), the mouse aims, F1 opens the debug menu (any
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
-/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|cave|exit|hole|kelp|shop|cache|treasure|treasure-out|clam-pearl|ambush|mob|boss|spring|spring-in,
+/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|arch-near|cave|exit|hole|kelp|shop|cache|cache-near|treasure|treasure-out|clam-pearl|ambush|mob|boss|spring|spring-in,
 /// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --luck=, --boss-hp=, --paused, --map, --f3, --no-focus, --dbg-nofog (no floor fog),
 /// --capture=dir --frames=a,b, --dbg-say=text (a message banner, a second in), --at=gate (swims into the boss arena through its
 /// opened way in), --dbg-free=seconds (the boss freed that long after it lands), --dbg-steer=x,y (she swims that way;
@@ -52,6 +52,8 @@ public partial class TopDownMain : Node3D
     bool _dbgGate;
     /// <summary>How far round her the rock between the camera and her is carved away.</summary>
     const float SeeThroughRadius = 4.5f;
+    /// <summary>How far the walls round her are carved away (0 whole → 1 open while they hide her).</summary>
+    float _seeThrough;
     /// <summary>Verification (--dbg-nocarve): the walls are not carved away round her.</summary>
     readonly bool _dbgNoCarve = OS.GetCmdlineUserArgs().Contains("--dbg-nocarve");
     float _dbgFree;
@@ -1072,6 +1074,8 @@ public partial class TopDownMain : Node3D
         }
         _run.Level = _id;
         _world = new PlaneWorld(_map, _tuning, _run, DebugBoss());
+        // A flounder's patch is open sand: no coral head of the view's scatter on it.
+        _level.KeepClear(_world.Flounders.Select(f => f.Home), 2.2f);
         _anchors = _world.SaveAnchors(_recorder.Profile, _achievements, _recorder);
         // Synergies she came in with (a resumed run, debug pearls) are not news.
         foreach (string id in _run.Loadout.Synergies) _announced.Add(id);
@@ -1280,6 +1284,9 @@ public partial class TopDownMain : Node3D
             "tunnel" => _map.Canopies.Where(c => c.Kind == CanopyKind.TunnelRoof).Select(c => (System.Numerics.Vector2?)c.Center).FirstOrDefault(),
             "tunnel-mouth" => _map.Canopies.Where(c => c.Kind == CanopyKind.TunnelRoof).Select(c => (System.Numerics.Vector2?)_map.Corridors[c.Corridor].Points[0]).FirstOrDefault(),
             "arch" => _map.Canopies.Where(c => c.Kind == CanopyKind.Arch).Select(c => (System.Numerics.Vector2?)c.Center).FirstOrDefault(),
+            // Down the corridor from the level's first arch, clear of it (captures of the arch itself).
+            "arch-near" => _map.Canopies.Where(c => c.Kind == CanopyKind.Arch)
+                .Select(c => (System.Numerics.Vector2?)(c.Center + new System.Numerics.Vector2(-c.Axis.Y, c.Axis.X) * (c.HalfWidth + 6f))).FirstOrDefault(),
             "cave" => _map.Caves.Select(c => (System.Numerics.Vector2?)(c.Mouth + c.Facing * 5f)).FirstOrDefault(),
             "exit" => _map.Exit.Position + new System.Numerics.Vector2(0f, _map.Exit.Radius + 3f),
             "hole" => _map.Exit.Position,
@@ -1318,11 +1325,12 @@ public partial class TopDownMain : Node3D
             }).FirstOrDefault(),
             // In front of the first sealed wall of any kind (the boss's, on a boss level).
             "seal" => _map.WeakRocks.OrderByDescending(r => r.Kind).Select(r => (System.Numerics.Vector2?)(r.Center + LevelView.SealFacing(_map, r) * (r.Thick + 5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
-            // Beside the level's first flounder (south of it, in sight); "hearth": it is a Hearthguard, and she in its reach.
-            "flounder" or "hearth" => _world.Flounders.SelectMany(f =>
+            // Beside the level's first flounder (south of it, in sight); "hearth": it is a Hearthguard, and she in its reach;
+            // "hearth-far": just out of its reach, where it shimmies.
+            "flounder" or "hearth" or "hearth-far" => _world.Flounders.SelectMany(f =>
             {
-                if (where == "hearth" && !f.Corrupted) _world.DebugTurnFlounder(f);
-                float off = where == "hearth" ? 2.4f : 4f;
+                if (where != "flounder" && !f.Corrupted) _world.DebugTurnFlounder(f);
+                float off = where switch { "hearth" => 2.4f, "hearth-far" => 4.5f, _ => 4f };
                 return Enumerable.Range(0, 16).Select(k => (System.Numerics.Vector2?)(f.Home + new System.Numerics.Vector2(MathF.Sin(k * 0.39f), MathF.Cos(k * 0.39f)) * off));
             }).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres off the level's first Thumpsquirt.
@@ -1342,6 +1350,10 @@ public partial class TopDownMain : Node3D
             // A few metres out before the level's first vent, facing it.
             "vent" => _world.Vents.Select(v => (System.Numerics.Vector2?)(v.Position + v.Facing * 4f)).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "cache" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
+            // A few metres from the first shell cache, its shells still lying there (captures of them).
+            "cache-near" => _map.Pois.Where(p => p.Kind == PoiKind.ShellCache)
+                .SelectMany(p => Enumerable.Range(0, 12).Select(k => p.Position + new System.Numerics.Vector2(Mathf.Cos(k * Mathf.Tau / 12f), Mathf.Sin(k * Mathf.Tau / 12f)) * 6f))
+                .Select(q => (System.Numerics.Vector2?)q).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             "ambush" => _map.Pois.Where(p => p.Kind == PoiKind.Ambush).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
@@ -1923,8 +1935,11 @@ public partial class TopDownMain : Node3D
         _camera.Zoom = Mathf.Lerp(1f, LevelUpZoom, framing);
         _camera.Track(Focus(alpha), dt, look: new Vector3(LevelUpShift() * framing, 0f, 0f));
         _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
-        // Any wall between the camera and her (a tunnel's roof, a wall in front) is carved away round her as she swims.
-        _level.SeeThrough(_bell.GlobalPosition, SeeThroughRadius, _dbgNoCarve ? 0f : 1f);
+        // A wall between the camera and her (a tunnel's roof, a wall in front) is carved away round her while it hides
+        // her, quick to open and gentle to close; one she only swims beside stays whole.
+        bool hidden = _level.Hides(_bell.GlobalPosition, _camera.Camera.GlobalPosition);
+        _seeThrough = Mathf.MoveToward(_seeThrough, hidden ? 1f : 0f, dt * (hidden ? 6f : 2f));
+        _level.SeeThrough(_bell.GlobalPosition, SeeThroughRadius, _dbgNoCarve ? 0f : _seeThrough);
         // In the curse den's dark her own light is dimmed too, to about half.
         _bell.Dim = 1f - 0.475f * _dark.Amount;
         _minimap.Blackout = _dark.Amount;
