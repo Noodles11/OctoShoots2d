@@ -14,6 +14,11 @@ public partial class PadMenus : Node
 {
 	/// <summary>Settings is capturing a new binding: the pad is left alone.</summary>
 	public static bool Capturing { get; set; }
+	/// <summary>
+	/// The screen reads the left stick itself (the title's ring: she points with it): the stick moves no focus here, and
+	/// is still kept from the GUI.
+	/// </summary>
+	public static bool StickFree { get; set; }
 
 	/// <summary>The left stick moves focus once per push (pushed past Press, re-armed below Release).</summary>
 	const float Press = 0.6f, Release = 0.3f;
@@ -35,6 +40,12 @@ public partial class PadMenus : Node
 			}
 		if (e is InputEventJoypadMotion { Axis: JoyAxis.LeftX or JoyAxis.LeftY } m)
 		{
+			if (StickFree)
+			{
+				_stickX = _stickY = false;
+				GetViewport().SetInputAsHandled();
+				return;
+			}
 			bool x = m.Axis == JoyAxis.LeftX;
 			float v = m.AxisValue;
 			bool held = x ? _stickX : _stickY;

@@ -312,7 +312,10 @@ The title uses the **surface & dive** language of the banner prototype, so every
 - **Keyboard:**
   - W/S or the arrow keys move the focus; Enter or Space activates; Esc goes back.
   - In grids, the arrow keys move between tiles and Tab switches tabs.
-- **Gamepad** (later): the same model. A confirms, B goes back; the bumpers switch tabs.
+- **Gamepad:** A confirms, B goes back; the bumpers switch tabs; the D-pad moves the focus as the arrow keys do. On
+  the ring the left stick points from Clementine: her crosshair (the mouse's own, GonadCursor) stands 120 px out from
+  her the way it is pushed, and the item whose direction from her is nearest takes the focus; let go, the crosshair
+  fades. Under a card or the seed box the left stick moves the focus as the D-pad does.
 - The seed box takes typing only while it is open; Esc closes it first, then the next Esc leaves it.
 
 ## 7. What needs recording (Core)

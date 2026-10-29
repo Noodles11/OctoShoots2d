@@ -22,10 +22,11 @@ namespace OctoShoots.Game.Title;
 /// fixed seed in the middle of the screen, the camera following her, and the menu's items stand in a ring round her:
 /// Continue, New run, Seeded run, Sea-pedia, Statistics, Save &amp; load, Settings and Quit. She turns to face the
 /// pointer (her crosshair, GonadCursor), or with the controller the item in focus, her first gonad toward it, as in the
-/// game; choosing an item, she shoots her light at it, and what it does happens as the shot strikes it. Run with game
+/// game. With the controller the left stick points from her: her crosshair stands round her the way it is pushed and the
+/// item that way takes the focus (the D-pad still steps round the ring); choosing an item, she shoots her light at it, and what it does happens as the shot strikes it. Run with game
 /// flags (--seed=, --at=, …) it skips straight to a run.
 /// Review flags: --title-sample (an example profile, never saved), --title-card=stats|pedia|creatures|save|settings|seed,
-/// --title-pick=id (that item focused, then chosen: her shot at it),
+/// --title-pick=id (that item focused, then chosen: her shot at it), --dbg-stick=x,y (the left stick held that way),
 /// --title-launch=new|continue (starts that run after a moment; the game then takes --capture), --capture=dir --frames=a,b.
 /// </summary>
 public partial class TitleMain : Node3D
@@ -63,6 +64,10 @@ public partial class TitleMain : Node3D
     Vector2 RingCentre => PageSize * 0.5f + new Vector2(0f, -8f);
     /// <summary>The last pointer she followed: the mouse, or (with the controller or the keys) the item in focus.</summary>
     bool _byPad;
+    /// <summary>The left stick's crosshair round her (page units out from her middle), and how much of it shows.</summary>
+    TextureRect _padCross = null!;
+    const float PadCrossOut = 120f, PadCrossSize = 44f, PadPush = 0.4f;
+    float _padCrossShown;
     MenuShots _shots = null!;
     Control? _inline;
     Control? _card;
@@ -75,6 +80,8 @@ public partial class TitleMain : Node3D
     int _frame;
     string? _openCard;
     string? _autoLaunch;
+    /// <summary>Review: --dbg-stick=x,y holds the controller's left stick that way.</summary>
+    Vector2? _dbgStick;
     /// <summary>Review: --title-pick=id focuses that item and chooses it a moment in (her shot at it).</summary>
     string? _autoPick;
 
@@ -111,6 +118,9 @@ public partial class TitleMain : Node3D
             else if (arg.StartsWith("--title-card=")) _openCard = Value("--title-card=");
             else if (arg.StartsWith("--title-launch=")) _autoLaunch = Value("--title-launch=");
             else if (arg.StartsWith("--title-pick=")) _autoPick = Value("--title-pick=");
+            else if (arg.StartsWith("--dbg-stick=") && Value("--dbg-stick=").Split(',') is { Length: 2 } st
+                && float.TryParse(st[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float sx) && float.TryParse(st[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float sy))
+                _dbgStick = new Vector2(sx, sy);
             else if (arg.StartsWith("--capture=")) _captureDir = Value("--capture=");
             else if (arg.StartsWith("--frames="))
                 foreach (string f in Value("--frames=").Split(','))
@@ -151,7 +161,11 @@ public partial class TitleMain : Node3D
 
     void SkipToGame() => GetTree().ChangeSceneToFile(RunLaunch.GameScene);
 
-    public override void _ExitTree() => OctoShoots.Game.Fx.GonadCursor.Release();
+    public override void _ExitTree()
+    {
+        OctoShoots.Game.Fx.GonadCursor.Release();
+        PadMenus.StickFree = false;
+    }
 
     /// <summary>The menu is laid out on a 1600×900 page, scaled to fit the window.</summary>
     static readonly Vector2 Page = new(1600f, 900f);
@@ -290,6 +304,7 @@ public partial class TitleMain : Node3D
             _level.UpdateCanopy(_world.Player.Position, dt, _camera.Camera.GlobalPosition);
         }
         LayoutRing();
+        PadPoint(dt);
         _shots.From = HerOnPage();
         Capture();
     }
@@ -356,6 +371,18 @@ public partial class TitleMain : Node3D
         _ui.AddChild(footer);
 
         _ui.AddChild(_shots);
+
+        // The left stick's crosshair: her own, standing round her the way the stick is pushed.
+        _padCross = new TextureRect
+        {
+            Texture = OctoShoots.Game.Fx.GonadCursor.Texture(),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            Size = Vector2.One * PadCrossSize,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Modulate = new Color(1f, 1f, 1f, 0f),
+        };
+        _ui.AddChild(_padCross);
 
         _fade = new ColorRect { Color = new Color(0f, 0f, 0f, 1f), MouseFilter = Control.MouseFilterEnum.Ignore };
         _fade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -469,6 +496,49 @@ public partial class TitleMain : Node3D
             var page = PageSize;
             holder.Position = new Vector2(Mathf.Clamp(at.X, 16f, page.X - holder.Size.X - 16f), Mathf.Clamp(at.Y, 16f, page.Y - holder.Size.Y - 16f));
         }
+    }
+
+    /// <summary>
+    /// The controller's left stick on the ring: pushed, her crosshair stands round her that way and the item whose
+    /// direction from her is nearest takes the focus; let go, the crosshair fades. Under a card or a box the stick works
+    /// the menus as usual (PadMenus).
+    /// </summary>
+    void PadPoint(float dt)
+    {
+        bool ring = _card is null && _inline is null && !_launching && _world is not null;
+        PadMenus.StickFree = ring;
+        var stick = Vector2.Zero;
+        foreach (int pad in Input.GetConnectedJoypads())
+        {
+            var v = new Vector2(Input.GetJoyAxis(pad, JoyAxis.LeftX), Input.GetJoyAxis(pad, JoyAxis.LeftY));
+            if (v.LengthSquared() > stick.LengthSquared()) stick = v;
+        }
+        if (_dbgStick is { } held) stick = held;
+        bool pushed = ring && stick.Length() > PadPush;
+        if (pushed)
+        {
+            _byPad = true;
+            var her = HerOnPage();
+            var dir = stick.Normalized();
+            _padCross.Position = her + dir * PadCrossOut - _padCross.Size * 0.5f;
+            Button? best = null;
+            float bestDot = -2f;
+            foreach (var (button, _, _) in _items)
+            {
+                if (!button.GetParent<Control>().Visible) continue;
+                var to = button.GetGlobalRect().GetCenter() / UiScale - her;
+                if (to.LengthSquared() < 1f) continue;
+                float dot = to.Normalized().Dot(dir);
+                if (dot > bestDot)
+                {
+                    bestDot = dot;
+                    best = button;
+                }
+            }
+            if (best is not null && !best.HasFocus()) best.GrabFocus();
+        }
+        _padCrossShown = Mathf.MoveToward(_padCrossShown, pushed ? 1f : 0f, dt * (pushed ? 10f : 2.5f));
+        _padCross.Modulate = new Color(1f, 1f, 1f, _padCrossShown);
     }
 
     (Button Button, Label Detail, string Id) Item(string id) => _items.First(it => it.Id == id);
