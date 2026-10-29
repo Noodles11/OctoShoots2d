@@ -183,7 +183,7 @@ it guards, always (nothing marks its reach itself).
   Menace more roam the level (far from her start, 12 m apart, never in the arena), at most 6 in all. A roamer drifts
   at 0.6 m/s toward where most of its kin gather within 25 m (looked for every 2 s) and settles beside them.
 - **The ward:** every corrupted creature within 8 m of an Inkwarden — murklings (lesser ones and primes too), Blotters,
-  Blightroots, Thumpsquirts — takes no harm from anything: her shots, pops, bursts, the Firefly Squid's surge, a dash's
+  Blightroots, Thumpsquirts, Lashjaws, Hearthguards — and every open vent (docs/ADVENTURE.md §1) takes no harm from anything: her shots, pops, bursts, the Firefly Squid's surge, a dash's
   burst (a clinging murkling is still thrown off). Each hit turned aside swells the tether from every warden guarding the
   creature bold and dark, held while the hits come and settling back over 0.6 s; the creature shimmers
   violet, the hit counts 0 and a dull knock sounds. Inkwardens never guard each other and bosses are never guarded, so
@@ -218,7 +218,7 @@ poking out of the rock at her height; it never moves.
   freed. Until then it hunts on. An Inkwarden can ward it like any kin.
 - **Fish:** with her out of its fan (or held by another), it lashes the nearest reef fish in it, reels it in and
   swallows it, chewing 4 s: her chance to strike.
-- **Freed:** it pops (see evaporation below), cleansing 3 m, and leaves 3–4 shells; every fish it swallowed swims back out alive, and the
+- **Freed:** it pops (see evaporation below), cleansing 3 m, and leaves 3–4 shells; every fish it swallowed swims back out alive (and off away from her, gone as any freed fish), and the
   healthy moray draws back into its hole.
 
 ## Dens (`Den`, `PlaneDens.cs`)
@@ -344,8 +344,8 @@ The reef's fish (DESIGN-TOPDOWN, Reef fish) are what the murklings corrupt.
   place on her taken, the rest of the swarm mills round her about 1.4 m out, waiting for one. What is left of the
   healthy school swims on, fleeing them.
 - **Freed:** emptied, its ink cracks off in flakes with a little burst of its own colour and a chime, and it is its fish
-  again, where it was: a chromis rejoins its school, a clownfish its anemone, a tang its home ground. A freed fish
-  cannot be turned again that level. Freed fish drop nothing.
+  again, where it was, and it swims off away from her at an easy pace and is gone (once 22 m from her, or after 40 s
+  wherever it is), never to be turned again. Freed fish drop nothing.
 
 ## Corruption meters (`CorruptionMeter`)
 

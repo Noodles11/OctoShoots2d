@@ -28,7 +28,7 @@ namespace OctoShoots.Core.Saves;
 /// </summary>
 public static class Snapshot
 {
-    const int Version = 1;
+    const int Version = 2;
 
     /// <summary>The objects both sides share, in a fixed order, and which of them have their contents saved.</summary>
     public sealed class Anchors

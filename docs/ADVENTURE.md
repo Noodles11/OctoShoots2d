@@ -5,10 +5,11 @@ spreads as ink dots through the water and turns the reef's fish one by one into 
 level by **sealing the vents**, and the fish she frees are fish again (freed, not killed: THEME-BIBLE).
 
 It is on with `PlaneOptions.Adventure` (the game's default). The simulation is in `src/Core/Plane/PlaneAdventure.cs`
-(`AdventureTuning`, `InkDots`, `PlaneVent`, the fish gauges, the three murklings, her inner light) and
+(`AdventureTuning`, `InkDots`, `PlaneVent`, the fish gauges, the three murklings, her oral arm),
+`src/Core/Plane/PlaneFlounder.cs` (flounders and Hearthguards) and
 `src/Core/Gen/TopDown/AbyssReef.cs` (the abyss); the presentation in `src/Game/TopDown/AdventureView.cs` (dots, their
 bracket marks, vents), `BlightView` (the murklings' bodies: `murkling.gdshaderinc` spikes and tadpole tail),
-`ReefFishView` (anemone pillars) and `HudView` (the gonad gauge, the vent dots). Tests: `AdventureTests`.
+`BlightView.Flounders` (flounders and Hearthguards), `ReefFishView` (anemone pillars) and `HudView` (the gonad gauge, the vent dots). Tests: `AdventureTests`.
 
 All numbers are first guesses (`AdventureTuning`).
 
@@ -36,7 +37,8 @@ All numbers are first guesses (`AdventureTuning`).
   its torn edges, further the more she has struck. Filled (8 hits, + 2 per Menace) the vent **seals**: with a shudder,
   a puff of magic particles flung out of its mouth and the last of its goo bursting off it, the goo shrinks back into
   the gash and the gash closes to a scar on a small rounded bump of rock, the glow going out; the stream stops. A
-  sealed vent stays sealed; each is worth 25 XP.
+  sealed vent stays sealed; each is worth 25 XP. An Inkwarden within 8 m of its mouth guards it (§4): her hits on it
+  are turned aside (its tether to the vent swells, a dull knock, no count) until that warden is freed.
 - **Its ring of light:** sealing sends an unseen ring of her light out from its mouth, 6 m in 0.6 s, clearing the
   ink it crosses (each dot going up in magic particles).
 - **Sealing stops the source, not the ink:** the dots it spread beyond its ring stay until cleared, but no longer
@@ -69,16 +71,23 @@ All numbers are first guesses (`AdventureTuning`).
 
 ## 3. Fish that turn
 
-- **Many fish:** every level has the Shallows' numbers of reef fish three times over — clownfish at their anemones,
-  blue tangs, chromis in schools of 12–24 — and no corrupted creatures at its start.
+- **Many fish:** a level of the Kelp Jungle has the Shallows' numbers of reef fish three times over — clownfish at
+  their anemones, blue tangs, chromis in schools of 12–24 — and no corrupted creatures at its start.
+- **Each fish has its own depth:** there it lives in its full numbers, above it not at all, and on every deeper depth
+  at 60% of them (`AdventureTuning.Rate`), so the deeper depths keep the earlier fish, fewer. The Shallows' fish and
+  the pufferfish count the Kelp Jungle as their own too (runs start there); the flounder's own is the Kelp Jungle.
 - **Each fish's gauge** (0..1): it fills 0.12 a second with a dot within 1 m, 0.2 for each dot it eats, and drains
   0.05 a second over clean water. Full, the fish **turns** (the ink creeps over it) into the murkling of its kind
   (§4); a chromis turns with its whole school. A spiked murkling's throw that strikes a fish adds 0.6 to the gauges in
-  its splash. A freed fish cannot turn again that level.
+  its splash. A freed fish never turns again: it swims off away from her and is gone (once 22 m from her, or after
+  40 s wherever it is).
+- **Flounders** (3–5 a level) lie on their own patches: each on a reef shelf (§5) no anemone takes, at least 12 m
+  apart. Healthy, a flounder lies still, shimmying itself into the sand every 6–12 s. It fills 0.1 a second with a
+  dot within 1.2 m (0.2 for each it eats), draining 0.04; full, it is a Hearthguard (§4).
 - **Pufferfish** (12–18 a level, in ones and twos) fill too: 0.06 a second with a dot within 1.4 m, 0.2 for each dot
   they eat, draining 0.03; full, a pufferfish is an Inkwarden (§4). Anemones are only the reef's: they never turn.
 
-## 4. The murklings
+## 4. The corrupted fish
 
 All of them are fish underneath; freed, they are themselves again and swim off. Her light frees them as
 it frees any corrupted creature: a corruption meter each, emptied by her shots, holes torn and healing.
@@ -88,7 +97,8 @@ it frees any corrupted creature: a corruption meter each, emptied by her shots, 
 | **Spiked murkling** | blue tang | blue | 0.38 m, short blowfish spikes all over | Keeps 6–9 m from her, circling, at 3.4 m/s; throws ink at her (the slingshot wind-up); never clings. Touching it hurts and knocks her off. |
 | **Tadpole murkling** | clownfish | orange | 0.22 m, a short wiggling tadpole tail | Only chases her (within 16 m), at 1.1 times her cruise; clings on and drains her; never throws. |
 | **Shoal murkling** | chromis | silver | 0.2 m, a whole school | Very fast (9 m/s). Within 14 m it rings her 1.8–2.6 m out, spread evenly all round in three layers, and the ring circles her (1.1 rad/s, each layer a little faster than the one inside it; each school its own way), never tied to her aim — she times her shots through the gaps, and a shot that meets one is spent on it. Harmless otherwise. |
-| **Inkwarden** | pufferfish | yellow | an inflated ring of ink, eight spikes folded in toward its hole | Wards the corrupted creatures round it (8 m). Calm, it drifts slowly about its spot (within 5 m), turning lazily. Struck (by her light, her arm or a burst), it rolls its spikes out over its top (0.5 s), spins up (0.6 s) and fires them one by one, one every 0.15 s, each in a random direction (11 m/s, 6 damage, an ink spike: it falls as a throw does and her shots burst it); then it slows and grows them back inward (3 s), calm until struck again. Freed, it is a pufferfish, and swims off. |
+| **Hearthguard** | flounder | sand gold | a flat oval disc (1.2 × 0.9 m) lying on its shelf, its fin fringe grown into a crown of twelve ink spines, ink drops lifting off it, no eyes | Never leaves its patch and never chases her. It rests 2.5–4 s (÷ 1 + 0.4 × Menace), then shimmies left and right for 1.4 s as if burying itself, flinging a pattern of ink drops round it at short range (3.5 m/s, falling after 2.4 m and leaving a dot where they land, 5 damage): a ring of eight all at once, a spiral of ten sweeping round once and a quarter, or a cross of four and then four more turned an eighth, never the same pattern twice running. Within 2.8 m of it (and in sight), its disc draws out narrow and pointed at her over 0.45 s (the telegraph), then a spear of ink stabs from its point to 3.2 m in 0.12 s (rock stops it): 12 damage and a shove along it; it holds a moment, draws back over 0.45 s, and waits 1 s before it can stab again. Meter 26 (+ per Menace as a murkling's). Freed, it is a flounder again, lifting off its shelf and swimming away. |
+| **Inkwarden** | pufferfish | yellow | an inflated ring of ink, eight spikes folded in toward its hole | Wards the corrupted creatures round it (8 m), and the open vents (§1). Calm, it drifts slowly about its spot (within 5 m), turning lazily. Struck (by her light, her arm or a burst), it rolls its spikes out over its top (0.5 s), spins up (0.6 s) and fires them one by one, one every 0.15 s, each in a random direction (11 m/s, 6 damage, an ink spike: it falls as a throw does and her shots burst it); then it slows and grows them back inward (3 s), calm until struck again. Freed, it is a pufferfish, and swims off. |
 
 Each depth's boss level holds its boss in its arena, Drippus Prime (docs/CORRUPTION.md); its brood are murklings like
 any other. On a boss level the way down opens once every vent is sealed **and** the boss is freed, in either order.
@@ -123,25 +133,22 @@ come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed under it (�
     and rays (3.5–5 m long, their wings beating). Each comes in 18–30 m from her over the deep, crosses near her, turns
     away from rock ahead, and fades out after 20–40 s or once 40 m away; another comes in elsewhere.
 
-## 6. Her oral arm, her inner light and the HUD
+## 6. Her oral arm and the HUD
 
 - **Her oral arm** stings: it trails her along the way she swam (her last 1.5 s of it, so it gathers in when she
   stops), 3.2 m long and 0.2 m longer for every skill point she spends (at most 6 m). A corrupted creature it brushes
   (a murkling, an Inkwarden) takes 30% of a shot's damage, once every 0.4 s.
 
-- **Inner light** (her stamina, 0..1): a volley spends 0.07, a dash 0.3, a surge 0.45 a second. It refills 0.5 a
-  second once 0.35 s pass without spending (about two seconds from empty). Emptied, she cannot shoot or dash until it
-  is back to a quarter.
+- **No stamina:** she shoots, dashes and surges whenever she likes; only the dash's own cooldown holds it back.
 - **Her gauge** (top left): Clementine seen from above. Her bell, a disc of glass with her four gonads and her glowing
   rim (static); holding an active pearl, its colours and pattern fill the glass (no pearl is drawn), whitening for a
-  beat when she uses it. Under it her four oral arms hang, one stat each, left to right by urgency, each as long as
-  its stat is full, over a faint track of its whole length, with a small sign at its foot:
+  beat when she uses it. Under it three of her oral arms hang, one stat each, left to right by urgency, each as long
+  as its stat is full, over a faint track of its whole length, with a small sign at its foot:
   1. **health** (warm white-gold; a heart) — a hit frays the lost piece off the arm, drifting away; low (under a
      quarter), it turns ragged and pulses rose;
-  2. **inner light** (pale cyan; a spark) — dim and flickering while spent out;
-  3. **the active pearl's charge** (the pearl's own colour; a pearl) — breathing when ready; without one, the arm is
+  2. **the active pearl's charge** (the pearl's own colour; a pearl) — breathing when ready; without one, the arm is
      curled up short and dim;
-  4. **experience** (amber; her level at its foot) — growing toward the next level, pulsing full with a point to
+  3. **experience** (amber; her level at its foot) — growing toward the next level, pulsing full with a point to
      spend.
   Beside the bell **her shells** (the shell and its count — shown only once she has collected at least one).
 - **Maps:** the minimap and the whole level's map (Tab / Select) both hidden unless she has absorbed **Sea Chart Nautilus** ("Remembers every current"; shop and treasure).

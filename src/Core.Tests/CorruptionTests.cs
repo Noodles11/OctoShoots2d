@@ -1207,6 +1207,10 @@ public class CorruptionTests
         Assert.False(l.Alive);
         Assert.False(fish.Corrupted);
         Assert.True(fish.Freed);
+        // It swims off away from her and is gone.
+        Assert.NotEqual(System.Numerics.Vector2.Zero, fish.Leaving);
+        for (int i = 0; i < 60 * (int)ReefFishTuning.LeaveMax + 60; i++) w.Step(default);
+        Assert.True(fish.Gone);
     }
 
     static void Quiet(PlaneWorld w)

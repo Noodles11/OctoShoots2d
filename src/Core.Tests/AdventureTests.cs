@@ -506,6 +506,127 @@ public class AdventureTests
     }
 
     [Fact]
+    public void Each_fish_lives_fully_at_its_own_depth_and_fewer_below()
+    {
+        Assert.Equal(0f, AdventureTuning.Rate(FlounderTuning.Home, 1));
+        Assert.Equal(1f, AdventureTuning.Rate(FlounderTuning.Home, FlounderTuning.Home));
+        Assert.Equal(AdventureTuning.EarlierRate, AdventureTuning.Rate(FlounderTuning.Home, 5));
+        Assert.True(AdventureTuning.EarlierRate is > 0f and < 1f);
+        // The Shallows' fish live fully in the Kelp Jungle too, and fewer deeper.
+        var kelp = World();
+        var deep = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Id.Depth == 4 && !p.HasBoss)), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Adventure);
+        Assert.InRange(kelp.Fish.Count, AdventureTuning.PufferMin, AdventureTuning.PufferMax);
+        Assert.InRange(deep.Fish.Count, 1, (int)MathF.Round(AdventureTuning.PufferMax * AdventureTuning.EarlierRate));
+        Assert.InRange(kelp.Flounders.Count, 1, FlounderTuning.Max);
+        Assert.InRange(deep.Flounders.Count, 0, (int)MathF.Round(FlounderTuning.Max * AdventureTuning.EarlierRate));
+    }
+
+    [Fact]
+    public void Flounders_lie_on_their_own_shelves()
+    {
+        var id = TestLevels.Find(p => p.Id.Depth == 2 && !p.HasBoss);
+        var map = AbyssReef.Apply(OctoShoots.Core.Gen.TopDown.TopDownGenerator.Generate(new OctoShoots.Core.Run.RunStreams(TestLevels.Seed), id));
+        var w = new PlaneWorld(map, new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Adventure);
+        Assert.InRange(w.Flounders.Count, FlounderTuning.Min, FlounderTuning.Max);
+        Assert.All(w.Flounders, f =>
+        {
+            Assert.False(f.Corrupted);
+            Assert.Contains(map.Shelves, s => Vector2.Distance(s, f.Home) < 1.5f);
+            Assert.DoesNotContain(w.Anemones, a => Vector2.Distance(a.Position, f.Home) < 6f);
+        });
+    }
+
+    [Fact]
+    public void A_flounder_in_the_ink_turns_into_a_hearthguard_that_holds_its_patch_flings_ink_and_stabs_her_close_by()
+    {
+        var w = Bare();
+        var f = w.Flounders[0];
+        w.Flounders.RemoveAll(o => o != f);
+        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
+        // Healthy, it lies still; it eats the dots it touches, fills and turns.
+        for (int i = 0; i < 2 * PlaneWorld.TickRate && !f.Corrupted; i++)
+        {
+            w.DebugDot(f.Home);
+            Run(w, 1);
+        }
+        Assert.True(f.Corrupted);
+        Assert.Equal(f.Home, f.Position);
+
+        // Left alone, it shimmies now and then, flinging ink drops round it that fall close and leave dots.
+        int drops = 0;
+        float far = 0f;
+        for (int i = 0; i < 10 * PlaneWorld.TickRate; i++)
+        {
+            int before = w.MurkShots.Count;
+            Run(w, 1);
+            drops += Math.Max(0, w.MurkShots.Count - before);
+            foreach (var s in w.MurkShots) far = MathF.Max(far, Vector2.Distance(s.Position, f.Home));
+        }
+        Assert.True(drops >= 8, $"only {drops} drops");
+        Assert.InRange(far, 1f, FlounderTuning.InkReach + 1.5f);
+        Assert.Equal(f.Home, f.Position);
+
+        // She comes close: its disc draws into a needle at her, and it stabs.
+        var near = f.Home + Vector2.Normalize(w.Map.Start.Position - f.Home) * 2f;
+        for (int k = 0; k < 16 && !(w.Clear(near, w.Radius) && w.LineOfSight(f.Home, near)); k++)
+            near = f.Home + new Vector2(MathF.Cos(k * 0.4f), MathF.Sin(k * 0.4f)) * 2f;
+        float hp = 100f;
+        bool wound = false, bit = false;
+        for (int i = 0; i < 3 * PlaneWorld.TickRate && !bit; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = near;
+            w.Player.Velocity = Vector2.Zero;
+            w.Player.DashInvulnerableTimer = 0f;
+            w.MurkShots.Clear();
+            w.Player.Hp = hp;
+            w.Step(default);
+            wound |= f.Stage == FlounderStage.Windup && f.Needle > 0f;
+            bit |= w.Events.Any(e => e.Type == PlaneEventType.FlounderBite);
+        }
+        Assert.True(wound && bit);
+        Assert.True(w.Player.Hp < hp);
+        Assert.Equal(f.Home, f.Position);
+
+        // Far off, it never comes after her.
+        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
+        Run(w, 3 * PlaneWorld.TickRate);
+        Assert.NotEqual(FlounderStage.Windup, f.Stage);
+        Assert.Equal(f.Home, f.Position);
+
+        // Freed: a flounder again, swimming off and gone.
+        f.Corruption.Value = 0.5f;
+        w.DebugBurst(f.Position, 0.5f, 10f);
+        Run(w, 1);
+        Assert.True(f.Freed);
+        Assert.False(f.Corrupted);
+        Run(w, PlaneWorld.TickRate * (int)ReefFishTuning.LeaveMax + 60);
+        Assert.DoesNotContain(f, w.Flounders);
+    }
+
+    [Fact]
+    public void An_inkwarden_guards_the_vents_in_its_reach()
+    {
+        var w = World();
+        var v = w.Vents[0];
+        var puffer = w.Fish[0];
+        puffer.Position = v.Position + v.Facing * 3f;
+        puffer.Ink = 1f;
+        Run(w, 1);
+        var warden = w.Inkwardens.Single();
+        Assert.Contains(w.GuardedBy(warden), at => at == v.Position);
+        for (int i = 0; i < v.Needed + 2; i++) w.DebugStrikeVent(v);
+        Assert.False(v.Sealed);
+        Assert.Equal(0, v.Hits);
+        Assert.Contains(w.Events, e => e.Type == PlaneEventType.Warded);
+        // Freed, it guards no more.
+        warden.Corruption.Value = 0.5f;
+        w.DebugBurst(warden.Position, 0.5f, 10f);
+        Run(w, 1);
+        for (int i = 0; i < v.Needed; i++) w.DebugStrikeVent(v);
+        Assert.True(v.Sealed);
+    }
+
+    [Fact]
     public void Her_oral_arm_trails_her_stings_what_it_touches_and_grows_with_her_skills()
     {
         var w = Bare();
@@ -539,27 +660,6 @@ public class AdventureTests
         for (int i = 0; i < 3; i++) Assert.True(w.SpendSkill(OctoShoots.Core.Items.Stat.Damage));
         Assert.Equal(AdventureTuning.ArmBase + 3 * AdventureTuning.ArmPerUpgrade, w.ArmLength, 3);
         Assert.Equal(AdventureTuning.ArmMax, AdventureTuning.ArmLength(1000), 3);
-    }
-
-    [Fact]
-    public void Her_inner_light_runs_out_with_shooting_and_comes_back()
-    {
-        var w = Bare();
-        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
-        int shots = 0;
-        for (int i = 0; i < 6 * PlaneWorld.TickRate && !w.Player.LightOut; i++)
-        {
-            w.Step(new PlaneInput { Aim = Vector2.UnitX, Fire = true });
-            shots += w.Events.Count(e => e.Type == PlaneEventType.Shot);
-        }
-        Assert.True(w.Player.LightOut);
-        Assert.InRange(shots, 10, 20);
-        // Out, she cannot shoot (or dash) until it is back.
-        w.Step(new PlaneInput { Aim = Vector2.UnitX, Fire = true, Dash = true });
-        Assert.DoesNotContain(w.Events, e => e.Type is PlaneEventType.Shot or PlaneEventType.DashStarted);
-        Run(w, (int)(2.5f * PlaneWorld.TickRate));
-        Assert.False(w.Player.LightOut);
-        Assert.True(w.Player.Light > 0.95f);
     }
 
     [Fact]

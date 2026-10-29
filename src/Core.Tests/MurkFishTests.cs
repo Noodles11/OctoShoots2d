@@ -152,6 +152,13 @@ public class MurkFishTests
         Assert.True(f.Freed);
         Assert.False(f.Huntable);
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.FishFreed);
+        // Freed, it swims off away from her and is gone, never to be turned again.
+        Assert.True(Vector2.Dot(f.Leaving, f.Position - w.Player.Position) > 0f);
+        float from = Vector2.Distance(f.Position, w.Player.Position);
+        Run(w, 60 * 3);
+        Assert.True(f.Gone || Vector2.Distance(f.Position, w.Player.Position) > from);
+        Run(w, 60 * (int)ReefFishTuning.LeaveMax);
+        Assert.True(f.Gone);
     }
 
     [Fact]

@@ -68,8 +68,8 @@ public partial class HudView : Control
     // ───────────────────────── the adventure's gonad gauge ─────────────────────────
 
     bool _adventure;
-    float _health = 1f, _healthShown = 1f, _light = 1f, _xpShare, _charge = 1f, _hurt;
-    bool _lightOut, _xpFull, _shellsSeen;
+    float _health = 1f, _healthShown = 1f, _xpShare, _charge = 1f, _hurt;
+    bool _xpFull, _shellsSeen;
     int _xpLevel = 1;
     ItemDef? _active;
     /// <summary>The level's vents: sealed or not, in order.</summary>
@@ -288,8 +288,6 @@ public partial class HudView : Control
             _health = health;
             _healthShown = Mathf.MoveToward(_healthShown, _health, dt * 0.8f);
             _hurt = Mathf.MoveToward(_hurt, 0f, dt * 2.5f);
-            _light = world.Player.Light;
-            _lightOut = world.Player.LightOut;
             _xpFull = world.Run.Points > 0;
             _xpShare = _xpFull ? 1f : Mathf.Clamp(world.Run.Xp / (float)Mathf.Max(world.Run.XpNeeded, 1), 0f, 1f);
             _xpLevel = world.Run.XpLevel;
@@ -419,9 +417,8 @@ public partial class HudView : Control
 
     /// <summary>
     /// Her arms under her bell: health (warm white-gold, ragged and pulsing when low, a hit fraying the lost piece off),
-    /// inner light (pale cyan, dim and flickering while spent out), the active pearl's charge (its own colour, breathing
-    /// when ready; curled up and dim without one), experience (amber, growing, pulsing with a point to spend; her level at
-    /// its foot). Her shells beside the bell.
+    /// the active pearl's charge (its own colour, breathing when ready; curled up and dim without one), experience (amber,
+    /// growing, pulsing with a point to spend; her level at its foot). Her shells beside the bell.
     /// </summary>
     void DrawGauge(Font font)
     {
@@ -430,25 +427,22 @@ public partial class HudView : Control
         var health = low ? new Color(1f, 0.88f, 0.62f).Lerp(new Color(1f, 0.42f, 0.58f), 0.4f + 0.4f * pulse) : new Color(1f, 0.88f, 0.62f);
         Arm(0, _healthShown, health, _hurt, low ? 1f : 0f);
         foreach (var (from, to, age) in _frays) Fray(0, from, to, age / FrayTime, health);
-        var light = _lightOut ? new Color(0.45f, 0.55f, 0.65f, 0.55f + 0.35f * pulse) : new Color(0.72f, 0.96f, 1f);
-        Arm(1, _light, light, 0f, 0f);
         if (_active is not null)
         {
             var pearl = OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active);
             bool ready = _charge >= 1f;
-            Arm(2, _charge, ready ? pearl.Lerp(Colors.White, 0.3f * pulse) : pearl * 0.85f, ready ? 0.25f * pulse : 0f, 0f);
+            Arm(1, _charge, ready ? pearl.Lerp(Colors.White, 0.3f * pulse) : pearl * 0.85f, ready ? 0.25f * pulse : 0f, 0f);
         }
-        else Curled(2);
+        else Curled(1);
         var xp = _xpFull ? new Color(1f, 0.85f, 0.45f).Lerp(Colors.White, 0.4f * pulse) : new Color(1f, 0.72f, 0.3f);
-        Arm(3, _xpShare, xp, _xpFull ? 0.3f * pulse : 0f, 0f);
+        Arm(2, _xpShare, xp, _xpFull ? 0.3f * pulse : 0f, 0f);
 
-        // The signs at the arms' feet: a heart, a spark, a pearl, her level.
+        // The signs at the arms' feet: a heart, a pearl, her level.
         SignHeart(Foot(0), health);
-        SignSpark(Foot(1), light);
-        SignPearl(Foot(2), _active is not null ? OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active) : new Color(0.6f, 0.62f, 0.66f, 0.6f));
+        SignPearl(Foot(1), _active is not null ? OctoShoots.Game.Fx.PearlMaterials.GlowColor(_active) : new Color(0.6f, 0.62f, 0.66f, 0.6f));
         var lv = _xpLevel.ToString();
         var ls = font.GetStringSize(lv, HorizontalAlignment.Left, -1, 15);
-        Outlined(font, Foot(3) + new Vector2(-ls.X * 0.5f, 5f), lv, 15, xp);
+        Outlined(font, Foot(2) + new Vector2(-ls.X * 0.5f, 5f), lv, 15, xp);
 
         // Her shells beside the bell (the shell itself is drawn in 3D over this).
         if (_shellsSeen || _flights.Count > 0)
@@ -464,7 +458,7 @@ public partial class HudView : Control
     }
 
     /// <summary>Where arm i hangs from (under the bell), and the point of it f (0 root → 1 its full length), swaying a little.</summary>
-    static Vector2 ArmRootOf(int i) => BellAt + new Vector2((i - 1.5f) * ArmGap, ArmTop);
+    static Vector2 ArmRootOf(int i) => BellAt + new Vector2((i - 1f) * ArmGap, ArmTop);
 
     Vector2 ArmAt(int i, float f) =>
         ArmRootOf(i) + new Vector2(Mathf.Sin(_time * 1.3f + i * 1.9f + f * 3.2f) * 3.2f * f, f * ArmLength);
@@ -543,17 +537,6 @@ public partial class HudView : Control
         DrawCircle(c + new Vector2(-2.6f, -1.5f), 2.5f, col);
         DrawCircle(c + new Vector2(2.6f, -1.5f), 2.5f, col);
         DrawColoredPolygon(new[] { c + new Vector2(-5f, -0.5f), c + new Vector2(5f, -0.5f), c + new Vector2(0f, 5.5f) }, col);
-    }
-
-    void SignSpark(Vector2 c, Color col)
-    {
-        var pts = new Vector2[8];
-        for (int k = 0; k < 8; k++)
-        {
-            float a = k * Mathf.Pi / 4f;
-            pts[k] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (k % 2 == 0 ? 6.5f : 2.2f);
-        }
-        DrawColoredPolygon(pts, col);
     }
 
     void SignPearl(Vector2 c, Color col)

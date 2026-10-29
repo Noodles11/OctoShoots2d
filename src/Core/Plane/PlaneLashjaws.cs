@@ -315,7 +315,7 @@ public sealed partial class PlaneWorld
         Corruption?.Cleanse(l.Position, LashTuning.Burst, 1f);
         int shells = LashTuning.ShellsMin + _drops.Int(LashTuning.ShellsMax - LashTuning.ShellsMin + 1);
         for (int i = 0; i < shells; i++) Shells.Add(new PlaneShell { Position = l.Position + l.Facing, Velocity = Fling(2f, 4f) });
-        // The fish it swallowed swim back out, alive.
+        // The fish it swallowed swim back out, alive, and off away from her.
         var all = l.Fish is { } held ? l.Swallowed.Append(held) : l.Swallowed;
         int k = 0;
         foreach (var fish in all)
@@ -324,6 +324,9 @@ public sealed partial class PlaneWorld
             fish.Freed = true;
             fish.Position = l.Mouth + l.Facing * (0.8f + 0.2f * k++);
             fish.Velocity = l.Facing * 2f;
+            fish.Leaving = SafeNormalize(fish.Position - Player.Position);
+            if (fish.Leaving == Vector2.Zero) fish.Leaving = l.Facing;
+            fish.Left = 0f;
         }
         Events.Add(new PlaneEvent(PlaneEventType.LashFreed, l.Position, l.Facing, LashTuning.Burst));
     }

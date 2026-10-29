@@ -1318,6 +1318,13 @@ public partial class TopDownMain : Node3D
             }).FirstOrDefault(),
             // In front of the first sealed wall of any kind (the boss's, on a boss level).
             "seal" => _map.WeakRocks.OrderByDescending(r => r.Kind).Select(r => (System.Numerics.Vector2?)(r.Center + LevelView.SealFacing(_map, r) * (r.Thick + 5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
+            // Beside the level's first flounder (south of it, in sight); "hearth": it is a Hearthguard, and she in its reach.
+            "flounder" or "hearth" => _world.Flounders.SelectMany(f =>
+            {
+                if (where == "hearth" && !f.Corrupted) _world.DebugTurnFlounder(f);
+                float off = where == "hearth" ? 2.4f : 4f;
+                return Enumerable.Range(0, 16).Select(k => (System.Numerics.Vector2?)(f.Home + new System.Numerics.Vector2(MathF.Sin(k * 0.39f), MathF.Cos(k * 0.39f)) * off));
+            }).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres off the level's first Thumpsquirt.
             // A few metres off the level's first Inkwarden.
             // In front of the level's first Lashjaw, in its reach.
@@ -2384,10 +2391,6 @@ public partial class TopDownMain : Node3D
             case PlaneEventType.AnemoneTurned:
                 _sfx.PlayPitched("curse_enter", 1.6f, -12f);
                 break;
-            case PlaneEventType.LightOut:
-                // Her inner light spent: a dull fizzle.
-                _sfx.PlayPitched("merge", 0.45f, -10f);
-                break;
             case PlaneEventType.GuardiansWoke:
                 // Its guardians wake: a low call.
                 _sfx.PlayPitched("curse_enter", 1.5f, -12f);
@@ -2500,6 +2503,22 @@ public partial class TopDownMain : Node3D
                     _haptics.Pulse(0.5f, 0.3f, 0.2f);
                 }
                 _sfx.PlayPitched("pop", 1.3f, -8f);
+                break;
+            case PlaneEventType.FlounderShimmy:
+                // A Hearthguard shimmies into the sand: a soft scuff, only near.
+                if (System.Numerics.Vector2.Distance(e.Position, _world.Player.Position) < 12f) _sfx.PlayPitched("merge", 0.7f, -16f);
+                break;
+            case PlaneEventType.FlounderWindup:
+                // Its needle draws out: a rising creak.
+                _sfx.PlayPitched("merge", 1.5f, -9f);
+                break;
+            case PlaneEventType.FlounderStrike:
+                _sfx.PlayPitched("pop", 1.6f, -9f);
+                break;
+            case PlaneEventType.FlounderBite:
+                _camera.Shake(0.3f);
+                _haptics.Pulse(0.6f, 0.4f, 0.2f);
+                _sfx.PlayPitched("pop", 0.6f, -4f);
                 break;
             case PlaneEventType.LashBite:
                 _camera.Shake(0.45f);

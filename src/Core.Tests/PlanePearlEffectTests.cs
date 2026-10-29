@@ -253,7 +253,6 @@ public class PlanePearlEffectTests
         for (int i = 0; i < PlaneWorld.TickRate; i++)
         {
             p.Hp = 100f;
-            p.Light = 1f;
             w.Step(new PlaneInput { Aim = aim, Fire = true });
         }
         foreach (var hue in new[] { PrismHue.Red, PrismHue.Green, PrismHue.Blue })

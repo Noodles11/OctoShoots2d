@@ -59,9 +59,6 @@ public sealed class PlaneBody
     public bool WasFiring;
     /// <summary>Bubble Shield: untouchable inside it while this counts down.</summary>
     public float ShieldTimer;
-    /// <summary>Her inner light (the adventure's stamina), 0..1; seconds since she last spent it; run out (until it is back to LightResume).</summary>
-    public float Light = 1f, LightRest;
-    public bool LightOut;
 
     public bool IsDashing => DashTimer > 0f;
 }
@@ -84,17 +81,19 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     BattleBegan, BossLanded, BossVolley, BossTelegraph, BossPulse, BossSacBurst, BossExposed, BossMutates, BossClosed, BossHit, BossStagger, BossSnapWarning, BossSnap, BossDefeated, BossFreed,
     /// <summary>Experience: gained (Size: how much), and a level reached (Size: the new level).</summary>
     XpGained, LevelUp,
-    /// <summary>The adventure: an ink dot cleared by her light or eaten by a fish; a vent lit (Size: its glow) or sealed (Size: vents still open); the way down opened; an anemone turned (Size: its scale); her inner light run out.</summary>
-    DotCleared, DotEaten, VentLit, VentSealed, ExitOpened, AnemoneTurned, LightOut,
+    /// <summary>The adventure: an ink dot cleared by her light or eaten by a fish; a vent lit (Size: its glow) or sealed (Size: vents still open); the way down opened; an anemone turned (Size: its scale).</summary>
+    DotCleared, DotEaten, VentLit, VentSealed, ExitOpened, AnemoneTurned,
     /// <summary>The adventure's Inkwarden: struck, it rouses (rolls its spikes out); it fires a spike (Direction: its way).</summary>
     WardenRoused, WardenSpike,
     /// <summary>Drippus Prime: a murkling born out of it (Direction: its way out); its near side dimpling to bounce her (Direction: toward her); the bounce (at its skin; Direction: the way she is flung).</summary>
     BossBrood, BossBounceWarn, BossBounce,
     /// <summary>Prism Pearl: her light splits into its three colours; they flow back together.</summary>
-    PrismSplit, PrismJoined }
+    PrismSplit, PrismJoined,
+    /// <summary>A Hearthguard: it shimmies (Size: how long); its needle draws out at her (Direction: its aim; Size: the wind-up), stabs, and strikes her (at the tip).</summary>
+    FlounderShimmy, FlounderWindup, FlounderStrike, FlounderBite }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run; saved by number, so Gloomvine stays though nothing deals it now).</summary>
-public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse }
+public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse, Hearthguard }
 
 /// <summary>
 /// Direction: for ShotPopped, the unit direction from the bubble's centre to where its film gave way. Size: a popped
@@ -203,9 +202,8 @@ public sealed partial class PlaneWorld
         p.DashInvulnerableTimer -= Dt;
 
         // Ink dash (DESIGN-2D §30): a burst that coasts, untouchable for a moment, leaving a slowing cloud.
-        if (input.Dash && !tumbling && p.DashCooldownTimer <= 0f && LightReady)
+        if (input.Dash && !tumbling && p.DashCooldownTimer <= 0f)
         {
-            SpendLight(AdventureTuning.DashCost);
             Vector2 dir = hasInput ? wishDir : p.Aim;
             p.DashTimer = t.DashCoast;
             p.DashInvulnerableTimer = t.DashInvulnerable;

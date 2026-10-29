@@ -130,7 +130,7 @@ public sealed partial class PlaneWorld
         Events.Add(new PlaneEvent(PlaneEventType.FishTurned, f.Position, Vector2.Zero, radius, DamageSource.None));
     }
 
-    /// <summary>A lesser murkling freed: it is its fish again, where it was, and it cannot be turned again this level.</summary>
+    /// <summary>A lesser murkling freed: it is its fish again, where it was, and it swims off away from her and is gone.</summary>
     void FreeFish(Murkling m)
     {
         if (m.Fish is not { } f) return;
@@ -141,6 +141,9 @@ public sealed partial class PlaneWorld
         f.Hiding = false;
         f.Wait = 0f;
         f.Target = default;
+        f.Leaving = SafeNormalize(m.Position - Player.Position);
+        if (f.Leaving == Vector2.Zero) f.Leaving = new Vector2(MathF.Cos(f.Heading), MathF.Sin(f.Heading));
+        f.Left = 0f;
         Events.Add(new PlaneEvent(PlaneEventType.FishFreed, m.Position, Vector2.Zero, m.Radius));
     }
 

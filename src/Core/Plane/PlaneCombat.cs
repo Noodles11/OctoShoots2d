@@ -424,9 +424,7 @@ public sealed partial class PlaneWorld
         // Clementine's shots, toward her aim while fire is held, shaped by her pearls. Firefly Squid pours them out as
         // one continuous surge instead (PlaneSurge.cs).
         bool aimed = p.Aim.LengthSquared() > 0.5f;
-        // The adventure: her inner light run out, she cannot shoot until it is back.
-        bool fire = input.Fire && LightReady;
-        int shotsFrom = Events.Count;
+        bool fire = input.Fire;
         // String of Pearls (Sardine Run + Pearl Diver): no holding to charge — the stream fires as Sardine Run's does,
         // and each shot is a pearl charged as far as the stream has spun up.
         bool pearlStream = Run.Loadout.Has("string_of_pearls");
@@ -471,10 +469,6 @@ public sealed partial class PlaneWorld
         p.WasFiring = fire;
         // Prism Pearl: the red and the blue beside her fire on their own beats.
         StepPrism(fire && aimed);
-        // Each volley spends her inner light (a surge, while it pours).
-        if (Run.Loadout.Flags.Contains("surge") && fire && aimed) SpendLight(AdventureTuning.SurgeCost * Dt);
-        for (int i = shotsFrom; i < Events.Count; i++)
-            if (Events[i].Type == PlaneEventType.Shot) SpendLight(AdventureTuning.ShotCost);
 
         // Pearls: touching one begins the absorbing ritual (one at a time); it plays round her as she swims on, and
         // the pearl is hers when its light bursts.

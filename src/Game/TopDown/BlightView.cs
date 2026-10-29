@@ -76,6 +76,7 @@ public partial class BlightView : Node3D
         ClearThumps();
         ClearWardens();
         ClearLashjaws();
+        ClearFlounders();
         ClearMurkBodies();
         _motes.Clear();
         _droplets.Clear();
@@ -95,6 +96,7 @@ public partial class BlightView : Node3D
         _lastWorld = world;
         SyncWardens(world, dt, camera);
         SyncLashjaws(world, dt, camera);
+        SyncFlounders(world, dt);
         SyncKinLights(world);
         SyncOutlines(world);
         SyncHitGlows(world);
@@ -420,6 +422,10 @@ public partial class BlightView : Node3D
                 _droplets.Burst(mouth, new Vector3(e.Direction.X, 0.4f, e.Direction.Y).Normalized(), 26, 4f, 0.8f, 0.5f, 0.14f, 0.03f, new Color(0.03f, 0.01f, 0.06f, 0.95f), new Color(0.2f, 0.06f, 0.35f, 0f), drag: 3f);
                 break;
             }
+            case PlaneEventType.FlounderBite:
+                // The needle strikes home: ink and her light flung out along it.
+                _droplets.Burst(new Vector3(e.Position.X, LevelMap.SwimBand + 0.1f, e.Position.Y), new Vector3(e.Direction.X, 0.3f, e.Direction.Y).Normalized(), 18, 3.5f, 0.7f, 0.45f, 0.1f, 0.02f, new Color(0.04f, 0.02f, 0.07f, 0.95f), new Color(0.3f, 0.1f, 0.5f, 0f), drag: 3f);
+                break;
             case PlaneEventType.LashStun:
                 // Its meter broken the first time: it reels, sparks of her light in its head.
                 for (int i = 0; i < 24; i++)

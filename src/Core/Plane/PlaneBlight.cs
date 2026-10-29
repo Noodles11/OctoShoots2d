@@ -263,8 +263,8 @@ public sealed class MurkShot
     /// <summary>Its size, what it does to her, its splash on fish and its stain where it lands (a prime's are bigger).</summary>
     public float Radius = BlightTuning.ThrowRadius, Damage = BlightTuning.ThrowDamage, Splash = MurkFishTuning.Splash, Stain = BlightTuning.ThrowStainRadius;
     public float Life = BlightTuning.ThrowLife;
-    /// <summary>How far it has flown.</summary>
-    public float Traveled;
+    /// <summary>How far it has flown, and how far it flies before it falls.</summary>
+    public float Traveled, FallAt = BlightTuning.ThrowFallAt;
     /// <summary>Seconds it has been falling to the sand (0: still flying on her plane).</summary>
     public float Fall;
     /// <summary>An Inkwarden's spike (the adventure's spiky ring), not a murkling's throw: drawn as a thin spine.</summary>
@@ -518,6 +518,11 @@ public sealed partial class PlaneWorld
             bool emptied = w.Corruption.Hit(light);
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, Vector2.Zero, light));
             if (emptied) FreeWarden(w);
+        }
+        foreach (var f in Flounders)
+        {
+            if (!f.Corrupted || Vector2.Distance(f.Position, at) > reach + FlounderTuning.Radius) continue;
+            HitFlounder(f, Ward(f, f.Position, light), Vector2.Zero);
         }
         foreach (var t in Thumpsquirts.ToArray())
         {
@@ -894,7 +899,7 @@ public sealed partial class PlaneWorld
             }
             s.Position += s.Velocity * Dt;
             s.Traveled += s.Velocity.Length() * Dt;
-            if (s.Traveled >= BlightTuning.ThrowFallAt) s.Fall = Dt;
+            if (s.Traveled >= s.FallAt) s.Fall = Dt;
             if (!Map.IsOpen(s.Position)) s.Life = 0f;
             else if (ReachesHer(s.Position, s.Radius, out var struck))
             {

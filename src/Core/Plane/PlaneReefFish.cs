@@ -9,6 +9,8 @@ namespace OctoShoots.Core.Plane;
 /// <summary>The reef fish's numbers (docs/REEF-FISH-PROPOSAL.md): first guesses, tuned in play.</summary>
 public static class ReefFishTuning
 {
+    /// <summary>A freed fish swims off and is gone, never to be turned again: once this far from her, or after this long wherever it is.</summary>
+    public const float LeaveFar = 22f, LeaveMax = 40f;
     /// <summary>Clownfish: a pair or trio to an anemone, darting out at most ClownRange from it and back.</summary>
     public const float ClownRadius = 0.22f, ClownSpeed = 1.1f, ClownDart = 2.6f, ClownAccel = 7f, ClownTurnDeg = 320f, ClownRange = 1.6f;
     /// <summary>She this close (DashRoom when dashing) sends a clownfish into its anemone; it stays until she is ClownSafe off.</summary>
@@ -113,8 +115,8 @@ public sealed class PlaneReefFish : PlaneSwimmer
     /// <summary>A chromis's place in its school (its spot in the arrow).</summary>
     public int Slot;
     /// <summary>
-    /// Leaving (one Drippus Prime took, swimming out of it as it is freed): the way it swims off, and the seconds it has
-    /// swum; gone once out of sight.
+    /// Leaving (freed: out of a lesser murkling, a Lashjaw's mouth or Drippus Prime): the way it swims off, and the
+    /// seconds it has swum; gone once out of sight.
     /// </summary>
     public Vector2 Leaving;
     public float Left;
@@ -154,7 +156,7 @@ public sealed partial class PlaneWorld
             n = ReefFishTuning.ForDepth(1);
             n.SizeMin = AdventureTuning.SchoolMin;
             n.SizeMax = AdventureTuning.SchoolMax;
-            more *= AdventureTuning.FishMore;
+            more *= AdventureTuning.FishMore * AdventureTuning.Rate(AdventureTuning.BaseHome, Map.Depth);
         }
         int More(int count) => (int)MathF.Round(count * more);
         int ids = 0;
@@ -169,6 +171,8 @@ public sealed partial class PlaneWorld
         anchors.AddRange(channel);
         Shuffle(anchors, rng);
         Shuffle(channel, rng);
+        // The flounders take their patches first.
+        if (Options.Adventure) PlaceFlounders(new Rng(rng.NextU64()), anchors, Allowed);
 
         // Anemones on the seabed at the foot of the rock, a pair or trio of clownfish in each.
         int want = More(n.AnemoneMin + rng.Int(n.AnemoneMax - n.AnemoneMin + 1));
@@ -189,7 +193,7 @@ public sealed partial class PlaneWorld
                 // Open round it, with rock close by.
                 if (!Allowed(q) || !Clear(q, ReefFishTuning.ClownRange) || Clear(q, ReefFishTuning.ClownRange + 2.5f)) continue;
                 if (Map.Abyss && Map.HeightAt(q) < AbyssReef.ShelfDepth - 0.5f) continue;
-                if (Anemones.Any(o => Vector2.Distance(o.Position, q) < 12f)) continue;
+                if (Anemones.Any(o => Vector2.Distance(o.Position, q) < 12f) || Flounders.Exists(o => Vector2.Distance(o.Home, q) < 6f)) continue;
                 Anemones.Add(new PlaneAnemone { Position = q, Scale = rng.Range(0.95f, 1.3f) });
                 int host = Anemones.Count - 1, size = 2 + rng.Int(2);
                 for (int k = 0; k < size; k++)
@@ -292,8 +296,8 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>
-    /// A fish swimming off (freed out of Drippus Prime): it scatters out of the burst, then swims its way at an easy
-    /// pace, sliding along the rock, a little wander in it; gone once far from her (or after LeaveMax, wherever it is).
+    /// A freed fish swimming off: it scatters out of the burst, then swims its way at an easy pace, sliding along the
+    /// rock, a little wander in it; gone once far from her (or after LeaveMax, wherever it is).
     /// </summary>
     void StepLeaving(PlaneReefFish f)
     {
@@ -309,7 +313,7 @@ public sealed partial class PlaneWorld
             f.Heading = before + Math.Clamp(AngleBetween(before, want), -4f * Dt, 4f * Dt);
             f.TurnRate = (f.Heading - before) / Dt;
         }
-        if (Vector2.Distance(f.Position, Player.Position) > DrippusTuning.LeaveFar || f.Left > DrippusTuning.LeaveMax) f.Gone = true;
+        if (Vector2.Distance(f.Position, Player.Position) > ReefFishTuning.LeaveFar || f.Left > ReefFishTuning.LeaveMax) f.Gone = true;
     }
 
     /// <summary>The push away from her: none past the reach, growing to full right beside her.</summary>

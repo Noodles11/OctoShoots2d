@@ -52,6 +52,8 @@ public partial class BlightView
             float energy = m.Prime ? 1.3f : m.Lesser ? 0.3f : 0.55f, range = m.Prime ? 7f : m.Lesser ? 1.8f : 3.2f;
             Want(new Vector3(m.Position.X, y, m.Position.Y), core, energy, range, her);
         }
+        foreach (var f in world.Flounders)
+            if (f.Corrupted) Want(new Vector3(f.Position.X, y - 0.8f, f.Position.Y), Kin.Tint(HearthSkin), 0.35f, 2.4f, her);
         foreach (var s in world.MurkShots)
             if (s.Life > 0f && s.Airborne) Want(new Vector3(s.Position.X, y, s.Position.Y), Kin.MurklingCore, 0.35f, 2.2f, her);
         foreach (var r in world.Blightroots)

@@ -58,19 +58,23 @@ public static class AdventureTuning
     public const float FishMore = 3f;
     public const int SchoolMin = 12, SchoolMax = 24;
 
+    /// <summary>
+    /// Each fish kind has its own depth: there it lives in its full numbers, above it not at all, and below it at
+    /// EarlierRate of them (the deeper depths keep the earlier fish, fewer). The Shallows' fish (the reef fish and the
+    /// pufferfish) count the Kelp Jungle, where runs start, as their own too: BaseHome.
+    /// </summary>
+    public const float EarlierRate = 0.6f;
+    public const int BaseHome = 2;
+
+    /// <summary>How many of a fish whose own depth is <paramref name="home"/> live at <paramref name="depth"/>, as a share of its full numbers.</summary>
+    public static float Rate(int home, int depth) => depth < home ? 0f : depth == home ? 1f : EarlierRate;
+
     /// <summary>Spiked murkling (a blue tang): keeps KeepMin–KeepMax metres from her at SpikedSpeed; a touch hurts and knocks her off at SpikedKnock.</summary>
     public const float KeepMin = 6f, KeepMax = 9f, SpikedSpeed = 3.4f, SpikedKnock = 7f, SpikedRadius = 0.38f, SpikedSense = 16f;
     /// <summary>Tadpole murkling (a clownfish): this small, chasing at TadpoleSpeed times her cruise.</summary>
     public const float TadpoleRadius = 0.22f, TadpoleSpeed = 1.1f, TadpoleSense = 16f;
     /// <summary>Shoal murkling (a chromis): very fast, on a ring ShoalRing (+ a layer) round her, circling her at ShoalOrbit radians a second.</summary>
     public const float ShoalSpeed = 9f, ShoalRing = 1.8f, ShoalLayer = 0.4f, ShoalRadius = 0.2f, ShoalSense = 14f, ShoalOrbit = 1.1f;
-
-    /// <summary>
-    /// Her inner light (stamina), 0..1: a volley spends ShotCost, a dash DashCost, a surge SurgeCost a second. It fills
-    /// LightRefill a second once LightPause has passed without spending; emptied, she cannot shoot or dash until it is
-    /// back to LightResume.
-    /// </summary>
-    public const float ShotCost = 0.07f, DashCost = 0.3f, SurgeCost = 0.45f, LightPause = 0.35f, LightRefill = 0.5f, LightResume = 0.25f;
 
     /// <summary>
     /// Her oral arm: ArmBase metres long, ArmPerUpgrade longer for each skill point she has spent (at most ArmMax). It
@@ -409,16 +413,16 @@ public sealed partial class PlaneWorld
         dots.Feed(VentMouths(dots));
     }
 
-    /// <summary>The adventure's turn, after the war's: vents pour, the ink spreads and trails, fish and anemones fill, her light refills.</summary>
+    /// <summary>The adventure's turn, after the war's: vents pour, the ink spreads and trails, fish and anemones fill.</summary>
     void StepAdventure()
     {
-        StepInnerLight();
         StepArm();
         if (Dots is not { } dots) return;
         StepVents(dots);
         StepSpread(dots);
         StepTrails(dots);
         StepGauges(dots);
+        StepFlounders(dots);
         dots.Regrow(Tick, AdventureTuning.Regrow * Dt);
     }
 
@@ -467,6 +471,8 @@ public sealed partial class PlaneWorld
         foreach (var v in Vents)
         {
             if (v.Sealed || Vector2.Distance(at, v.Wall) > AdventureTuning.VentReach) continue;
+            // An Inkwarden in reach guards it: her light is turned aside.
+            if (Ward(v, v.Position, 1f) <= 0f) return true;
             v.Hits++;
             v.Since = v.DrainClock = 0f;
             Events.Add(new PlaneEvent(PlaneEventType.VentLit, v.Position, v.Facing, v.Glow));
@@ -842,6 +848,12 @@ public sealed partial class PlaneWorld
             Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, w.Position, SafeNormalize(w.Position - p.Position), light));
             if (emptied) FreeWarden(w);
         }
+        foreach (var f in Flounders)
+        {
+            if (!f.Corrupted || f.ArmCooldown > 0f || ArmDistance(f.Position) > FlounderTuning.Radius + AdventureTuning.ArmWidth) continue;
+            f.ArmCooldown = AdventureTuning.ArmEvery;
+            HitFlounder(f, Ward(f, f.Position, light), SafeNormalize(f.Position - p.Position));
+        }
     }
 
     /// <summary>How far a point is from her oral arm.</summary>
@@ -857,29 +869,5 @@ public sealed partial class PlaneWorld
     {
         _trail.Clear();
         foreach (var at in path) _trail.Add((at, Time));
-    }
-
-    // ───────────────────────── her inner light ─────────────────────────
-
-    /// <summary>She may shoot and dash: always outside the adventure; in it, unless her inner light ran out and is not back yet.</summary>
-    bool LightReady => !Options.Adventure || !Player.LightOut;
-
-    void SpendLight(float amount)
-    {
-        if (!Options.Adventure) return;
-        var p = Player;
-        p.Light = MathF.Max(0f, p.Light - amount);
-        p.LightRest = 0f;
-        if (p.Light > 0f || p.LightOut) return;
-        p.LightOut = true;
-        Events.Add(new PlaneEvent(PlaneEventType.LightOut, p.Position, Vector2.Zero));
-    }
-
-    void StepInnerLight()
-    {
-        var p = Player;
-        p.LightRest += Dt;
-        if (p.LightRest >= AdventureTuning.LightPause) p.Light = MathF.Min(1f, p.Light + AdventureTuning.LightRefill * Dt);
-        if (p.LightOut && p.Light >= AdventureTuning.LightResume) p.LightOut = false;
     }
 }

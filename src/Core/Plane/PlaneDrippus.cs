@@ -39,9 +39,8 @@ public static class DrippusTuning
     /// this share of it, it swells up and is solid to her.
     /// </summary>
     public const float Rise = 2.5f, RiseReach = 7f, RiseSolid = 0.35f;
-    /// <summary>Freed, the reef fish it took swim out of it: this many chromis and tangs; gone once this far from her (or after LeaveMax).</summary>
+    /// <summary>Freed, the reef fish it took swim out of it: this many chromis and tangs (gone as any freed fish, ReefFishTuning.LeaveFar).</summary>
     public const int Chromis = 14, Tangs = 6;
-    public const float LeaveFar = 22f, LeaveMax = 40f;
 }
 
 /// <summary>A tear her light opened in Drippus Prime (Angle on the map, from its middle), closing as it ages.</summary>

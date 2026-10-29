@@ -203,7 +203,7 @@ public class DrippusTests
         var start = taken.Select(f => f.Position).ToList();
         for (int i = 0; i < 60 * 5; i++) w.Step(default);
         Assert.True(taken.Select((f, k) => Vector2.Distance(f.Position, start[k])).Average() > 3f);
-        for (int i = 0; i < 60 * (int)DrippusTuning.LeaveMax; i++) w.Step(default);
+        for (int i = 0; i < 60 * (int)ReefFishTuning.LeaveMax; i++) w.Step(default);
         Assert.All(taken, f => Assert.True(f.Gone));
     }
 

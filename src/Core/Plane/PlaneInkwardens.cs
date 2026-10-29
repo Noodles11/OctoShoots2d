@@ -7,8 +7,9 @@ namespace OctoShoots.Core.Plane;
 
 /// <summary>
 /// The Inkwarden (docs/CORRUPTION.md): a corrupted sea anemone that shelters its kin as an anemone shelters clownfish.
-/// Passive: it never attacks. Every corrupted creature within its reach takes no harm while it stands; a blocked hit
-/// shows as an ink tether from each warden guarding it. Wardens cannot guard each other, so they are always the way in.
+/// Passive: it never attacks. Every corrupted creature (and, in the adventure, every open vent) within its reach takes
+/// no harm while it stands; a blocked hit shows as an ink tether from each warden guarding it. Wardens cannot guard
+/// each other, so they are always the way in.
 /// From Depth 2 (the Sunken Galleon) one sits beside each Blightroot; deeper, more roam toward wherever its kin gather.
 /// </summary>
 public static class WardenTuning
@@ -192,6 +193,8 @@ public sealed partial class PlaneWorld
         foreach (var l in Lashjaws) if (l.Alive && Near(l.Position)) yield return l.Position;
         foreach (var t in Thumpsquirts) if (t.Alive && Near(t.Position)) yield return t.Position;
         foreach (var root in Blightroots) if (root.Alive && Near(root.Position)) yield return root.Position;
+        foreach (var f in Flounders) if (f.Corrupted && Near(f.Position)) yield return f.Position;
+        foreach (var v in Vents) if (!v.Sealed && Near(v.Position)) yield return v.Position;
     }
 
     void StepInkwardens()
@@ -347,6 +350,8 @@ public sealed partial class PlaneWorld
             if (r.Alive) kin.Add(r.Position);
         foreach (var l in Lashjaws)
             if (l.Alive) kin.Add(l.Position);
+        foreach (var f in Flounders)
+            if (f.Corrupted) kin.Add(f.Position);
         Vector2? best = null;
         int most = 0;
         foreach (var k in kin)
