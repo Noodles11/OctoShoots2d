@@ -9,7 +9,7 @@ namespace OctoShoots.Core.Items;
 /// <summary>All items, synergies and transformations, loaded from data/items.json.</summary>
 public sealed class ItemCatalog
 {
-    public static readonly string[] KnownPools = { "treasure", "shop", "boss", "secret", "siren", "whale", "curse", "goldenClam" };
+    public static readonly string[] KnownPools = { "treasure", "shop", "boss", "secret", "siren", "whale", "curse", "goldenClam", "start" };
     public static readonly string[] KnownTags = { "tentacle", "glow", "predator", "coral", "galleon" };
 
     public static readonly JsonSerializerOptions Json = new()
@@ -39,6 +39,8 @@ public sealed class ItemCatalog
         Items = model.Items;
         Synergies = model.Synergies;
         Transformations = model.Transformations;
+        // Every pearl looks like what it does.
+        foreach (var item in Items) item.Pearl = PearlKey.Look(item);
         _byId = Items.ToDictionary(i => i.Id);
     }
 
@@ -62,9 +64,6 @@ public sealed class ItemCatalog
         return new ItemCatalog(model);
     }
 
-    static bool IsHexColor(string s) =>
-        s.Length == 7 && s[0] == '#' && s.Skip(1).All(Uri.IsHexDigit);
-
     static List<string> Validate(FileModel m)
     {
         var problems = new List<string>();
@@ -86,9 +85,8 @@ public sealed class ItemCatalog
                 problems.Add($"{who} is active but has no recharge time");
             if (item.Kind == ItemKind.Passive && item.Active is not null)
                 problems.Add($"{who} is passive but defines an active effect");
-            if (item.Pearl is null) problems.Add($"{who} has no pearl look");
-            else if (item.Pearl.Colors.Count is < 2 or > 3 || !item.Pearl.Colors.All(IsHexColor))
-                problems.Add($"{who} pearl needs 2–3 colours like \"#ff8800\"");
+            // Its look follows what it does (PearlKey): it must do something the key has a colour for.
+            if (PearlKey.Parts(item).Count == 0) problems.Add($"{who} does nothing the pearl colour key knows (PearlKey)");
         }
         foreach (var s in m.Synergies)
         {

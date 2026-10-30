@@ -14,6 +14,8 @@
 shader_type spatial;
 render_mode unshaded, cull_back, blend_mix, depth_draw_never, depth_test_disabled;
 
+#include "res://assets/shaders/pearl_engraving.gdshaderinc"
+
 uniform float pulse = 0.0;      // contraction, about −0.15 (flared) to 1 (fully contracted)
 uniform float wave = 1.0;       // the light wave's position along the bell, 0 apex → 1 margin
 uniform float hurt = 0.0;       // magenta flash, 1 → 0
@@ -23,6 +25,7 @@ uniform float breath = 1.0;     // her light reserve: 0.85 (just spent a volley 
 uniform float health = 1.0;     // her HP as a share of her max, 0..1 (eased on the CPU)
 uniform float charge = -1.0;    // the active pearl's charge 0..1 (1 ready); below 0, she holds none
 uniform float snuff = 0.0;      // just used: 1 → 0, the gold whipping off the rim counter-clockwise
+uniform float points = 0.0;     // a skill point waits (0..1, eased): her gonads pulse, swelling and flaring gold
 uniform float spin = 0.0;       // the bell's turn about its axis (she faces her aim), undone so the rim's top stays at the screen's top
 // Her colours (HerColor.cs, data/clementine_color.cfg): body is the bell and tentacles, gold her light.
 global uniform vec3 her_body;
@@ -31,13 +34,13 @@ global uniform vec3 her_light;
 #define gold her_light
 uniform vec3 flash : source_color = vec3(1.0, 0.239, 0.498);  // hurt magenta #FF3D7F
 // The absorbing ritual (docs/PEARLS.md): `mimic` 0..1 is how far she has taken on the pearl's look (its three colours
-// laid out in its pattern, mimic_pattern as PearlPattern), like a chameleon; `burst` 1 → 0 is the light pulse as she
+// with its icon engraved, mimic_icon as PearlIcon), like a chameleon; `burst` 1 → 0 is the light pulse as she
 // returns to her own colours.
 uniform float mimic = 0.0;
 uniform vec3 mimic_c0 : source_color = vec3(1.0);
 uniform vec3 mimic_c1 : source_color = vec3(1.0);
 uniform vec3 mimic_c2 : source_color = vec3(1.0);
-uniform int mimic_pattern = 0;
+uniform int mimic_icon = 0;
 uniform float burst = 0.0;
 
 vec3 mimic_ramp(float t) {
@@ -45,19 +48,10 @@ vec3 mimic_ramp(float t) {
 	return t < 0.5 ? mix(mimic_c0, mimic_c1, t * 2.0) : mix(mimic_c1, mimic_c2, t * 2.0 - 1.0);
 }
 
-float mimic_hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-
-// The pearl's pattern laid over the bell's plan (q, unit disk), each the bell's own version of the pearl's.
-float mimic_t(vec2 q, float fres) {
-	float r = length(q), a = atan(q.y, q.x);
-	if (mimic_pattern == 0) return 0.5 + 0.5 * sin(r * 11.0);
-	if (mimic_pattern == 1) return 0.5 + 0.5 * sin(a * 3.0 + r * 9.0);
-	if (mimic_pattern == 2) return step(0.68, mimic_hash(floor(q * 6.0)));
-	if (mimic_pattern == 3) return 0.5 + 0.5 * sin(q.x * 7.0 + 3.0 * sin(q.y * 5.0 + q.x * 3.0));
-	if (mimic_pattern == 4) return 0.5 + 0.5 * cos(r * 18.0);
-	if (mimic_pattern == 5) return mix(step(0.0, sin(a * 6.0)), 0.5, 0.15);
-	if (mimic_pattern == 6) return step(0.82, mimic_hash(floor(q * 14.0)));
-	return fres;
+// The pearl's look over the bell's plan (q, unit disk): its colours, its icon cut into them.
+float mimic_t(vec2 q) {
+	float d = pearl_engraving(q * 1.25, mimic_icon);
+	return mix(1.0, 0.2 + 0.4 * length(q), smoothstep(-0.02, 0.02, d));
 }
 
 varying float along;
@@ -96,7 +90,8 @@ void fragment() {
 	// turns to keep it toward her aim (BellView), so it is her pointer.
 	float gonad = 0.0, lead = 0.0, halo = 0.0;
 	float critical = 1.0 - step(0.25, health);
-	vec3 gonad_col = mix(gold, vec3(1.0, 0.93, 0.8), 0.2) * (0.92 + 0.1 * pulse);
+	float waiting = points * (0.5 + 0.5 * sin(TIME * 4.5));
+	vec3 gonad_col = mix(gold, vec3(1.0, 0.93, 0.8), 0.2) * (0.92 + 0.1 * pulse) * (1.0 + 1.5 * waiting);
 	float dying = 0.25 + 0.75 * (0.5 + 0.5 * sin(TIME * 2.4));
 	for (int k = 0; k < 4; k++) {
 		float ka = 0.7853982 + float(k) * 1.5707963;
@@ -104,11 +99,11 @@ void fragment() {
 		vec2 d = q - c;
 		float open = 1.0 - smoothstep(0.35, 0.75, dot(normalize(d + 1e-5), -normalize(c)));
 		float size = k == 0 ? 0.2 : 0.17;
-		float shape = line(length(d) - size, k == 0 ? 0.07 : 0.06) * open;
+		float shape = line(length(d) - size, (k == 0 ? 0.07 : 0.06) + 0.035 * waiting) * open;
 		float lit = clamp(health * 4.0 - float(k), 0.0, 1.0);
 		if (k == 0) lit *= mix(1.0, dying, critical);
 		gonad = max(gonad, shape * lit);
-		halo = max(halo, line(length(d) - size, 0.22) * open * lit);
+		halo = max(halo, line(length(d) - size, 0.22 + 0.16 * waiting) * open * lit);
 		if (k == 0) lead = shape * lit;
 	}
 	// (No stomach drawn: her middle is clear.)
@@ -172,7 +167,7 @@ void fragment() {
 	a = max(a, specks * 0.7);
 	// The gonads: her health, bioluminescent lines with a soft halo round each.
 	col = mix(col, gonad_col * 1.15, clamp(halo * 0.5 + gonad, 0.0, 1.0));
-	a = max(a, halo * 0.22);
+	a = max(a, halo * (0.22 + 0.4 * waiting));
 	col = mix(col, mix(gonad_col, vec3(1.0, 0.98, 0.92), 0.35) * 1.25, gonad * 0.7);
 	a = max(a, gonad * 0.95);
 	col = mix(col, vec3(1.0, 0.98, 0.92), lead * 0.25);
@@ -194,9 +189,9 @@ void fragment() {
 	a += hurt * 0.35;
 	// The ink dash: a dark violet ghost with a bright rim.
 	col = mix(col, vec3(0.16, 0.08, 0.26) + fres * gold * 0.8, ink * 0.55);
-	// The ritual: her colours give way to the pearl's look, glowing as the pearl does (the pattern fills the glass);
+	// The ritual: her colours give way to the pearl's look, glowing as the pearl does (its icon fills the glass);
 	// the burst whitens her for a beat as her own colours flood back.
-	vec3 worn = mimic_ramp(mimic_t(q, fres)) * (1.1 + 0.3 * fres);
+	vec3 worn = mimic_ramp(mimic_t(q)) * (1.1 + 0.3 * fres);
 	col = mix(col, worn, clamp(mimic, 0.0, 1.0) * 0.88);
 	a = mix(a, max(a, 0.55), clamp(mimic, 0.0, 1.0));
 	col = mix(col, vec3(1.0, 0.95, 0.85) * 1.6, clamp(burst, 0.0, 1.0) * 0.7);

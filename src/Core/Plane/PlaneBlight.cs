@@ -832,7 +832,8 @@ public sealed partial class PlaneWorld
             m.Target = target;
             var to = target - m.Position;
             float dist = to.Length();
-            Vector2 wish = dist < m.Sense ? SafeNormalize(to) : Vector2.Zero;
+            // After her, round the rock rather than into it (a bait bubble it goes straight at).
+            Vector2 wish = dist < m.Sense ? her ? WayToHer(m.Position) : SafeNormalize(to) : Vector2.Zero;
             // She is away: a den's murkling drifts home into its nave (DenTuning.Leash); else it hunts the reef's fish,
             // keeping a throw's distance from the one it is after.
             bool away = her && dist >= m.Sense;

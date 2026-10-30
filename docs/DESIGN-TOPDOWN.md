@@ -206,7 +206,17 @@ different visual channel, so they can never be confused.
   stick), easing round quickly (rate 14 a second), and the first ring — a little larger and hotter than the others,
   and the last to go — keeps toward it. Playing with the mouse, the pointer is a small orange crosshair of her four
   gonads (32 px: horseshoes at the quarters, open toward the middle as on her bell, a dark edge, a dot at its heart);
-  under menus the system's arrow; with the controller no pointer at all.
+  under menus the system's arrow. With the controller the system's pointer is hidden and the same crosshair is drawn
+  the way she aims, out from her as far as the right stick is tilted (from 30% of the circle below at the lightest
+  tilt to all of it; let go, it holds its distance while her aim follows the way she swims). Either way **the
+  crosshair stays within 45% of the screen's height of her** (`TopDownMain.SyncCrosshair`, `CrossReach`): the mouse
+  pointer, strayed past that circle, is drawn back onto it. Where on the circle it stands only sets her aim's way —
+  her light always flies her full range.
+- **Key hints follow the device in use** (`InputSetup.UsingPad`, `InputSetup.Hint`): the last input decides (the
+  title's carries into the run). Every hint names the action's own binding on that device, as set in Settings: the
+  dive cap over the shaft (SHIFT, or the controller's dive button: LB, RB, X…), the splash's prompt (Enter or click,
+  else the menu's confirm and back buttons), Resume in the pause menu (Esc, else the pause and back buttons), the
+  pause menu's tab buttons (LB and RB, shown only on a controller), and the title cards' Close (Esc, else the back button).
   - *Critical:* at a quarter or less, the last ring's light pulses slowly in and
     out — a dying light at the centre of her body, readable in peripheral
     vision without looking away from the fight.
@@ -266,22 +276,12 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
   range +5%, shot size +6%, swim speed +4%, dash cooldown −5%, glow +8% (her
   light's reach). Experience, level, points and the spent points are saved
   with the run.
-- **The level-up** waits until she is out of the fight: no battle on, no
-  corrupted creature within 12 m, no hit taken, for
-  1.5 s, and not while she absorbs a pearl. Reaching a level mid-fight says
-  so ("Level 3! Your skill point waits until the fight is over"). Then:
-  1. The game stops and the clock with it. She still moves in place: only the
-     sea is held.
-  2. The camera closes in on her (to a third of its distance) and looks past
-     her, so she sits at the screen's left, 30% across.
-  3. A drawer slides in from the right (`LevelUpDrawer`) with "Level n!", the
-     points to spend, and every modifier: her value now (as the pause menu's
-     stat sheet shows it), what a point adds, and dots for the points it
-     holds. She clicks one (or picks it with a controller). With more points
-     left the list refreshes; once they are spent it slides away.
-  4. The camera eases back to its usual framing.
-  5. "Press any key to play on" breathes at the bottom. Any key, click or
-     button resumes the game and the clock (that press does nothing else).
+- **The level-up** never interrupts play. A level reached says so ("Level 3! A skill point waits in the pause menu"),
+  and while a point waits her four gonads pulse, swelling and flaring gold, on her bell and on the HUD's bell. She spends
+  it in the pause menu (§9) whenever she likes, in a fight too: the menu opens on its **Level up** tab while a point
+  waits, listing every modifier: her value now (as the Stats tab shows it), what a point adds, and dots for the points it
+  holds. She clicks one or picks it with a controller; the list and her stats follow at once, the focus staying on that
+  row. With no point waiting the tab still shows the modifiers, greyed.
 - **On the minimap** (§9): a thin gold ring outside the bezel fills with her
   experience; when it is full (a point waits) it pulses slowly and glows
   outward.
@@ -429,8 +429,8 @@ its own.
   floats just inside the screen's edge while it is out of sight, pointing from
   her toward it (`ExitPointer`): it glides along the edge as she swims, bobs
   toward the way, and fades as the way comes into view. It is there with or
-  without the maps (Sea Chart Nautilus), and hides while the game is held (a
-  level-up, the boss's intro, a dive).
+  without the maps (Sea Chart Nautilus), and hides while the game is held (the
+  pause menu, the boss's intro, a dive).
 - The cave's records: its tunnels are the level's corridors (main, side, and
   each room's spur), its chambers the plazas.
 
@@ -485,7 +485,15 @@ its own.
   and kept off the spur to its mouth. The mountain's surface is kept as the
   cave's roof and drawn as intact rock until Clementine swims inside (canopy
   fade); the chambers beneath have a floor 3.5 m under the swim level — the
-  only flat ground in a level.
+  only flat ground in a level. Drawn (`LevelView.LidSurface`), the roof is the mountain as recorded, raised wherever
+  the rock round it stands higher (a surface spanned smoothly between the heights at its edge), so it never sinks into
+  a basin that shows a hollow under it. The roof casts no sun shadow of its own (a single sheet over the hollow, it
+  would shade itself into a dark pit that gives the chamber away); a copy of it 6 m under it, seen only by the sun,
+  keeps the chamber in shade. Its way in stays open: no roof over the passage past the chamber's rim (a shop's runs on
+  to its doorway: see the shop under §12.2's shells). **A secret cave stays hidden until its wall opens:** its roof runs on over its way in to
+  the middle of its sealed wall (as wide as the passage and 4 m more each side), meeting the wall's top, so the whole
+  of it reads as solid reef; it never fades and, with its wall, is never carved away round her (`LevelView`'s
+  kept-whole materials); once the wall slides down it fades and carves like any cave.
 - **Passes — the shortcuts, every one a tunnel (2–4 sought, about one a level
   where the rock is thick enough):** tunnels (3–5 m) worn through the rock
   between two parts of the cave 10–36 m apart as the fish swims — tunnels and
@@ -578,6 +586,8 @@ Running after the checks, it never changes what she can reach.
     a level's template seals (its `pathSeals` rule);
   - **a sword**, on **every way into the boss's arena** (each opening in its rim found by rays out from its middle, a
     wall across it from the rock on one side to the rock on the other), its crimson smouldering faintly in the groove.
+    It takes no light while a vent on the level stands open (`SealRefused`): her shots knock dully on it, and she is told
+    how many still pour. No vent lies behind it.
   Each of her shots that strikes the wall within 2.2 m of its carving fills it with her light (a sixth of an X, an
   eighth of the sword; damage does not matter, a merged or bouncing bubble counts once), from its heart outward (the
   X's crossing, the sword's guard), with a flash and a chime rising as it fills. **The hits must come one after
@@ -912,7 +922,7 @@ exactly and cheaply, and the water glows where light passes through it.
   from inside her bell out of its opening — always the way the inside of her bell points: down at rest, and streaming
   out behind her as she swims, tipped apex first — toned down, a soft warm beam rather than a floodlight. A faint short glow round the bell (3 m) keeps what swims right beside her from going black. Its
   strength follows the depth's **Lantern** (`ReefLook.Lantern`, §5.1): 1 in the Shallows, 1.1 Kelp, 1.35 Galleon,
-  1.5 Carnival, 1.85 Trench, 2 Abyss, 0.6 Tank; the beam is 3.4 × Lantern^1.8 strong, reaches 26 m × √Lantern (× Lantern
+  1.5 Carnival, 1.85 Trench, 2 Abyss, 0.6 Tank; the beam is 2.38 × Lantern^1.8 strong (`BellView.BeamEnergy`), reaches 26 m × √Lantern (× Lantern
   Pearl's glow, so it gets down into an abyss reef) and falls off more gently the deeper she is. The light-field
   shaders share its cone (`her_spot`: its direction and the cosine of its half-angle): her glow in the water keeps
   inside it (a little glow round the bell aside), and the water's veil clears only as much as the beam's light
@@ -923,20 +933,32 @@ exactly and cheaply, and the water glows where light passes through it.
   on the reef is lit through the murk however deep it lies.
 - **Where her light reaches — the horizon map** (`HorizonMap.cs`): round her light, for 256 directions × 32 distances
   (out to its reach), the running steepest slope of the terrain (its height over the light ÷ the distance). A point is
-  lit exactly when its own slope from the light clears that; one texture lookup (`her_vis`), soft at the edge. Redone
-  when she moves (a quarter of a millisecond).
+  lit exactly when its own slope from the light clears that; one texture lookup (`her_vis`), soft at the edge. Close
+  round her the map's first rows hold rock beyond the point itself, so the test fades in from one row's width to two
+  (0.8 m plus 1/32 to 2/32 of her reach) and nearer than that her light simply reaches: no hard edge, so no ring of
+  false shadow round her. Redone when she moves (a quarter of a millisecond).
 - **The water she pushes** (`WaterSwells`, the post pass's swells): when she sets off from near still, turns
   sharply at speed (over about 57° from the way she was holding; long curves never count) or dashes, the water
-  shifts for a moment — no surface ripple, a brief change in its density: a faint ring of refraction at her plane
-  spreading about 2.6 m from where she pushed off over 0.7 s, strongest behind her, the water a shade thicker where
-  it passes. At most six at once, one every 0.28 s; off with reduced motion.
+  shifts for a moment — a small underwater ripple, no surface ripple: a ring of the currents' moving water
+  (`CurrentView`'s shimmer) at her plane spreading about 2.6 m from where she pushed off over 0.7 s, the picture under
+  it wavering with eddies of denser water and shoved outward along its crest (a sharp leading edge, a softer wake),
+  strongest behind her, the water a shade thicker where it passes. A dash pushes hardest (1), setting off less (0.5), a
+  turn least (0.4). Heavy blows add even rings of their own (a Blightroot's head coming down; Tide Pulse's three
+  waves, running out sharply to their reach). At most eight at once, one of hers every 0.28 s; off with reduced
+  motion.
 - **A flinch and a jolt on every hit** (`BlightView.Flinch`, `CameraRig.Shake`): a corrupted creature her light
   strikes contracts for a moment (by 10–30%, more for a harder hit) and rebounds past its size as it settles, within
   0.3 s; the screen shakes a little with each hit (more for a harder one, never much; off with the camera-shake
   setting).
-- **Ink off a hit** (`BlightView.InkSplash`): where her shot strikes a corrupted body, 5–7 drops of its ink (10 for
-  one freed) flick off the struck side — back toward her and fanning out, up a little — then slow and sink,
-  violet-sheened so they read on dark ground.
+- **The hit burst** (`CombatView.HitBurst`): wherever her light strikes a creature (any of them, and the boss), the
+  light bounces back — magic particles (white and ecru stars and crosses) burst from the struck side of its outline,
+  fanned wide, back toward her — and its corruption is shot through: violet brackets burst out of the far side, a
+  narrower splatter carrying on the light's way, away from her, sinking as they slow. The way is the shot's own (from
+  her to the creature for a hit without one, such as the surge's). How much of each scales with the share of the
+  creature's whole health that one hit took (the boss's: its health): 6 of each for a graze, up to 40 for a hit that
+  takes it all (6 + 34 × √share), thrown harder the bigger the share. No ink drops, no torn holes, and for now no
+  flash on the struck creature (no hit outline, no white flash on a pufferling, no brightening of the boss). A
+  murkling's or a Blightroot's liquid body still dents where it struck (`BlightView.Struck`).
 - **Her glow in the water**: the water her light passes through scatters it toward the eye, integrated along every
   pixel's view ray. For a point light that integral has a closed form, (I / h)·(θb − θa) with h the ray's closest
   approach and θ the angle seen from the light; 10 samples spaced evenly in that angle (equiangular sampling, jittered
@@ -1196,10 +1218,16 @@ The FP staging ("look up through the surface") is replaced:
 - **The cleanse bar** (`CleanseMeter`, docs/CORRUPTION.md) runs under the minimap, as wide as it: slim, gold over
   ink, its tipping points notched. No caption at rest; while it moves, "Reef 34%" shows beside it and fades 1.6 s
   after it settles. Inside a boss's arena a second bar under it, the arena's, captioned the same way.
-- **Pause menu**: resume, restart, save & quit, camera zoom; two tabs — the
-  pearls she has absorbed, and the **achievements** (earned ones with their line
-  and the pearl they unlocked; unearned ones as a dark pearl silhouette, the
-  title and how to earn it).
+- **Pause menu** (`PauseMenu`; Esc or Start): the sea and the clock are held, and she still moves in place. A drawer
+  slides in from the right over the reef (0.35 s) as the camera closes in on her (to a third of its distance, 0.5 s) and
+  looks past her, so she sits 30% across the screen; closing, both ease back (0.35 s) and play goes on. Its top gives
+  the seed, where she is, her corruption and her pearls. Four tabs, changed with LB and RB (`MenuTabLeft`, `MenuTabRight`,
+  rebindable) or the mouse: **Level up** (§2.6), **Stats**, **Pearls** (those she has absorbed, in their colours and
+  engravings) and **Achievements** (earned ones with their line and the pearl they unlocked; unearned ones as a dark
+  pearl silhouette, the title and how to earn it). It opens on Level up while a point waits, else on Stats. Under the
+  tabs: resume, restart, save & quit, camera zoom. On a controller something always holds the focus (the first modifier
+  on Level up with a point to spend, else Resume), the D-pad and left stick move it, A presses, B resumes, and the right
+  stick scrolls the list.
 - **Minimap**: circular, top-right, rotates so forward is up (inherited); fog of
   war; landmark icons (inherited §27); the map shows your floor only.
 - **Tab map**: full floor, legend, crater-accurate (inherited §26).
@@ -1333,9 +1361,9 @@ at mist distance (inherited fade rule).
   thrown at 17 m/s, it slows steadily at first, then — once the water's drag (2.2 × its speed, per second) is the
   gentler — eases off exponentially, the two meeting smoothly at about 6.5 m/s. Slower than 0.9 m/s it hovers, still
   drifting and slowing (about 0.1 m/s left at the end), each bubble for its own time (0.8–1.2 s, rolled as it is
-  thrown, times her **bubble hover** stat, which pearls can change: Bubble Coral ×1.5); then it pops, where she aimed
-  (the pointer, or as far as the right stick is pushed) or at her range, 12.8 m (half the screen's height at the
-  100% camera zoom), whichever is nearer; it never flies nearer than 1.5 m. Where it goes out it clears a little of
+  thrown, times her **bubble hover** stat, which pearls can change: Bubble Coral ×1.5); then it pops at the end of
+  her range, 12.8 m (half the screen's height at the 100% camera zoom), however near her the pointer is (only its way
+  from her counts; what is in the way is struck anyway). Where it goes out it clears a little of
   the ground's corruption. It only ever comes to rest by popping. They always pop on a mob (piercing and boomerang bubbles fly on through mobs). A bubble that bumps into rock
   pops 40% of the time and otherwise bounces off (Mirror Scale's bounces are sure). Two of her bubbles that touch
   (bubbles of one volley never do) bounce off each other: pushed apart, the bigger moving less, and turned off each
@@ -1382,8 +1410,7 @@ at mist distance (inherited fade rule).
 - **Clam rooms (look)** (`ClamRoomView`): a chamber like any other, the dead end of its spur, and in its middle a giant
   clam lying open on the sand — three times the pearl's width, bone-cream, ribbed — its mouth turned to the chamber's
   entrance, the hinge behind, its soft flesh inside and the pearl lying on its lower valve. **The pearl's light comes out
-  of the clam's mouth only:** in the pearl's own colours and pattern (its bands, swirl, spots, marble, rings, stripes,
-  speckle or halo, `pearl_glow.gdshaderinc`) laid over the chamber's floor and the foot of its walls in a cone of 120°
+  of the clam's mouth only:** in the pearl's own colours, softly mottled (`pearl_glow.gdshaderinc`), laid over the chamber's floor and the foot of its walls in a cone of 120°
   toward the entrance, softly edged (`pearl_floor_light.gdshader`), with a shadowed spotlight of its colour the same way
   and the pearl's own light shadowed by the shell — nothing of it falls behind the clam. Its light pours out of the
   chamber's mouth over the path: a spill 7 m out from the mouth reaching 17 m, and the water pass's haze in three pools
@@ -1397,7 +1424,7 @@ at mist distance (inherited fade rule).
 - **Pearls (first pass):** each clam room holds one pearl she does not have yet, from the 19 ported to the
   plane (`PlaneRun.PortedPearls`; docs/PEARLS.md marks them). They stack through the item loadout (items.json). The
   pearls she has absorbed circle her bell (`PearlOrbitView`): one small pearl each (non-unique ones as often as she took
-  them), in its own colours and pattern, evenly spaced on a ring 0.8 m out from her middle that turns slowly; a new one
+  them), in its own colours with its engraving, evenly spaced on a ring 0.8 m out from her middle that turns slowly; a new one
   slots in and the ring respaces itself. The HUD shows no list of them. Taking one shows its name and tagline.
   - **Shots:** Triple Tentacle (3-shot fan), Hammerhead (5-shot cone), Anglerfish Lure (homing: each shot locks onto the one creature nearest it, ahead and within 12 m, and keeps it until it is freed, passed or out of reach), Swordfish Bill
     (pierce), Mirror Scale (2 bounces off rock), Boomerang Shrimp (returns to her), Double Helix (2 weaving shots).
@@ -1421,11 +1448,12 @@ at mist distance (inherited fade rule).
     hover time (0.8–1.2 s, ×1.5 with the pearl) before going out — so the shots that follow catch up with it, and
     shots that touch merge into one, bigger and stronger, instead of bouncing apart (see Combat above).
   - **Firefly Squid** (`PlaneSurge.cs`, `SurgeView`): fire pours out one continuous, narrow surge of her light instead
-    of shots. It reaches where she aims (the pointer, or as far as the right stick is pushed; at most her range) and
+    of shots. It reaches her full range the way she aims and
     stops on rock, a pot, Queen Clam's shut shell or the first creature it meets. It strikes everything it touches every
     step, smoothly, for 90% of her shots' damage per second (her damage, fire rate and Sardine Run's spin all count),
     so a creature's meter drains steadily for as long as it is held in the light; its hit numbers and flashes come
-    summed four times a second (a creature it frees shows at once). A pot breaks once 18 of it has landed. It has no
+    summed four times a second (a creature it frees shows at once). A pot breaks once 18 of it has landed. Held on rock
+    it counts as one of her shots every shot's time, on a vent's mouth or a sealed wall's carving. It has no
     knockback and sends no surge back to her. Its tip and every impact steadily clear the ground's corruption round
     them (1 m plus its width, 2.25 density a second); the rest of its line does not. A ribbon of
     white-hot light in her glow, pulses racing outward along it, laid like paint (its edge wandering and tearing,
@@ -1458,7 +1486,9 @@ at mist distance (inherited fade rule).
     recharges over its listed time; its charge is the rim of her bell (§2.5). The charge carries down the shaft and
     into a saved run. **Bubble Shield** (20 s): a big iridescent bubble round her for 3 s; nothing hurts her inside it (needles
     and spines are turned away; it wobbles when struck and flickers before it goes). **Whale Song** (40 s): heals 35 HP,
-    three rings of sound swelling out from her; not usable at full HP ("Already at full health").
+    three rings of sound swelling out from her; not usable at full HP ("Already at full health"). **Tide Pulse**
+    (60 s; every run starts with it): three waves of water push everything loose away from her, leaving the water
+    clear 3.3 m round her bell (docs/PEARLS.md, `PlanePushWave.cs`). A new active pearl takes the old one's place.
 - **Sunken amphorae (`PlaneVases.cs`, `VaseView`):** breakable pots on the seabed. Each level has 5–7 groups of
   1–3, seeded, by the walls where the seabed lies 0.3–1.6 m under her swim plane (so they stand up into it), clear of
   the start (20 m), the way down and the places: a tall two-handled amphora, a round jar or a squat pot, terracotta
@@ -1472,13 +1502,21 @@ at mist distance (inherited fade rule).
   - **Broken,** it shatters: shards burst out along the blow, tumble down through the water and lie on the sand a
     while before fading, and a puff of silt rises. It leaves **2–3 shells** (50%), **a heart** (20%) or nothing.
 - **Shells (the currency, first pass, `PlaneEconomy.cs`):** small shells lie in caches at the shell cache (6–9),
-  and secret rooms (8–12); they drift to her from 2.5 m. A freed mob leaves a **heart** (6%: it heals 20 HP; she
+  and secret rooms (8–12; one secret room in ten holds a pearl in its middle instead, one she lacks or another copy
+  of a non-unique one, from its own roll); they drift to her from 2.5 m. A freed mob leaves a **heart** (6%: it heals 20 HP; she
   takes it only when hurt, otherwise it waits where it fell, a small red heart), else **shells** (30%: one, or two
   a quarter of the time), else nothing — about one heart and six shells a level from mobs. The shop
   has three stand slots: a pearl she does not have on half the visits (30 shells), always a heart (a health top-up:
   +25 HP, 5 shells, only when hurt), and a third slot kept empty for wares to come. The
   goods float on their own (pearls as in a clam room, the top-up as a red heart), each with a small price tag on a
-  string (the price and a shell), shown only while she is inside the shop; she buys by touching one. **A shell** is a
+  string (the price and a shell), shown only while she is inside the shop; she buys by touching one. **The shop's way
+  in shows** (`LevelView.AddShopGates`): its roof runs on over its passage as solid rock (`LidSurface`, as a secret's
+  does to its wall), level with the walls beside it and at least 1.2 m over the doorway, out to a face 1.8 m out from
+  the chamber. In that face is its doorway, a round arch of pale stone on two posts from the passage floor (springing
+  0.9 m over her plane, 1.4 m deep, 0.75 m thick), fading like an arch while she swims through it. Over the arch, on
+  the face, hangs its sign: three golden nautilus shells side by side (1.05 m apart, the middle one a little higher and
+  larger), their coils turned out of the face and up toward the camera, a warm glow about them; it goes with the cave's
+  roof when she is inside. **A shell** is a
   round nautilus coated in silver (`NautilusShell`, nautilus.gdshader), 0.62 m across: a plump planispiral coil, its
   aperture open, fine wavy growth lines across its whorls, polished so it mirrors a bright sky, a dark horizon band and
   warm sand (its own surround, so it reads as silver in every depth); each lies as it fell, turned at random in every

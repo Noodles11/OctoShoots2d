@@ -71,7 +71,7 @@ public partial class SaveCard : PanelContainer
         head.AddChild(title);
         _toast = TitleStyle.Text("", 15, new Color(0.1f, 0.45f, 0.36f), TitleStyle.BodyBold);
         head.AddChild(_toast);
-        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
+        var close = TitleStyle.Pill(TitleStyle.CloseText, primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
@@ -197,12 +197,7 @@ public partial class SaveCard : PanelContainer
 
     static ColorRect MiniPearl(ItemDef? item)
     {
-        var mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/pearl_icon.gdshader") };
-        var colors = item?.Pearl?.Colors ?? new List<string> { "#ffffff", "#dddddd" };
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), Color.FromHtml(colors[0]));
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), Color.FromHtml(colors[Math.Min(1, colors.Count - 1)]));
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), Color.FromHtml(colors[^1]));
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)(item?.Pearl?.Pattern ?? PearlPattern.Halo));
+        var mat = OctoShoots.Game.Fx.PearlMaterials.Flat(item?.Pearl);
         return new ColorRect { CustomMinimumSize = new Vector2(26f, 26f), Material = mat, TooltipText = item?.Name ?? "" };
     }
 

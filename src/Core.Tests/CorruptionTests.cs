@@ -639,26 +639,27 @@ public class CorruptionTests
 
     /// <summary>No budding or murklings, so a test sees only what it sets up.</summary>
     [Fact]
-    public void HerLightFliesToWhereSheAimsAndClearsALittleWhereItGoesOut()
+    public void HerLightFliesHerFullRangeAndClearsALittleWhereItGoesOut()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss);
         Quiet(w);
-        // The longest open line from her start; she aims 6 m along it.
+        // The longest open line from her start; she aims along it.
         var from = w.Player.Position;
         var aim = Enumerable.Range(0, 32).Select(i => new Vector2(MathF.Cos(i * MathF.Tau / 32f), MathF.Sin(i * MathF.Tau / 32f)))
             .OrderByDescending(d => Enumerable.Range(0, 40).TakeWhile(k => w.Map.IsOpen(from + d * (k * 0.5f))).Count()).First();
-        const float reach = 6f;
+        Assert.True(Enumerable.Range(0, 30).All(k => w.Map.IsOpen(from + aim * (k * 0.5f))), "an open line her range long");
+        const float reach = PlaneCombatTuning.BubbleRange;
         var end = from + aim * (reach + 0.5f);
         var field = w.Corruption!;
         for (int i = 0; i < CorruptionField.N * CorruptionField.N; i++)
             if (Vector2.Distance(CellAt(i), end) < 2.5f) field.Density[i] = 1f;
         float before = field.At(end);
-        w.Step(new PlaneInput { Aim = aim, AimReach = reach, Fire = true });
+        w.Step(new PlaneInput { Aim = aim, Fire = true });
         var shot = w.Shots.Single(s => s.FromPlayer);
         bool gone = false;
         for (int i = 0; i < 200 && !gone; i++)
         {
-            w.Step(new PlaneInput { Aim = aim, AimReach = reach });
+            w.Step(new PlaneInput { Aim = aim });
             gone = !w.Shots.Contains(shot);
         }
         Assert.True(gone);
@@ -682,8 +683,8 @@ public class CorruptionTests
         m.Bud = 0f;
         m.Radius = 0.08f;
         m.Corruption.Max = m.Corruption.Value = 1000f;
-        w.Step(new PlaneInput { Aim = aim, AimReach = 10f, Fire = true });
-        for (int i = 0; i < 20; i++) w.Step(new PlaneInput { Aim = aim, AimReach = 10f });
+        w.Step(new PlaneInput { Aim = aim, Fire = true });
+        for (int i = 0; i < 20; i++) w.Step(new PlaneInput { Aim = aim });
         Assert.True(m.Corruption.Value < 1000f, "her light struck it");
     }
 

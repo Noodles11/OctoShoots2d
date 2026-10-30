@@ -99,7 +99,7 @@ public partial class BlightView : Node3D
         SyncFlounders(world, dt);
         SyncKinLights(world);
         SyncOutlines(world);
-        SyncHitGlows(world);
+        // (Her light's hit outline, SyncHitGlows, is off for now.)
         StepRipples(dt);
         StepGathers(dt);
         StepChunks(dt);
@@ -254,7 +254,7 @@ public partial class BlightView : Node3D
 
     /// <summary>
     /// No meters (docs/CORRUPTION.md): her light's outline stays round every corrupted creature whose corruption is not
-    /// full, the thicker the less it has left (corruption_orb's worn); each hit flashes it (SyncHitGlows).
+    /// full, the thicker the less it has left (corruption_orb's worn).
     /// </summary>
     void SyncOutlines(PlaneWorld world)
     {
@@ -272,73 +272,32 @@ public partial class BlightView : Node3D
 
     static readonly StringName WornParam = "worn", WornMeta = "worn_outline";
 
-    // ───────────────────────── ink off a hit ─────────────────────────
+    // ───────────────────────── a hit's give ─────────────────────────
 
     /// <summary>
-    /// Her light strikes a corrupted body: a few drops of its ink flick off the side the shot hit — back toward her and
-    /// out to the sides, up a little, then sinking as they slow in the water (heavier than it, tacky). A creature freed
-    /// throws a few more. The body's size sets where its skin is.
+    /// Her light strikes a corrupted body (the way it went, from her): a murkling's liquid body dents where it struck and
+    /// rings back, a Blightroot's head the same and pushed back on its pole — the harder, the more of its meter the hit took.
     /// </summary>
-    public void InkSplash(PlaneWorld world, System.Numerics.Vector2 at, System.Numerics.Vector2 dir, bool freed)
+    public void Struck(PlaneWorld world, System.Numerics.Vector2 at, System.Numerics.Vector2 dir)
     {
-        float radius = BodyRadius(world, at, out float height);
         var back = new Vector3(-dir.X, 0f, -dir.Y).Normalized();
-        // A murkling is torn: a dent, a hole, chunks ripped away (BlightView.Murklings).
-        Murkling? torn = null;
-        float nearest = 2f;
+        static float Share(CorruptionMeter meter) => Mathf.Clamp(meter.LastHit / Mathf.Max(meter.Max, 1f), 0.05f, 1f);
         foreach (var mk in world.Murklings)
-        {
-            float d = System.Numerics.Vector2.Distance(mk.Position, at);
-            if (mk.Alive && d < nearest) (torn, nearest) = (mk, d);
-        }
-        if (torn is not null && !freed)
-            TearMurkling(torn, back, Mathf.Clamp(torn.Corruption.LastHit / Mathf.Max(torn.Corruption.Max, 1f), 0.05f, 1f),
-                new Vector3(torn.Position.X, LevelMap.SwimBand, torn.Position.Y), torn.Radius);
-        // A Blightroot's head is torn the same way.
-        if (torn is null && !freed)
-            foreach (var root in world.Blightroots)
-                if (root.Alive && System.Numerics.Vector2.Distance(root.Position, at) < 1.6f)
-                {
-                    TearRoot(root, back, Mathf.Clamp(root.Corruption.LastHit / Mathf.Max(root.Corruption.Max, 1f), 0.05f, 1f));
-                    break;
-                }
-        var side = new Vector3(-back.Z, 0f, back.X);
-        var hit = new Vector3(at.X, height, at.Y) + back * radius * 0.85f;
-        int drops = freed ? 10 : 5 + (int)_droplets.RandRange(0f, 2.99f);
-        for (int i = 0; i < drops; i++)
-        {
-            // Off the skin: mostly back the way the shot came, fanning out to the sides, and up.
-            float fan = _droplets.RandRange(-1f, 1f);
-            // Out past the glow of her shot bursting there, before they slow and sink.
-            var v = (back * _droplets.RandRange(2.4f, 4f) + side * fan * 2.4f + Vector3.Up * _droplets.RandRange(0.8f, 2f)) * (freed ? 1.25f : 1f);
-            float size = _droplets.RandRange(0.14f, 0.24f);
-            _droplets.Emit(hit + back * 0.15f + side * fan * radius * 0.25f, v, _droplets.RandRange(0.6f, 0.9f), size, size * 0.4f,
-                InkDrop, InkDropFade, drag: 2.6f, buoyancy: -2.4f);
-        }
+            if (mk.Alive && System.Numerics.Vector2.Distance(mk.Position, at) < 2f)
+            {
+                Dent(BodyOf(mk), back, Share(mk.Corruption));
+                return;
+            }
+        foreach (var root in world.Blightroots)
+            if (root.Alive && System.Numerics.Vector2.Distance(root.Position, at) < 1.6f)
+            {
+                DentRoot(root, back, Share(root.Corruption));
+                return;
+            }
     }
 
     /// <summary>A drop of the ink: dark violet with the sheen of the creatures' own rims (it reads on dark ground too), thinning to their glow.</summary>
     static readonly Color InkDrop = new(0.2f, 0.1f, 0.34f, 1f), InkDropFade = new(0.5f, 0.32f, 0.85f, 0f);
-
-    /// <summary>The radius and height of the corrupted body nearest <paramref name="at"/> (where its hit was; the shove may have moved it since).</summary>
-    static float BodyRadius(PlaneWorld world, System.Numerics.Vector2 at, out float height)
-    {
-        float best = 2f, radius = 0.5f, h = LevelMap.SwimBand;
-        void Try(System.Numerics.Vector2 p, float r, float y)
-        {
-            float d = System.Numerics.Vector2.Distance(p, at);
-            if (d >= best) return;
-            (best, radius, h) = (d, r, y);
-        }
-        foreach (var m in world.Murklings) Try(m.Position, m.Radius, LevelMap.SwimBand);
-        foreach (var b in world.Blotters) Try(b.Position, BlotterTuning.ShellRadius * 0.8f, LevelMap.SwimBand + 1f);
-        foreach (var w in world.Inkwardens) Try(w.Position, WardenTuning.Radius, LevelMap.SwimBand + 0.4f);
-        foreach (var t in world.Thumpsquirts) Try(t.Position, ThumpTuning.Radius, LevelMap.SwimBand + 0.4f);
-        foreach (var l in world.Lashjaws) Try(l.Position, 0.6f, LevelMap.SwimBand);
-        foreach (var r in world.Blightroots) Try(r.Position, 0.9f, SacHeight);
-        height = h;
-        return radius;
-    }
 
     // ───────────────────────── events ─────────────────────────
 
@@ -530,7 +489,7 @@ public partial class BlightView : Node3D
     static float HitGlow(CorruptionMeter meter) =>
         !meter.Empty && meter.LastHit > 0f && meter.Since < HitGlowSeconds ? 1f - meter.Since / HitGlowSeconds : 0f;
 
-    /// <summary>Every corrupted creature struck by her light lights a short outline round its body (corruption_orb's hit).</summary>
+    /// <summary>Every corrupted creature struck by her light lights a short outline round its body (corruption_orb's hit). Off for now.</summary>
     void SyncHitGlows(PlaneWorld world)
     {
         for (int i = 0; i < _murks.Count && i < world.Murklings.Count; i++) Glow(_murks[i], HitGlow(world.Murklings[i].Corruption));

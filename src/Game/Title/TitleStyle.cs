@@ -76,6 +76,11 @@ public static class TitleStyle
     };
 
     /// <summary>A pill button: coral (primary) or outlined (secondary), Nunito ExtraBold.</summary>
+    /// <summary>A card's close button: Esc on the keyboard, the back button on a controller (its binding).</summary>
+    public static string CloseText => OctoShoots.Game.Controls.InputSetup.UsingPad
+        ? $"Close  ({OctoShoots.Game.Controls.InputSetup.Hint(OctoShoots.Game.Controls.InputSetup.MenuBack, true)})"
+        : "Close  (Esc)";
+
     public static Button Pill(string text, bool primary = true, int size = 17)
     {
         var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.All, MouseDefaultCursorShape = Control.CursorShape.PointingHand };

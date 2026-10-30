@@ -95,8 +95,10 @@ public partial class CombatView : Node3D
         AddChild(_trails);
         _fireworks = new FxParticles(1024, additive: true);
         AddChild(_fireworks);
-        _dust = new MagicParticles(512);
+        _dust = new MagicParticles(1536);
         AddChild(_dust);
+        _ink = new MagicParticles(1536);
+        AddChild(_ink);
         _afterimages = new FxParticles(1536, additive: true);
         AddChild(_afterimages);
         _wake = new FxParticles(400, additive: false, FxParticles.Bubble());
@@ -308,6 +310,7 @@ public partial class CombatView : Node3D
         _trails.Clear();
         _fireworks.Clear();
         _dust.Clear();
+        _ink.Clear();
         foreach (var q in _pearls) q.QueueFree();
         _shots.Clear();
         _halos.Clear();
@@ -496,6 +499,8 @@ void fragment() {
     FxParticles _fireworks = null!;
     /// <summary>The magic particles a light burst throws up (falling back like dust) and a pearl's absorbing bursts out.</summary>
     MagicParticles _dust = null!;
+    /// <summary>The corruption a hit knocks out of a creature (HitBurst): violet brackets.</summary>
+    MagicParticles _ink = null!;
     /// <summary>The light her shots shed as they fly (afterimage bursts), and Pistol Shrimp's cavitation bubbles in their wake.</summary>
     FxParticles _afterimages = null!, _wake = null!;
     /// <summary>Per shot: when it next sheds a burst of light, and how many bounces it had left (a bounce glints).</summary>
@@ -713,7 +718,19 @@ void fragment() {
         if (shot.Charged > 0.25f) { width *= 1.4f; life *= 1.2f; }
         // Starfish Arm: as wide as it has grown.
         if (shot.Grow) width *= Mathf.Clamp(shot.Radius / Mathf.Max(shot.BaseRadius, 0.01f), 1f, 2.5f);
+        // Her shot size: at this speed the afterlight is most of what is seen of a shot.
+        width *= DrawnSize(shot);
         return new LightTrails.Style(jag, life, width, twin: shot.Wave);
+    }
+
+    /// <summary>
+    /// How big a shot is drawn for her shot size (her stat and her pearls; a Pearl Diver charge shows on its own):
+    /// past its true share, so that even a small step is seen; 1 for a plain shot.
+    /// </summary>
+    static float DrawnSize(PlaneShot shot)
+    {
+        float size = shot.BaseRadius / PlaneCombatTuning.ShotRadius / (1f + (PlaneCombatTuning.ChargeSize - 1f) * shot.Charged);
+        return Mathf.Clamp(Mathf.Pow(size, 1.5f), 0.5f, 3.2f);
     }
 
     /// <summary>Her light's colour in a shot: her own, or (Prism Pearl) the red, green or blue third of it.</summary>
@@ -796,6 +813,43 @@ void fragment() {
     /// </summary>
     public void Flares(System.Numerics.Vector2 at, float radius, System.Numerics.Vector2 dir, float strength) =>
         _trails.Flares(new Vector3(at.X, LevelMap.SwimBand + 0.2f, at.Y), radius, new Vector3(dir.X, 0f, dir.Y), strength);
+
+    /// <summary>
+    /// Her light struck a creature (its middle and the radius of its outline; the way the light went through it, from her;
+    /// the share of its whole health the hit took): the light bounces back off it — magic particles burst from where it
+    /// struck back toward her — and its corruption is knocked out through the far side, violet brackets splattering on
+    /// away from her. The bigger the share, the more of each and the harder thrown; even a graze shows a few.
+    /// </summary>
+    public void HitBurst(System.Numerics.Vector2 at, float radius, System.Numerics.Vector2 through, float share)
+    {
+        var dir = new Vector3(through.X, 0f, through.Y).Normalized();
+        var side = new Vector3(-dir.Z, 0f, dir.X);
+        var mid = new Vector3(at.X, LevelMap.SwimBand + 0.3f, at.Y);
+        float k = Mathf.Sqrt(Mathf.Clamp(share, 0f, 1f));
+        int count = HitBurstLeast + Mathf.RoundToInt((HitBurstMost - HitBurstLeast) * k);
+        float push = 1f + 0.7f * k;
+        // The light bouncing back: from the struck side, fanned wide, back toward her.
+        var front = mid - dir * radius;
+        for (int i = 0; i < count; i++)
+        {
+            float fan = _dust.RandRange(-0.75f, 0.75f);
+            var d = (-dir + side * fan + Vector3.Up * _dust.RandRange(0.05f, 0.45f)).Normalized();
+            _dust.Emit(front + side * fan * radius * 0.4f, d * _dust.RandRange(2.5f, 5.5f) * push, _dust.RandRange(0.45f, 0.8f), _dust.RandRange(0.11f, 0.19f), drag: 3f);
+        }
+        // The corruption shot through: out of the far side, a narrower splatter on away from her, sinking as it slows.
+        var exit = mid + dir * radius;
+        for (int i = 0; i < count; i++)
+        {
+            float fan = _ink.RandRange(-0.5f, 0.5f);
+            var d = (dir + side * fan + Vector3.Up * _ink.RandRange(0f, 0.35f)).Normalized();
+            var tint = _ink.RandRange(0f, 1f) < 0.35f ? MagicParticles.BrightViolet : (Color?)null;
+            _ink.EmitBracket(exit + side * fan * radius * 0.4f, d * _ink.RandRange(3f, 7f) * push, _ink.RandRange(0.5f, 0.9f), _ink.RandRange(0.13f, 0.21f),
+                gravity: 2.5f, drag: 2.6f, color: tint);
+        }
+    }
+
+    /// <summary>A hit's burst: so many particles of each kind for a graze, up to so many for a hit that takes a whole creature.</summary>
+    const int HitBurstLeast = 6, HitBurstMost = 40;
 
     /// <summary>
     /// Her light bursts like a small firework: a white flash, sparks flung out (more and faster for a bigger, merged
@@ -903,11 +957,13 @@ void fragment() {
             if (shot.FromPlayer)
             {
                 // A shot of light: a small hot mote, no bubble (it hits where the sim says, with the sim's radius). It
-                // grows a little and brightens as it merges; an Ink Sac one has a violet heart; a Pearl Diver throw is
-                // the gathered light, bigger and brighter. Its lightning afterlight is drawn by the trails.
+                // grows a little and brightens as it merges, and is drawn as big as her shot size makes it; an Ink Sac one
+                // has a violet heart; a Pearl Diver throw is the gathered light, bigger and brighter. Its lightning
+                // afterlight is drawn by the trails.
                 bool charged = shot.Charged > 0.25f;
                 float seed = (System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(shot) & 1023) * 0.0137f;
-                float mote = Mathf.Min(0.58f * (1f + 0.1f * (shot.Bubbles - 1)), 1.5f) * (charged ? 1.5f : 1f)
+                float drawn = DrawnSize(shot);
+                float mote = Mathf.Min(0.58f * (1f + 0.1f * (shot.Bubbles - 1)), 1.5f) * (charged ? 1.5f : 1f) * drawn
                     // Room for its pearls' marks: the dividing cell (Mitosis), the star (Starfish Arm).
                     * (shot.Split || shot.Grow ? 1.6f : 1f);
                 _shots[i].Mesh = _spark;
@@ -957,11 +1013,12 @@ void fragment() {
                 _trails.Feed(shot, _shots[i].Position, warmth, strength, TrailStyle(shot));
                 Shed(shot, _shots[i].Position, heading, speed, mote, warmth, light);
 
-                // Its glow in the water: a fixed-size disc, stronger (never wider) as it merges.
+                // Its glow in the water: a disc as wide as her shot size, stronger (never wider) as it merges.
                 float k = Mathf.Clamp(light / MaxLight, 0f, 1.5f);
                 var halo = _halos[i];
                 halo.Visible = true;
                 halo.Position = _shots[i].Position;
+                halo.Scale = Vector3.One * HaloRadius * drawn;
                 halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("strength"), Mathf.Min(Mathf.Lerp(HaloMin, HaloMax, Warmth(shot.Bubbles)) * (0.6f + 0.4f * k), HaloMax) * (shot.Explosive ? 1.3f : 1f));
                 halo.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("color"), LightOf(shot.Hue).Lerp(new Color(1f, 0.95f, 0.84f), shot.Hue == PrismHue.None ? warmth : warmth * 0.3f));
                 _candidates.Add((shot.Position, GroundStrength * Mathf.Min(k, 1f) * (shot.Explosive ? 1.3f : 1f), GroundRadius));
@@ -1013,6 +1070,7 @@ void fragment() {
         {
             _fireworks.Tick(dt, camera.GlobalBasis);
             _dust.Tick(dt, camera.GlobalBasis);
+            _ink.Tick(dt, camera.GlobalBasis);
         }
 
         // Popping bubbles: the tear opens from the struck point and sweeps the film away; droplets break off the rim

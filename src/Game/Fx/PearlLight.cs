@@ -7,7 +7,7 @@ namespace OctoShoots.Game.Fx;
 
 /// <summary>
 /// A pearl's own light (a clam room's pearl lights its room): its colour for the room's fill and spill and the water's
-/// haze over it. Its pattern is painted over the room by the shell's shader (pearl_glow.gdshaderinc).
+/// haze over it. Its colours are mottled over the room by the shell's shader (pearl_glow.gdshaderinc).
 /// </summary>
 public static class PearlLight
 {

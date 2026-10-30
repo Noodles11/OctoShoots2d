@@ -18,6 +18,14 @@ public static class FlounderTuning
     public const int Home = 2, Min = 3, Max = 5;
     /// <summary>Its disc (for her shots, her arm and the dots it touches).</summary>
     public const float Radius = 0.45f;
+    /// <summary>
+    /// Where a thing lying under her plane shows on it: this many metres south per metre below (the camera's 60° tilt). Her
+    /// shots fly on her plane, so a Hearthguard's hit shape reaches from its disc up to where it shows (FlounderSeen).
+    /// </summary>
+    public const float ViewShear = 0.577f;
+    /// <summary>Where it lies: on its patch's floor, never deeper than a shelf under her plane.</summary>
+    public static float Bed(LevelMap map, Vector2 at) =>
+        MathF.Max(MathF.Min(map.HeightAt(at), LevelMap.BlockHeight), LevelMap.SwimBand + AbyssReef.ShelfDepth - 0.4f) + 0.06f;
     /// <summary>Its gauge: it fills Fill a second with a dot within Sense (AdventureTuning.FishEat for a dot it eats), drains Drain a second.</summary>
     public const float Sense = 1.2f, Fill = 0.1f, Drain = 0.04f;
     /// <summary>Healthy, it shimmies into the sand every SettleMin–Max seconds.</summary>
@@ -162,7 +170,7 @@ public sealed partial class PlaneWorld
             if (!shot.FromPlayer || shot.Life <= 0f) continue;
             foreach (var f in Flounders)
             {
-                if (!f.Corrupted || shot.Struck == f || !Reaches(shot, f.Position, FlounderTuning.Radius)) continue;
+                if (!f.Corrupted || shot.Struck == f || !ReachesFlounder(shot, f)) continue;
                 float dealt = Ward(f, f.Position, HitDamage(shot));
                 HitFlounder(f, dealt, SafeNormalize(shot.Velocity));
                 if (shot.Pierce) shot.Struck = f;
@@ -176,11 +184,26 @@ public sealed partial class PlaneWorld
         Flounders.RemoveAll(f => f.Gone);
     }
 
+    /// <summary>Where a flounder lying on its bed shows on her plane (south of its place by how far under it lies).</summary>
+    public Vector2 FlounderSeen(PlaneFlounder f) =>
+        f.Position + new Vector2(0f, MathF.Max(LevelMap.SwimBand - FlounderTuning.Bed(Map, f.Home), 0f) * FlounderTuning.ViewShear);
+
+    /// <summary>
+    /// Whether a shot of hers meets a Hearthguard: anywhere from its place on the plane to where it shows lying flat under
+    /// it, so a shot over the fish on the screen strikes it (three discs, no more than a radius apart).
+    /// </summary>
+    bool ReachesFlounder(PlaneShot shot, PlaneFlounder f)
+    {
+        var seen = FlounderSeen(f);
+        return Reaches(shot, seen, FlounderTuning.Radius) || Reaches(shot, Vector2.Lerp(seen, f.Position, 0.5f), FlounderTuning.Radius) || Reaches(shot, f.Position, FlounderTuning.Radius);
+    }
+
     /// <summary>Light on a Hearthguard (her shot, her arm): its meter emptied, it is a flounder again.</summary>
     void HitFlounder(PlaneFlounder f, float light, Vector2 dir)
     {
         bool emptied = light > 0f && f.Corruption.Hit(light);
-        Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, f.Position, dir, light));
+        // (Told where it shows: its burst and its number are seen on the fish.)
+        Events.Add(new PlaneEvent(emptied ? PlaneEventType.MobDefeated : PlaneEventType.MobHit, FlounderSeen(f), dir, light));
         if (emptied) FreeFlounder(f);
     }
 

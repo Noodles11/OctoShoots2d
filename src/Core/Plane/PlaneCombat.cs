@@ -19,15 +19,15 @@ public static class PlaneCombatTuning
 
     /// <summary>
     /// Her shots are light (docs/LIGHT-BUBBLES.md; the rules still call them bubbles): thrown hard at ShotSpeed, light
-    /// has no friction, so it flies on undimmed at full speed to where she aims (the pointer, or as far as the right
-    /// stick is pushed; never nearer than MinReach) or the end of her range, whichever is nearer, and goes out there like
-    /// a match (no hovering, no burst), clearing a little of the ground's corruption where it does. BubbleRange is her
+    /// has no friction, so it flies on undimmed at full speed the way she aims, always to the end of her range (how near
+    /// the pointer is to her does not matter: what is in the way is hit anyway), and goes out there like a match (no
+    /// hovering, no burst), clearing a little of the ground's corruption where it does. BubbleRange is her
     /// range with no pearls: half the screen's height at the 100% camera zoom (the framing shows 25.6 m of the swim
     /// band top to bottom). ShotLife is only a safety net. With Bubble Coral her light lingers instead (see
     /// LingerDrag): it slows to a hover near the end of its range, so later shots catch up and merge with it.
     /// </summary>
     public const float ShotSpeed = 90f;
-    public const float BubbleRange = 12.8f, MinReach = 1.5f, LightSettle = 8f;
+    public const float BubbleRange = 12.8f, LightSettle = 8f;
     /// <summary>
     /// Below this speed a bubble hovers: still drifting and slowing, each bubble for its own time between BubbleHoverMin
     /// and BubbleHoverMax seconds (times her bubble hover stat), then it pops.
@@ -671,7 +671,8 @@ public sealed partial class PlaneWorld
 
     /// <summary>
     /// The active pearl (F): it recharges over its listed time (faster with her recharge stat), and when charged, F uses
-    /// it. Bubble Shield: untouchable for its duration. Whale Song: heals (not at full HP).
+    /// it. Bubble Shield: untouchable for its duration. Whale Song: heals (not at full HP). Tide Pulse: three waves push
+    /// everything loose away from her (PlanePushWave.cs).
     /// </summary>
     void StepActive(in PlaneInput input)
     {
@@ -694,6 +695,9 @@ public sealed partial class PlaneWorld
                 break;
             case ActiveAction.Prism:
                 BeginPrism(spec.Duration);
+                break;
+            case ActiveAction.PushWave:
+                BeginPushWave(spec.Duration, spec.Radius);
                 break;
             case ActiveAction.WhaleSong:
                 if (p.Hp >= Run.MaxHp)
@@ -743,15 +747,8 @@ public sealed partial class PlaneWorld
     float ShotSpeedScale => Run.Loadout.Stats.ShotSpeed / MathF.Max(Tuning.ShotSpeed, 0.01f);
     float RangeScale => Run.Loadout.Stats.Range / MathF.Max(Tuning.Range, 0.01f);
 
-    /// <summary>How far this throw flies: to where she aims (never nearer than MinReach), at most her range.</summary>
-    float ThrowReach
-    {
-        get
-        {
-            float range = PlaneCombatTuning.BubbleRange * RangeScale;
-            return Player.AimReach > 0f ? Math.Clamp(Player.AimReach, PlaneCombatTuning.MinReach, range) : range;
-        }
-    }
+    /// <summary>How far this throw flies: her full range, wherever along her aim the pointer is.</summary>
+    float ThrowReach => PlaneCombatTuning.BubbleRange * RangeScale;
 
     /// <summary>The time to her next throw: her fire rate's, and quicker as Sardine Run's stream spins up.</summary>
     float ShotInterval => PlaneCombatTuning.ShotInterval / FireScale / (1f + (PlaneCombatTuning.MinigunMax - 1f) * Player.Spin);

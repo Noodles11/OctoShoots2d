@@ -27,6 +27,8 @@ public static class PlaneEconomyTuning
     public const float HeartHeal = 12f, HeartReach = 0.6f;
     /// <summary>Shell caches at places: the item cache and secret rooms (inclusive ranges).</summary>
     public const int CacheMin = 6, CacheMax = 9, SecretMin = 8, SecretMax = 12;
+    /// <summary>How often a secret room holds a pearl instead of its shells.</summary>
+    public const float SecretPearl = 0.1f;
     /// <summary>The shop: at most one pearl (offered this often), and always a heart (a health top-up).</summary>
     public const int PearlPrice = 30, HealthPrice = 5;
     public const float HealthAmount = 25f;
@@ -88,12 +90,33 @@ public sealed partial class PlaneWorld
     /// <summary>The stand she was turned away from (too few shells), so she is told once per approach.</summary>
     int _denied = -1;
 
-    /// <summary>Shell caches at the item cache and secret rooms, scattered round each place's middle.</summary>
+    /// <summary>Whether a level's secret room (by its place's index) holds a pearl instead of shells: its own roll.</summary>
+    public static bool SecretHoldsPearl(ulong seed, int depth, int level, int attempt, int poi) =>
+        new Rng(SecretSeed(seed, depth, level, attempt, poi)).NextFloat() < PlaneEconomyTuning.SecretPearl;
+
+    static ulong SecretSeed(ulong seed, int depth, int level, int attempt, int poi) =>
+        seed ^ 0x5EC2E7UL ^ ((ulong)level << 20) ^ ((ulong)depth << 28) ^ ((ulong)attempt << 40) ^ ((ulong)poi << 52);
+
+    /// <summary>
+    /// Shell caches at the item cache and secret rooms, scattered round each place's middle. A secret room now and then
+    /// (SecretPearl) holds a pearl in its middle instead: one she lacks, or another copy of a non-unique one.
+    /// </summary>
     void PlaceShells()
     {
         _drops = new Rng(Map.Seed ^ 0x5E115UL ^ ((ulong)Map.Level << 24) ^ ((ulong)Map.Depth << 32) ^ ((ulong)Map.Attempt << 48));
-        foreach (var poi in Map.Pois)
+        for (int pi = 0; pi < Map.Pois.Count; pi++)
         {
+            var poi = Map.Pois[pi];
+            if (poi.Kind == PoiKind.Secret && SecretHoldsPearl(Map.Seed, Map.Depth, Map.Level, Map.Attempt, pi))
+            {
+                var offer = PlaneRun.PortedPearls.Where(id => Run.CanOffer(id) && Pearls.All(q => q.ItemId != id)).ToList();
+                if (offer.Count > 0)
+                {
+                    var pick = new Rng(SecretSeed(Map.Seed, Map.Depth, Map.Level, Map.Attempt, pi) ^ 0x9E37UL);
+                    Pearls.Add(new PlanePearl { ItemId = Run.Pick(offer, pick), Position = poi.Position });
+                    continue;
+                }
+            }
             (int min, int max) = poi.Kind switch
             {
                 PoiKind.ShellCache => (PlaneEconomyTuning.CacheMin, PlaneEconomyTuning.CacheMax),

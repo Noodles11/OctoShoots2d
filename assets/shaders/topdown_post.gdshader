@@ -76,8 +76,8 @@ uniform int lens_count = 0;
 /// Swells in the water where she set off, turned or dashed (WaterSwells): x, z (world), age 0 → 1, strength; and the
 /// way she was going (x, z; none for a ring) and its reach (a share of 2.6 m; 0 for 1). A faint spreading ring of
 /// refraction at her plane, strongest behind her.
-uniform vec4 swells[6];
-uniform vec4 swell_dirs[6];
+uniform vec4 swells[8];
+uniform vec4 swell_dirs[8];
 uniform int swell_count = 0;
 // Blasts' marks (CameraRig.AddBlur): where a burst of her light went off, a small round smear of the picture on her
 // plane — a zoom blur drawn in toward its middle — that fades: world x, z, age (0 → 1), radius (m).
@@ -127,6 +127,12 @@ float hash12(vec2 p) {
 	return fract((p3.x + p3.y) * p3.z);
 }
 
+float value_noise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
 void fragment() {
 	vec2 uv = SCREEN_UV;
 	float depth = texture(depth_tex, uv).r;
@@ -157,14 +163,23 @@ void fragment() {
 	// Refraction: the picture swims very slightly, more for what lies deeper.
 	vec2 wob = vec2(sin(uv.y * 38.0 + TIME * 1.3 + uv.x * 9.0), cos(uv.x * 31.0 + TIME * 1.1 - uv.y * 7.0));
 	vec2 suv = uv + wob * wobble * (0.0006 + 0.0012 * smoothstep(0.0, 6.0, below));
-	// Her swells: where this pixel's ray crosses her plane, a soft ring spreading from where she pushed off bends the
-	// picture outward a touch and thickens the water a shade — a brief shift in its density, no surface ripple.
+	// Her swells: where this pixel's ray crosses her plane, a ring of moving water spreading from where she pushed off —
+	// the currents' shimmer (CurrentView): the picture wavers, bent by eddies of denser water boiling as they go, and is
+	// shoved outward along the ring; the water thickens a shade where it passes. No surface ripple, no lines.
 	float swell_density = 0.0;
 	if (swell_count > 0) {
 		vec4 vm = INV_PROJECTION_MATRIX * vec4(uv * 2.0 - 1.0, 0.5, 1.0);
 		vec3 ray = normalize((INV_VIEW_MATRIX * vec4(vm.xyz / vm.w, 0.0)).xyz);
 		vec3 cam = INV_VIEW_MATRIX[3].xyz;
 		vec3 sp = cam + ray * ((swim_level + 0.4 - cam.y) / min(ray.y, -1e-3));
+		// The water's eddies (as the currents' own): slow swirls with fine shivers riding them.
+		vec2 q = sp.xz;
+		float big = value_noise(q * 0.42 + vec2(0.0, TIME * 0.22));
+		float ea = value_noise(q * 1.1 + vec2(big * 1.5, TIME * 0.55) + 3.7);
+		float eb = value_noise(q * 0.95 + vec2(-TIME * 0.45, big * 1.5) + 19.1);
+		float fine = value_noise(q * 2.8 + vec2(TIME * 0.9, -TIME * 0.7) + 41.3);
+		vec2 eddy = vec2(ea - 0.5, eb - 0.5) + (fine - 0.5) * vec2(0.55, -0.55);
+		float patch = mix(0.5, 1.0, smoothstep(0.25, 0.7, big));
 		vec2 bend = vec2(0.0);
 		for (int i = 0; i < swell_count; i++) {
 			vec4 s = swells[i];
@@ -172,19 +187,24 @@ void fragment() {
 			float r = length(d);
 			vec2 out_dir = d / max(r, 1e-3);
 			float age = s.z;
-			// Out to about 2.6 m (times its reach, z), quick at first, easing; widening as it goes; fading out.
+			// Out to about 2.6 m (times its reach, z), quick at first (sharper still with a snap, w), easing; widening as
+			// it goes; fading out.
 			float reach = swell_dirs[i].z > 0.0 ? swell_dirs[i].z : 1.0;
-			float front = mix(0.25, 2.6 * reach, 1.0 - (1.0 - age) * (1.0 - age));
+			float snap = swell_dirs[i].w > 0.0 ? swell_dirs[i].w : 2.0;
+			float front = mix(0.25, 2.6 * reach, 1.0 - pow(1.0 - age, snap));
 			float width = (0.35 + 0.55 * age) * sqrt(reach);
-			float band = exp(-pow((r - front) / width, 2.0));
+			// A sharp leading edge, a softer wake behind it.
+			float ahead = r - front;
+			float band = exp(-pow(ahead / (ahead > 0.0 ? width * 0.6 : width * 1.3), 2.0));
 			// Strongest behind her (the water she pushed), still there ahead of her; a ring with no way, even.
 			float behind = dot(swell_dirs[i].xy, swell_dirs[i].xy) > 0.25 ? 0.45 + 0.55 * max(0.0, dot(out_dir, -swell_dirs[i].xy)) : 1.0;
-			float k = s.w * band * behind * (1.0 - age) * (1.0 - age);
-			bend += out_dir * k;
+			float k = s.w * band * behind * patch * (1.0 - age) * (1.0 - age);
+			bend += (out_dir * 0.6 + eddy) * k;
 			swell_density += k;
 		}
-		// Map axes to the screen: east is right, south (+z) is down.
-		suv += bend * 0.004 * wobble;
+		// Metres on her plane to the screen (east is right, south, +z, is down): the framing shows about 25.6 m top to
+		// bottom.
+		suv += bend * 2.5 / 25.6 * vec2(VIEWPORT_SIZE.y / VIEWPORT_SIZE.x, 1.0) * wobble;
 	}
 
 	// Painted, the depths below her are stated as flat layers of water (each a step deeper, hazier), barely blurred.

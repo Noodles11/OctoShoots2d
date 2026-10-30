@@ -12,11 +12,6 @@ public struct PlaneInput
     public bool Dash;
     /// <summary>Unit aim direction on the plane (mouse or arrow keys).</summary>
     public Vector2 Aim;
-    /// <summary>
-    /// How far her light should fly (m): to the pointer, or as far as the right stick is pushed. 0 is all the way (her
-    /// range); nearer than PlaneCombatTuning.MinReach it flies MinReach.
-    /// </summary>
-    public float AimReach;
     /// <summary>Held: shoot along Aim (with Pearl Diver, held charges a pearl and letting go throws it).</summary>
     public bool Fire;
     /// <summary>Pressed: use the active pearl (F).</summary>
@@ -43,8 +38,6 @@ public sealed class PlaneBody
     public float ShotTimer;
     /// <summary>Sardine Run: how far the stream has spun up, 0 (her normal rate) → 1 (MinigunMax times as fast).</summary>
     public float Spin;
-    /// <summary>How far her light should fly (PlaneInput.AimReach; 0 is her full range).</summary>
-    public float AimReach;
     public float HurtTimer;
     /// <summary>Slowed (Queen Clam's royal pearl) while this counts down.</summary>
     public float SlowTimer;
@@ -59,6 +52,8 @@ public sealed class PlaneBody
     public bool WasFiring;
     /// <summary>Bubble Shield: untouchable inside it while this counts down.</summary>
     public float ShieldTimer;
+    /// <summary>Tide Pulse (PlanePushWave.cs): seconds into its waves (−1: none under way), their whole length and the radius they clear.</summary>
+    public float PushTime = -1f, PushLength = 1f, PushRadius;
 
     public bool IsDashing => DashTimer > 0f;
 }
@@ -89,8 +84,14 @@ public enum PlaneEventType { JetStarted, DashStarted, HitWall, Shot, MobHit, Mob
     BossBrood, BossBounceWarn, BossBounce,
     /// <summary>Prism Pearl: her light splits into its three colours; they flow back together.</summary>
     PrismSplit, PrismJoined,
-    /// <summary>A Hearthguard: it shimmies (Size: how long); its needle draws out at her (Direction: its aim; Size: the wind-up), stabs, and strikes her (at the tip).</summary>
-    FlounderShimmy, FlounderWindup, FlounderStrike, FlounderBite }
+    /// <summary>A Hearthguard: it shimmies (Size: how long); its sting draws up at her (Direction: its aim; Size: the wind-up), stabs, and strikes her (at the tip).</summary>
+    FlounderShimmy, FlounderWindup, FlounderStrike, FlounderBite,
+    /// <summary>The adventure: an ink dot cut off from every open vent long enough decays and pops on its own.</summary>
+    DotDecayed,
+    /// <summary>Tide Pulse: one of its waves leaves her (Size: which, 0–2).</summary>
+    PushWave,
+    /// <summary>Her light on the boss's sealed wall while vents stand open: it takes none (at the carving; Size: the vents left).</summary>
+    SealRefused }
 
 /// <summary>What hurt Clementine (the killing blow names what ended a run; saved by number, so Gloomvine stays though nothing deals it now).</summary>
 public enum DamageSource { None, PufferNeedle, PufferSpines, BossPearl, RoyalPearl, BossSnap, BossContact, Murkling, MurkShot, Gloomvine, Blightroot, Blotter, Thumpsquirt, Lashjaw, Curse, Hearthguard }
@@ -176,7 +177,6 @@ public sealed partial class PlaneWorld
         var t = Tuning;
         p.PrevPosition = p.Position;
         if (input.Aim.LengthSquared() > 1e-6f) p.Aim = Vector2.Normalize(input.Aim);
-        p.AimReach = input.AimReach;
 
         Vector2 wish = input.Move;
         float wishLen = wish.Length();
@@ -281,6 +281,7 @@ public sealed partial class PlaneWorld
         StepCurse();
         StepEconomy();
         StepExperience();
+        StepPushWave();
         // Murklings made during the step (a prime's pieces) join the others now, never while a loop walks them.
         Murklings.AddRange(_madeLater);
         _madeLater.Clear();

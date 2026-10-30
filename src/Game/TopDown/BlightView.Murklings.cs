@@ -12,13 +12,8 @@ namespace OctoShoots.Game.TopDown;
 /// surface tension) lightly damped, so it rings; each is pulled toward its neighbours (so a dent spreads and smooths);
 /// and the whole is kept at its volume (what one lobe takes in, the rest push out). Its inertia shapes it: when it
 /// speeds up the ink lags, its trailing side bulging and its leading side flattening; when it stops, it sloshes on;
-/// moving fast, it draws out along its way. Her hit dents it where the light struck, and it rebounds past round.
-/// </para>
-/// <para>
-/// Each hit tears a hole there (the stronger the shot, the wider: about a quarter of a radian for a plain shot, up to
-/// about 0.7 for one that takes all of it), ragged, its lip glowing with the ember inside, and rips chunks of it away (wobbling
-/// blobs of ink that drag to a stop, sink and break into drops). The holes close as its corruption grows back: they hold
-/// while the meter waits (MurkDelay), then shrink as it refills, gone when it is full again.
+/// moving fast, it draws out along its way. Her hit dents it where the light struck (the deeper, the more of its meter
+/// the hit took), and it rebounds past round.
 /// </para>
 /// <para>
 /// Its throw: drawing the slingshot back, its body sloshes back with the strain; at the snap the front is flung out and
@@ -34,10 +29,6 @@ public partial class BlightView
         public System.Numerics.Vector2 LastVelocity;
         public bool Seen, WasWinding;
         public float LastThrowAge = 10f;
-        /// <summary>Holes torn in it: where (on it), how strong the hit was (its share of the meter).</summary>
-        public readonly List<(Vector3 Dir, float Strength)> Holes = new();
-        /// <summary>The meter's emptiness when the holes were last torn (they close as it falls back to 0).</summary>
-        public float OpenAt;
         /// <summary>A second material drawing it over her (a Blightroot's head: murkling_over), kept in step with Material.</summary>
         public ShaderMaterial? Over;
         public MurkBody(ShaderMaterial material) { Material = material; }
@@ -46,9 +37,8 @@ public partial class BlightView
     internal const int Lobes = 12;
     /// <summary>Its surface tension (spring), its damping (low: it rings), its neighbours' pull, how hard its inertia shapes it, how far it may stand out.</summary>
     const float Tension = 170f, Damping = 5f, Coupling = 40f, Inertia = 0.03f, LobeMax = 0.45f;
-    /// <summary>A hit: how deep it dents (per its share of the meter), and the holes' widths (radians: least, and per √share).</summary>
-    const float HitDent = 8f, HoleLeast = 0.12f, HoleWide = 0.6f;
-    const int MaxHoles = 6;
+    /// <summary>A hit: how deep it dents (per its share of the meter).</summary>
+    const float HitDent = 8f;
 
     internal static readonly Vector3[] LobeDirs =
     {
@@ -86,7 +76,7 @@ public partial class BlightView
         return b;
     }
 
-    /// <summary>One frame of a murkling's liquid body: its inertia, its throw's strain and snap, its springs, its holes closing.</summary>
+    /// <summary>One frame of a murkling's liquid body: its inertia, its throw's strain and snap, its springs.</summary>
     void StepBody(Murkling m, MurkBody b, float dt)
     {
         // The throw's drawing back: it sloshes away from its aim, then is flung forward at the snap and recoils.
@@ -94,15 +84,14 @@ public partial class BlightView
         bool winding = m.Windup > BlightTuning.SnapSeconds;
         bool snapped = m.ThrowAge < b.LastThrowAge && m.ThrowAge < 0.1f;
         b.LastThrowAge = m.ThrowAge;
-        SoftStep(b, m.Velocity, aim, winding, snapped, m.Corruption, m.Seed, dt);
+        SoftStep(b, m.Velocity, aim, winding, snapped, m.Seed, dt);
     }
 
     /// <summary>
     /// One frame of a liquid body (a murkling's, a Blightroot's head): its inertia, any strain (drawn back from aim) and
-    /// snap, its springs and volume, its holes closing as meter refills; sent to its material. stir: how restless the
-    /// water round it keeps it.
+    /// snap, its springs and volume; sent to its material. stir: how restless the water round it keeps it.
     /// </summary>
-    void SoftStep(MurkBody b, System.Numerics.Vector2 velocity, Vector3 aim, bool winding, bool snapped, CorruptionMeter meter, float seed, float dt, float stirAmount = 0.06f)
+    void SoftStep(MurkBody b, System.Numerics.Vector2 velocity, Vector3 aim, bool winding, bool snapped, float seed, float dt, float stirAmount = 0.06f)
     {
         b.Seen = true;
         dt = Mathf.Min(dt, 1f / 30f);
@@ -150,35 +139,10 @@ public partial class BlightView
         for (int i = 0; i < Lobes; i++) lobes[i] = b.R[i];
         b.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lobes"), lobes);
         b.Over?.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lobes"), lobes);
-
-        // Its holes close as its corruption grows back: they hold while it waits, shrink as it refills, gone when full.
-        float empty = meter.Empty ? 1f : 1f - meter.Fraction;
-        if (empty <= 0.001f)
-        {
-            b.Holes.Clear();
-            b.OpenAt = 0f;
-        }
-        float open = b.OpenAt > 1e-4f ? Mathf.Clamp(empty / b.OpenAt, 0f, 1f) : 0f;
-        var holes = new Vector4[MaxHoles];
-        for (int i = 0; i < b.Holes.Count && i < MaxHoles; i++)
-        {
-            var (dir, strength) = b.Holes[i];
-            float width = (HoleLeast + HoleWide * Mathf.Sqrt(strength)) * Mathf.Sqrt(open);
-            holes[i] = new Vector4(dir.X, dir.Y, dir.Z, width);
-        }
-        b.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("holes"), holes);
-        b.Over?.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("holes"), holes);
     }
 
-    /// <summary>
-    /// Her light struck a murkling (from InkSplash): a dent where it struck, ringing back; a hole torn there, as wide
-    /// as the hit was strong; chunks of its ink ripped away.
-    /// </summary>
-    void TearMurkling(Murkling m, Vector3 back, float hitShare, Vector3 at, float radius) =>
-        Tear(BodyOf(m), m.Corruption, back, hitShare, at, radius, m.Seed);
-
-    /// <summary>A liquid body struck (a murkling, a Blightroot's head): dented, torn open, chunks of it ripped away.</summary>
-    void Tear(MurkBody b, CorruptionMeter meter, Vector3 back, float hitShare, Vector3 at, float radius, float seed)
+    /// <summary>A liquid body struck (a murkling, a Blightroot's head; from Struck): dented where it struck, ringing back.</summary>
+    void Dent(MurkBody b, Vector3 back, float hitShare)
     {
         // Where it struck, on the body (the side facing the shot, a little up toward the camera).
         var dir = (back + Vector3.Up * 0.35f).Normalized();
@@ -187,28 +151,7 @@ public partial class BlightView
             float k = Mathf.Max(0f, LobeDirs[i].Dot(dir));
             b.V[i] -= HitDent * (0.5f + hitShare * 2f) * k * k;
         }
-        // The hole: a new one, or the nearest widened when it is full of them.
-        if (b.Holes.Count < MaxHoles) b.Holes.Add((Jitter(dir, 0.25f), hitShare));
-        else
-        {
-            int best = 0;
-            for (int i = 1; i < b.Holes.Count; i++)
-                if (b.Holes[i].Dir.Dot(dir) > b.Holes[best].Dir.Dot(dir)) best = i;
-            b.Holes[best] = (b.Holes[best].Dir, Mathf.Min(1f, b.Holes[best].Strength + hitShare));
-        }
-        b.OpenAt = Mathf.Max(b.OpenAt, meter.Empty ? 1f : 1f - meter.Fraction);
-        // Chunks ripped out of it: blobs of its ink flung off the struck side.
-        int chunks = 1 + (int)(hitShare * 5f);
-        for (int c = 0; c < chunks; c++)
-        {
-            var side = new Vector3(-back.Z, 0f, back.X);
-            var v = back * _droplets.RandRange(2f, 3.8f) + side * _droplets.RandRange(-1.8f, 1.8f) + Vector3.Up * _droplets.RandRange(0.5f, 1.6f);
-            AddChunk(at + back * radius * 0.8f, v, radius * _droplets.RandRange(0.16f, 0.26f) * (0.8f + hitShare), seed + c);
-        }
     }
-
-    Vector3 Jitter(Vector3 d, float amount) =>
-        (d + new Vector3(_droplets.RandRange(-amount, amount), _droplets.RandRange(-amount, amount), _droplets.RandRange(-amount, amount))).Normalized();
 
     // ───────────────────────── ripped chunks ─────────────────────────
 

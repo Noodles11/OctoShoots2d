@@ -11,8 +11,9 @@ namespace OctoShoots.Game.TopDown;
 /// shell of their own — the same silver nautilus that lies in the reef (NautilusShell), still, its coil to the eye. Each shell she
 /// picks up flies itself from where she took it to the counter — the very shell, turned as it lay, shrinking and righting
 /// itself as it goes, a wisp of light behind it on a slight arc — and counts in there with a pulse, so a pickup is never
-/// missed. The shells are drawn in 3D over the HUD's own drawing (a transparent view of their own). A pearl's name
-/// and tagline show for a moment when she takes it. Over the shaft, a prompt: Shift to dive, or why she cannot yet.
+/// missed. The shells are drawn in 3D over the HUD's own drawing (a transparent view of their own). (The pearl she is
+/// absorbing shows on its own card, PearlBanner.) Over the shaft, a prompt: the dive's key (or button) to dive, or why
+/// she cannot yet.
 /// The top of the screen stays clear at rest: a level's title shows there for a moment as she arrives (ShowTitle), the
 /// boss's bar while its fight runs, and messages (<see cref="Say"/>) as a banner that slides down from the top edge,
 /// floats there (under the title or the boss's bar when one shows) for a while, then eases away up; a queued one
@@ -406,10 +407,11 @@ public partial class HudView : Control
             _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), C(0));
             _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), C(1));
             _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), C(2));
-            _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)look.Pattern);
+            _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("icon"), (int)look.Icon);
         }
         _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("ready"), _active is not null && _charge >= 1f ? 1f : 0f);
         _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("flash"), _used);
+        _bellLook.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("points"), _xpFull ? 1f : 0f);
     }
 
     /// <summary>How long a frayed piece of health's arm takes to drift off and fade.</summary>
@@ -653,7 +655,8 @@ public partial class HudView : Control
         {
             float a = _promptShown;
             const int fs = 18;
-            string key = "SHIFT";
+            // The key cap: whatever dive is bound to on the device in use (RB on a controller, SHIFT on the keyboard…).
+            string key = OctoShoots.Game.Controls.InputSetup.Hint(OctoShoots.Game.Controls.InputSetup.Dive);
             var ks = font.GetStringSize(key, HorizontalAlignment.Left, -1, 14);
             var ws = font.GetStringSize(_prompt, HorizontalAlignment.Left, -1, fs);
             float w = (_promptReady ? ks.X + 22f : 0f) + ws.X + 28f;

@@ -67,7 +67,7 @@ public class PlanePearlEffectTests
             Assert.True(Catalog.Value.Contains(id), id);
             var item = Catalog.Value[id];
             if (item.Kind == ItemKind.Active)
-                Assert.Contains(item.Active!.Action, new[] { ActiveAction.BubbleShield, ActiveAction.WhaleSong, ActiveAction.Prism });
+                Assert.Contains(item.Active!.Action, new[] { ActiveAction.BubbleShield, ActiveAction.WhaleSong, ActiveAction.Prism, ActiveAction.PushWave });
             else
                 Assert.True(item.Shot is not null || item.Stats.Count > 0 || item.Flags.Count > 0, id);
         }

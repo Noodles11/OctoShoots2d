@@ -46,12 +46,12 @@ public class PlaneSurgeTests
         return mob;
     }
 
-    static void Hold(PlaneWorld w, Vector2 aim, float seconds, float reach = 0f)
+    static void Hold(PlaneWorld w, Vector2 aim, float seconds)
     {
         for (int i = 0; i < (int)(seconds * PlaneWorld.TickRate); i++)
         {
             w.Player.Hp = 100f;
-            w.Step(new PlaneInput { Aim = aim, AimReach = reach, Fire = true });
+            w.Step(new PlaneInput { Aim = aim, Fire = true });
         }
     }
 
@@ -60,11 +60,11 @@ public class PlaneSurgeTests
     {
         var w = World();
         var aim = OpenAim(w);
-        Hold(w, aim, 0.5f, reach: 7f);
+        Hold(w, aim, 0.5f);
         Assert.Empty(w.Shots);
         var surge = Assert.IsType<PlaneSurge>(w.LightSurge);
         var ray = Assert.Single(surge.Rays);
-        Assert.InRange(ray.Length, 6.4f, 7.2f);
+        Assert.InRange(ray.Length, PlaneCombatTuning.BubbleRange - 0.6f, PlaneCombatTuning.BubbleRange + 0.2f);
         w.Step(new PlaneInput { Aim = aim });
         Assert.Null(w.LightSurge);
     }
@@ -164,14 +164,15 @@ public class PlaneSurgeTests
     public void BoomerangShrimpLoopsItOutToItsReachAndBackToHer()
     {
         var w = World("boomerang_shrimp");
-        // Somewhere the whole loop runs through open water (out 8 m, its widest 22% of that either side, and a margin).
+        // Somewhere the whole loop runs through open water (out her range, its widest 22% of that either side, and a margin).
         bool Free(Vector2 q, Vector2 d)
         {
             var side = new Vector2(-d.Y, d.X);
             for (int i = 0; i <= 40; i++)
             {
                 float t = i / 40f;
-                var p = q + d * (8.6f * MathF.Sin(MathF.PI * t)) + side * (8.6f * SurgeTuning.LoopWidth * MathF.Sin(MathF.Tau * t));
+                const float reach = PlaneCombatTuning.BubbleRange + 0.6f;
+                var p = q + d * (reach * MathF.Sin(MathF.PI * t)) + side * (reach * SurgeTuning.LoopWidth * MathF.Sin(MathF.Tau * t));
                 if (!w.Map.IsOpen(p) || !w.Map.IsOpen(p + side * 0.6f) || !w.Map.IsOpen(p - side * 0.6f)) return false;
             }
             return true;
@@ -180,16 +181,16 @@ public class PlaneSurgeTests
             .SelectMany(q => Enumerable.Range(0, 8).Select(k => (q, new Vector2(MathF.Cos(k * MathF.Tau / 8f), MathF.Sin(k * MathF.Tau / 8f)))))
             .First(t => Free(t.Item1, t.Item2));
         w.Player.Position = w.Player.PrevPosition = spot - aim * (w.Radius + 0.1f);
-        Hold(w, aim, 0.1f, reach: 8f);
+        Hold(w, aim, 0.1f);
         var ray = Assert.Single(w.LightSurge!.Rays);
         Assert.True(ray.Loop);
         Assert.False(ray.Blocked);
         var start = ray.Points[0];
         float far = ray.Points.Max(q => Vector2.Dot(q - start, aim));
-        Assert.InRange(far, 7.5f, 8.2f);
+        Assert.InRange(far, PlaneCombatTuning.BubbleRange - 0.5f, PlaneCombatTuning.BubbleRange + 0.2f);
         Assert.True(ray.Points.Max(q => MathF.Abs(Vector2.Dot(q - start, new Vector2(-aim.Y, aim.X)))) > 1f, "a loop, not a line");
         Assert.True(Vector2.Distance(ray.End, start) < 0.5f, "it comes back to her");
-        Assert.InRange(Vector2.Dot(ray.Tip - start, aim), 7.5f, 8.2f);
+        Assert.InRange(Vector2.Dot(ray.Tip - start, aim), PlaneCombatTuning.BubbleRange - 0.5f, PlaneCombatTuning.BubbleRange + 0.2f);
     }
 
     [Fact]

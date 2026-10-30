@@ -26,11 +26,44 @@ public class PlaneEconomyTests
         int expectedMin = w.Map.Pois.Sum(p => p.Kind switch
         {
             PoiKind.ShellCache => PlaneEconomyTuning.CacheMin,
-            PoiKind.Secret => PlaneEconomyTuning.SecretMin,
+            // (Unless it holds a pearl instead.)
+            PoiKind.Secret => w.Pearls.Any(q => q.Position == p.Position) ? 0 : PlaneEconomyTuning.SecretMin,
             _ => 0,
         });
         Assert.True(w.Shells.Count >= expectedMin, $"{w.Shells.Count} shells");
         Assert.All(w.Shells, s => Assert.True(w.Map.IsOpen(s.Position)));
+    }
+
+    [Fact]
+    public void A_secret_room_now_and_then_holds_a_pearl_instead_of_its_shells()
+    {
+        // The roll: about one secret room in ten.
+        int pearls = 0;
+        for (int i = 0; i < 4000; i++)
+            if (PlaneWorld.SecretHoldsPearl((ulong)i * 7919UL + 13UL, 1 + i % 6, 1 + i % 5, 0, i % 9)) pearls++;
+        Assert.InRange(pearls / 4000f, PlaneEconomyTuning.SecretPearl - 0.02f, PlaneEconomyTuning.SecretPearl + 0.02f);
+
+        // Where it does, the secret room holds one pearl in its middle and no shells; else its shells.
+        int checkedRooms = 0;
+        foreach (var id in TestLevels.All(p => p.Secrets > 0).Take(8))
+        {
+            var w = new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()));
+            for (int pi = 0; pi < w.Map.Pois.Count; pi++)
+            {
+                var poi = w.Map.Pois[pi];
+                if (poi.Kind != PoiKind.Secret) continue;
+                checkedRooms++;
+                bool pearl = PlaneWorld.SecretHoldsPearl(w.Map.Seed, w.Map.Depth, w.Map.Level, w.Map.Attempt, pi);
+                int shells = w.Shells.Count(s => Vector2.Distance(s.Position, poi.Position) < poi.Radius);
+                if (pearl)
+                {
+                    Assert.Contains(w.Pearls, q => q.Position == poi.Position);
+                    Assert.Equal(0, shells);
+                }
+                else Assert.True(shells >= PlaneEconomyTuning.SecretMin, $"{shells} shells");
+            }
+        }
+        Assert.True(checkedRooms > 0);
     }
 
     [Fact]

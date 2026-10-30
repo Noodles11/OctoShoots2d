@@ -518,6 +518,7 @@ public partial class TitleMain : Node3D
         if (pushed)
         {
             _byPad = true;
+            InputSetup.UsingPad = true;
             var her = HerOnPage();
             var dir = stick.Normalized();
             _padCross.Position = her + dir * PadCrossOut - _padCross.Size * 0.5f;
@@ -738,10 +739,15 @@ public partial class TitleMain : Node3D
         // The mouse moving: she follows it; the controller or the keys: she follows the item in focus.
         if (e is InputEventMouseMotion) _byPad = false;
         else if (e is InputEventJoypadButton or InputEventKey || e is InputEventJoypadMotion m && Mathf.Abs(m.AxisValue) > 0.3f) _byPad = true;
+        // The key hints (a card's close button, the game's prompts after) follow the device in use.
+        if (e is InputEventJoypadButton || e is InputEventJoypadMotion jm && Mathf.Abs(jm.AxisValue) > 0.3f) InputSetup.UsingPad = true;
+        else if (e is InputEventKey or InputEventMouseButton || e is InputEventMouseMotion mm && mm.Relative.LengthSquared() >= 9f) InputSetup.UsingPad = false;
     }
 
     public override void _UnhandledInput(InputEvent e)
     {
+        // (Skipping straight to a run, the title's bindings were never set up.)
+        if (!InputMap.HasAction(InputSetup.MenuBack)) return;
         // B on a controller goes back like Esc: closes a card or the seed box.
         bool padBack = e is (InputEventJoypadButton or InputEventJoypadMotion) && e.IsActionPressed(InputSetup.MenuBack);
         if (e is not InputEventKey { Pressed: true, Echo: false } key)

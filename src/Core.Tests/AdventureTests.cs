@@ -275,7 +275,8 @@ public class AdventureTests
         for (int dy = -1; dy <= 1; dy++)
         for (int dx = -1; dx <= 1; dx++)
             w.DebugDot(at + new Vector2(dx, dy) * AdventureTuning.Spacing);
-        Run(w, 25 * PlaneWorld.TickRate);
+        // (Short of the decay: a cut-off dot lasts at least DecayMin.)
+        Run(w, 9 * PlaneWorld.TickRate);
         Assert.Equal(9, w.Dots!.Count);
 
         // A vent's patch grows while it pours; sealed, what it left behind stops.
@@ -287,8 +288,40 @@ public class AdventureTests
         w.DebugSealVent(w.Vents[0]);
         Run(w, PlaneWorld.TickRate);
         int left = w.Dots!.Count;
-        Run(w, 25 * PlaneWorld.TickRate);
+        Run(w, 8 * PlaneWorld.TickRate);
         Assert.Equal(left, w.Dots.Count);
+    }
+
+    [Fact]
+    public void Ink_cut_off_from_every_vent_decays_dot_by_dot_after_a_while_longer_the_higher_the_menace()
+    {
+        Assert.Equal(AdventureTuning.DecayMin, AdventureTuning.DecayAfter(0f));
+        Assert.True(AdventureTuning.DecayAfter(1f) > AdventureTuning.DecayAfter(0.2f));
+
+        var w = Bare();
+        var at = OpenSpot(w);
+        int placed = 0;
+        for (int dy = -2; dy <= 2; dy++)
+        for (int dx = -2; dx <= 2; dx++)
+            if (w.DebugDot(at + new Vector2(dx, dy) * AdventureTuning.Spacing)) placed++;
+        Assert.True(placed >= 9);
+        float after = AdventureTuning.DecayAfter(w.Menace);
+        // None goes before its time.
+        Run(w, (int)((after - 0.3f) * PlaneWorld.TickRate));
+        Assert.Equal(placed, w.Dots!.Count);
+        // Then they pop on their own, each a popping event, not all on the same step, all gone within the jitter.
+        var steps = new System.Collections.Generic.HashSet<long>();
+        int popped = 0;
+        for (int i = 0; i < (int)((AdventureTuning.DecayJitter + 0.6f) * PlaneWorld.TickRate); i++)
+        {
+            w.Step(default);
+            int n = w.Events.Count(e => e.Type == PlaneEventType.DotDecayed);
+            if (n > 0) steps.Add(w.Tick);
+            popped += n;
+        }
+        Assert.Equal(placed, popped);
+        Assert.Equal(0, w.Dots.Count);
+        Assert.True(steps.Count > 1, "every dot popped on the same step");
     }
 
     [Fact]
@@ -534,6 +567,71 @@ public class AdventureTests
             Assert.Contains(map.Shelves, s => Vector2.Distance(s, f.Home) < 1.5f);
             Assert.DoesNotContain(w.Anemones, a => Vector2.Distance(a.Position, f.Home) < 6f);
         });
+    }
+
+    [Fact]
+    public void Firefly_squids_surge_held_on_a_vents_mouth_seals_it()
+    {
+        var run = new PlaneRun(Catalog.Value, new Tuning());
+        run.Add("firefly_squid");
+        var w = new PlaneWorld(TestLevels.Get(TestLevels.Find(p => p.Id.Depth == 2 && !p.HasBoss)), new Tuning(), run, Adventure);
+        w.Inkwardens.Clear();
+        var v = w.Vents[0];
+        w.Player.Position = w.Player.PrevPosition = v.Position;
+        var aim = Vector2.Normalize(v.Wall - v.Position);
+        for (int i = 0; i < 12 * PlaneWorld.TickRate && !v.Sealed; i++)
+        {
+            w.Player.Position = w.Player.PrevPosition = v.Position;
+            w.Player.Hp = 100f;
+            w.Step(new PlaneInput { Aim = aim, Fire = true });
+        }
+        Assert.True(v.Sealed);
+    }
+
+    [Fact]
+    public void The_boss_wall_takes_no_light_until_every_vent_is_sealed_and_no_vent_lies_behind_it()
+    {
+        int walls = 0;
+        foreach (var id in TestLevels.All(p => p.HasBoss && p.Id.Depth <= 4))
+        {
+            var w = new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Adventure);
+            var seal = w.Seals.FirstOrDefault(s => s.Kind == SealKind.Boss);
+            if (seal is null || w.Vents.Count == 0) continue;
+            walls++;
+            var rocks = w.Seals.Where(s => s.Kind == SealKind.Boss).Select(s => s.Rock).ToList();
+            var reach = LevelValidator.Distances(w.Map, w.Map.Start.Position, blocked: q => rocks.Exists(r => r.Contains(q)));
+            Assert.All(w.Vents, v => Assert.False(float.IsPositiveInfinity(LevelValidator.DistanceAt(reach, v.Position))));
+            for (int k = 0; k < 60; k++) w.DebugStrikeSeal(seal);
+            Assert.False(seal.Open);
+            Assert.Equal(0, seal.Hits);
+            Assert.Contains(w.Events, e => e.Type == PlaneEventType.SealRefused);
+            foreach (var v in w.Vents) w.DebugSealVent(v);
+            for (int k = 0; k < 60 && !seal.Open; k++) w.DebugStrikeSeal(seal);
+            Assert.True(seal.Open);
+        }
+        Assert.True(walls > 0, "no boss level with a wall and vents");
+    }
+
+    [Fact]
+    public void A_shot_over_a_hearthguard_lying_flat_strikes_it_where_it_shows()
+    {
+        var w = Bare();
+        var f = w.Flounders.OrderByDescending(o => w.FlounderSeen(o).Y - o.Position.Y).First();
+        w.Flounders.RemoveAll(o => o != f);
+        f.Corrupted = true;
+        var seen = w.FlounderSeen(f);
+        Assert.True(Vector2.Distance(seen, f.Position) > FlounderTuning.Radius + PlaneCombatTuning.ShotRadius, "it shows clear of its disc");
+        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
+        void Shoot(Vector2 at) => w.Shots.Add(new PlaneShot { FromPlayer = true, Position = at, Line = at, Velocity = Vector2.UnitX * 0.1f, Damage = 1f, Life = 1f });
+        // South of where it shows: nothing.
+        Shoot(seen + new Vector2(0f, 1.5f));
+        Run(w, 2);
+        Assert.Equal(f.Corruption.Max, f.Corruption.Value);
+        w.Shots.Clear();
+        // Over the fish on the screen: struck.
+        Shoot(seen);
+        Run(w, 2);
+        Assert.True(f.Corruption.Value < f.Corruption.Max);
     }
 
     [Fact]

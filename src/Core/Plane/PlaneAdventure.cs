@@ -23,6 +23,15 @@ public static class AdventureTuning
     public const float PopBite = 1.6f, BurstBite = 2f;
     /// <summary>A corrupted creature leaves a dot every TrailEvery metres it swims (into an empty cell).</summary>
     public const float TrailEvery = 2.5f;
+    /// <summary>
+    /// A dot cut off from every open vent (its patch cleared through, or its vent sealed; or a trail's, never joined to
+    /// one) decays: it pops on its own after DecayMin seconds (+ DecayPerMenace × Menace), and up to DecayJitter more,
+    /// its own share of it, so a patch goes out dot by dot rather than all at once. Joined to a vent again, it starts over.
+    /// </summary>
+    public const float DecayMin = 10f, DecayPerMenace = 20f, DecayJitter = 2f;
+
+    /// <summary>How long a dot cut off from every vent lasts at this Menace (its own jitter not counted).</summary>
+    public static float DecayAfter(float menace) => DecayMin + DecayPerMenace * menace;
 
     /// <summary>
     /// The vents: VentsMin–VentsMax a level on the walls' faces, VentSpacing apart and VentFromStart from her start. Open,
@@ -111,6 +120,18 @@ public sealed class InkDots
     public readonly bool[] Fed = new bool[N * N];
     /// <summary>A fed dot's steps from the nearest open vent's mouth, dot to dot (the view's brackets hop outward along them).</summary>
     public readonly int[] Hops = new int[N * N];
+    /// <summary>Seconds each dot has been cut off from every open vent (0 while fed).</summary>
+    public readonly float[] Adrift = new float[N * N];
+
+    /// <summary>A dot's own share of the decay's jitter (0..1), the same for its cell every time.</summary>
+    public static float DecayShare(int i)
+    {
+        uint h = unchecked((uint)i * 2654435761u);
+        h ^= h >> 15;
+        h = unchecked(h * 2246822519u);
+        h ^= h >> 13;
+        return (h & 0xFFFFFF) / 16777216f;
+    }
     readonly Queue<int> _walk = new();
 
     /// <summary>
@@ -191,6 +212,7 @@ public sealed class InkDots
     {
         if (i < 0 || !Open[i] || Ink[i] > 0f || Live.Count >= AdventureTuning.MaxDots) return false;
         Ink[i] = 1f;
+        Adrift[i] = 0f;
         _slot[i] = Live.Count;
         Live.Add(i);
         return true;
@@ -330,7 +352,9 @@ public sealed partial class PlaneWorld
 
     void PlaceVents()
     {
-        var reach = LevelValidator.Distances(Map, Map.Start.Position);
+        // Where she can swim with the boss's walls shut: they wait for every vent, so none may lie behind them.
+        var bossWalls = _rocks.Where(r => r.Kind == SealKind.Boss).ToList();
+        var reach = LevelValidator.Distances(Map, Map.Start.Position, blocked: q => bossWalls.Exists(r => r.Contains(q)));
         var safes = SafePlaces().ToList();
         var candidates = new List<Vector2>();
         foreach (var c in Map.Corridors.Where(c => c.Kind is CorridorKind.Main or CorridorKind.Side))
@@ -420,6 +444,7 @@ public sealed partial class PlaneWorld
         if (Dots is not { } dots) return;
         StepVents(dots);
         StepSpread(dots);
+        StepDecay(dots);
         StepTrails(dots);
         StepGauges(dots);
         StepFlounders(dots);
@@ -527,6 +552,26 @@ public sealed partial class PlaneWorld
                 if (j >= 0 && dots.Ink[j] <= 0f && !_rocks.Any(r => r.Contains(InkDots.Centre(j)))) free[n++] = j;
             }
             if (n > 0) dots.Add(free[_inkRng.Int(n)]);
+        }
+    }
+
+    /// <summary>Dots cut off from every open vent decay: each pops on its own once it has been adrift long enough.</summary>
+    void StepDecay(InkDots dots)
+    {
+        float after = AdventureTuning.DecayAfter(Menace);
+        // Backwards: a removed dot's place is taken by the last, already seen.
+        for (int k = dots.Live.Count - 1; k >= 0; k--)
+        {
+            int i = dots.Live[k];
+            if (dots.Fed[i])
+            {
+                dots.Adrift[i] = 0f;
+                continue;
+            }
+            dots.Adrift[i] += Dt;
+            if (dots.Adrift[i] < after + AdventureTuning.DecayJitter * InkDots.DecayShare(i)) continue;
+            dots.Remove(i);
+            Events.Add(new PlaneEvent(PlaneEventType.DotDecayed, InkDots.Centre(i), Vector2.Zero));
         }
     }
 
@@ -691,7 +736,10 @@ public sealed partial class PlaneWorld
         var dir = SafeNormalize(to);
         bool sees = d < AdventureTuning.SpikedSense;
         Vector2 wish = Wobble(m, 0.3f);
-        if (sees)
+        if (sees && !NavLine(m.Position, p.Position))
+            // Rock between: round it toward her, to where it can see her again.
+            wish += WayToHer(m.Position);
+        else if (sees)
         {
             float keep = d > AdventureTuning.KeepMax ? 1f : d < AdventureTuning.KeepMin ? -1f : 0f;
             float spin = m.Seed % 2f < 1f ? 1f : -1f;
@@ -723,7 +771,7 @@ public sealed partial class PlaneWorld
         float speed = Tuning.PlaneCruiseSpeed * AdventureTuning.TadpoleSpeed;
         float d = Vector2.Distance(m.Position, p.Position);
         bool chase = d < AdventureTuning.TadpoleSense;
-        Vector2 wish = (chase ? SafeNormalize(p.Position - m.Position) * speed : Vector2.Zero) + Wobble(m, chase ? 0.5f : 0.6f);
+        Vector2 wish = (chase ? WayToHer(m.Position) * speed : Vector2.Zero) + Wobble(m, chase ? 0.5f : 0.6f);
         if (wish.Length() > speed) wish = Vector2.Normalize(wish) * speed;
         m.Target = chase ? p.Position : m.Position;
         m.Velocity = MoveToward(m.Velocity, wish, 14f * Dt);
@@ -771,7 +819,8 @@ public sealed partial class PlaneWorld
             float a = MathF.Tau * k / n + spin * AdventureTuning.ShoalOrbit * (1f + 0.25f * layer) * Time;
             float r = Radius + AdventureTuning.ShoalRing + AdventureTuning.ShoalLayer * layer;
             var slot = p.Position + new Vector2(MathF.Cos(a), MathF.Sin(a)) * r;
-            wish = (slot - m.Position) * 8f;
+            // (Rock between it and her: round the rock to her first.)
+            wish = NavLine(m.Position, p.Position) ? (slot - m.Position) * 8f : WayToHer(m.Position) * AdventureTuning.ShoalSpeed;
             m.Target = p.Position;
         }
         else

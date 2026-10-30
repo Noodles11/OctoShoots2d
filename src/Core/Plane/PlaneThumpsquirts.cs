@@ -284,7 +284,8 @@ public sealed partial class PlaneWorld
     void RollAfterHer(Thumpsquirt t, CorruptionField field)
     {
         var p = Player;
-        var want = SafeNormalize(p.Position - t.Position);
+        // Round the rock to her, not into it.
+        var want = WayToHer(t.Position);
         if (want != Vector2.Zero)
         {
             float cross = t.Heading.X * want.Y - t.Heading.Y * want.X;

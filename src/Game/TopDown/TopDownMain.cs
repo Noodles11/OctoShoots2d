@@ -23,8 +23,8 @@ namespace OctoShoots.Game.TopDown;
 /// screen (RunLaunch); run directly with verification flags, it starts a run on its own and saves nothing.
 /// WASD swims (north is up), Space dashes, Shift dives (InputSetup), the mouse aims, F1 opens the debug menu (any
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
-/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|arch-near|cave|exit|hole|kelp|shop|cache|cache-near|treasure|treasure-out|clam-pearl|ambush|mob|boss|spring|spring-in,
-/// --autopilot, --dive (dives whenever it can), --calm (no creatures), --fire, --pearls=, --hp=, --luck=, --boss-hp=, --paused, --map, --f3, --no-focus, --dbg-nofog (no floor fog),
+/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|arch-near|cave|exit|hole|kelp|shop|shop-out|cache|cache-near|secret|secret-in|treasure|treasure-out|clam-pearl|ambush|mob|boss|spring|spring-in,
+/// --autopilot, --dive (dives whenever it can), --dbg-pad (on the controller from the start), --calm (no creatures), --fire, --pearls=, --hp=, --luck=, --boss-hp=, --paused, --map, --f3, --no-focus, --dbg-nofog (no floor fog),
 /// --capture=dir --frames=a,b, --dbg-say=text (a message banner, a second in), --at=gate (swims into the boss arena through its
 /// opened way in), --dbg-free=seconds (the boss freed that long after it lands), --dbg-steer=x,y (she swims that way;
 /// --dbg-steer-fight: once the boss fights), --look=N (an art direction under study for the reef, docs/ART-LOOKS.md).
@@ -43,6 +43,7 @@ public partial class TopDownMain : Node3D
     /// <summary>Achievements: their data, what earns them on this run, and the banner that announces them (§8).</summary>
     AchievementCatalog? _achievementData;
     PlaneAchievements _achievements = null!;
+    PearlBanner _pearlBanner = null!;
     AchievementBanner _achievementBanner = null!;
     string? _debugAward;
     string? _debugSay;
@@ -71,12 +72,10 @@ public partial class TopDownMain : Node3D
     /// still moves in place) while the camera closes in on her at the screen's left; the drawer slides in; a point
     /// chosen, it slides away and the camera eases back; any key plays on.
     /// </summary>
-    enum LevelUpPhase { None, In, Choosing, Out, Waiting }
-    LevelUpPhase _lvl;
-    float _lvlBlend;
-    LevelUpDrawer _levelUp = null!;
+    /// <summary>How far the pause menu's close framing has come (0 the usual framing → 1 close on her).</summary>
+    float _menuBlend;
     /// <summary>How close the level-up brings the camera (a share of its usual distance), and where she sits across the screen.</summary>
-    const float LevelUpZoom = 0.33f, LevelUpAt = 0.3f, LevelUpIn = 0.7f, LevelUpOut = 0.6f;
+    const float MenuZoom = 0.33f, MenuAt = 0.3f, MenuIn = 0.5f, MenuOut = 0.35f;
     LowHealthVeil _lowHealth = null!;
     bool _inCurse;
     /// <summary>A boss level's Crack: 0 sealed under sand → 1 open (the sand drains over CrackOpenSeconds once it opens).</summary>
@@ -106,7 +105,7 @@ public partial class TopDownMain : Node3D
     int _startXp;
     /// <summary>Verification (`--dbg-levelup`): the drawer's first choice made for her, a moment after it opens.</summary>
     readonly bool _dbgLevelUp = OS.GetCmdlineUserArgs().Contains("--dbg-levelup");
-    float _choosingFor;
+    float _spendIn;
     string[] _startPearls = Array.Empty<string>();
     HudView _hud = null!;
     ItemCatalog? _catalog;
@@ -134,6 +133,8 @@ public partial class TopDownMain : Node3D
     double _accumulator;
     bool _dashLatched, _rLatched, _f3Latched, _escLatched, _backLatched;
     PauseMenu _pause = null!;
+    /// <summary>When she was last told why the boss's wall will not open.</summary>
+    float _sealToldAt = -10f;
     ViewOptions _view = null!;
     DamageNumbers _damage = null!;
     Sfx _sfx = null!;
@@ -160,7 +161,7 @@ public partial class TopDownMain : Node3D
     /// <summary>The run's play time so far (sim time: still while paused or diving), for the HUD clock.</summary>
     float _elapsed;
     bool _fireBlocked;
-    bool Paused => _pause.Visible || _debug.Visible;
+    bool Paused => _pause.Visible || _debug.Visible || _menuBlend > 0f;
     /// <summary>F1: the debug menu (level jump, pearls). Once used, the run is neither saved nor recorded.</summary>
     DebugMenu _debug = null!;
     bool _f1Latched, _debugRun;
@@ -198,12 +199,12 @@ public partial class TopDownMain : Node3D
 
     /// <summary>
     /// The way down, once it is open, pointed out from the screen's edge while the shaft is out of sight (not while the
-    /// game is held: a level-up, the boss's intro, a dive, between levels).
+    /// game is held: the pause menu, the boss's intro, a dive, between levels).
     /// </summary>
     void SyncExitPointer(float dt)
     {
         _exitPointer.Size = _hudRoot.Size;
-        bool open = _world.ExitOpen && _transition == Transition.None && !_deathSplash && !_diving && _lvl == LevelUpPhase.None && !_intro.Playing;
+        bool open = _world.ExitOpen && _transition == Transition.None && !_deathSplash && !_diving && !Paused && !_intro.Playing;
         var cam = _camera.Camera;
         var view = GetViewport().GetVisibleRect().Size;
         Vector2 Shown(Vector3 at) => OctoShoots.Game.Fx.Fisheye.Shown(cam.UnprojectPosition(at), view) / HudScale;
@@ -405,6 +406,8 @@ public partial class TopDownMain : Node3D
             else if (arg.StartsWith("--dbg-slowmo=") && float.TryParse(Value("--dbg-slowmo="), NumberStyles.Float, CultureInfo.InvariantCulture, out float slow))
                 Engine.TimeScale = Math.Clamp(slow, 0.02f, 1f);
             else if (arg == "--paused") _startPaused = true;
+            // Verification: as on a controller from the start (its key hints).
+            else if (arg == "--dbg-pad") InputSetup.UsingPad = _pad = true;
             else if (arg.StartsWith("--xp=") && int.TryParse(Value("--xp="), out int xp)) _startXp = xp;
             else if (arg.StartsWith("--hp=") && float.TryParse(Value("--hp="), NumberStyles.Float, CultureInfo.InvariantCulture, out float hp)) _startHp = hp;
             else if (arg.StartsWith("--luck=") && float.TryParse(Value("--luck="), NumberStyles.Float, CultureInfo.InvariantCulture, out float luck)) _dbgLuck = luck;
@@ -710,6 +713,16 @@ public partial class TopDownMain : Node3D
         AddChild(layer);
         _debugMap = new DebugMapOverlay { Visible = OS.GetCmdlineUserArgs().Contains("--f3") };
         layer.AddChild(_debugMap);
+        // The controller's crosshair: her own, the way she aims (SyncCrosshair). Under the HUD.
+        _padCross = new TextureRect
+        {
+            Texture = OctoShoots.Game.Fx.GonadCursor.Texture(),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+        };
+        layer.AddChild(_padCross);
         _hud = new HudView();
         // The HUD is laid out on a 1080-line screen and scaled with the window (HudScale), so it keeps its share of it.
         _hudRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -758,12 +771,11 @@ public partial class TopDownMain : Node3D
                 case "pop": _sfx.PlayPitched("pop", 1.1f, -4f); break;
             }
         };
-        // The level-up drawer: over the HUD, under the pointer and the pause menu.
-        _levelUp = new LevelUpDrawer { Visible = false };
-        bannerLayer.AddChild(_levelUp);
-        _levelUp.Chosen += ChooseSkill;
         _achievementBanner = new AchievementBanner { ReducedMotion = _view.ReducedMotion };
         bannerLayer.AddChild(_achievementBanner);
+        // The pearl she is absorbing, as the pause menu lists it.
+        _pearlBanner = new PearlBanner();
+        bannerLayer.AddChild(_pearlBanner);
         // Its sounds come from the game's Sfx (made in _Ready, before or after this).
         if (_sfx is not null) _achievementBanner.Sound = _sfx;
         // ESC: pause, restart the run, see the pearls she has absorbed. Drawn above the rest of the HUD.
@@ -772,6 +784,7 @@ public partial class TopDownMain : Node3D
         _pause = new PauseMenu { Zoom = _view.CameraZoom };
         pauseLayer.AddChild(_pause);
         _pause.ResumePressed += Resume;
+        _pause.SkillChosen += ChooseSkill;
         _pause.ZoomChanged += zoom =>
         {
             _view.CameraZoom = zoom;
@@ -908,7 +921,7 @@ public partial class TopDownMain : Node3D
     /// </summary>
     void ShowLevel(LevelShape shape, bool keepRun, long ms)
     {
-        ResetLevelUp();
+        ResetMenu();
         _intro.Stop();
         _introShown = false;
         DropBelow();
@@ -1043,6 +1056,10 @@ public partial class TopDownMain : Node3D
             // Her earned achievements are the run's unlocks (the profile's own set: one earned mid-run applies at once).
             _run.Unlocked = _recorder.Profile.Achievements;
             _achievements = new PlaneAchievements(_recorder.Profile, _customSeed);
+            // Every run starts with these (a resumed one brings back what it carried).
+            if (_resume is null)
+                foreach (string id in PlaneRun.StartingPearls)
+                    if (_catalog?.Contains(id) == true) _run.Add(id);
             foreach (string id in _startPearls)
                 if (_catalog?.Contains(id) == true) _run.Add(id);
             if (_startHp is { } hp) _run.Hp = hp;
@@ -1303,6 +1320,8 @@ public partial class TopDownMain : Node3D
             // Close in front of the boss (captures of its body).
             "boss-near" => _map.HasBoss ? _world.ArenaCenter + new System.Numerics.Vector2(0f, 6.5f) : null,
             "shop" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 1.5f)).FirstOrDefault(),
+            // Out along the shop's passage, facing its gateway.
+            "shop-out" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.Shop).Select(c => (System.Numerics.Vector2?)(c.Mouth + c.Facing * 6f)).FirstOrDefault(),
             // Beside the level's light spring, if it has one.
             "spring" => _world.Springs.Select(sp => (System.Numerics.Vector2?)(sp.Position + new System.Numerics.Vector2(0f, SpringTuning.Radius + 1.5f))).FirstOrDefault(),
             "spring-in" => _world.Springs.Select(sp => (System.Numerics.Vector2?)sp.Position).FirstOrDefault(),
@@ -1318,10 +1337,19 @@ public partial class TopDownMain : Node3D
             // it behind her).
             "gate" => _world.Seals.Where(x => x.Kind == SealKind.Boss).Select(x =>
             {
+                while (_world.VentsOpen > 0) _world.DebugSealVent();
                 while (!x.Open) _world.DebugStrikeSeal(x);
                 _level.Slide(x.Rock.Center);
                 foreach (var e in _world.Events) _seals.OnEvent(_world, e);
                 return (System.Numerics.Vector2?)(x.Rock.Center + x.Facing * (x.Rock.Thick + 4f));
+            }).FirstOrDefault(),
+            // Inside the level's secret room, its wall already down.
+            "secret-in" => _world.Seals.Where(x => x.Kind == SealKind.Secret).Select(x =>
+            {
+                while (!x.Open) _world.DebugStrikeSeal(x);
+                _level.Slide(x.Rock.Center);
+                foreach (var e in _world.Events) _seals.OnEvent(_world, e);
+                return (System.Numerics.Vector2?)_map.Caves[x.Rock.Cave].Chambers[0].Center;
             }).FirstOrDefault(),
             // In front of the first sealed wall of any kind (the boss's, on a boss level).
             "seal" => _map.WeakRocks.OrderByDescending(r => r.Kind).Select(r => (System.Numerics.Vector2?)(r.Center + LevelView.SealFacing(_map, r) * (r.Thick + 5f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
@@ -1556,7 +1584,13 @@ public partial class TopDownMain : Node3D
         SyncPointer();
         SyncHaptics(dt);
         // Banners run on game time: they wait while paused and under a splash.
-        if (!Paused && _transition == Transition.None && !_deathSplash) _achievementBanner.Step(dt);
+        if (!Paused && _transition == Transition.None && !_deathSplash)
+        {
+            _achievementBanner.Step(dt);
+            ItemDef? absorbing = null;
+            if (_world?.Pearls.Find(q => q.Absorbing) is { } ritual && _catalog is not null && _catalog.TryGet(ritual.ItemId, out var item)) absorbing = item;
+            _pearlBanner.Step(dt, absorbing, _achievementBanner.Busy);
+        }
         if (_debugSay is { } said && _levelTime > 1f)
         {
             _debugSay = null;
@@ -1606,8 +1640,8 @@ public partial class TopDownMain : Node3D
             DebugGoTo(_id with { Level = _dbgGoTo }, true);
             _dbgGoTo = 0;
         }
-        // Paused: the sea stands still under the menu.
-        if (Paused)
+        // The debug menu: everything stands still under it.
+        if (_debug.Visible)
         {
             _accumulator = 0;
             _hud.Elapsed = _elapsed;
@@ -1617,9 +1651,9 @@ public partial class TopDownMain : Node3D
         }
 
         DebugMoment();
-        // A level-up holds the sea still (and the clock): only the views go on, so she still moves in place.
-        StepLevelUp(dt);
-        bool held = _lvl != LevelUpPhase.None || _intro.Playing;
+        // The pause menu holds the sea still (and the clock): only the views go on, so she still moves in place.
+        StepMenu(dt);
+        bool held = Paused || _intro.Playing;
         _accumulator += delta;
         if (held) _accumulator = 0;
         int steps = 0;
@@ -1663,10 +1697,10 @@ public partial class TopDownMain : Node3D
                 _blight.OnEvent(e);
                 _adventure.OnEvent(_world, e);
                 _seals.OnEvent(_world, e);
-                // A level reached: the ring fills and pulses; the drawer opens once she is out of the fight.
+                // A level reached: her gonads pulse, on her and on the HUD, until the point is spent in the pause menu.
                 if (e.Type == PlaneEventType.LevelUp)
                 {
-                    Say(_world.Calm ? $"Level {(int)e.Size}!" : $"Level {(int)e.Size}! Your skill point waits until the fight is over.");
+                    Say($"Level {(int)e.Size}! A skill point waits in the pause menu");
                     _sfx.PlayPitched("synergy", 1.25f, -6f);
                 }
                 // Any explosion (hers, a creature's, the reef's): the screen shakes and the controller kicks, by its size and
@@ -1678,11 +1712,16 @@ public partial class TopDownMain : Node3D
                     _combat.Flares(e.Position, Outline(e), e.Direction, e.Type == PlaneEventType.VaseHit ? 1f : e.Size / PlaneCombatTuning.ShotDamage);
                     // Struck: the screen shakes a little, more for a harder hit.
                     if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated) _camera.Shake(Mathf.Clamp(0.08f + 0.006f * e.Size, 0.08f, 0.22f));
-                    // Ink flicks off a corrupted body where her light struck it.
-                    if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated && e.Direction != default) _blight.InkSplash(_world, e.Position, e.Direction, e.Type == PlaneEventType.MobDefeated);
                     // A tap for a hit landed, a firmer one for a creature freed.
                     if (e.Type == PlaneEventType.MobDefeated) _haptics.Pulse(0.4f, 0.25f, 0.16f);
                     else ShotKick(e.Size / PlaneCombatTuning.ShotDamage);
+                }
+                // Struck: her light bounces back off it toward her, and its corruption is knocked out through its far side
+                // (the more of it the hit took, the more of both); a liquid body dents where it struck.
+                if (e.Type is PlaneEventType.MobHit or PlaneEventType.MobDefeated or PlaneEventType.BossHit && Through(e) is { } through)
+                {
+                    _combat.HitBurst(e.Position, Outline(e), through, HitShare(e));
+                    if (e.Type == PlaneEventType.MobHit) _blight.Struck(_world, e.Position, through);
                 }
                 CorruptionEvent(e);
                 CurseEvent(e);
@@ -1792,6 +1831,29 @@ public partial class TopDownMain : Node3D
                     _camera.AddBlur(e.Position, Mathf.Clamp(e.Size * 0.75f, 1f, 2.4f));
                 }
                 else if (e.Type == PlaneEventType.ActiveUsed) _combat.ActiveUsed(_world);
+                else if (e.Type == PlaneEventType.SealRefused)
+                {
+                    // The boss's wall takes no light yet: a dull knock, and now and then why.
+                    _sfx.PlayPitched("pop", 0.55f, -10f);
+                    if (_levelTime - _sealToldAt > 4f)
+                    {
+                        _sealToldAt = _levelTime;
+                        Say(e.Size == 1f ? "It will not open: one vent still pours" : $"It will not open: {(int)e.Size} vents still pour");
+                    }
+                }
+                else if (e.Type == PlaneEventType.PushWave)
+                {
+                    // Tide Pulse: a wave of moving water from her bell (her swells' shimmer, as the currents'), running out
+                    // to its reach in step with the sim's front, then fading; each harder and wider than the last.
+                    int k = Math.Clamp((int)e.Size, 0, PushTuning.At.Length - 1);
+                    var pl = _world.Player;
+                    float grow = PushTuning.FrontShare * pl.PushLength;
+                    _swells.AddRing(new Vector2(_bell.GlobalPosition.X, _bell.GlobalPosition.Z), 1.1f + 0.3f * k,
+                        PushTuning.Reach[k] * pl.PushRadius / 2.6f, grow + 0.35f, snap: 6f);
+                    _sfx.PlayPitched("spout", 0.75f + 0.12f * k, -6f + 2f * k);
+                    if (_view.CameraShake) _camera.Shake(0.06f + 0.04f * k);
+                    _haptics.Pulse(0.3f + 0.15f * k, 0.15f + 0.1f * k, 0.1f);
+                }
                 else if (e.Type == PlaneEventType.ShieldBlocked) _bell.ShieldRipple();
                 else if (e.Type == PlaneEventType.VaseHit) _vases.Hit(_world, e.Position, e.Direction);
                 else if (e.Type == PlaneEventType.VaseBroken)
@@ -1930,10 +1992,10 @@ public partial class TopDownMain : Node3D
             _introShown = true;
             if (!OS.GetCmdlineUserArgs().Contains("--dbg-nobanner")) _intro.Play(introBoss.Spec, _id.ShownDepth, _view.ReducedMotion);
         }
-        // The level-up's close framing: nearer, and looking past her so she sits at the screen's left.
-        float framing = _lvlBlend * _lvlBlend * (3f - 2f * _lvlBlend);
-        _camera.Zoom = Mathf.Lerp(1f, LevelUpZoom, framing);
-        _camera.Track(Focus(alpha), dt, look: new Vector3(LevelUpShift() * framing, 0f, 0f));
+        // The pause menu's close framing: nearer, and looking past her so she sits at the screen's left.
+        float framing = _menuBlend * _menuBlend * (3f - 2f * _menuBlend);
+        _camera.Zoom = Mathf.Lerp(1f, MenuZoom, framing);
+        _camera.Track(Focus(alpha), dt, look: new Vector3(MenuShift() * framing, 0f, 0f));
         _dark.Sync(_world, _camera.Camera, _bell.GlobalPosition, dt);
         // A wall between the camera and her (a tunnel's roof, a wall in front) is carved away round her while it hides
         // her, quick to open and gentle to close; one she only swims beside stays whole.
@@ -2190,7 +2252,7 @@ public partial class TopDownMain : Node3D
     /// <summary>The death splash: how far the run got, then a new run with a new seed.</summary>
     void BeginDeath()
     {
-        ResetLevelUp();
+        ResetMenu();
         _accumulator = 0;
         AddToRun();
         _recorder.RunDied(_world, _runTime);
@@ -2254,7 +2316,7 @@ public partial class TopDownMain : Node3D
                 if (_deathSplash)
                 {
                     // Dead: read the page, then start over.
-                    _splash.Prompt(_persist ? "Enter, click or A: a new run  ·  Esc or B: back to the title" : "Press Enter, click or A to start a new run");
+                    _splash.Prompt(WaitPrompt());
                     _confirmLatched = true;
                     _transition = Transition.Waiting;
                     _transitionTime = 0f;
@@ -2277,7 +2339,7 @@ public partial class TopDownMain : Node3D
                 else
                 {
                     // The level is ready: wait until the player has read the page.
-                    _splash.Prompt("Press Enter, click or A to continue");
+                    _splash.Prompt(WaitPrompt());
                     _confirmLatched = true;
                     _transition = Transition.Waiting;
                 }
@@ -2323,8 +2385,8 @@ public partial class TopDownMain : Node3D
 
     void TogglePause()
     {
-        if (Paused) Resume();
-        else
+        if (_pause.IsOpen) Resume();
+        else if (!_debug.Visible)
         {
             _pause.Open(_world.Run, _catalog, _seed.ToString(), $"{_id} · {HudView.Clock(_elapsed)}", _world.Player.Hp, _achievementData);
             if (_pad) _pause.FocusFirst();
@@ -2654,83 +2716,49 @@ public partial class TopDownMain : Node3D
         _fireBlocked = true;
     }
 
-    /// <summary>
-    /// The level-up's course: it begins once a skill point waits and she is out of the fight (and not absorbing a pearl);
-    /// the camera closes in, the drawer opens, a point is chosen (ChooseSkill), the camera eases back, and a key plays on.
-    /// </summary>
-    void StepLevelUp(float dt)
+    /// <summary>The pause menu's close framing: the camera closes in as the drawer slides in, and eases back as it slides away.</summary>
+    void StepMenu(float dt)
     {
-        if (_lvl == LevelUpPhase.None)
-        {
-            if (_world.Run.Points <= 0 || !_world.Calm || _world.Defeated || _world.Pearls.Exists(q => q.Absorbing)) return;
-            _lvl = LevelUpPhase.In;
-            _sfx.PlayPitched("synergy", 1.1f, -4f);
-        }
-        switch (_lvl)
-        {
-            case LevelUpPhase.Choosing:
-                _choosingFor += dt;
-                if (_dbgLevelUp && _choosingFor > 1.2f) ChooseSkill(OctoShoots.Core.Items.Stat.MaxHp);
-                break;
-            case LevelUpPhase.In:
-                _lvlBlend = Mathf.Min(1f, _lvlBlend + dt / LevelUpIn);
-                if (_lvlBlend >= 1f)
-                {
-                    _lvl = LevelUpPhase.Choosing;
-                    _choosingFor = 0f;
-                    _levelUp.Open(_world.Run, _pad);
-                }
-                break;
-            case LevelUpPhase.Out:
-                _lvlBlend = Mathf.Max(0f, _lvlBlend - dt / LevelUpOut);
-                if (_lvlBlend <= 0f)
-                {
-                    _lvl = LevelUpPhase.Waiting;
-                    _levelUp.Waiting = true;
-                }
-                break;
-        }
+        _menuBlend = _pause.IsOpen ? Mathf.Min(1f, _menuBlend + dt / MenuIn) : Mathf.Max(0f, _menuBlend - dt / MenuOut);
+        if (!_dbgLevelUp || _world.Run.Points <= 0) return;
+        // Verification (--dbg-levelup): the menu opens and spends her points, one every 1.2 s.
+        if (!_pause.IsOpen) TogglePause();
+        _spendIn += dt;
+        if (_spendIn <= 1.2f) return;
+        _spendIn = 0f;
+        ChooseSkill(OctoShoots.Core.Items.Stat.MaxHp);
     }
 
-    /// <summary>A modifier chosen in the drawer: the point is spent; with none left the drawer slides away.</summary>
+    /// <summary>A modifier chosen on the level-up tab: the point is spent and the tab shows it.</summary>
     void ChooseSkill(OctoShoots.Core.Items.Stat stat)
     {
-        if (_lvl != LevelUpPhase.Choosing || !_world.SpendSkill(stat)) return;
+        if (!_world.SpendSkill(stat)) return;
         _sfx.PlayPitched("bell_ring", 1.3f, -6f);
-        if (_world.Run.Points > 0)
-        {
-            _levelUp.Fill(_world.Run);
-            if (_pad) _levelUp.FocusFirst();
-            return;
-        }
-        _levelUp.Close();
-        _lvl = LevelUpPhase.Out;
+        _pause.Refill(_world.Run);
     }
 
-    /// <summary>A new level, a restart or her end: any level-up under way is let go (unspent points wait).</summary>
-    void ResetLevelUp()
+    /// <summary>A new level, a restart or her end: the menu is gone and the camera back at once.</summary>
+    void ResetMenu()
     {
-        _lvl = LevelUpPhase.None;
-        _lvlBlend = 0f;
-        _levelUp.Close();
-        _levelUp.Waiting = false;
+        _menuBlend = 0f;
+        _pause.Shut();
         _camera.Zoom = 1f;
     }
 
-    /// <summary>How far east of her the level-up's camera looks so she sits at LevelUpAt across the screen (metres).</summary>
-    float LevelUpShift()
+    /// <summary>How far east of her the menu's camera looks so she sits at MenuAt across the screen (metres).</summary>
+    float MenuShift()
     {
         var cam = _camera.Camera;
         float distance = (cam.GlobalPosition - Focus(1f)).Length();
         var size = GetViewport().GetVisibleRect().Size;
         float half = distance * Mathf.Tan(Mathf.DegToRad(cam.Fov) * 0.5f) * size.X / Mathf.Max(size.Y, 1f);
-        return (0.5f - LevelUpAt) * 2f * half;
+        return (0.5f - MenuAt) * 2f * half;
     }
 
     void HandleKeys()
     {
-        // During a level-up or the boss intro, they take the keys.
-        if (_lvl != LevelUpPhase.None || _intro.Playing) return;
+        // During the boss intro, it takes the keys.
+        if (_intro.Playing) return;
         // Esc or Start pauses and resumes; B also resumes (and closes the debug menu).
         bool esc = Input.IsActionPressed(InputSetup.Pause);
         bool back = Input.IsActionPressed(InputSetup.MenuBack);
@@ -2740,7 +2768,7 @@ public partial class TopDownMain : Node3D
             else if (_seedField.HasFocus()) _seedField.ReleaseFocus();
             else TogglePause();
         }
-        else if (back && !_backLatched && (Paused || _debug.Visible))
+        else if (back && !_backLatched && (_pause.IsOpen || _debug.Visible))
         {
             if (_debug.Visible) CloseDebug();
             else Resume();
@@ -2806,6 +2834,36 @@ public partial class TopDownMain : Node3D
         foreach (var w in _world.Inkwardens) Near(w.Position, WardenTuning.Radius);
         foreach (var t in _world.Thumpsquirts) Near(t.Position, ThumpTuning.Radius);
         return radius;
+    }
+
+    /// <summary>The way a hit went through what it struck: the shot's own way, else from her to it (null: none).</summary>
+    System.Numerics.Vector2? Through(PlaneEvent e)
+    {
+        if (e.Direction != default) return e.Direction;
+        var to = e.Position - _world.Player.Position;
+        return to.LengthSquared() > 1e-6f ? System.Numerics.Vector2.Normalize(to) : null;
+    }
+
+    /// <summary>The share of the struck creature's whole health a hit took (0..1; the creature nearest the hit's place).</summary>
+    float HitShare(PlaneEvent e)
+    {
+        if (e.Type == PlaneEventType.BossHit) return _world.Boss is { } boss ? Mathf.Clamp(e.Size / Mathf.Max(boss.MaxHp, 1f), 0f, 1f) : 0f;
+        var at = e.Position;
+        float best = 1.5f, whole = 0f;
+        void Near(System.Numerics.Vector2 p, float max)
+        {
+            float d = System.Numerics.Vector2.Distance(p, at);
+            if (d < best) (best, whole) = (d, max);
+        }
+        foreach (var m in _world.Mobs) Near(m.Position, PlaneCombatTuning.MobHp);
+        foreach (var m in _world.Murklings) Near(m.Position, m.Corruption.Max);
+        foreach (var r in _world.Blightroots) Near(r.Position, r.Corruption.Max);
+        foreach (var b in _world.Blotters) Near(b.Position, b.Corruption.Max);
+        foreach (var w in _world.Inkwardens) Near(w.Position, w.Corruption.Max);
+        foreach (var t in _world.Thumpsquirts) Near(t.Position, t.Corruption.Max);
+        foreach (var l in _world.Lashjaws) Near(l.Position, l.Corruption.Max);
+        foreach (var f in _world.Flounders) Near(f.Position, f.Corruption.Max);
+        return whole > 0f ? Mathf.Clamp(e.Size / whole, 0f, 1f) : 0f;
     }
 
     /// <summary>How big an explosion an event is (0..1), or null when it is none.</summary>
@@ -2889,13 +2947,12 @@ public partial class TopDownMain : Node3D
         Vector2 aim = Input.GetVector(InputSetup.AimLeft, InputSetup.AimRight, InputSetup.AimUp, InputSetup.AimDown);
         if (_pad)
         {
-            // Controller: the right stick aims, the trigger shoots; the further the stick is pushed, the further her light
-            // flies. Left alone, she aims the way she swims, at her full range (standing still, the way she last aimed).
+            // Controller: the right stick aims, the trigger shoots (her light always flies her full range). Left alone, she
+            // aims the way she swims (standing still, the way she last aimed).
             if (aim.LengthSquared() > 0.04f) _padAim = new System.Numerics.Vector2(aim.X, aim.Y);
             else if (stick.LengthSquared() > 0.04f) _padAim = System.Numerics.Vector2.Normalize(new System.Numerics.Vector2(stick.X, stick.Y));
             else if (_padAim.LengthSquared() > 1e-6f) _padAim = System.Numerics.Vector2.Normalize(_padAim);
             input.Aim = _padAim.LengthSquared() > 1e-6f ? System.Numerics.Vector2.Normalize(_padAim) : _world.Player.Aim;
-            input.AimReach = PadReach();
             input.Fire = held && !_fireBlocked;
         }
         else if (aim.LengthSquared() > 0f)
@@ -2906,10 +2963,9 @@ public partial class TopDownMain : Node3D
         }
         else
         {
-            // The mouse: shoot toward the pointer while the button is held; her light goes out at the pointer.
+            // The mouse: shoot toward the pointer while the button is held (only its way counts: her light flies her full range).
             var to = MouseOnBand() - _world.Player.Position;
             input.Aim = to.LengthSquared() > 1e-4f ? System.Numerics.Vector2.Normalize(to) : default;
-            input.AimReach = to.Length();
             input.Fire = held && !_fireBlocked;
         }
         return input;
@@ -2929,15 +2985,6 @@ public partial class TopDownMain : Node3D
             GetViewport().SetInputAsHandled();
             return;
         }
-        // After a level-up: any key, click or button plays on (and does nothing else).
-        if (_lvl == LevelUpPhase.Waiting && e.IsPressed() && !e.IsEcho() && e is InputEventKey or InputEventMouseButton or InputEventJoypadButton)
-        {
-            _lvl = LevelUpPhase.None;
-            _levelUp.Waiting = false;
-            _fireBlocked = true;
-            GetViewport().SetInputAsHandled();
-            return;
-        }
         if (e is InputEventJoypadButton or InputEventJoypadMotion) _haptics.Device = e.Device;
         bool pad = e switch
         {
@@ -2949,12 +2996,25 @@ public partial class TopDownMain : Node3D
         };
         if (pad == _pad) return;
         _pad = pad;
+        InputSetup.UsingPad = pad;
         SyncPointer();
         if (pad && _pause.Visible) _pause.FocusFirst();
+        // The key hints on screen follow the device in use.
+        _pause.ShowHints();
+        if (_transition == Transition.Waiting) _splash.Prompt(WaitPrompt());
     }
 
-    bool _pad;
+    /// <summary>On the controller (from the last input; carried over from the title).</summary>
+    bool _pad = InputSetup.UsingPad;
     System.Numerics.Vector2 _padAim;
+
+    /// <summary>The splash's prompt while it waits for her: in the device's own buttons (the menu bindings on a controller).</summary>
+    string WaitPrompt()
+    {
+        string go = _pad ? InputSetup.Hint(InputSetup.MenuAccept) : "Enter or click", back = _pad ? InputSetup.Hint(InputSetup.MenuBack) : "Esc";
+        if (!_deathSplash) return $"Press {go} to continue";
+        return _persist ? $"{go}: a new run  ·  {back}: back to the title" : $"Press {go} to start a new run";
+    }
     readonly Haptics _haptics = new();
 
     readonly HashSet<string> _failedViews = new();
@@ -3023,11 +3083,12 @@ public partial class TopDownMain : Node3D
     /// <summary>
     /// The pointer: playing with the mouse, a small orange crosshair of her four gonads (GonadCursor) — she also turns
     /// to face it (BellView), her first gonad toward it; under a menu, a splash, a dive or a level change, the system's
-    /// own arrow; with the controller, none.
+    /// own arrow; with the controller, the system's pointer hidden and her crosshair drawn the way she aims (SyncCrosshair).
     /// </summary>
     void SyncPointer()
     {
-        bool playing = _world is not null && !Paused && !_deathSplash && !_diving && _transition == Transition.None && !_autopilot && _lvl == LevelUpPhase.None && !_intro.Playing;
+        bool playing = _world is not null && !Paused && !_deathSplash && !_diving && _transition == Transition.None && !_autopilot && !_intro.Playing;
+        SyncCrosshair(playing);
         var mode = _pad ? Input.MouseModeEnum.Hidden : Input.MouseModeEnum.Visible;
         if (Input.MouseMode != mode) Input.MouseMode = mode;
         bool cross = playing && !_pad;
@@ -3037,6 +3098,41 @@ public partial class TopDownMain : Node3D
         else OctoShoots.Game.Fx.GonadCursor.Release();
     }
     bool _crosshairOn;
+
+    /// <summary>
+    /// The crosshair stands no farther from her than CrossReach of the screen's height, the mouse's or the controller's
+    /// (only its way from her sets her aim). The mouse's pointer, strayed past that circle, is drawn back onto it. With the
+    /// controller her crosshair is drawn the way she aims, out as far as the right stick is tilted (at least PadCrossLeast
+    /// of the circle); let go, it holds there as her aim follows the way she swims.
+    /// </summary>
+    void SyncCrosshair(bool playing)
+    {
+        _padCross.Visible = playing && _pad;
+        if (!playing || _world is null) return;
+        float reach = CrossReach * GetViewport().GetVisibleRect().Size.Y;
+        var her = OnScreen(_world.Player.Position);
+        if (!_pad)
+        {
+            var off = GetViewport().GetMousePosition() - her;
+            if (GetWindow().HasFocus() && off.Length() > reach + 1f) GetViewport().WarpMouse(her + off.Normalized() * reach);
+            return;
+        }
+        float tilt = Input.GetVector(InputSetup.AimLeft, InputSetup.AimRight, InputSetup.AimUp, InputSetup.AimDown).Length();
+        if (tilt > 0.2f) _padCrossOut = Mathf.Clamp(tilt, PadCrossLeast, 1f);
+        var way = OnScreen(_world.Player.Position + _world.Player.Aim) - her;
+        if (way.LengthSquared() < 1e-6f) return;
+        float side = 32f * Mathf.Max(1f, GetViewport().GetVisibleRect().Size.Y / 1080f);
+        _padCross.Size = Vector2.One * side;
+        _padCross.Position = her + way.Normalized() * reach * _padCrossOut - _padCross.Size * 0.5f;
+    }
+
+    /// <summary>The farthest the crosshair stands from her: this share of the screen's height.</summary>
+    const float CrossReach = 0.45f;
+    /// <summary>The controller's crosshair at the stick's lightest tilt: this share of CrossReach out from her.</summary>
+    const float PadCrossLeast = 0.3f;
+    /// <summary>The controller's crosshair (her own, GonadCursor's) and how far out it stands now (a share of CrossReach).</summary>
+    TextureRect _padCross = null!;
+    float _padCrossOut = 0.6f;
 
     /// <summary>Verification: fire at the boss in her fight, else at the nearest mob.</summary>
     bool AutoFire(ref PlaneInput input)
@@ -3059,8 +3155,6 @@ public partial class TopDownMain : Node3D
               ?? _world.Vases.Where(v => !v.Broken).OrderBy(v => System.Numerics.Vector2.Distance(v.Position, from)).Select(v => (System.Numerics.Vector2?)v.Position).FirstOrDefault();
         // Nothing to shoot at: straight ahead, the way she faces.
         input.Aim = target is { } at && System.Numerics.Vector2.DistanceSquared(at, from) > 1e-4f ? System.Numerics.Vector2.Normalize(at - from) : _world.Player.Aim;
-        // Through the target, so the light reaches it.
-        input.AimReach = target is { } t ? System.Numerics.Vector2.Distance(t, from) + 1.5f : 0f;
         // With Pearl Diver, let go once the pearl is fully charged.
         input.Fire = !(_world.Run.Loadout.Shot.Charge && _world.Player.Charge >= PlaneCombatTuning.ChargeSeconds);
         return true;
@@ -3078,11 +3172,9 @@ public partial class TopDownMain : Node3D
         return new System.Numerics.Vector2(hit.X, hit.Z);
     }
 
-    /// <summary>Her range now (her pearls' range stat on the base reach).</summary>
-    float HerRange => PlaneCombatTuning.BubbleRange * _world.Run.Loadout.Stats.Range / Mathf.Max(_world.Tuning.Range, 0.01f);
-
-    /// <summary>The right stick's reach: from the nearest throw at the lightest tilt to her full range pushed all the way.</summary>
-    float PadReach() => Mathf.Lerp(PlaneCombatTuning.MinReach, HerRange, Mathf.Clamp((_padAim.Length() - 0.2f) / 0.75f, 0f, 1f));
+    /// <summary>Where a point on the swim band is shown on the screen (through the fisheye).</summary>
+    Vector2 OnScreen(System.Numerics.Vector2 p) =>
+        OctoShoots.Game.Fx.Fisheye.Shown(_camera.Camera.UnprojectPosition(new Vector3(p.X, LevelMap.SwimBand, p.Y)), GetViewport().GetVisibleRect().Size);
 
     void Capture()
     {

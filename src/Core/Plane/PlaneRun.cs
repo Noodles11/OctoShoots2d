@@ -24,8 +24,14 @@ public sealed class PlaneRun
         "lucky_sea_glass", "pirates_doubloon",
         "squid_ink_espresso", "whale_lung", "pufferfish_pout", "cuttlebone", "cannonball", "dolphin_fin", "coral_polyp",
         "abyssal_glow", "glass_squid", "sea_cucumber", "sardine_run", "pistol_shrimp", "brass_compass", "sea_chart_nautilus",
-        "bubble_shield", "whale_song", "firefly_squid", "prism_pearl",
+        "bubble_shield", "whale_song", "firefly_squid", "prism_pearl", StartingPearl,
     };
+
+    /// <summary>The active pearl every run starts with (Tide Pulse).</summary>
+    public const string StartingPearl = "tide_pulse";
+
+    /// <summary>What every run starts with; never offered, since she always has it.</summary>
+    public static readonly string[] StartingPearls = { StartingPearl, "sea_chart_nautilus" };
 
     public PlaneRun(ItemCatalog? catalog, Tuning tuning)
     {
@@ -94,6 +100,9 @@ public sealed class PlaneRun
 
     public void Add(string itemId)
     {
+        // She carries one active pearl at a time: a new one takes the old one's place.
+        if (Catalog is not null && Catalog.TryGet(itemId, out var item) && item.Kind == ItemKind.Active)
+            Items.RemoveAll(id => Catalog.TryGet(id, out var held) && held.Kind == ItemKind.Active);
         Items.Add(itemId);
         Rebuild();
         if (Active?.Id == itemId) ActiveCharge = 1f;
@@ -144,6 +153,6 @@ public sealed class PlaneRun
 
     /// <summary>How likely a pearl is to be offered: its weight, lower for each copy of a non-unique one she holds, 0 if it may not be.</summary>
     public float OfferWeight(string itemId) =>
-        Catalog is not null && Catalog.TryGet(itemId, out var item) && ItemPools.IsUnlocked(item, Unlocked)
+        !StartingPearls.Contains(itemId) && Catalog is not null && Catalog.TryGet(itemId, out var item) && ItemPools.IsUnlocked(item, Unlocked)
             ? ItemPools.WeightFor(item, Items.Count(id => id == itemId)) : 0f;
 }

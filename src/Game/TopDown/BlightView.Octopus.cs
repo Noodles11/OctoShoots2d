@@ -9,8 +9,7 @@ namespace OctoShoots.Game.TopDown;
 /// The Blightroot as it is drawn (docs/CORRUPTION.md), all of it painted as the murklings are: a pole of ink standing
 /// from a splay of rootlets on the seabed up to its head at her plane — the target her light drains. The head is a
 /// liquid body (the murklings' soft body, BlightView.Murklings): it breathes, swells on the pulse as a swell of ink runs
-/// up the pole into it, sways on its pole, and her hits dent it, tear holes in it that close as its corruption grows
-/// back, and rip chunks of ink from it.
+/// up the pole into it, sways on its pole, and her hits dent it and push it back on its pole.
 /// <para>
 /// It stands tall, its head well over her plane, so it can stand between her and the camera: its head and pole are
 /// then drawn over her where they cover her, as kelp is (over_her.gdshaderinc), and she wears her outline.
@@ -366,7 +365,7 @@ public partial class BlightView
             view.Head.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("ember"), 0.2f + 0.8f * root.Inflate);
             view.Pole.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("pulse"), root.Inflate);
             Mirror(view);
-            SoftStep(BodyOf(root), System.Numerics.Vector2.Zero, Vector3.Zero, false, false, root.Corruption, view.Seed, dt, 0.08f);
+            SoftStep(BodyOf(root), System.Numerics.Vector2.Zero, Vector3.Zero, false, false, view.Seed, dt, 0.08f);
             // Ink running down its pole now and then, sinking into the sand.
             view.Drip += dt * 3f;
             while (view.Drip >= 1f)
@@ -461,15 +460,14 @@ public partial class BlightView
         Swells?.AddRing(new Vector2(g.X, g.Z), 1.2f, 0.8f);
     }
 
-    /// <summary>Her light struck a Blightroot's head (from InkSplash): torn as a murkling is.</summary>
-    void TearRoot(Blightroot root, Vector3 back, float hitShare)
+    /// <summary>Her light struck a Blightroot's head (from Struck): dented as a murkling is.</summary>
+    void DentRoot(Blightroot root, Vector3 back, float hitShare)
     {
         int i = -1;
         if (_lastWorld is { } w) i = w.Blightroots.IndexOf(root);
         if (i < 0 || i >= _roots.Count) return;
         var view = _roots[i];
-        var at = view.Node.Position + view.Holder.Position;
-        Tear(BodyOf(root), root.Corruption, back, hitShare, at, BlightTuning.SacRadius * HeadSize, view.Seed);
+        Dent(BodyOf(root), back, hitShare);
         // Pushed back, away from the shot, as hard as it struck: a run of hits pushes it further (to TiltMax).
         view.TiltVel += new Vector2(-back.X, -back.Z) * (HitPush + HitPushPerShare * hitShare);
     }
@@ -494,13 +492,8 @@ public partial class BlightView
             view.FleeDir = (away * 0.4f + Vector3.Up).Normalized();
             view.FleeAt = view.Holder.Position;
             view.FleeVelocity = Vector3.Zero;
-            // Its holes close at once and it rounds out: it is whole again.
-            if (_bodies.TryGetValue(root, out var body))
-            {
-                body.Holes.Clear();
-                body.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("holes"), new Vector4[MaxHoles]);
-                body.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lobes"), new float[Lobes]);
-            }
+            // It rounds out: it is whole again.
+            if (_bodies.TryGetValue(root, out var body)) body.Material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("lobes"), new float[Lobes]);
         }
         view.Since += dt;
         float t = view.Since;

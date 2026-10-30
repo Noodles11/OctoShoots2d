@@ -10,16 +10,19 @@ namespace OctoShoots.Game.Fx;
 /// </summary>
 public sealed class WaterSwells
 {
-    public const int Max = 6;
+    public const int Max = 8;
     const float Life = 0.7f;
 
     /// <summary>Per swell: x, z (world), age (0 → 1), strength (0..1).</summary>
     public Vector4[] Rings { get; } = new Vector4[Max];
-    /// <summary>Per swell: the way she was going (x, y = world z; unit, or none for a ring), and its reach (z: a share of 2.6 m, 0 for 1).</summary>
+    /// <summary>
+    /// Per swell: the way she was going (x, y = world z; unit, or none for a ring), its reach (z: a share of 2.6 m, 0 for 1)
+    /// and how sharply its front runs out (w: the ease's power, 0 for 2).
+    /// </summary>
     public Vector4[] Dirs { get; } = new Vector4[Max];
     public int Count { get; private set; }
 
-    readonly float[] _age = new float[Max];
+    readonly float[] _age = new float[Max], _life = new float[Max];
 
     /// <summary>A new swell at <paramref name="at"/> (world x, z), her heading <paramref name="dir"/>; the oldest gives way when full.</summary>
     public void Add(Vector2 at, Vector2 dir, float strength)
@@ -29,18 +32,21 @@ public sealed class WaterSwells
         Rings[i] = new Vector4(at.X, at.Y, 0f, Mathf.Clamp(strength, 0f, 1f));
         Dirs[i] = new Vector4(dir.X, dir.Y, 0f, 0f);
         _age[i] = 0f;
+        _life[i] = Life;
     }
 
     /// <summary>
-    /// A ring of the water shoved outward (a heavy blow: a Blightroot's head coming down): even all round, out to
-    /// reach × 2.6 m, as strong as strength (up to 2).
+    /// A ring of the water shoved outward (a heavy blow: a Blightroot's head coming down; Tide Pulse's waves): even all
+    /// round, out to reach × 2.6 m, as strong as strength (up to 2), over life seconds, its front running out as sharply
+    /// as snap (the ease's power: 2 a plain ease-out, higher reaching its width sooner).
     /// </summary>
-    public void AddRing(Vector2 at, float strength, float reach)
+    public void AddRing(Vector2 at, float strength, float reach, float life = Life, float snap = 2f)
     {
         int i = Count < Max ? Count++ : Oldest();
         Rings[i] = new Vector4(at.X, at.Y, 0f, Mathf.Clamp(strength, 0f, 2f));
-        Dirs[i] = new Vector4(0f, 0f, reach, 0f);
+        Dirs[i] = new Vector4(0f, 0f, reach, snap);
         _age[i] = 0f;
+        _life[i] = Mathf.Max(life, 0.05f);
     }
 
     int Oldest()
@@ -56,15 +62,16 @@ public sealed class WaterSwells
         for (int i = Count - 1; i >= 0; i--)
         {
             _age[i] += dt;
-            if (_age[i] >= Life)
+            if (_age[i] >= _life[i])
             {
                 Count--;
                 Rings[i] = Rings[Count];
                 Dirs[i] = Dirs[Count];
                 _age[i] = _age[Count];
+                _life[i] = _life[Count];
                 continue;
             }
-            Rings[i].Z = _age[i] / Life;
+            Rings[i].Z = _age[i] / _life[i];
         }
     }
 
@@ -95,7 +102,7 @@ public sealed class WaterSwells
         }
         else if (_cooldown <= 0f && _speed < StillBelow && speed > MovingAbove)
         {
-            Add(at, dir, 0.65f);
+            Add(at, dir, 0.5f);
             _cooldown = Cooldown;
             _heading = dir;
         }
@@ -103,7 +110,7 @@ public sealed class WaterSwells
         {
             if (_cooldown <= 0f && Mathf.Abs(_heading.AngleTo(dir)) > TurnAngle)
             {
-                Add(at, dir, 0.5f);
+                Add(at, dir, 0.4f);
                 _cooldown = Cooldown;
                 _heading = dir;
             }

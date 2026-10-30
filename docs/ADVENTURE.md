@@ -31,7 +31,7 @@ All numbers are first guesses (`AdventureTuning`).
   on later loops), grown out of its mouth as the ink spreads — neighbour to neighbour through open water only, the
   nearest first, its edge ragged — so it lies joined to its vent and spreads from the start.
 - **Sealing it:** her shots striking the wall within 1.6 m of its mouth count once each, as a seal wall's carving
-  does; the hits must come one after another (1.4 s after the last, one drains away every 0.3 s). Each hit dents its
+  does (Firefly Squid's surge held there counts as one shot every shot's time, for a seal's carving too); the hits must come one after another (1.4 s after the last, one drains away every 0.3 s). Each hit dents its
   goo where her light met it, ringing out over it, splashes goo off it (dark drops in its oily colours, flying out and
   sinking, glinting) and flings magic particles. Her hits show as thin veins of gold light creeping into the goo from
   its torn edges, further the more she has struck. Filled (8 hits, + 2 per Menace) the vent **seals**: with a shudder,
@@ -43,7 +43,9 @@ All numbers are first guesses (`AdventureTuning`).
   ink it crosses (each dot going up in magic particles).
 - **Sealing stops the source, not the ink:** the dots it spread beyond its ring stay until cleared, but no longer
   spread (§2), unless they still link to another open vent.
-- **The level's end:** the way down opens once every vent on the level is sealed ("The way down is open").
+- **The level's end:** the way down opens once every vent on the level is sealed ("The way down is open"). On a boss
+  level the boss's sword walls take no light until then: her shots knock dully on them ("It will not open: 2 vents still
+  pour"), so she cannot enter the arena with a vent open, and no vent is ever placed behind them.
 
 ## 2. Ink dots
 
@@ -58,7 +60,10 @@ All numbers are first guesses (`AdventureTuning`).
 - **Spreading:** only a patch joined to a working vent spreads: one whose dots link, neighbour to neighbour, to a dot
   within 2 m of an open vent's mouth. Every 10 s (÷ 1 + 0.3 × Menace) each whole dot of such a patch beside an empty
   cell divides into it, each dot on its own beat. A patch cut off from every open vent — its vent sealed, or her light
-  cleared a way through it — stops growing and only waits to be cleared; so do trails and fallen throws. The ink only
+  cleared a way through it — stops growing; so do trails and fallen throws (never joined to a vent).
+- **Decay:** a dot cut off from every open vent pops on its own, in magic particles as when her light clears it, after
+  10 s (+ 20 s × Menace) and up to 2 s more (its own share, so a patch goes out dot by dot, not all at once). Joined
+  to a working vent again, it starts over. The ink only
   reaches a neighbour with open water between them: never through rock, never into safe places (the start, shops,
   treasure caves). At most 9,000 dots a level.
 - **Trails:** every corrupted creature leaves a dot every 2.5 m it swims (into empty cells only); a spiked murkling's
@@ -94,14 +99,14 @@ All numbers are first guesses (`AdventureTuning`).
 ## 4. The corrupted fish
 
 All of them are fish underneath; freed, they are themselves again and swim off. Her light frees them as
-it frees any corrupted creature: a corruption meter each, emptied by her shots, holes torn and healing.
+it frees any corrupted creature: a corruption meter each, emptied by her shots.
 
 | Mob | From | Core | Body | Behaviour |
 |---|---|---|---|---|
 | **Spiked murkling** | blue tang | blue | 0.38 m, short blowfish spikes all over | Keeps 6–9 m from her, circling, at 3.4 m/s; throws ink at her (the slingshot wind-up); never clings. Touching it hurts and knocks her off. |
 | **Tadpole murkling** | clownfish | orange | 0.22 m, a short wiggling tadpole tail | Only chases her (within 16 m), at 1.1 times her cruise; clings on and drains her; never throws. |
 | **Shoal murkling** | chromis | silver | 0.2 m, a whole school | Very fast (9 m/s). Within 14 m it rings her 1.8–2.6 m out, spread evenly all round in three layers, and the ring circles her (1.1 rad/s, each layer a little faster than the one inside it; each school its own way), never tied to her aim — she times her shots through the gaps, and a shot that meets one is spent on it. Harmless otherwise. |
-| **Hearthguard** | flounder | sand gold | a plain flat oval of ink (1.1 × 0.8 m) lying on its patch, no head, no fins, the sand gold showing through, ink drops lifting off it | Never leaves its patch and never chases her. It rests 2.5–4 s (÷ 1 + 0.4 × Menace), then shimmies left and right for 1.4 s as if burying itself: ten swings, one flank then the other, each throwing a spray of sand off the flank it swings to and that swing's ink drops of its pattern off that flank, lobbed up from its patch to her plane (3.5 m/s, falling after 2.4 m and leaving a dot where they land, 5 damage). The patterns: a fan of three off four of its swings, one drop at every swing sweeping from its head to its tail, or a burst of five off each side at the height of the shimmy, never the same pattern twice running. Within 2.8 m of it (and in sight), its back draws up into a cone leaning at her over 0.45 s, its ember waking in it (the telegraph); then that cone stabs out as one continuous sting to 3.2 m at her plane in 0.12 s while the oval stays where it lies (rock stops it): 12 damage and a shove along it; it holds a moment, draws back over 0.45 s, and waits 1 s before it can stab again. Meter 26 (+ per Menace as a murkling's). Freed, it is a flounder again, lifting off its patch and swimming away. |
+| **Hearthguard** | flounder | sand gold | a plain flat oval of ink (1.1 × 0.8 m) lying on its patch, no head, no fins, the sand gold showing through, ink drops lifting off it | Never leaves its patch and never chases her. It rests 2.5–4 s (÷ 1 + 0.4 × Menace), then shimmies left and right for 1.4 s as if burying itself: ten swings, one flank then the other, each throwing a spray of sand off the flank it swings to and that swing's ink drops of its pattern off that flank, lobbed up from its patch to her plane (3.5 m/s, falling after 2.4 m and leaving a dot where they land, 5 damage). The patterns: a fan of three off four of its swings, one drop at every swing sweeping from its head to its tail, or a burst of five off each side at the height of the shimmy, never the same pattern twice running. Within 2.8 m of it (and in sight), its back draws up into a cone leaning at her over 0.45 s, its ember waking in it (the telegraph); then that cone stabs out as one continuous sting to 3.2 m at her plane in 0.12 s while the oval stays where it lies (rock stops it): 12 damage and a shove along it; it holds a moment, draws back over 0.45 s, and waits 1 s before it can stab again. Meter 26 (+ per Menace as a murkling's). Lying under her plane, it shows south of its place on the plane (0.577 m per metre below), so her shots strike it anywhere from its place to where it shows (`PlaneWorld.FlounderSeen`). Freed, it is a flounder again, lifting off its patch and swimming away. |
 | **Inkwarden** | pufferfish | yellow | an inflated ring of ink, eight spikes folded in toward its hole | Wards the corrupted creatures round it (8 m), and the open vents (§1). Calm, it drifts slowly about its spot (within 5 m), turning lazily. Struck (by her light, her arm or a burst), it rolls its spikes out over its top (0.5 s), spins up (0.6 s) and fires them one by one, one every 0.15 s, each in a random direction (11 m/s, 6 damage, an ink spike: it falls as a throw does and her shots burst it); then it slows and grows them back inward (3 s), calm until struck again. Freed, it is a pufferfish, and swims off. |
 
 Each depth's boss level holds its boss in its arena, Drippus Prime (docs/CORRUPTION.md); its brood are murklings like
@@ -155,7 +160,7 @@ come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed under it (�
   3. **experience** (amber; her level at its foot) — growing toward the next level, pulsing full with a point to
      spend.
   Beside the bell **her shells** (the shell and its count — shown only once she has collected at least one).
-- **Maps:** the minimap and the whole level's map (Tab / Select) both hidden unless she has absorbed **Sea Chart Nautilus** ("Remembers every current"; shop and treasure).
+- **Maps:** the minimap and the whole level's map (Tab / Select) both hidden unless she has absorbed **Sea Chart Nautilus** ("Remembers every current"), which she starts every run with for now.
   Never an experience ring or health bezel round it: a thin outline and the north mark only. The cleansing meter is
   gone.
   The whole level's map is cut out of its square along the level's outline — all its water and a few metres of rock

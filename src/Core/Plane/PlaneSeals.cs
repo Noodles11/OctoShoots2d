@@ -21,7 +21,8 @@ public static class SealTuning
 /// <summary>
 /// A sealed wall, looking like any other reef wall: a secret room's way in or a tunnel (an X carved faintly in it), or
 /// the way into the boss's arena (a sword). Her shots striking the carving one after another fill it with light (if
-/// they stop, it drains); filled, the wall slides down into the sand and the way is open.
+/// they stop, it drains); filled, the wall slides down into the sand and the way is open. The boss's takes no light
+/// while a vent on the level stands open.
 /// </summary>
 public sealed class SecretSeal
 {
@@ -76,6 +77,11 @@ public sealed partial class PlaneWorld
         foreach (var seal in Seals)
         {
             if (seal.Open || seal.Barred || !seal.Rock.Contains(at, 0.3f) || Vector2.Distance(at, seal.Emblem) > SealTuning.Reach) continue;
+            if (seal.Kind == SealKind.Boss && VentsOpen > 0)
+            {
+                Events.Add(new PlaneEvent(PlaneEventType.SealRefused, seal.Emblem, seal.Facing, VentsOpen));
+                return;
+            }
             seal.Hits++;
             seal.Since = seal.DrainClock = 0f;
             Events.Add(new PlaneEvent(PlaneEventType.SealLit, seal.Emblem, seal.Facing, seal.Glow));

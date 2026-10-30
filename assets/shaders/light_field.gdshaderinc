@@ -49,15 +49,20 @@ float her_beam_cone(vec3 p) {
 float her_sight(vec3 p) {
 	vec2 d = p.xz - her_light_at.xz;
 	float r = length(d);
-	if (r < 0.9) return 1.0;
+	// Close round her the map knows nothing short of the point: its first rows hold the rock out to a row's width
+	// beyond it, which would shade the floor there (a thin dark ring round her). So the test is trusted only from two
+	// rows out, fading in smoothly from one (no edge to draw a ring); nearer, her light reaches.
+	float row = her_light_at.w / 32.0;
+	float trust = smoothstep(0.8 + row, 0.8 + 2.0 * row, r);
+	if (trust <= 0.0) return 1.0;
 	float u = atan(d.y, d.x) / 6.2831853 + 0.5;
 	// The terrain short of the point itself (its own column would shade it). Kept to the first row's centre at the
 	// near end: the map repeats round (for the directions), and sampling below that row would blend in the farthest
-	// distances' horizon — a ring of false shadow round her.
+	// distances' horizon.
 	float v = clamp((r - 0.8) / her_light_at.w - 0.5 / 32.0, 0.5 / 32.0, 1.0 - 0.5 / 32.0);
 	float horizon = texture(her_horizon, vec2(u, v)).r;
 	float slope = (p.y - her_light_at.y) / r;
-	return smoothstep(-0.14, 0.04, slope - horizon);
+	return mix(1.0, smoothstep(-0.14, 0.04, slope - horizon), trust);
 }
 
 // 1 where her light reaches p, 0 behind the reef, soft over the edge.

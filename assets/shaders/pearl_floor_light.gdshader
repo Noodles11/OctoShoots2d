@@ -1,4 +1,4 @@
-// A clam room's pearl lighting the chamber (ClamRoomView): its own colours in its own pattern (pearl_glow.gdshaderinc)
+// A clam room's pearl lighting the chamber (ClamRoomView): its own colours (pearl_glow.gdshaderinc)
 // laid over the chamber's floor and the foot of its walls, added to them like light — only in a cone of 120° from the
 // clam's mouth toward the chamber's entrance, softly edged; the clam's shell keeps every bit of it off what lies behind.
 // A patch of the ground's own surface, lifted a hair off it, reaching well past the chamber's mouth; the light floods

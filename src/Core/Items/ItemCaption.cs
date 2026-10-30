@@ -169,5 +169,9 @@ public static class ItemCaption
         _ => flag,
     };
 
-    static string ActiveLine(ActiveSpec a) => $"Recharges in {N(a.Recharge)}s";
+    static string ActiveLine(ActiveSpec a) => a.Action switch
+    {
+        ActiveAction.PushWave => $"Three waves push everything loose {N(a.Radius)} m away from her; recharges in {N(a.Recharge)}s",
+        _ => $"Recharges in {N(a.Recharge)}s",
+    };
 }

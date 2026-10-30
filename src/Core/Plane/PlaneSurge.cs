@@ -74,6 +74,8 @@ public sealed class SurgeRay
     public bool Fork;
     /// <summary>It ended on something (rock, a pot, a creature) rather than at its reach.</summary>
     public bool Blocked;
+    /// <summary>The rock it stopped on, if it did.</summary>
+    public Vector2? Wall;
     /// <summary>Boomerang Shrimp: a loop back to her; FarTip is the far end of the loop (null until it gets there).</summary>
     public bool Loop;
     public Vector2? FarTip;
@@ -160,6 +162,8 @@ public sealed partial class PlaneWorld
             Trace(surge, ray, from, Rotate(p.Aim, a), reach, spec, null);
         }
 
+        StrikeWalls(surge);
+
         float cone = 1f + SurgeTuning.ConeShare * (count - 1);
         surge.Power = (1f + (SurgeTuning.FocusDamage - 1f) * focus) * (1f + (PlaneCombatTuning.MinigunMax - 1f) * p.Spin) * MathF.Sqrt(cone);
 
@@ -188,6 +192,27 @@ public sealed partial class PlaneWorld
     /// Scale), and stops on rock, a pot, or a creature (unless it pierces). Mitosis forks the main rays where they first
     /// strike. What it touches goes in _surgeStruck.
     /// </summary>
+    /// <summary>
+    /// The surge held on rock counts as her shots would: once every shot's time (her fire rate's) it adds its light to a
+    /// vent's mouth or a seal's carving it stands on, one hit however wide the cone.
+    /// </summary>
+    void StrikeWalls(PlaneSurge surge)
+    {
+        _surgeWall -= Dt;
+        if (_surgeWall > 0f) return;
+        foreach (var ray in surge.Rays)
+        {
+            if (ray.Wall is not { } wall) continue;
+            _surgeWall = ShotInterval;
+            if (_rocks.Exists(r => r.Contains(wall))) StrikeSeal(wall);
+            if (Vents.Count > 0) StrikeVent(wall);
+            return;
+        }
+    }
+
+    /// <summary>Until the surge next counts on the wall it stands on.</summary>
+    float _surgeWall;
+
     void Trace(PlaneSurge surge, SurgeRay ray, Vector2 start, Vector2 dir, float length, ShotSpec spec, object? spare)
     {
         ray.Points.Add(start);
@@ -256,6 +281,7 @@ public sealed partial class PlaneWorld
                     gone += step * 0.5f;
                     continue;
                 }
+                if (!ClamShellAt(next)) ray.Wall = next;
                 Stop(at);
                 break;
             }

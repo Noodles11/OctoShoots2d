@@ -37,7 +37,7 @@ public partial class BlightView
     ShaderMaterial? _flounderMat;
 
     /// <summary>Where it lies: on its patch's floor, never deeper than a shelf under her plane.</summary>
-    float FlounderBed(System.Numerics.Vector2 at) => Mathf.Max(Floor(at), LevelMap.SwimBand + AbyssReef.ShelfDepth - 0.4f) + 0.06f;
+    float FlounderBed(System.Numerics.Vector2 at) => _map is null ? -1f : FlounderTuning.Bed(_map, at);
 
     void SyncFlounders(PlaneWorld world, float dt)
     {
@@ -128,14 +128,9 @@ public partial class BlightView
 
         view.Oval.Basis = turn.Scaled(HearthOval);
         view.Rim.Basis = turn.Scaled(view.Rim.Scale);
-        // Struck by her light (flashing), worn down (its outline holding).
-        float hit = f.Corruption.Since < 0.25f && f.Corruption.LastHit > 0f ? 1f - f.Corruption.Since / 0.25f : 0f;
+        // Worn down: its outline holding (no flash as her light strikes, for now).
         float worn = 1f - f.Corruption.Fraction;
-        foreach (var part in new[] { view.Oval, view.Rim, view.Sting })
-        {
-            part.SetInstanceShaderParameter(SN.Of("hit"), hit);
-            part.SetInstanceShaderParameter(SN.Of("worn"), worn);
-        }
+        foreach (var part in new[] { view.Oval, view.Rim, view.Sting }) part.SetInstanceShaderParameter(SN.Of("worn"), worn);
         // Its ink lifts off it in drops.
         view.Drip -= dt;
         if (view.Drip <= 0f)

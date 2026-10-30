@@ -51,6 +51,8 @@ public partial class BellView : Node3D
     OmniLight3D _halo = null!;
     /// <summary>The beam's half-angle (degrees) and how far it reaches (before Lantern and glow).</summary>
     const float BeamAngle = 17f, BeamRange = 26f;
+    /// <summary>The searchlight's strength (before Lantern, glow, her breath and pulse).</summary>
+    const float BeamEnergy = 2.38f;
     Vector3 _beam = Vector3.Down;
     /// <summary>Which way her searchlight points (world, unit), and the cosine of its half-angle.</summary>
     public Vector3 BeamDirection => _beam;
@@ -124,7 +126,7 @@ public partial class BellView : Node3D
     /// Light bubbles: the light she has to spend, 0..1, presentation only. Each volley spends a little (the bell dims to
     /// 0.85 when it is gone, never dark) and it rekindles while she holds her fire.
     /// </summary>
-    float _reserve = 1f, _breath = 1f;
+    float _reserve = 1f, _breath = 1f, _points;
     const float SpendPerBubble = 0.07f, Rekindle = 0.45f;
 
     public override void _Ready()
@@ -185,7 +187,7 @@ public partial class BellView : Node3D
         // swims right beside her from going black.
         _light = new SpotLight3D
         {
-            LightColor = Glow, LightEnergy = 3.4f, SpotRange = BeamRange, SpotAngle = BeamAngle, SpotAngleAttenuation = 0.6f, SpotAttenuation = 0.9f,
+            LightColor = Glow, LightEnergy = BeamEnergy, SpotRange = BeamRange, SpotAngle = BeamAngle, SpotAngleAttenuation = 0.6f, SpotAttenuation = 0.9f,
             ShadowEnabled = OctoShoots.Game.Settings.ViewOptions.Shadows, ShadowBias = 0.06f, ShadowNormalBias = 1.2f,
             LightSize = 0.3f, ShadowBlur = 1f, LightSpecular = 0.8f, TopLevel = true,
         };
@@ -342,6 +344,8 @@ public partial class BellView : Node3D
         _phase = Mathf.PosMod(_phase + h * (burst ? 1.8f : 0.6f + 0.8f * Mathf.Min(pace, 1.3f)), 1f);
         float before = _pulse;
         _pulse = Mathf.Lerp(_pulse, Contraction(_phase) * _amp, 1f - Mathf.Exp(-25f * h));
+        // Tide Pulse: her bell draws in hard before each of its waves and snaps open as the wave leaves.
+        _pulse = Mathf.Max(_pulse, OctoShoots.Core.Plane.PushTuning.Contraction(p.PushTime, p.PushLength));
         float pulseRate = h > 0f ? (_pulse - before) / h : 0f;
         _hurt = hit ? 1f : Mathf.MoveToward(_hurt, 0f, h * 2.2f);
         _inkGhost = Mathf.MoveToward(_inkGhost, p.DashInvulnerableTimer > 0f ? 1f : 0f, h * 10f);
@@ -408,7 +412,7 @@ public partial class BellView : Node3D
         float deep = Mathf.Clamp((Lantern - 1f) / 0.85f, 0f, 1f);
         _light.SpotRange = BeamRange * glow * Mathf.Sqrt(Lantern);
         if (!_dbgFalloff) _light.SpotAttenuation = Mathf.Lerp(1f, 0.6f, deep);
-        _light.LightEnergy = 3.4f * _dbgEnergy * Mathf.Pow(Lantern, 1.8f) * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
+        _light.LightEnergy = BeamEnergy * _dbgEnergy * Mathf.Pow(Lantern, 1.8f) * (1f + 0.4f * (glow - 1f)) * (0.94f + 0.12f * _pulse) * (0.7f + 0.3f * _breath);
         _light.LightColor = Glow.Lerp(PrismColour, _prism).Lerp(new Color(1f, 0.3f, 0.55f), _hurt * 0.5f);
         // The red and the blue: lighter lanterns, unshadowed (her own casts the reef's shadows).
         if (Part >= 0)
@@ -488,7 +492,7 @@ public partial class BellView : Node3D
                     _bellMaterial.SetShaderParameter(name, c);
                     if (i < 2) _strandMaterial.SetShaderParameter(name, c);
                 }
-                _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_pattern"), (int)look.Pattern);
+                _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("mimic_icon"), (int)look.Icon);
             }
             float k = Mathf.Clamp(ritual.Ritual / PearlRitual.Mimic, 0f, 1f);
             _mimic = k * k * (3f - 2f * k);
@@ -543,6 +547,9 @@ public partial class BellView : Node3D
     /// </summary>
     void SyncVitals(PlaneWorld world, float h)
     {
+        // A skill point waits: her gonads pulse until it is spent.
+        _points = Mathf.MoveToward(_points, world.Run.Points > 0 ? 1f : 0f, h * 3f);
+        _bellMaterial.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("points"), _points);
         // The adventure shows her health and her pearl's charge on the HUD's gonad gauge: her gonads and her rim are
         // only hers then, always whole, never a gauge.
         if (world.Options.Adventure)

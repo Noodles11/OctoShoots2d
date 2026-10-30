@@ -178,7 +178,7 @@ public sealed partial class PlaneWorld
             if (n > 0) centre = sum / n;
         }
         bool chase = Vector2.Distance(centre, p.Position) < BlightTuning.Sense;
-        Vector2 wish = chase ? SafeNormalize(p.Position - m.Position) * speed : Vector2.Zero;
+        Vector2 wish = chase ? WayToHer(m.Position) * speed : Vector2.Zero;
         // A swarm swims as one: pulled to its middle, apart from its neighbours.
         if (m.Swarm >= 0) wish += (centre - m.Position) * (chase ? 0.6f : 1.2f) + apart * 4f;
         wish += new Vector2(MathF.Sin(Time * 2.3f + m.Seed), MathF.Cos(Time * 1.9f + m.Seed * 2f)) * (chase ? 0.4f : 0.6f);

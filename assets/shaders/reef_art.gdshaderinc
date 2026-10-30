@@ -217,11 +217,27 @@ vec2 art_picture(vec3 w) {
 	return vec2(w.x, dot(w, vec3(0.0, 0.5, -0.866)));
 }
 
+// How round a dot laid on the picture plane still shows on screen here (1 round → 0 drawn out): the picture plane is
+// the view along the camera's middle, and off it, on rock seen nearly edge-on (a wall's face, a drop's lip), the true
+// view squeezes a dot into a stroke. The stretch is the ratio of the pixel footprint's two axes on the plane (the
+// singular values of its Jacobian); dots fade out before they could read as lines.
+float art_round(vec2 q) {
+	vec2 qx = dFdx(q), qy = dFdy(q);
+	float fro = dot(qx, qx) + dot(qy, qy);
+	float det = abs(qx.x * qy.y - qx.y * qy.x);
+	float disc = sqrt(max(fro * fro - 4.0 * det * det, 0.0));
+	float big = sqrt(0.5 * (fro + disc)), small = sqrt(max(0.5 * (fro - disc), 1e-14));
+	return 1.0 - smoothstep(1.25, 1.6, big / small);
+}
+
 // The game's own look (0): its shade stippled too, the dots not ink but a deeper shade of the reef's own colour
 // (art_dot_colour), laid into its albedo so the light falls on them like the rest. How much of a dot lies here, 0..1.
+// Only round dots: where one would be drawn out into a line, none.
 float art_dots(vec3 w, vec3 local, vec3 n) {
 	vec2 q = art_picture(w);
-	return art_stipple(q, length(fwidth(q)) * 0.7071, art_tone(w, local, n));
+	float round_ = art_round(q);
+	if (round_ <= 0.0) return 0.0;
+	return art_stipple(q, length(fwidth(q)) * 0.7071, art_tone(w, local, n)) * round_;
 }
 
 // Looks 4 and 5's shade: the tone it must state here (art_tone, and the sponge's holes), drawn in stippled dots, and
@@ -235,7 +251,7 @@ vec2 art_shading(vec3 w, vec3 local, vec3 n) {
 	vec3 sponge = art_sponge(w, n, px_wall);
 	// Through a hole, only the water beyond: none of the wall's own shade.
 	tone = mix(max(tone, sponge.x), 0.0, sponge.z);
-	return vec2(max(0.85 * art_stipple(q, px, tone), 0.9 * sponge.y), sponge.z);
+	return vec2(max(0.85 * art_stipple(q, px, tone) * art_round(q), 0.9 * sponge.y), sponge.z);
 }
 
 // The felt tip (looks 2-5, a light touch of it in 3): x how much ink lies here, 0..1; y how much of the water beyond a

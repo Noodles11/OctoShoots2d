@@ -82,6 +82,14 @@ public partial class LevelView : Node3D
     bool _below;
     readonly List<(Canopy Canopy, ShaderMaterial Material, float Alpha)> _canopies = new();
     readonly List<ShaderMaterial> _lids = new();
+    /// <summary>How far under a cave's roof its sun shadow is cast from.</summary>
+    const float LidShadowDrop = 6f;
+    /// <summary>
+    /// The secret caves still sealed (by cave), and what of them is kept whole till their wall opens: the roof and the
+    /// wall itself are never faded nor carved away round her, so nothing shows there is a chamber behind the rock.
+    /// </summary>
+    readonly HashSet<int> _sealedCaves = new();
+    readonly Dictionary<int, List<ShaderMaterial>> _keptWhole = new();
     readonly Dictionary<int, ShaderMaterial> _tunnelRoofs = new();
     Shader _rock = null!;
 
@@ -129,6 +137,13 @@ public partial class LevelView : Node3D
     {
         int i = _seals.FindIndex(s => s.At == at);
         if (i < 0) return;
+        // A secret's wall coming down: its cave is no longer hidden (its roof fades over her and carves away again).
+        if (!up && _map.WeakRocks.Any(r => r.Center == at && r.Kind == SealKind.Secret) && _map.WeakRocks.First(r => r.Center == at).Cave is int cave and >= 0)
+        {
+            _sealedCaves.Remove(cave);
+            _keptWhole.Remove(cave);
+            _seeThrough = default;
+        }
         var (_, wall, remains, height) = _seals[i];
         if (remains is not null) remains.Visible = true;
         wall.Visible = true;
@@ -174,11 +189,24 @@ public partial class LevelView : Node3D
         foreach (var surface in shape.Ground) AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = _ground });
 
         _lids.Clear();
+        _sealedCaves.Clear();
+        _keptWhole.Clear();
+        foreach (var rock in map.WeakRocks)
+            if (rock.Kind == SealKind.Secret && rock.Cave >= 0) _sealedCaves.Add(rock.Cave);
         for (int i = 0; i < map.Caves.Count; i++)
         {
             var lid = Rock(0f);
             _lids.Add(lid);
-            if (shape.Lids[i] is { } surface) AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = lid });
+            if (_sealedCaves.Contains(i)) KeepWhole(i, lid);
+            if (shape.Lids[i] is { } surface)
+            {
+                // The roof casts no sunlight shadow of its own (a single sheet over the hollow, it shaded itself: a dark
+                // pit over every cave, giving the chamber away); a copy a little under it, seen only by the sun, keeps
+                // the chamber in shade.
+                var mesh = ToMesh(surface);
+                AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = lid, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
+                AddChild(new MeshInstance3D { Mesh = mesh, MaterialOverride = lid, CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, Position = new Vector3(0f, -LidShadowDrop, 0f) });
+            }
         }
         _tunnelRoofs.Clear();
         foreach (var (corridor, surface) in shape.TunnelRoofs)
@@ -188,13 +216,22 @@ public partial class LevelView : Node3D
             AddChild(new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = roof });
         }
         foreach (var canopy in map.Canopies) AddCanopy(canopy);
+        AddShopGates(map);
         // Sealed walls: the reef wall carried on across their passage (LevelMap.Sealed), in the reef's own ground, so each is
         // one more stretch of wall. SealView carves its emblem; Slide brings it down.
         _seals.Clear();
         foreach (var rock in map.WeakRocks)
         {
             if (SealSurface(map, rock) is not { } surface) continue;
-            var wall = new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = _ground };
+            // A secret's wall is the reef's ground, but its own copy of it, so it is not carved away round her either.
+            var face = _ground;
+            if (rock.Kind == SealKind.Secret && rock.Cave >= 0)
+            {
+                face = (ShaderMaterial)_ground.Duplicate();
+                Track(face);
+                KeepWhole(rock.Cave, face);
+            }
+            var wall = new MeshInstance3D { Mesh = ToMesh(surface), MaterialOverride = face };
             AddChild(wall);
             // A long one's remains (what stands either side of its gate once it opens), hidden till then.
             MeshInstance3D? remains = null;
@@ -220,6 +257,15 @@ public partial class LevelView : Node3D
     {
         if (!_materials.Contains(m)) _materials.Add(m);
     }
+
+    void KeepWhole(int cave, ShaderMaterial m)
+    {
+        if (!_keptWhole.TryGetValue(cave, out var list)) _keptWhole[cave] = list = new List<ShaderMaterial>();
+        list.Add(m);
+    }
+
+    /// <summary>Whether this material is kept whole (a sealed secret's roof or wall).</summary>
+    bool KeptWhole(ShaderMaterial m) => _keptWhole.Values.Any(list => list.Contains(m));
 
     /// <summary>
     /// Where the level sits in the world (its offset) and its absolute origin, which its patterns are drawn from: a
@@ -257,7 +303,7 @@ public partial class LevelView : Node3D
         _seeThrough = v;
         foreach (var m in _materials)
         {
-            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("see_through"), v);
+            m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("see_through"), KeptWhole(m) ? v with { W = 0f } : v);
             m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("see_through_y"), her.Y);
         }
     }
@@ -500,14 +546,96 @@ public partial class LevelView : Node3D
     }
 
     /// <summary>
-    /// A cave's roof: the mountain as it stood before the cave was hollowed out, over the chambers and a little past them
-    /// (where it meets the terrain again). It fades like any canopy while Clementine is inside.
+    /// A cave's roof: the rock carried on over the chambers and a little past them, so the cave reads as solid reef. Its
+    /// height is the mountain as it stood before the cave was hollowed out, raised wherever the rock round it stands
+    /// higher (a smooth surface spanned between the heights at its edge), so it never sinks into a basin that gives the
+    /// chamber away. A secret room's roof runs on over its way in to the middle of its sealed wall, meeting the wall's
+    /// top, so nothing shows a passage behind it. It fades like any canopy while Clementine is inside.
     /// </summary>
     internal static LevelShape.Surface? LidSurface(LevelMap map, CaveSite cave)
     {
-        int x0 = Math.Max(0, (int)cave.Chambers.Min(c => c.Center.X - c.Radius) - 4), x1 = Math.Min(LevelMap.Size, (int)cave.Chambers.Max(c => c.Center.X + c.Radius) + 5);
-        int y0 = Math.Max(0, (int)cave.Chambers.Min(c => c.Center.Y - c.Radius) - 4), y1 = Math.Min(LevelMap.Size, (int)cave.Chambers.Max(c => c.Center.Y + c.Radius) + 5);
-        return SurfaceMesh((x, y) => SmoothRoof(map, x, y) + 0.03f, x0, y0, x1, y1, (x, y) => SmoothRoof(map, x, y) > SmoothHeight(map, x, y) + 0.05f);
+        int index = map.Caves.IndexOf(cave);
+        WeakRock? seal = map.WeakRocks.Where(r => r.Kind == SealKind.Secret && r.Cave == index).Select(r => (WeakRock?)r).FirstOrDefault();
+        var spur = map.Corridors.FirstOrDefault(c => c.Poi == cave.Poi);
+        float spurHalf = (spur?.HalfWidth ?? 2f) + 4f;
+        // How far along its way in the roof runs: a secret's to the middle of its wall, a shop's to its gateway's face.
+        bool shop = map.Pois[cave.Poi].Kind == PoiKind.Shop;
+        var gate = shop ? ShopGate(map, cave) : default;
+        System.Numerics.Vector2? end = seal?.Center ?? (shop ? gate.At : null);
+        float cut = seal is not null ? 0f : GateDepth * 0.5f;
+        var facing = cave.Facing;
+        // A shop's roof keeps the height of the walls beside its passage out to its face, well over the gateway.
+        float face = 0f;
+        if (shop)
+        {
+            var across = new System.Numerics.Vector2(-facing.Y, facing.X);
+            var l = gate.At + across * spurHalf;
+            var r = gate.At - across * spurHalf;
+            face = MathF.Max(0.5f * (SmoothHeight(map, l.X, l.Y) + SmoothHeight(map, r.X, r.Y)), gate.Crown + 1.6f);
+        }
+        float Beyond(System.Numerics.Vector2 p) => end is { } e ? System.Numerics.Vector2.Dot(p - e, facing) - cut : 0f;
+        var points = cave.Chambers.Select(c => c.Center).ToList();
+        if (end is { } e0) points.Add(e0);
+        float pad = cave.Chambers.Max(c => c.Radius) + 6f;
+        int x0 = Math.Max(0, (int)(points.Min(p => p.X) - pad)), x1 = Math.Min(LevelMap.Size, (int)(points.Max(p => p.X) + pad));
+        int y0 = Math.Max(0, (int)(points.Min(p => p.Y) - pad)), y1 = Math.Min(LevelMap.Size, (int)(points.Max(p => p.Y) + pad));
+        int w = x1 - x0 + 1, h = y1 - y0 + 1;
+        bool Under(int x, int y)
+        {
+            var p = new System.Numerics.Vector2(x, y);
+            foreach (var (c, r) in cave.Chambers)
+                if (System.Numerics.Vector2.Distance(p, c) < r + 2f) return true;
+            for (int i = 1; i < cave.Chambers.Count; i++)
+                if (Geo.SegmentDistance(p, cave.Chambers[i - 1].Center, cave.Chambers[i].Center) < 4f) return true;
+            return end is { } e && Geo.SegmentDistance(p, cave.Chambers[0].Center, e) < spurHalf && Beyond(p) <= 0f;
+        }
+        // Just past a shop's face, over its passage: held at the face's height, so the roof runs level out to it.
+        bool AtFace(int x, int y)
+        {
+            if (!shop || end is not { } e) return false;
+            var p = new System.Numerics.Vector2(x, y);
+            float b = Beyond(p);
+            return b > 0f && b < 2.5f && Geo.SegmentDistance(p, cave.Chambers[0].Center, e + facing * 3f) < spurHalf;
+        }
+        // Its way in stays open (a secret's excepted): no roof over the passage past the chamber's rim.
+        bool Passage(int x, int y)
+        {
+            if (end is not null || spur is null) return false;
+            var p = new System.Numerics.Vector2(x, y);
+            if (cave.Chambers.Any(c => System.Numerics.Vector2.Distance(p, c.Center) < c.Radius - 0.5f)) return false;
+            for (int i = 1; i < spur.Points.Count; i++)
+                if (Geo.SegmentDistance(p, spur.Points[i - 1], spur.Points[i]) < spur.HalfWidth + 1f) return true;
+            return false;
+        }
+        // The rock round it: the terrain, and a secret's wall where it stands.
+        float Around(int x, int y) => seal is { } sw && !float.IsNaN(map.SealedAt(x, y)) && OfSeal(map, sw, x, y) ? MathF.Max(map[x, y], map.SealedAt(x, y)) : map[x, y];
+        var under = new bool[w * h];
+        var roof = new float[w * h];
+        for (int j = 0; j < h; j++)
+        for (int i = 0; i < w; i++)
+        {
+            int x = x0 + i, y = y0 + j, k = j * w + i;
+            under[k] = i > 0 && j > 0 && i < w - 1 && j < h - 1 && Under(x, y) && !Passage(x, y);
+            roof[k] = under[k] ? (float.IsNaN(map.LidAt(x, y)) ? Around(x, y) : map.LidAt(x, y)) : AtFace(x, y) ? face : Around(x, y);
+        }
+        // Spanned from the heights at its edge (relaxed toward their average, a few hundred passes).
+        var span = (float[])roof.Clone();
+        for (int pass = 0; pass < 300; pass++)
+            for (int j = 1; j < h - 1; j++)
+            for (int i = 1; i < w - 1; i++)
+            {
+                int k = j * w + i;
+                if (under[k]) span[k] = 0.25f * (span[k - 1] + span[k + 1] + span[k - w] + span[k + w]);
+            }
+        for (int k = 0; k < roof.Length; k++)
+            if (under[k]) roof[k] = MathF.Max(MathF.Max(roof[k], span[k]), shop ? gate.Crown + 1.2f : LevelMap.SwimBand + 2.5f);
+        float Grid(int x, int y)
+        {
+            int i = x - x0, j = y - y0;
+            return i >= 0 && j >= 0 && i < w && j < h && under[j * w + i] ? roof[j * w + i] : Around(x, y);
+        }
+        float Height(float x, float y) => SmoothSample(Grid, x, y);
+        return SurfaceMesh((x, y) => Height(x, y) + 0.03f, x0, y0, x1, y1, (x, y) => Height(x, y) > SmoothHeight(map, x, y) + 0.05f);
     }
 
     /// <summary>
@@ -595,6 +723,150 @@ public partial class LevelView : Node3D
         }
         else AddChild(new MeshInstance3D { Mesh = ArchMesh(c), MaterialOverride = material });
         _canopies.Add((c, material, 1f));
+    }
+
+    // ───────────────────────── the shop's gateway ─────────────────────────
+
+    /// <summary>Each shop's sign (its golden shells and glow) and the canopy it goes with (its cave's roof): gone while that fades.</summary>
+    readonly List<(Canopy Canopy, Node3D Inlay)> _gates = new();
+    static ShaderMaterial? _goldShell;
+    /// <summary>The gateway: out from the chamber's rim along the passage, springing this high over her plane, this deep and thick.</summary>
+    const float GateOut = 1.8f, GateSpring = 0.9f, GateDepth = 1.4f, GateThick = 0.75f;
+    /// <summary>The sign's shells: this far apart, side by side.</summary>
+    const float SignSpacing = 1.05f;
+
+    /// <summary>A shop's gateway: its middle (map), its half-span (the passage's half-width and a little), its crown's height.</summary>
+    static (System.Numerics.Vector2 At, float Half, float Crown) ShopGate(LevelMap map, CaveSite cave)
+    {
+        var spur = map.Corridors.FirstOrDefault(c => c.Poi == cave.Poi);
+        float half = (spur?.HalfWidth ?? 2f) + 0.3f;
+        return (cave.Mouth + cave.Facing * GateOut, half, LevelMap.SwimBand + GateSpring + half + GateThick * 0.5f);
+    }
+
+    /// <summary>
+    /// A shop shows its way in (DESIGN-TOPDOWN §4.2): its roof runs on over its passage as solid rock out to a face, and
+    /// in that face its doorway, a round arch of pale dressed stone on two posts from the passage floor; over the arch,
+    /// on the face, its sign: three golden shells side by side, a warm glow about them.
+    /// </summary>
+    void AddShopGates(LevelMap map)
+    {
+        _gates.Clear();
+        foreach (var cave in map.Caves)
+        {
+            if (map.Pois[cave.Poi].Kind != PoiKind.Shop) continue;
+            var (at, half, crown) = ShopGate(map, cave);
+            var f = cave.Facing;
+            var side2 = new System.Numerics.Vector2(-f.Y, f.X);
+            var footA = at - side2 * half;
+            var footB = at + side2 * half;
+            float floor = Mathf.Min(SmoothHeight(map, footA.X, footA.Y), SmoothHeight(map, footB.X, footB.Y)) - 0.4f;
+            float spring = LevelMap.SwimBand + GateSpring;
+            var centre = new Vector3(at.X, 0f, at.Y);
+            var side = new Vector3(side2.X, 0f, side2.Y);
+            var fwd = new Vector3(f.X, 0f, f.Y);
+            var material = Rock(0.06f, new Color(1.08f, 0.98f, 0.82f));
+            AddChild(new MeshInstance3D { Mesh = GateMesh(centre, side, fwd, half, floor, spring), MaterialOverride = material });
+
+            // Its sign: three golden shells side by side on the face over the arch, the middle one a little higher and
+            // larger, their coils turned out of the face and up toward the camera so they read from above.
+            _goldShell ??= GoldShell();
+            var inlay = new Node3D();
+            AddChild(inlay);
+            var toEye = new Vector3(0f, Mathf.Sin(Mathf.DegToRad(CameraRig.Tilt)), Mathf.Cos(Mathf.DegToRad(CameraRig.Tilt))).Normalized();
+            var faceOut = (toEye + fwd * 0.45f).Normalized();
+            for (int k = -1; k <= 1; k++)
+            {
+                bool middle = k == 0;
+                var p = centre + Vector3.Up * (crown + (middle ? 1f : 0.8f)) + fwd * (GateDepth * 0.5f + 0.45f) + side * (k * SignSpacing);
+                var shell = new MeshInstance3D { Mesh = OctoShoots.Game.Fx.NautilusShell.Mesh, MaterialOverride = _goldShell, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+                var x = side.Rotated(faceOut, k * 0.5f);
+                var look = new Basis(x, faceOut, x.Cross(faceOut).Normalized());
+                shell.Transform = new Transform3D(look.Scaled(Vector3.One * (middle ? 1.15f : 0.95f)), p);
+                // (A gentler shimmer than a loose shell's, so the gold is not washed white.)
+                shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("shimmer"), 0.2f);
+                shell.SetInstanceShaderParameter(OctoShoots.Game.Fx.SN.Of("shimmer_seed"), 0.3f * (k + 1));
+                inlay.AddChild(shell);
+            }
+            inlay.AddChild(new OmniLight3D { LightColor = new Color(1f, 0.78f, 0.4f), LightEnergy = 0.9f, OmniRange = 4.5f, ShadowEnabled = false, Position = centre + Vector3.Up * (crown + 0.8f) + fwd * 1.2f });
+
+            var gate = new Canopy
+            {
+                Kind = CanopyKind.Arch,
+                Center = at,
+                Axis = side2,
+                HalfLength = half + GateThick,
+                HalfWidth = GateDepth * 0.5f + 0.2f,
+                Bottom = spring,
+                Top = spring + half + GateThick,
+            };
+            _canopies.Add((gate, material, 1f));
+            // The sign is on the rock's face, not the arch: it goes with the cave's roof (as she swims inside), not the arch.
+            var roof = map.Canopies.FirstOrDefault(c => c.Kind == CanopyKind.CaveRoof && cave.Chambers.Any(ch => ch.Center == c.Center)) ?? gate;
+            _gates.Add((roof, inlay));
+        }
+    }
+
+    /// <summary>The nautilus coated in gold (its silver and its tarnish warmed): the shells set in a shop's gateway.</summary>
+    static ShaderMaterial GoldShell()
+    {
+        var m = (ShaderMaterial)OctoShoots.Game.Fx.NautilusShell.Material.Duplicate();
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("silver"), new Color(1f, 0.6f, 0.08f));
+        m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("tarnish"), new Color(0.38f, 0.2f, 0.04f));
+        return m;
+    }
+
+    /// <summary>
+    /// The gateway's stone: a band of rounded-square section along two posts up from the floor and a half-circle over the
+    /// passage (its centre <paramref name="spring"/> high, radius <paramref name="half"/>), across <paramref name="side"/>.
+    /// </summary>
+    static ArrayMesh GateMesh(Vector3 centre, Vector3 side, Vector3 fwd, float half, float floor, float spring)
+    {
+        const int arcSteps = 24, postSteps = 4, around = 16;
+        var path = new List<(Vector3 P, Vector3 Out)>();
+        for (int i = 0; i <= postSteps; i++)
+            path.Add((centre - side * half + Vector3.Up * Mathf.Lerp(floor, spring, i / (float)postSteps), -side));
+        for (int i = 1; i < arcSteps; i++)
+        {
+            float a = Mathf.Pi * (1f - i / (float)arcSteps);
+            var radial = side * Mathf.Cos(a) + Vector3.Up * Mathf.Sin(a);
+            path.Add((centre + Vector3.Up * spring + radial * half, radial));
+        }
+        for (int i = postSteps; i >= 0; i--)
+            path.Add((centre + side * half + Vector3.Up * Mathf.Lerp(floor, spring, i / (float)postSteps), side));
+        var verts = new List<Vector3>();
+        var normals = new List<Vector3>();
+        var indices = new List<int>();
+        foreach (var (p, outward) in path)
+            for (int j = 0; j < around; j++)
+            {
+                float ang = j * Mathf.Tau / around;
+                float cx = Mathf.Cos(ang), cy = Mathf.Sin(ang);
+                // A rounded square: dressed stone, its edges eased.
+                float sx = Mathf.Sign(cx) * Mathf.Pow(Mathf.Abs(cx), 0.35f), sy = Mathf.Sign(cy) * Mathf.Pow(Mathf.Abs(cy), 0.35f);
+                verts.Add(p + outward * (sx * GateThick * 0.5f) + fwd * (sy * GateDepth * 0.5f));
+                normals.Add((outward * cx * GateDepth + fwd * cy * GateThick).Normalized());
+            }
+        for (int i = 0; i + 1 < path.Count; i++)
+        {
+            // Wound to face out whichever way the path runs (the section turns from out to fwd: against the path, or with it).
+            var along = path[i + 1].P - path[i].P;
+            bool flip = path[i].Out.Cross(fwd).Dot(along) < 0f;
+            for (int j = 0; j < around; j++)
+            {
+                int j1 = (j + 1) % around;
+                int p0 = i * around + j, p1 = i * around + j1, p2 = (i + 1) * around + j, p3 = (i + 1) * around + j1;
+                if (flip) indices.AddRange(new[] { p0, p1, p2, p1, p3, p2 });
+                else indices.AddRange(new[] { p0, p2, p1, p1, p2, p3 });
+            }
+        }
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
+        arrays[(int)Mesh.ArrayType.Normal] = normals.ToArray();
+        arrays[(int)Mesh.ArrayType.Index] = indices.ToArray();
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
     }
 
     /// <summary>
@@ -718,6 +990,8 @@ public partial class LevelView : Node3D
         for (int i = 0; i < _canopies.Count; i++)
         {
             var c = _canopies[i].Canopy;
+            // A sealed secret's roof stays: she cannot be in there, and it must not show there is a chamber under it.
+            if (c.Kind == CanopyKind.CaveRoof && _sealedCaves.Contains(CaveOf(c))) continue;
             var (lo, hi) = _spans.TryGetValue(c, out var span) ? span : (c.Bottom, c.Top);
             if (!Blocks(c, lo, hi, her, sight)) continue;
             hide[i] = true;
@@ -735,6 +1009,9 @@ public partial class LevelView : Node3D
             if (_noCanopy) alpha = 0f;
             // A dithered dissolve: the rock stays opaque, so the depth focus still blurs it like other high rock.
             material.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("fade"), alpha);
+            // A shop's gateway: its golden shells and glow go with it.
+            foreach (var (gate, inlay) in _gates)
+                if (gate == c) inlay.Visible = alpha > 0.5f;
             _canopies[i] = (c, material, alpha);
         }
     }

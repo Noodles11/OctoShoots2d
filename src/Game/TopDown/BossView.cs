@@ -280,11 +280,11 @@ public partial class BossView : Node3D
         rig.SyncMutations(boss, melt, _time);
         if (world.Events.Exists(e => e.Type == PlaneEventType.BossMutates)) _surge = 1f;
         _surge = Mathf.MoveToward(_surge, 0f, dt / 1.5f);
-        // Corrupted colours wash back in once it is freed; hits flash it white; it fades as it leaves.
+        // Corrupted colours wash back in once it is freed; it fades as it leaves.
         if (boss.Stage == BossStage.Freed) _drained = Mathf.MoveToward(_drained, 0f, dt / 1.2f);
         float fade = boss.Freed && boss.Spec.Form != OctoShoots.Core.Bosses.BodyForm.GiantClam ? 1f - Mathf.Clamp((boss.Leap - 0.6f) / 0.4f, 0f, 1f) : 1f;
-        // A hit only brightens it a little (under steady fire the flashes overlap; it must never turn white).
-        rig.SetSkin(_drained, boss.HitFlash > 0f ? 0.25f : 0f, _surge + (world.Corruption is null ? 0f : boss.Crust * 0.06f), fade);
+        // (No brightening as her light strikes it, for now.)
+        rig.SetSkin(_drained, 0f, _surge + (world.Corruption is null ? 0f : boss.Crust * 0.06f), fade);
         _root.Visible &= !boss.Gone && fade > 0.01f;
 
         // The pearl: where the sim has it (a moving window's travels round the body), at the rig's height.

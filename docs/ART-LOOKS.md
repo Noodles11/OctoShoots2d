@@ -6,7 +6,10 @@
 > (`reef_art.gdshaderinc`, used by the ground and the free rock), and changes how the depth pass states distance.
 > The game's own look keeps its painting; it takes only the stippling of looks 4 and 5 (the same dots, the same shade
 > they state), each dot a deeper shade of the reef's own colour (45% of it, with a fifth of the ink mixed in, laid 70%
-> over it) rather than ink, so the light falls on the dots like the rest.
+> over it) rather than ink, so the light falls on the dots like the rest. Every look draws only round dots: the picture
+> plane is the view along the camera's middle, and off it, on rock seen nearly edge-on (a wall's face low on the
+> screen, a drop's lip), a dot would show drawn out into a dash or a line; where its stretch on screen passes 1.25 it
+> fades, gone by 1.6 (`art_round`).
 
 Choose one with `--look=N` (the `reef_art` shader global): 0 is the game's own look.
 

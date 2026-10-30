@@ -65,7 +65,7 @@ public partial class SeaPediaCard : PanelContainer
         var title = TitleStyle.Text("Sea-pedia", 40, TitleStyle.Ink, TitleStyle.Display);
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
+        var close = TitleStyle.Pill(TitleStyle.CloseText, primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 
@@ -178,13 +178,7 @@ public partial class SeaPediaCard : PanelContainer
 
     ColorRect PearlIcon(ItemDef? item, Known state, float size)
     {
-        var mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/pearl_icon.gdshader") };
-        var look = item?.Pearl;
-        var colors = look?.Colors ?? new List<string> { "#ffffff", "#dddddd" };
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c0"), Color.FromHtml(colors[0]));
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c1"), Color.FromHtml(colors[Math.Min(1, colors.Count - 1)]));
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("c2"), Color.FromHtml(colors[^1]));
-        mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("pattern"), (int)(look?.Pattern ?? PearlPattern.Halo));
+        var mat = OctoShoots.Game.Fx.PearlMaterials.Flat(item?.Pearl);
         mat.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("state"), state switch { Known.Absorbed => 0, Known.Seen => 1, _ => 2 });
         _spinning.Add(mat);
         return new ColorRect { CustomMinimumSize = new Vector2(size, size), Material = mat, MouseFilter = MouseFilterEnum.Ignore };

@@ -40,6 +40,9 @@ public static class InputSetup
 	public const string MenuDown = "menu_down";
 	public const string MenuLeft = "menu_left";
 	public const string MenuRight = "menu_right";
+	/// <summary>The pause menu's tabs on a controller (LB and RB by default).</summary>
+	public const string MenuTabLeft = "menu_tab_left";
+	public const string MenuTabRight = "menu_tab_right";
 
 	/// <summary>A rebindable action: its name in Settings, its default keyboard/mouse and controller bindings.</summary>
 	public sealed record Spec(string Action, string Name, string Key, string Pad, bool KeyLocked = false);
@@ -69,6 +72,8 @@ public static class InputSetup
 		new(MenuDown, "Menu: down", "", "button:DpadDown", KeyLocked: true),
 		new(MenuLeft, "Menu: left", "", "button:DpadLeft", KeyLocked: true),
 		new(MenuRight, "Menu: right", "", "button:DpadRight", KeyLocked: true),
+		new(MenuTabLeft, "Menu: previous tab", "", "button:LeftShoulder", KeyLocked: true),
+		new(MenuTabRight, "Menu: next tab", "", "button:RightShoulder", KeyLocked: true),
 	};
 
 	/// <summary>The menu actions and the Godot ui action each one drives.</summary>
@@ -79,6 +84,51 @@ public static class InputSetup
 
 	/// <summary>A controller's last press, for Settings (what the pad really sends).</summary>
 	public static string? LastPad { get; set; }
+
+	/// <summary>
+	/// Whether the player is on the controller now (the last input came from it), so the key hints on screen show its
+	/// buttons (Hint). Set by the screens as the input switches.
+	/// </summary>
+	public static bool UsingPad { get; set; }
+
+	/// <summary>
+	/// The short name of what an action is bound to, for a key cap on screen: the controller's binding while on the
+	/// controller (RB, X, LT…), else the keyboard's (SHIFT, SPACE…); the other one when that slot is empty.
+	/// </summary>
+	public static string Hint(string action) => Hint(action, UsingPad);
+
+	public static string Hint(string action, bool pad)
+	{
+		string? code = Get(action, pad);
+		if (string.IsNullOrEmpty(code)) code = Get(action, !pad);
+		if (string.IsNullOrEmpty(code)) return "?";
+		var p = code.Split(':');
+		return p[0] switch
+		{
+			"key" => Enum.TryParse<Key>(p[1], out var key) ? key switch
+			{
+				Key.Escape => "ESC",
+				Key.Enter => "ENTER",
+				Key.Up => "↑", Key.Down => "↓", Key.Left => "←", Key.Right => "→",
+				_ => OS.GetKeycodeString(key).ToUpperInvariant(),
+			} : p[1].ToUpperInvariant(),
+			"mouse" => p[1] switch { "Left" => "LMB", "Right" => "RMB", "Middle" => "MMB", _ => "MOUSE " + p[1] },
+			"button" => p[1] switch
+			{
+				"LeftShoulder" => "LB", "RightShoulder" => "RB", "LeftStick" => "LS", "RightStick" => "RS",
+				"Back" => "VIEW", "Start" => "START", "Guide" => "GUIDE",
+				"DpadUp" => "D-PAD ↑", "DpadDown" => "D-PAD ↓", "DpadLeft" => "D-PAD ←", "DpadRight" => "D-PAD →",
+				_ => int.TryParse(p[1], out int raw) ? $"BUTTON {raw}" : p[1].ToUpperInvariant(),
+			},
+			"axis" => p[1] switch
+			{
+				"TriggerLeft" => "LT", "TriggerRight" => "RT",
+				"LeftX" or "LeftY" => "L-STICK", "RightX" or "RightY" => "R-STICK",
+				_ => int.TryParse(p[1], out int raw) ? $"AXIS {raw}" : p[1].ToUpperInvariant(),
+			},
+			_ => code,
+		};
+	}
 
 	const string FilePath = "user://bindings.json";
 	static readonly Dictionary<string, (string? Key, string? Pad)> Current = new();

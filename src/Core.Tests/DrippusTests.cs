@@ -219,7 +219,7 @@ public class DrippusTests
             for (int i = 0; i < 60 * 240 && took is null; i++)
             {
                 var aim = boss.Position - w.ArenaCenter - new Vector2(0f, 7f);
-                Hold(w, 7f, new PlaneInput { Aim = -Vector2.UnitY, AimReach = 8f, Fire = true });
+                Hold(w, 7f, new PlaneInput { Aim = -Vector2.UnitY, Fire = true });
                 if (boss.Freed) took = i * PlaneWorld.Dt;
             }
             Assert.NotNull(took);

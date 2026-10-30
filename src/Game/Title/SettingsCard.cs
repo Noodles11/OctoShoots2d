@@ -34,7 +34,7 @@ public partial class SettingsCard : PanelContainer
         var title = TitleStyle.Text("Settings", 40, TitleStyle.Ink, TitleStyle.Display);
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        var close = TitleStyle.Pill("Close  (Esc · B)", primary: false, size: 15);
+        var close = TitleStyle.Pill(TitleStyle.CloseText, primary: false, size: 15);
         close.Pressed += _close;
         head.AddChild(close);
 

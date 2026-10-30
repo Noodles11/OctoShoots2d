@@ -67,7 +67,7 @@ public partial class ClamRoomView : Node3D
         foreach (var poi in map.Pois.Where(p => p.Kind == PoiKind.TreasureCave && p.Cave >= 0))
         {
             var room = Build(map, poi, map.Caves[poi.Cave], bright);
-            // Lit by the pearl that lies in it: its colours, in its pattern.
+            // Lit by the pearl that lies in it: its colours.
             var pearl = world.Pearls.FirstOrDefault(p => p.Position == poi.Position);
             if (pearl is not null && world.Run.Catalog?.TryGet(pearl.ItemId, out var item) == true)
             {
@@ -78,7 +78,6 @@ public partial class ClamRoomView : Node3D
                 m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_c0"), Color.FromHtml(look.Colors[0]));
                 m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_c1"), Color.FromHtml(look.Colors[System.Math.Min(1, look.Colors.Count - 1)]));
                 m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_c2"), Color.FromHtml(look.Colors[^1]));
-                m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_pattern"), (int)look.Pattern);
                 m.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("glow_seed"), (float)(System.StringComparer.Ordinal.GetHashCode(item.Id) % 97));
                 room.Spill.LightColor = room.Tint;
             }

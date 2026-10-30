@@ -535,13 +535,14 @@ public partial class AdventureView : Node3D
         return null;
     }
 
-    /// <summary>The adventure's events: dots cleared go up in magic particles; a vent sealed puffs them out.</summary>
+    /// <summary>The adventure's events: dots cleared (or decayed on their own) go up in magic particles; a vent sealed puffs them out.</summary>
     public void OnEvent(PlaneWorld world, in PlaneEvent e)
     {
         var at = new Vector3(e.Position.X, LevelMap.SwimBand, e.Position.Y);
         switch (e.Type)
         {
             case PlaneEventType.DotCleared:
+            case PlaneEventType.DotDecayed:
                 for (int i = 0; i < 3; i++)
                     _magic.Emit(at + new Vector3(_rng.RandfRange(-0.2f, 0.2f), 0f, _rng.RandfRange(-0.2f, 0.2f)),
                         new Vector3(_rng.RandfRange(-0.6f, 0.6f), _rng.RandfRange(0.4f, 1.2f), _rng.RandfRange(-0.6f, 0.6f)), _rng.RandfRange(0.5f, 0.9f), _rng.RandfRange(0.14f, 0.22f));

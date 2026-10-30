@@ -17,10 +17,10 @@ public class ItemTests
     [Fact]
     public void CatalogLoadsTheFullSet()
     {
-        Assert.Equal(71, Catalog.Items.Count);
+        Assert.Equal(72, Catalog.Items.Count);
         Assert.Equal(20, Catalog.Synergies.Count);
         Assert.Equal(5, Catalog.Transformations.Count);
-        Assert.Equal(12, Catalog.Items.Count(i => i.Kind == ItemKind.Active));
+        Assert.Equal(13, Catalog.Items.Count(i => i.Kind == ItemKind.Active));
     }
 
     [Fact]
@@ -28,13 +28,6 @@ public class ItemTests
     {
         foreach (var item in Catalog.Items)
             Assert.True(ItemCaption.Describe(item).Count > 0, $"{item.Id} has no caption lines");
-    }
-
-    [Fact]
-    public void EveryItemHasItsOwnPearl()
-    {
-        var looks = Catalog.Items.Select(i => string.Join(",", i.Pearl!.Colors) + i.Pearl.Pattern).ToList();
-        Assert.Equal(looks.Count, looks.Distinct().Count());
     }
 
     [Fact]
@@ -50,8 +43,7 @@ public class ItemTests
     [InlineData("""{ "items": [ { "id": "a", "name": "A", "pools": ["treasure"], "tags": ["laser"] } ] }""", "unknown tag")]
     [InlineData("""{ "items": [ { "id": "a", "name": "A", "pools": ["treasure"] } ], "synergies": [ { "id": "s", "requires": ["a", "ghost"] } ] }""", "unknown item 'ghost'")]
     [InlineData("""{ "items": [ { "id": "a", "name": "A", "kind": "active", "pools": ["treasure"] } ] }""", "no recharge time")]
-    [InlineData("""{ "items": [ { "id": "a", "name": "A", "pools": ["treasure"] } ] }""", "no pearl look")]
-    [InlineData("""{ "items": [ { "id": "a", "name": "A", "pools": ["treasure"], "pearl": { "colors": ["red"] } } ] }""", "pearl needs 2–3 colours")]
+    [InlineData("""{ "items": [ { "id": "a", "name": "A", "pools": ["treasure"] } ] }""", "colour key knows")]
     [InlineData("""{ "items": [ { "id": "a", "name": "A", "pools": ["treasure"] } ], "transformations": [ { "id": "t", "tag": "coral", "count": 3 } ] }""", "only 0 exist")]
     public void ValidationReportsBrokenData(string json, string expected)
     {

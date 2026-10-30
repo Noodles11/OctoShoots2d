@@ -54,7 +54,7 @@ public class BossFightTests
                 w.Player.Velocity = Vector2.Zero;
             }
             var aim = target - w.Player.Position;
-            w.Step(new PlaneInput { Aim = aim.LengthSquared() > 1e-6f ? Vector2.Normalize(aim) : Vector2.UnitY, AimReach = aim.Length() + 1f, Fire = true });
+            w.Step(new PlaneInput { Aim = aim.LengthSquared() > 1e-6f ? Vector2.Normalize(aim) : Vector2.UnitY, Fire = true });
             if (boss.Freed) return i * PlaneWorld.Dt;
         }
         return null;

@@ -1,10 +1,13 @@
-// Item pearls: a hand-picked 2–3 colour gradient laid out in one of eight patterns, glowing from within
-// and brighter at the rim. Shared by the world pearl and the tentacle (overlay) pearl.
+// Item pearls: a 2–3 colour gradient glowing from within and brighter at the rim, the icon of what it does engraved on the
+// face turned to the camera (pearl_engraving.gdshaderinc), cut dark with a lit lip. Shared by the world pearl and the
+// tentacle (overlay) pearl.
+
+#include "res://assets/shaders/pearl_engraving.gdshaderinc"
 
 uniform vec3 c0 : source_color = vec3(1.0);
 uniform vec3 c1 : source_color = vec3(0.8);
 uniform vec3 c2 : source_color = vec3(0.6);
-uniform int pattern = 0;
+uniform int icon = 0;
 uniform float glow = 1.0;
 uniform float seed = 0.0;
 uniform float highlight = 0.0;
@@ -39,30 +42,20 @@ vec3 ramp(float t) {
 void fragment() {
 	vec3 n = local_n;
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
-	float t;
-	if (pattern == 0) {          // bands
-		t = 0.5 + 0.5 * sin(n.y * 9.0);
-	} else if (pattern == 1) {   // swirl
-		t = 0.5 + 0.5 * sin(atan(n.z, n.x) * 3.0 + n.y * 8.0);
-	} else if (pattern == 2) {   // spots
-		t = smoothstep(0.55, 0.75, vnoise(n * 5.0 + seed));
-	} else if (pattern == 3) {   // marble
-		t = 0.5 + 0.5 * sin(n.x * 6.0 + 4.0 * vnoise(n * 3.0 + seed));
-	} else if (pattern == 4) {   // rings
-		t = 0.5 + 0.5 * cos(acos(clamp(n.y, -1.0, 1.0)) * 10.0);
-	} else if (pattern == 5) {   // stripes
-		t = mix(step(0.0, sin(atan(n.z, n.x) * 6.0)), 0.5, 0.15);
-	} else if (pattern == 6) {   // speckle
-		t = vnoise(n * 14.0 + seed);
-		t = t * t;
-	} else {                     // halo
-		t = fres;
-	}
+	// Its colours run down the face, stirred a little.
+	float t = 0.5 - 0.45 * NORMAL.y + 0.3 * (vnoise(n * 2.5 + seed) - 0.5);
 	vec3 col = ramp(t);
+	// The engraving, always toward the camera: dark in the cut, its far wall catching the light.
+	vec2 q = NORMAL.xy * 1.05;
+	float d = pearl_engraving(q, icon);
+	float px = max(fwidth(d), 0.001);
+	float cut = (1.0 - smoothstep(-px, px, d)) * (1.0 - pale);
+	float lip = cut * smoothstep(-px, px, pearl_engraving(q + vec2(0.04, -0.04), icon));
+	col = col * (1.0 - 0.72 * cut) + mix(col, vec3(1.0), 0.5) * lip * 0.7;
 	col = mix(col, vec3(0.88, 0.89, 0.9), pale * 0.85);
 	ALBEDO = col;
 	ROUGHNESS = 0.18;
 	METALLIC = 0.15;
 	SPECULAR = 0.8;
-	EMISSION = (col * glow * (0.35 + 0.65 * fres) + vec3(fres * 0.4)) * (1.0 - 0.8 * pale) + vec3(highlight * 0.6);
+	EMISSION = (col * glow * (0.35 + 0.65 * fres) * (1.0 - 0.75 * cut) + vec3(fres * 0.4)) * (1.0 - 0.8 * pale) + vec3(highlight * 0.6);
 }

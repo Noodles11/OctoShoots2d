@@ -221,13 +221,16 @@ public static class LevelValidator
         return true;
     }
 
-    /// <summary>Swimming distance from a point to every 1 m cell (∞ where unreachable). Weak rock is not counted as a wall.</summary>
-    public static float[] Distances(LevelMap map, Vector2 from, float clearance = BodyRadius)
+    /// <summary>
+    /// Swimming distance from a point to every 1 m cell (∞ where unreachable). Weak rock is not counted as a wall, unless
+    /// <paramref name="blocked"/> says so.
+    /// </summary>
+    public static float[] Distances(LevelMap map, Vector2 from, float clearance = BodyRadius, Func<Vector2, bool>? blocked = null)
     {
         var open = new bool[N * N];
         for (int y = 0; y < N; y++)
         for (int x = 0; x < N; x++)
-            open[y * N + x] = CellOpen(map, x, y, clearance);
+            open[y * N + x] = CellOpen(map, x, y, clearance) && blocked?.Invoke(new Vector2(x + 0.5f, y + 0.5f)) != true;
         var dist = new float[N * N];
         Array.Fill(dist, float.PositiveInfinity);
         var (sx, sy) = Cell(from);

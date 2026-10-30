@@ -125,7 +125,8 @@ public partial class PufferlingView : Node3D
             if (!mob.Alive) continue;
             seen.Add(mob);
             if (!_fish.TryGetValue(mob, out var f)) _fish[mob] = f = Make(corrupted: true);
-            Pose(f, mob, dt, corrupt: 1f, flash: mob.HitFlash > 0f ? 1f : 0f, spines: mob.Spines, shudder: 0f);
+            // (No flash as her light strikes it, for now.)
+            Pose(f, mob, dt, corrupt: 1f, flash: 0f, spines: mob.Spines, shudder: 0f);
         }
         foreach (var fish in world.Fish)
         {

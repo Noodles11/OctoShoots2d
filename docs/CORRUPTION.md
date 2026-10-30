@@ -65,9 +65,9 @@ away.
     Standing between her and the camera, its head and pole are drawn over her where they cover her, by kelp's rule
     (`over_her.gdshaderinc`, `murkling_over`, `ink_stalk_over`), and she wears her outline meanwhile. A liquid body (as a murkling's,
     `murkling.gdshader`): it breathes, swells on the pulse, sways on its pole, and shrinks as her light drains it. Her
-    hits tear it as they tear a murkling: a deep dent that rings back, ragged holes (its inner blue light showing
-    through) that close as its meter refills, chunks of ink ripped away. Ink runs down its pole into the sand.
-  - It wears the Blightroot's blue under the ink, and its hit outline like every corrupted creature.
+    hits dent it as they dent a murkling (a deep dent that rings back) and push it back on its pole. Ink runs down its
+    pole into the sand.
+  - It wears the Blightroot's blue under the ink, and its light's outline like every corrupted creature.
 - **Freed** (smoothly, over 1.1 s, then away): its ink bursts off its head; the pole runs away from the top down into
   drips and the rootlets draw back into the sand; its head takes its own healthy coral, rounds out whole and draws out
   into a mantle while eight arms grow out under it, hanging, then curling. Then it swims **up** off the seabed toward
@@ -243,6 +243,14 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 
 ## Murklings (`Murkling`)
 
+- **After her, round the rock, never into it** (`PlaneNav.cs`, `WayToHer`; murklings and primes, lesser murklings and
+  their swarms, the adventure's tadpole, spiked and shoal murklings, rolling Thumpsquirts): with open water straight
+  to her (a body's width either side of the line, 0.45 m) it swims straight at her; with rock between, it follows the
+  way round. The open water is a 1 m grid (cells kept 0.5 m off the rock and the sealed walls standing), each cell
+  knowing its steps to her cell, counted outward from her (8 ways round, never cutting a rock's corner) — found again
+  as she moves (at most every 6 ticks; at once when she jumps) and when a sealed wall opens or shuts. It heads for the
+  farthest cell up to 14 steps along the way that it can reach in a straight line, so it rounds corners rather than
+  hugging every step. (A pufferling only goes after her while it sees her.)
 - **Its body is liquid** (`BlightView.Murklings`, `murkling.gdshader`; lesser ones and primes alike): a drop of ink adrift
   like mercury in no gravity. Twelve points round it each stand out of round or in on a spring back to round (its
   surface tension), lightly damped so it rings, pulled toward their neighbours (a dent spreads and smooths), its
@@ -250,12 +258,9 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   front flattens; stopping, it sloshes on; fast, it draws out along its way; still, the water stirs it gently. It is
   painted as her light is: its ink brushed in flowing bands, a ragged dry-brushed violet stroke for its rim, a torn
   silhouette, one soft dab of sheen.
-- **Her hits tear it** (`TearMurkling`): the struck side dents deep and rebounds past round; a ragged hole opens there,
-  wider for a stronger hit (about 0.25 rad for a plain shot, up to about 0.7 for one that takes all of it; at most
-  six, the nearest widened past that), its lip glowing with the ember, its dark inside showing in it with the ember
-  deep in it (never through it to what lies behind); and chunks of its ink are ripped away (1 + 5 × the hit's share of its meter): wobbling blobs flung off
-  the struck side that drag to a stop, sink, shed drops and break into a few. **The holes close as its corruption grows
-  back:** they hold while its meter waits (its delay), shrink as it refills, and are gone when it is full.
+- **Her hits dent it** (`BlightView.Struck`): the struck side dents deep (the deeper, the more of its meter the hit
+  took) and rebounds past round. Like every creature struck, it bursts her light back and its corruption out through
+  its far side (the hit burst, DESIGN-TOPDOWN.md).
 - **Budding:** each living Blightroot's area buds one from dense ground (≥ 0.6), at least 5 m from her, every
   15 s / (1 + 0.6 × Menace), while the level holds ink enough for it. The bud takes 0.8 s. **It is made of ink:**
   over the bud it drinks 3.6 (about a 1.2 m disc of thick ink, the nearest first and further out where it is thin),
@@ -354,11 +359,11 @@ meter that starts full. Each shot of her light takes its damage (illuminance) of
 meter regrows, at a rate set by the creature's kind and the Menace. Emptied, the creature is cleansed: one strong
 enough shot does it at once, or keep shooting until the meter runs out.
 
-No meter is drawn. Instead **her light's outline** (the warm-white line round the silhouette that each hit
-flashes) **stays** round the creature for as long as its corruption is not full (`corruption_orb`'s `worn`,
-`BlightView.SyncOutlines`): thin after the first hit, thicker the less corruption it has left, up to about a fifth of
-its radius near empty, and a little brighter. Each hit flashes it brighter for 0.2 s. Regrowing to full, it is gone;
-emptied, the creature bursts. A freed octopus swims off without it.
+No meter is drawn. Instead **her light's outline** (a warm-white line round the silhouette) **stays** round the
+creature for as long as its corruption is not full (`corruption_orb`'s `worn`, `BlightView.SyncOutlines`): thin after
+the first hit, thicker the less corruption it has left, up to about a fifth of its radius near empty, and a little
+brighter. A hit does not flash it (the shader's `hit` is left at 0 for now). Regrowing to full, it is gone; emptied,
+the creature bursts. A freed octopus swims off without it.
 
 **Knockback** (`PlaneKnock.cs`): each shot of her light shoves the creature it strikes a little along the shot, the
 smaller the further: 3 m/s for a 0.5 m body, scaled by 0.5 m over its radius (0.25–1.4 times that), easing off

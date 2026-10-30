@@ -162,6 +162,8 @@ public enum ActiveAction
     AnchorDrop,
     /// <summary>Prism Pearl: her light splits into red, green and blue Clementines for its duration (PlanePrism.cs).</summary>
     Prism,
+    /// <summary>Tide Pulse: three waves from her bell over its duration push everything loose out past its radius (PlanePushWave.cs).</summary>
+    PushWave,
 }
 
 public sealed class ActiveSpec
@@ -174,19 +176,20 @@ public sealed class ActiveSpec
     public float Radius { get; set; }
 }
 
-/// <summary>How an item's pearl is painted: a hand-picked 2–3 colour gradient laid out in a pattern.</summary>
-public enum PearlPattern { Bands, Swirl, Spots, Marble, Rings, Stripes, Speckle, Halo }
+/// <summary>The icon engraved on a pearl, for the kind of thing it does (PearlKey; pearl_engraving.gdshaderinc, in this order).</summary>
+public enum PearlIcon { Arrow, Chevron, Shield, Nautilus, Feather, Swirl, Star }
 
 public sealed class PearlLook
 {
     /// <summary>Gradient stops as "#rrggbb", 2 or 3 of them.</summary>
     public List<string> Colors { get; set; } = new();
-    public PearlPattern Pattern { get; set; }
+    public PearlIcon Icon { get; set; }
 }
 
 public sealed class ItemDef : EffectBundle
 {
-    /// <summary>Items are found and carried as glowing pearls.</summary>
+    /// <summary>Items are found and carried as glowing pearls: its look, read from what it does (PearlKey, set as the catalog loads).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public PearlLook? Pearl { get; set; }
 
     public string Id { get; set; } = "";

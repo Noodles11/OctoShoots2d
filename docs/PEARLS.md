@@ -8,18 +8,57 @@
 
 | | Passive | Active | All |
 |---|---|---|---|
-| Pearls | 58 | 11 | 69 |
-| Built | 36 | 2 | 38 |
+| Pearls | 59 | 13 | 72 |
+| Built | 37 | 4 | 41 |
 
 - **Passive** pearls work on their own from the moment she absorbs one: her stats, her bubbles, or something that
   happens when she is hit or frees a creature. They stack.
-- **Active** pearls are used with **F** and then recharge over time. She carries one at a time (a new one replaces
-  the old); its charge is the rim of her bell, a light sweeping round it (DESIGN-TOPDOWN §2.5).
+- **Active** pearls are used with **F** and then recharge over time. She carries one at a time: a new one takes the
+  old one's place, and the old one is gone (`PlaneRun.Add`). Every run starts with **Tide Pulse** and the **Sea
+  Chart Nautilus** (`PlaneRun.StartingPearls`; never offered, since she always has them). Its charge is the rim of her bell, a light sweeping round it (DESIGN-TOPDOWN §2.5).
 - **Quality** is ★ to ★★★★ (rarer, stronger). **Found in** lists the item pools that can offer it.
 - **Unique** pearls are absorbed once a run and then leave the pools. A non-unique one (**No**) can be absorbed again:
   it stays in the pools at a lower chance (×0.35 of its weight per copy held, `ItemPools.RepeatWeight`). Each extra
   copy adds the whole pearl again, or what the column notes in brackets (the catalog's `stack`: one more chain or
   bounce, more reach, +5% chance, +1 s, +1 HP).
+
+## Reading a pearl
+
+A pearl looks like what it does (`PearlKey`, applied as the catalogue loads; nothing in `items.json` paints it). Each
+thing it does that helps her stands for a colour, weighted by how strong it is against a usual helping of it (+20 max
+HP, +0.5 damage, ×1.3 and so on); the strongest is the pearl's middle colour (also its light), the next one or two blend
+in beside it. A pearl of one effect is that colour from light to deep. A drawback colours nothing (Glass Squid's −20
+max HP leaves it all red).
+
+| Colour | What it does |
+|---|---|
+| Red | Damage: damage, bigger hits, crits, exploding or charged shots, lasers, chain lightning, shards |
+| Orange | Fire rate: fire rate, Sardine Run's stream, Firefly Squid's surge |
+| Blue | Shot speed, and shots that steer (homing, spiral, boomerang) |
+| Cyan | Range, and shots that go on through (pierce, spectral, bounces) |
+| Violet | More or bigger shots: multishot, split, wave, rear, grow, shot size, her bubbles |
+| Green | Health: max HP, regeneration, healing |
+| White | Mobility: swim speed, dash cooldown |
+| Gold | Luck and shells |
+| Tan | Finding the way: maps, landmarks |
+| Pale lemon | Glow |
+| Bronze | Knockback |
+| Silver | Defence: foam, slower enemy shots, shields |
+| Ice, ember, lime, pink, lilac | Freeze, burn, poison, charm, slow |
+| Lavender | Active recharge |
+
+The icon engraved on it is the kind of effect that weighs most (`PearlIcon`, `pearl_engraving.gdshaderinc`), cut dark
+into the face turned to the camera, wherever the pearl is drawn:
+
+| Icon | Kind of effect |
+|---|---|
+| Up-pointing arrow | Stat up |
+| Three dots in a chevron pointing up | Change to her shots |
+| Shield | Defence |
+| Nautilus shell | Luck, shells and maps |
+| Feather | Mobility |
+| Swirl | Status effect |
+| Five-armed star | Active pearl (its colours by what it does: Tide Pulse bronze and silver, Whale Song green, Prism Pearl red, green and blue) |
 
 ## Absorbing a pearl: the ritual
 
@@ -29,15 +68,18 @@ Taking a pearl is a moment of its own. It plays round Clementine while she swims
 - **The pull:** whenever a pearl is within 6 m, her tentacles and oral arms are drawn toward it like a magnet. The
   nearer it is, the harder the pull.
 - **Touch (0 s):** the ritual begins. One plays at a time. A bought pearl begins its ritual by her too. The pearl
-  lifts and circles her bell, and her strands reach for it.
-- **Mimic (0–1.2 s):** like a chameleon, she takes on the pearl's look: its colours laid out in its own pattern, and
+  lifts and circles her bell, and her strands reach for it. A card rises at the bottom centre of the HUD
+  (`PearlBanner`): "Absorbing" over the pearl as the pause menu lists it — the pearl in its colours, its name, its
+  tagline and its effects (standing above an achievement card when one shows).
+- **Mimic (0–1.2 s):** like a chameleon, she takes on the pearl's look: its colours with its icon engraved, and
   its glow, spreading over her bell and strands. The pearl pales to a milky, empty vessel as its light leaves it. Her
   light swells.
 - **Hold (1.2–1.65 s):** she wears the new look. The emptied pearl trembles.
 - **Shatter (1.65 s):** the pearl breaks into pieces that tumble out and dissolve, with a few last glints. Her
   strands let go and fall back to their natural place.
 - **Burst (1.95 s):** her light bursts out in a strong pulse round her, like an explosion, with a bloom on the water.
-  She flashes white and returns to her own colours. Only now is the pearl hers: it is absorbed, and the pop-up shows.
+  She flashes white and returns to her own colours. Only now is the pearl hers: it is absorbed, and the card reads
+  "Absorbed"; it holds 3.5 s more to be read, then sinks away.
   A dive cut through a ritual completes it, so a pearl is never lost.
 - **Haptics:** a hum rising from touch to a trembling peak while she holds the look, a sharp tap on the shatter, and
   the climax, a full-strength pulse, on the burst.
@@ -119,6 +161,7 @@ comes to it (the level below is laid out while she plays the one above); a run w
 | No |  | **Oyster Pearl** | *A little grit, a little shine* | +1 luck; +10 max HP; +5 sand dollars | ★ | treasure, goldenClam |  |
 | No | ✅ | **Dolphin Fin** | *Born to sprint* | +0.25 speed; ×0.85 dash cooldown | ★★ | treasure |  |
 | Yes | ✅ | **Brass Compass** | *Points to what matters* | Every place shows on the maps before you reach it (secret rooms stay hidden) | ★ | shop, treasure |  |
+| Yes | ✅ | **Sea Chart Nautilus** | *Remembers every current* | Shows the minimap: the reef round you, top right, and the whole level's map. She starts every run with it, for now | ★ | start |  |
 | No | ✅ | **Lantern Pearl** | *Carry the light down* | ×1.8 glow radius | ★ | treasure, boss |  |
 
 ### Bubbles on the throwing tentacle
@@ -132,6 +175,7 @@ comes to it (the level below is laid out while she plays the one above); a run w
 
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
+| Yes | ✅ | **Tide Pulse** | *Room to breathe* | She starts every run with it. Three quick waves of water from her bell within 1 s, each telegraphed by her bell drawing in hard (deeper each time) and leaving as it snaps open, each wider and harder than the last (out to 2, 2.6 and 3.3 m; thrown on at 5, 7 and 10 m/s). Each wave's front sweeps everything loose out ahead of it, sliding along rock: mobs and corrupted creatures, the reef's fish, shells, hearts, loose pearls, pots, their shots and throws (turned away from her); the first shakes off clinging murklings. When it is done the water is clear 3.3 m round her bell (about three of her). Rooted creatures, Hearthguards on their beds, shop stands, the boss and her own light stay put. Seen as the currents' moving water: three rings of it shoving the picture outward (PlanePushWave.cs); recharges in 60 s | ★ | start |  |
 | Yes | ✅ | **Prism Pearl** | *One light, three colours* | Splits her light into three smaller Clementines for 6 s, in a triangle round the point she steers (each corner 1.4 m from it, the triangle turning with her aim): she is the green one at its front corner toward her aim, a red at the back corner on her left and a blue on her right, keeping their corners (her own controls) round the rock. Each fires its own volleys, on its own beat, at where she aims, its light and shots in its colour. A hit on any of them is a hit on her, one body of health. Splitting and flowing back together each take 0.45 s, with a jolt, the picture's colours pulled apart for a moment and a burst of light (PlanePrism.cs); recharges in 45 s | ★★★ | treasure, boss |  |
 | Yes |  | **Conch Horn** | *The sea answers* | Stuns and knocks back every foe within 8 m for 2 s; recharges in 30 s | ★★ | treasure, shop |  |
 | Yes | ✅ | **Bubble Shield** | *Pop-proof, mostly* | An untouchable bubble round her for 3 s; recharges in 20 s | ★★ | treasure, shop |  |
