@@ -92,7 +92,7 @@ public class PlaneBossTests
     {
         var w = World();
         foreach (var m in w.Mobs) m.Hp = 0f;
-        var seal = w.Seals.First(s => s.Kind == SealKind.Boss);
+        var seal = w.Seals.First(s => s.Kind == SealKind.Boss && w.Map.IsOpen(s.Rock.Center));
         for (int k = 0; k < 60 && !seal.Open; k++) w.DebugStrikeSeal(seal);
         Assert.True(seal.Open);
         Assert.True(w.Clear(seal.Rock.Center, 0.4f));

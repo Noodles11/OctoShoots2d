@@ -134,6 +134,14 @@ public partial class CameraRig : Node3D
         _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("swell_count"), swells.Count);
     }
 
+    /// <summary>The fish far under her plane (DeepShoals): where they are and how they swim.</summary>
+    public void SetDeepFish(OctoShoots.Game.Fx.DeepShoals shoals)
+    {
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("deep_fish"), shoals.Fish);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("deep_fish_ways"), shoals.Ways);
+        _post.SetShaderParameter(OctoShoots.Game.Fx.SN.Of("deep_fish_count"), shoals.Count);
+    }
+
     /// <summary>
     /// A blast's mark (topdown_post's blurs): a small round smear of the picture on her plane at this point, this wide,
     /// fading over BlurSeconds. At most four at once (the oldest gives way).

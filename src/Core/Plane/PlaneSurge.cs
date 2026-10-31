@@ -38,8 +38,6 @@ public static class SurgeTuning
     /// told at once.
     /// </summary>
     public const float Dps = 0.9f, Tally = 0.25f;
-    /// <summary>Every extra shot of her volley adds this share of the damage to each foe in the cone.</summary>
-    public const float ConeShare = 0.25f;
     /// <summary>The cone is traced as rays this far apart (degrees), at most MaxRays.</summary>
     public const float RayEveryDeg = 2.5f;
     public const int MaxRays = 24;
@@ -164,7 +162,8 @@ public sealed partial class PlaneWorld
 
         StrikeWalls(surge);
 
-        float cone = 1f + SurgeTuning.ConeShare * (count - 1);
+        // Its cone is her volley: as strong on each foe in it as the whole volley would be.
+        float cone = PlaneCombatTuning.VolleyPower(count);
         surge.Power = (1f + (SurgeTuning.FocusDamage - 1f) * focus) * (1f + (PlaneCombatTuning.MinigunMax - 1f) * p.Spin) * MathF.Sqrt(cone);
 
         {

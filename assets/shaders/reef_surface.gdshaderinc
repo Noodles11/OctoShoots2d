@@ -5,7 +5,8 @@
 //   Seabed (flat, under the swim level): rippled sand whose crests catch the sun, shell grit, soft drifts of algae.
 //   Reef walls, ledges and tops: limestone with strata and dark crevices, crusted with lilac and pink coralline algae,
 //   turf on ledges — one rock all the way up.
-//   Light: sharp moving caustics on everything facing up, fading with depth; red light absorbed as the water deepens.
+//   Light: sharp moving caustics on everything facing up, fading with depth. Its colour is the same at every height: the
+//   water's own colour is laid over all of it alike (topdown_post).
 //   The Crack: an orange glow breathing up from the deepest fissure (reef_crack: x, z, radius, strength).
 
 #include "res://assets/shaders/sunlight.gdshaderinc"
@@ -159,11 +160,6 @@ ReefSkin reef_surface(vec3 local, vec3 n, float time, float px) {
 	float edge = min(min(local.x, local.z), min(reef_extent.x - local.x, reef_extent.y - local.z));
 	float rim = 1.0 - smoothstep(0.0, 9.0, edge);
 	c = mix(c, c * 0.55 + reef_murk * 0.2, rim * 0.6);
-
-	// Water steals red first: the deeper the floor, the bluer and dimmer it is.
-	float deep = clamp((-h - 1.0) / 8.0, 0.0, 1.0);
-	c = mix(c, c * vec3(0.6, 0.86, 0.95), deep);
-	c = mix(c, reef_water_deep * 0.5, deep * 0.25);
 
 	s.albedo = c;
 

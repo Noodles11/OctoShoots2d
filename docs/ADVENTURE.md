@@ -15,8 +15,8 @@ All numbers are first guesses (`AdventureTuning`).
 
 ## 1. Corruption vents
 
-- **What:** wounds in the reef walls, 3–5 a level, at least 30 m apart (closer only if the level has no room) and 24 m
-  from her start, never at safe places or the way down. Each is a gash torn along a wall face at her plane (2.6 m
+- **What:** wounds in the reef walls, always 5 a level, at least 30 m apart (closer only if the level has no room) and
+  24 m from her start (nearer only then too), never at safe places or the way down. Each is a gash torn along a wall face at her plane (2.6 m
   long, pinched at its ends, its edges ragged, each its own), turned up out of the wall's slope so it shows from above,
   its torn rock lips standing out along both edges. A blister of thick ink goo plugs it, bulging out into the water
   and swelling more here than there (`vent_goo.gdshader`): an oily, iridescent film (violet, teal and magenta sliding
@@ -43,15 +43,20 @@ All numbers are first guesses (`AdventureTuning`).
   ink it crosses (each dot going up in magic particles).
 - **Sealing stops the source, not the ink:** the dots it spread beyond its ring stay until cleared, but no longer
   spread (§2), unless they still link to another open vent.
-- **The level's end:** the way down opens once every vent on the level is sealed ("The way down is open"). On a boss
-  level the boss's sword walls take no light until then: her shots knock dully on them ("It will not open: 2 vents still
-  pour"), so she cannot enter the arena with a vent open, and no vent is ever placed behind them.
+- **Each one sealed** throws 5 shells out of its mouth into the water before it, as well as its experience.
+- **The level's end:** the way down opens once 3 of the 5 vents are sealed ("The way down is open"); the other two may be
+  sealed for their shells and experience, or left pouring. The HUD shows a dot for each vent, gold once sealed, filling
+  from the left: three full-size for the ones she must seal, two smaller. On a boss level the boss's sword walls take no
+  light until the third is sealed: her shots knock dully on them ("It will not open: seal 2 more vents"), and no vent is
+  ever placed behind them.
 
 ## 2. Ink dots
 
-- **The look:** the corruption is not a stain on the ground but **round ink dots floating at her plane**, on an even
-  grid 0.8 m apart, radius 0.135 m: matte ink brushed in dark bands with a dry-brushed violet rim, afloat — each bobs
-  slowly up and down on its own beat (`ink_dot.gdshader`). A new dot swells in with a little overshoot.
+- **The look:** the corruption is not a stain on the ground but **ink dots floating at her plane**, on an even grid
+  0.8 m apart, radius 0.135 m. Each dot is drawn as **three marks** 0.17 m across, in a small triangle turned its own way:
+  fine-tip violet strokes with a pale edge, drawn as the bracket marks are, each twitching between a "×" and a "+" on
+  its own uneven beat (4–9 flips a second, jumping a hair aside each time) and bobbing slowly up and down
+  (`ink_dot.gdshader`). A new dot swells in with a little overshoot, and a dot's marks shrink as her light wears it down.
 - **Bracket marks:** while a patch is fed by an open vent (below), violet "(", ")", "[", "]" hop out through it from
   the vent's mouth to the rim, dot by dot (each hop a little arc onto the next dot one step further out), and pop at
   the rim — drawn as the magic particles are (fine-tip strokes), their dark counterpart. A patch cut off shows none.
@@ -110,10 +115,10 @@ it frees any corrupted creature: a corruption meter each, emptied by her shots.
 | **Inkwarden** | pufferfish | yellow | an inflated ring of ink, eight spikes folded in toward its hole | Wards the corrupted creatures round it (8 m), and the open vents (§1). Calm, it drifts slowly about its spot (within 5 m), turning lazily. Struck (by her light, her arm or a burst), it rolls its spikes out over its top (0.5 s), spins up (0.6 s) and fires them one by one, one every 0.15 s, each in a random direction (11 m/s, 6 damage, an ink spike: it falls as a throw does and her shots burst it); then it slows and grows them back inward (3 s), calm until struck again. Freed, it is a pufferfish, and swims off. |
 
 Each depth's boss level holds its boss in its arena, Drippus Prime (docs/CORRUPTION.md); its brood are murklings like
-any other. On a boss level the way down opens once every vent is sealed **and** the boss is freed, in either order.
+any other. On a boss level the way down opens once 3 vents are sealed **and** the boss is freed, in either order.
 
 Switched off in the adventure (their code kept, to bring back one by one): pufferlings, Blightroots, Blotters,
-Lashjaws, Thumpsquirts, dens, curse dens, ambushes and murkling budding. Light springs
+Lashjaws, Thumpsquirts, dens and murkling budding. Light springs
 (docs/CORRUPTION.md: a god ray onto the seabed, a store of healing she may come back to, too bright for any murkling)
 come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed under it (§5).
 
@@ -128,7 +133,7 @@ come only by her luck (docs/PEARLS.md, "Luck"); one keeps the seabed under it (�
   rolled per level, 7 m from crest to crest, each with a long gentle back and a short steep face (a quarter of it),
   up to 1.8 m from crest to trough on the shallowest floor (half that on the deepest). Their lines wander and their
   crests rise and die away patch by patch, and a finer set (a quarter as high, 3.5 m apart) runs across them at an
-  angle. Seen clearly on the first depths; the deep water's blur and murk take them further down.
+  angle. Seen clearly on the first depths; the deep water's blur takes them further down.
 - **Reef shelves:** here and there a rounded ledge of rock juts from a wall just under her plane (1.2 m down, 3 m
   across, its rim falling away into the deep), at least 12 m apart, none within 20 m of her start. The anemones grow
   only on these.

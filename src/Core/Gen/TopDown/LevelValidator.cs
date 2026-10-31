@@ -21,7 +21,7 @@ public static class LevelValidator
         int Count(PoiKind k) => map.Pois.Count(p => p.Kind == k);
         if (Count(PoiKind.Start) != 1 || Count(PoiKind.Exit) != 1) return "missing start or exit";
         if (Count(PoiKind.TreasureCave) > 2 || Count(PoiKind.Shop) > 1 || Count(PoiKind.Secret) > 1 || Count(PoiKind.CurseDen) > 1
-            || Count(PoiKind.ShellCache) > 1 || Count(PoiKind.Ambush) > LevelStocking.MaxAmbushes) return "optional POI counts out of range";
+            || Count(PoiKind.ShellCache) > 1) return "optional POI counts out of range";
 
         // Scatter rules.
         var start = map.Start;

@@ -31,9 +31,9 @@ public static class BlightTuning
     /// The ring corrupts her as it passes over her (once per ring, more with Menace). A dash through it (she is
     /// untouchable while dashing) takes nothing. Her shots it crosses are snuffed out.
     /// </summary>
-    public const float PulseDamage = 6f, PulseDamagePerMenace = 2f;
+    public const float PulseDamage = 6f;
     /// <summary>Every creature's corruption meter grows this much per point of Menace (deeper, tougher).</summary>
-    public const float MeterPerMenace = 0.2f;
+    public const float MeterPerMenace = 1.2f;
     /// <summary>Where they stand: never near safe places (beyond their radius), apart, more with Menace.</summary>
     public const float SafeDistance = 18f, Spacing = 22f;
     public const int Base = 3, Max = 6;
@@ -46,7 +46,7 @@ public static class BlightTuning
     /// swings again HammerCooldown after it has recovered (HammerRecover), and never while it gathers a pulse.
     /// </summary>
     public const float HammerReach = 4.2f, HammerHit = 4.6f, HammerWindup = 0.5f, HammerStrike = 0.14f, HammerRecover = 0.55f, HammerCooldown = 1.2f;
-    public const float HammerDamage = 10f, HammerDamagePerMenace = 3f, HammerKnock = 9f;
+    public const float HammerDamage = 10f, HammerKnock = 9f;
 
     // Murklings: orbs of darkness budding from the corruption.
     public const float MurkRadius = 0.45f, MurkSpeed = 2.6f, MurkSpeedPerMenace = 0.4f, Sense = 14f;
@@ -58,13 +58,13 @@ public static class BlightTuning
     public const float BudSeconds = 0.8f, BudInterval = 15f, BudDensity = 0.6f, BudClearance = 5f;
     /// <summary>
     /// A murkling is made of ink: budding, it drinks Ink (density × m², about a 1.2 m disc of thick ink) from anywhere
-    /// on the level, the nearest ink first and then further out until it has it, over its bud. An ambush's buds are the
-    /// trap's own ink and drink nothing; they gather a GatherRadius disc.
+    /// on the level, the nearest ink first and then further out until it has it, over its bud. One that drinks nothing
+    /// gathers a GatherRadius disc.
     /// </summary>
     public const float Ink = 3.6f, GatherRadius = 1.2f;
     /// <summary>
     /// A murkling prime: a rare bud (PrimeChance + PrimeChancePerMenace × Menace), at most one alive per area and
-    /// PrimePerLevel a level, at least PrimeClearance metres from her, never from ambushes or guards. It drinks PrimeInk
+    /// PrimePerLevel a level, at least PrimeClearance metres from her, never from guards. It drinks PrimeInk
     /// (twelve murklings' worth) over PrimeBud seconds into a body PrimeScale times a murkling's (colliding as PrimeBody).
     /// </summary>
     public const float PrimeChance = 0.06f, PrimeChancePerMenace = 0.04f, PrimeInk = Ink * 12f, PrimeClearance = 10f, PrimeBud = 2f;
@@ -117,8 +117,6 @@ public static class BlightTuning
     /// </summary>
     public const float GuardWindow = 3f, GuardInterval = 5f, GuardPerMenace = 1.5f, GuardNear = 4f, GuardFar = 7f, GuardCapPerMenace = 2f;
     public const int GuardCap = 1;
-    /// <summary>An ambush buds this many murklings round her.</summary>
-    public const int AmbushBuds = 3;
 }
 
 /// <summary>
@@ -459,6 +457,8 @@ public sealed partial class PlaneWorld
     {
         var p = Player;
         if (Defeated || amount <= 0f || p.ShieldTimer > 0f || p.DashInvulnerableTimer > 0f) return;
+        // (The curse den's dark drains the same at any depth.)
+        if (source != DamageSource.Curse) amount *= HurtScale;
         p.Hp -= amount;
         Stats.DamageTaken += amount;
         LastHitSource = _drainSource = source;
@@ -665,7 +665,7 @@ public sealed partial class PlaneWorld
                     if (MathF.Abs(her - (r0 + r1) * 0.5f) <= BlightTuning.PulseBand * 0.5f + Radius + (r1 - r0) * 0.5f)
                     {
                         _pulseHit = root.PulseId;
-                        HurtPlayer(BlightTuning.PulseDamage + BlightTuning.PulseDamagePerMenace * Menace, SafeNormalize(Player.Position - root.Position), DamageSource.Blightroot);
+                        HurtPlayer(BlightTuning.PulseDamage, SafeNormalize(Player.Position - root.Position), DamageSource.Blightroot);
                     }
                 }
                 if (r1 >= BlightTuning.Reach) root.PulseRadius = -1f;
@@ -706,7 +706,7 @@ public sealed partial class PlaneWorld
             var at = on ? p.Position : root.Position + root.SwingDir * MathF.Min(MathF.Max(her, 1f), BlightTuning.HammerHit);
             Events.Add(new PlaneEvent(PlaneEventType.BlightrootSlam, at, root.SwingDir, on ? 1f : 0f));
             if (on
-                && HurtPlayer(BlightTuning.HammerDamage + BlightTuning.HammerDamagePerMenace * Menace, root.SwingDir, DamageSource.Blightroot))
+                && HurtPlayer(BlightTuning.HammerDamage, root.SwingDir, DamageSource.Blightroot))
                 p.Velocity += root.SwingDir * BlightTuning.HammerKnock;
         }
         if (root.Swing >= lands + BlightTuning.HammerRecover)
@@ -1005,7 +1005,7 @@ public sealed partial class PlaneWorld
 
     /// <summary>
     /// A murkling (or a prime) buds here, made of the nearest ink (<paramref name="drink"/>): null when the level no
-    /// longer holds that much. Without drink it is made of nothing from the ground (an ambush's, a prime's pieces).
+    /// longer holds that much. Without drink it is made of nothing from the ground (a prime's pieces).
     /// Born, it is out at once, out of a body rather than the ground (Drippus Prime's brood): no bud.
     /// </summary>
     Murkling? Bud(Vector2 at, int area, bool prime = false, bool drink = true, bool born = false)
@@ -1115,29 +1115,6 @@ public sealed partial class PlaneWorld
         if (blooms) Corruption!.Cleanse(m.Position, CorruptionTuning.EmberRadius, 1f);
         Events.Add(new PlaneEvent(PlaneEventType.MurklingBurst, m.Position, Vector2.Zero, blooms ? CorruptionTuning.EmberRadius : 0f));
         if (damage > 0f) Events.Add(new PlaneEvent(PlaneEventType.MobDefeated, m.Position, Vector2.Zero, damage));
-    }
-
-    /// <summary>An ambush clearing springs: murklings bud in a ring round her (the pufferlings are retracted).</summary>
-    void AmbushBuds(PlaneAmbush ambush)
-    {
-        var p = Player;
-        float turn = _blightRng.Range(0f, MathF.Tau);
-        int spawned = 0;
-        for (int i = 0; i < BlightTuning.AmbushBuds; i++)
-        {
-            float a = turn + MathF.Tau * i / BlightTuning.AmbushBuds;
-            var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-            foreach (float r in new[] { 5f, 3.8f, 2.8f })
-            {
-                var at = p.Position + dir * r;
-                if (!Clear(at, BlightTuning.MurkRadius)) continue;
-                // The trap's own ink: an ambush's buds drink nothing from the ground.
-                Bud(at, -1, drink: false);
-                spawned++;
-                break;
-            }
-        }
-        ambush.Spawned = spawned;
     }
 
     // ───────────────────────── the arena ─────────────────────────

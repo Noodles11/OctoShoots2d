@@ -92,9 +92,9 @@ public static class ItemCaption
         {
             lines.Add(s.Pattern switch
             {
-                ShotPattern.Cone => $"Fires a {s.Multishot}-pellet cone",
+                ShotPattern.Cone => $"Fires a {s.Multishot}-pellet cone, each {Pct(PlaneCombatTuning.VolleyShot(s.Multishot))} of a shot",
                 ShotPattern.Kraken8 => "Fires in 8 directions",
-                _ => $"Fires {s.Multishot} shots",
+                _ => $"Fires {s.Multishot} shots, each {Pct(PlaneCombatTuning.VolleyShot(s.Multishot))} of a shot",
             });
         }
         else if (s.Pattern == ShotPattern.Kraken8)

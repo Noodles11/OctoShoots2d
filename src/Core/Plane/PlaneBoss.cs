@@ -344,11 +344,11 @@ public sealed partial class PlaneWorld
     {
         BossBattle = false;
         if (boss.Spec.Blockade) UnbarArena();
-        // The Crack opens once the arena is cleansed enough too (StepCondensation); in the adventure, once every vent is
+        // The Crack opens once the arena is cleansed enough too (StepCondensation); in the adventure, once enough vents are
         // sealed too (SealVent).
         if (Options.Adventure)
         {
-            ExitOpen = VentsOpen == 0;
+            ExitOpen = VentsLeft == 0;
             if (ExitOpen) Events.Add(new PlaneEvent(PlaneEventType.ExitOpened, Map.Exit.Position, Vector2.Zero));
         }
         else

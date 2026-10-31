@@ -1,7 +1,6 @@
 // Art directions under study for the reef (docs/ART-LOOKS.md; `--look=N`, reef_art): not a filter laid over the picture
 // but the reef painted another way, in its own surface shading (reef_surface.gdshaderinc's callers: the ground and the
-// free rock). 0 is the game's own look, which takes the stippling of 4 and 5 (art_dots), its dots a deeper shade of
-// the reef's own colour rather than ink.
+// free rock). 0 is the game's own look: nothing here touches it.
 //
 //   1 Gouache layers: a muted palette; the reef stepped into flat painted layers by height (the deeper, the hazier and
 //     cooler, as planes of atmosphere in concept art); broad brush strokes laid along the slopes instead of the fine
@@ -230,16 +229,6 @@ float art_round(vec2 q) {
 	return 1.0 - smoothstep(1.25, 1.6, big / small);
 }
 
-// The game's own look (0): its shade stippled too, the dots not ink but a deeper shade of the reef's own colour
-// (art_dot_colour), laid into its albedo so the light falls on them like the rest. How much of a dot lies here, 0..1.
-// Only round dots: where one would be drawn out into a line, none.
-float art_dots(vec3 w, vec3 local, vec3 n) {
-	vec2 q = art_picture(w);
-	float round_ = art_round(q);
-	if (round_ <= 0.0) return 0.0;
-	return art_stipple(q, length(fwidth(q)) * 0.7071, art_tone(w, local, n)) * round_;
-}
-
 // Looks 4 and 5's shade: the tone it must state here (art_tone, and the sponge's holes), drawn in stippled dots, and
 // the sponge's lips and black pits in solid ink. x: the ink; y: how much of the water beyond a hole shows.
 vec2 art_shading(vec3 w, vec3 local, vec3 n) {
@@ -301,11 +290,6 @@ vec2 art_ink(vec3 w, vec3 local, vec3 n, float hw, float px) {
 // The felt tip's ink: near black, a little of the depth's water in it.
 vec3 art_ink_colour(vec3 water) {
 	return mix(vec3(0.07, 0.07, 0.09), water * 0.2, 0.3);
-}
-
-// A dot's colour in the game's own look: the reef's colour (c) deepened, a touch of the felt tip's ink in it.
-vec3 art_dot_colour(vec3 c, vec3 water) {
-	return mix(c * 0.45, art_ink_colour(water), 0.2);
 }
 
 // The water seen through a hole in the wall: lit, paler than the rock round it.

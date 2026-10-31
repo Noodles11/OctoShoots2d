@@ -93,7 +93,7 @@ HP regeneration (her corruption ebbing), luck, glow and knockback. Stat pearls a
 (including the drawbacks: Glass Squid, Sea Cucumber, Pufferfish Pout and Cannonball all trade something away).
 
 **Luck**, per point (each capped; `LuckTuning`): every freed foe leaves one more shell; a level without a clam room gets
-one with a 10% chance (at most 60%); each planned ambush is dropped with a 15% chance (at most 90%); each shell she picks
+one with a 10% chance (at most 60%); each shell she picks
 up counts twice with an 8% chance (at most 60%; a second shell flies to her counter); a light spring is 10% likelier (at
 most +60%) — on an adventure level, where there are none otherwise, only by luck — and holds 15% more healing (at most
 twice as much). A level is planned with her luck as she
@@ -104,9 +104,9 @@ comes to it (the level below is laid out while she plays the one above); a run w
 | No | ✅ | **Coral Crown** | *A reef princess's lost tiara* | +20 max HP; +0.3 damage; Heals 20 HP | ★★ | treasure, boss |  |
 | No | ✅ | **Squid Ink Espresso** | *The Galleon's cook swore by it* | +0.3 speed; +0.4 fire rate | ★★ | treasure, shop |  |
 | No | ✅ | **Whale Lung** | *Deep breath!* | +1 range; ×1.3 shot size | ★★ | treasure |  |
-| No | ✅ | **Pufferfish Pout** | *Angry and proud of it* | ×1.5 damage; −0.2 shot speed | ★★★ | treasure, boss |  |
+| No | ✅ | **Pufferfish Pout** | *Angry and proud of it* | ×1.35 damage; −0.2 shot speed | ★★★ | treasure, boss |  |
 | No | ✅ | **Lucky Sea Glass** | *Found only on moonlit tides* | +2 luck | ★ | treasure, shop | untouchable |
-| No | ✅ | **Plankton Swarm** | *Tiny friends* | +0.5 fire rate; Fires 3 shots; ×0.6 shot size; ×0.5 shot damage | ★★ | treasure |  |
+| No | ✅ | **Plankton Swarm** | *Tiny friends* | +0.5 fire rate; Fires 3 shots, each 46% of a shot; ×0.6 shot size; ×0.85 shot damage | ★★ | treasure |  |
 | No | ✅ | **Glass Squid** | *See-through, and sharp for it* | +1 damage; −20 max HP | ★★ | treasure, curse |  |
 | No | ✅ | **Sea Cucumber** | *Slow, soft, and very hard to stop* | +30 max HP; −0.15 speed; Heals 30 HP | ★ | treasure, shop |  |
 | No |  | **Barnacle Armor** | *Clingy but protective* | −0.1 speed; +30 foam HP | ★ | treasure, shop |  |
@@ -128,11 +128,11 @@ comes to it (the level below is laid out while she plays the one above); a run w
 | Yes | ✅ | **Pearl Diver** | *Patience makes pearls* | Hold to charge a pearl (up to ×3 damage) | ★★★ | treasure, boss |  |
 | Yes |  | **Sunbeam** | *A shaft of the surface, bottled* | Hold to charge a laser beam | ★★★★ | treasure, boss, whale |  |
 | Yes | ✅ | **Firefly Squid** | *Never blinks* | Fire pours out a continuous surge of light instead of shots: 90% of your shots' damage per second to all it touches, clearing a little corruption where it ends. Your other pearls shape it | ★★★★ | treasure, boss |  |
-| Yes | ✅ | **Double Helix** | *Twice the twist* | Fires 2 shots; Shots twist in a double helix | ★★★ | treasure |  |
-| Yes | ✅ | **Triple Tentacle** | *Why squirt once?* | Fires 3 shots; ×0.8 shot damage | ★★★ | treasure, boss |  |
+| Yes | ✅ | **Double Helix** | *Twice the twist* | Fires 2 shots, each 62% of a shot; Shots twist in a double helix | ★★★ | treasure |  |
+| Yes | ✅ | **Triple Tentacle** | *Why squirt once?* | Fires 3 shots, each 46% of a shot | ★★★ | treasure, boss |  |
 | Yes | ✅ | **Starfish Arm** | *Grows back bigger* | Shots grow with distance | ★★ | treasure | big_bubble_energy |
 | Yes | ✅ | **Starburst Gland** | *Bursts with borrowed sun* | Shots burst into light (cleanses ground, strikes the corrupted near) | ★★★ | treasure, curse |  |
-| Yes | ✅ | **Sardine Run** | *A million small reasons* | Hold fire: she spins up to a stream of small shots, four times as fast; ×0.7 shot size; ×0.35 shot damage | ★★★ | treasure, boss |  |
+| Yes | ✅ | **Sardine Run** | *A million small reasons* | Hold fire: she spins up to a stream of small shots, four times as fast; ×0.7 shot size; ×0.3 shot damage | ★★★ | treasure, boss |  |
 | Yes | ✅ | **Pistol Shrimp Claw** | *Snap. Bang.* | Shots collapse with a bang where they hit or go out, hurting everything near | ★★★ | treasure, boss |  |
 | Yes |  | **Siren Song** | *Come closer…* | 15% chance to charm foes for 3s | ★★ | treasure, siren |  |
 
@@ -153,7 +153,7 @@ comes to it (the level below is laid out while she plays the one above); a run w
 | No | ✅ | **Captain's Hook** | *Get over here* | ×2.5 knockback | ★ | treasure, shop |  |
 | No (+1s) |  | **Stingray Barb** | *Numbs on contact* | 30% chance to slow foes for 2s | ★ | treasure |  |
 | No (+1HP) |  | **Lamprey Mouth** | *Every bite counts* | Each creature freed heals 3 HP | ★★★ | treasure, curse | hollow_maw |
-| Yes | ✅ | **Hammerhead** | *Wide-angle view* | Fires a 5-pellet cone; ×0.6 shot damage | ★★★ | treasure, boss |  |
+| Yes | ✅ | **Hammerhead** | *Wide-angle view* | Fires a 5-pellet cone, each 32% of a shot | ★★★ | treasure, boss |  |
 | Yes |  | **Rear Fin** | *Eyes in the back of your mantle* | Also fires backwards | ★ | treasure, shop |  |
 | No | ✅ | **Abyssal Glow** | *Light from below the light* | +0.4 damage; ×1.3 glow radius | ★★ | treasure, curse |  |
 | No (+x1.5 glow, +0.1HP regen) |  | **Glowing Moss** | *Soft and luminous* | ×1.5 glow radius; +0.1 HP regeneration per second | ★ | treasure, shop |  |
@@ -168,14 +168,14 @@ comes to it (the level below is laid out while she plays the one above); a run w
 
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
-| No |  | **Twin Siphon** | *Two at a time* | +1 bubbles per throw; ×0.85 shot damage | ★★★ | treasure, boss |  |
+| No |  | **Twin Siphon** | *Two at a time* | +1 shot per throw (a volley shares her light) | ★★★ | treasure, boss |  |
 | Yes | ✅ | **Bubble Coral** | *Little ones grow up* | ×1.5 bubble hover time; Her light lingers at the end of its range; shots that touch merge into one, bigger and stronger | ★★ | treasure, shop |  |
 
 ## Active pearls (Right mouse click/RB, recharge over time)
 
 | Unique | Built | Pearl | Tagline | Effect | Quality | Found in | Unlocked by |
 |:---:|:---:|---|---|---|---|---|---|
-| Yes | ✅ | **Tide Pulse** | *Room to breathe* | She starts every run with it. Three quick waves of water from her bell within 1 s, each telegraphed by her bell drawing in hard (deeper each time) and leaving as it snaps open, each wider and harder than the last (out to 2, 2.6 and 3.3 m; thrown on at 5, 7 and 10 m/s). Each wave's front sweeps everything loose out ahead of it, sliding along rock: mobs and corrupted creatures, the reef's fish, shells, hearts, loose pearls, pots, their shots and throws (turned away from her); the first shakes off clinging murklings. When it is done the water is clear 3.3 m round her bell (about three of her). Rooted creatures, Hearthguards on their beds, shop stands, the boss and her own light stay put. Seen as the currents' moving water: three rings of it shoving the picture outward (PlanePushWave.cs); recharges in 60 s | ★ | start |  |
+| Yes | ✅ | **Tide Pulse** | *Room to breathe* | She starts every run with it. Three quick waves of water from her bell within 1 s, each telegraphed by her bell drawing in hard (deeper each time) and leaving as it snaps open, each wider and harder than the last (out to 4, 5.3 and 6.6 m; thrown on at 5, 7 and 10 m/s). Each wave's front sweeps everything loose out ahead of it, sliding along rock: mobs and corrupted creatures, the reef's fish, shells, hearts, loose pearls, pots, their shots and throws (turned away from her); the first shakes off clinging murklings. When it is done the water is clear 6.6 m round her bell (about six of her). Rooted creatures, Hearthguards on their beds, shop stands, the boss and her own light stay put. Seen as the currents' moving water: three rings of it shoving the picture outward (PlanePushWave.cs); recharges in 60 s | ★ | start |  |
 | Yes | ✅ | **Prism Pearl** | *One light, three colours* | Splits her light into three smaller Clementines for 6 s, in a triangle round the point she steers (each corner 1.4 m from it, the triangle turning with her aim): she is the green one at its front corner toward her aim, a red at the back corner on her left and a blue on her right, keeping their corners (her own controls) round the rock. Each fires its own volleys, on its own beat, at where she aims, its light and shots in its colour. A hit on any of them is a hit on her, one body of health. Splitting and flowing back together each take 0.45 s, with a jolt, the picture's colours pulled apart for a moment and a burst of light (PlanePrism.cs); recharges in 45 s | ★★★ | treasure, boss |  |
 | Yes |  | **Conch Horn** | *The sea answers* | Stuns and knocks back every foe within 8 m for 2 s; recharges in 30 s | ★★ | treasure, shop |  |
 | Yes | ✅ | **Bubble Shield** | *Pop-proof, mostly* | An untouchable bubble round her for 3 s; recharges in 20 s | ★★ | treasure, shop |  |

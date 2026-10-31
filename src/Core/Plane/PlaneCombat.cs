@@ -62,6 +62,16 @@ public static class PlaneCombatTuning
     public const float HitFlash = 0.12f;
     public const float ShotInterval = 0.22f;
     public const float ShotDamage = 10f;
+    /// <summary>
+    /// A volley shares her light: its whole power grows only as its count to the power VolleyGrowth (2 shots ×1.23, 3 ×1.39,
+    /// 5 ×1.62, 7 ×1.79), however the shots came, so a spread of shots is wider and surer, not several times stronger.
+    /// </summary>
+    public const float VolleyGrowth = 0.3f;
+    /// <summary>A volley's whole power, and each of its shots' share of a plain shot.</summary>
+    public static float VolleyPower(int count) => MathF.Pow(Math.Max(count, 1), VolleyGrowth);
+    public static float VolleyShot(int count) => VolleyPower(count) / Math.Max(count, 1);
+    /// <summary>What hurts her is this much harder per point of Menace (the creatures' own numbers are for Depth 1).</summary>
+    public const float HurtPerMenace = 0.75f;
     public const float ShotRadius = 0.15f;
 
     public const float MobHp = PufferlingTuning.Hp;
@@ -75,12 +85,6 @@ public static class PlaneCombatTuning
 
     /// <summary>No diving while a creature that has noticed her is this close (an active battle).</summary>
     public const float DiveSafeDistance = 12f;
-
-    /// <summary>An ambush springs as she enters its clearing: this many pufferlings, in a ring this far around her.</summary>
-    public const int AmbushMin = 3, AmbushMax = 4;
-    public const float AmbushRing = 5.5f;
-    /// <summary>They may first blow up after this long, one after another, so she has a moment to react.</summary>
-    public const float AmbushFirstShot = 0.9f, AmbushShotStagger = 0.6f;
 
     /// <summary>A pearl is picked up within this distance of her edge.</summary>
     public const float PearlReach = 0.8f;
@@ -102,12 +106,12 @@ public static class PlaneCombatTuning
     /// <summary>String of Pearls: the stream's shots are charged this far at full spin.</summary>
     public const float StreamCharge = 0.98f;
     /// <summary>Starfish Arm: a bubble grows as it flies, reaching GrowMax× its size and damage at the end of its range.</summary>
-    public const float GrowMax = 2f;
+    public const float GrowMax = 1.6f;
     /// <summary>
     /// Starburst Gland (item id ink_sac): wherever a shot pops it bursts into light, cleansing everything within
     /// BurstRadius of its edge for BurstDamage of its own damage (on top of the hit itself), and the ground under it.
     /// </summary>
-    public const float BurstRadius = 1.8f, BurstDamage = 0.6f;
+    public const float BurstRadius = 1.8f, BurstDamage = 0.35f;
     /// <summary>A hit shoves a mob along the shot at Tuning.ShotKnockback × her knockback stat (m/s), easing off at this rate.</summary>
     public const float KnockDecay = 6f;
     /// <summary>
@@ -128,7 +132,7 @@ public static class PlaneCombatTuning
     /// CavitationRadius (plus its own size) for CavitationDamage of its damage. Depth Charge (with Pearl Diver): a
     /// full-charge pearl's blast reaches DepthChargeReach times as far and hits DepthChargeDamage times as hard.
     /// </summary>
-    public const float CavitationRadius = 2.2f, CavitationDamage = 0.7f, DepthChargeReach = 2f, DepthChargeDamage = 1.5f;
+    public const float CavitationRadius = 2.2f, CavitationDamage = 0.4f, DepthChargeReach = 2f, DepthChargeDamage = 1.5f;
 }
 
 /// <summary>
@@ -139,7 +143,7 @@ public sealed class PlaneMob : PlaneSwimmer
 {
     public int Spawn;
     public float Hp = PlaneCombatTuning.MobHp;
-    /// <summary>It may not blow up until this runs out (an ambush staggers its pufferlings with it).</summary>
+    /// <summary>It may not blow up until this runs out.</summary>
     public float FireTimer;
     public bool Aggro;
     /// <summary>Counts down from HitFlash when it is hit (the view flashes it meanwhile).</summary>
@@ -218,16 +222,6 @@ public sealed class PlaneShot
     public HashSet<PlaneMob>? Hit;
 }
 
-/// <summary>An ambush clearing: it springs (spawning mobs around her) the first time she enters.</summary>
-public sealed class PlaneAmbush
-{
-    public int Poi;
-    public Vector2 Center;
-    public float Radius;
-    public bool Sprung;
-    public int Spawned;
-}
-
 /// <summary>A pearl lying in a treasure room until Clementine swims over it.</summary>
 public sealed class PlanePearl
 {
@@ -260,68 +254,6 @@ public sealed partial class PlaneWorld
     public List<PlaneMob> Mobs { get; } = new();
     public List<PlaneShot> Shots { get; } = new();
     public List<PlanePearl> Pearls { get; } = new();
-
-    /// <summary>The ambush places of the level, and whether each has sprung (it springs once).</summary>
-    public List<PlaneAmbush> Ambushes { get; } = new();
-
-    void PlaceAmbushes()
-    {
-        for (int i = 0; i < Map.Pois.Count; i++)
-            if (Map.Pois[i].Kind == PoiKind.Ambush) Ambushes.Add(new PlaneAmbush { Poi = i, Center = Map.Pois[i].Position, Radius = Map.Pois[i].Radius });
-    }
-
-    /// <summary>
-    /// The first time she enters an ambush clearing, mobs appear in a ring around her, already hunting her, their first
-    /// shots staggered. Afterwards they are ordinary mobs: if she swims away they stay behind.
-    /// </summary>
-    void StepAmbushes()
-    {
-        var p = Player;
-        foreach (var ambush in Ambushes)
-        {
-            if (ambush.Sprung || Vector2.Distance(p.Position, ambush.Center) > ambush.Radius) continue;
-            ambush.Sprung = true;
-            if (!Options.Pufferlings)
-            {
-                // The pufferlings are retracted: the clearing's corruption buds murklings round her instead.
-                // (A quiet level's template springs none.)
-                if (Corruption is not null && !Quiet) AmbushBuds(ambush);
-                Events.Add(new PlaneEvent(PlaneEventType.AmbushSprung, ambush.Center, Vector2.Zero));
-                continue;
-            }
-            var rng = new Rng(Map.Seed ^ 0xA3B05UL ^ ((ulong)ambush.Poi << 16) ^ ((ulong)Map.Level << 32) ^ ((ulong)Map.Depth << 40) ^ ((ulong)Map.Attempt << 48));
-            int count = PlaneCombatTuning.AmbushMin + rng.Int(PlaneCombatTuning.AmbushMax - PlaneCombatTuning.AmbushMin + 1);
-            float turn = rng.Range(0f, MathF.Tau);
-            int spawned = 0;
-            for (int i = 0; i < count; i++)
-            {
-                float a = turn + MathF.Tau * i / count + rng.Range(-0.2f, 0.2f);
-                Vector2 dir = new(MathF.Cos(a), MathF.Sin(a));
-                // The ring where there is water; closer in where rock is near.
-                foreach (float r in new[] { PlaneCombatTuning.AmbushRing, PlaneCombatTuning.AmbushRing * 0.75f, PlaneCombatTuning.AmbushRing * 0.5f })
-                {
-                    Vector2 at = p.Position + dir * r;
-                    if (!Clear(at, PlaneCombatTuning.MobRadius) || !LineOfSight(p.Position, at)) continue;
-                    Mobs.Add(new PlaneMob
-                    {
-                        Spawn = Mobs.Count,
-                        Position = at,
-                        Home = at,
-                        Heading = MathF.Atan2(-dir.Y, -dir.X),
-                        Aggro = true,
-                        State = PufferState.Face,
-                        FireTimer = PlaneCombatTuning.AmbushFirstShot + spawned * PlaneCombatTuning.AmbushShotStagger,
-                        Rng = new Rng(rng.NextU64()),
-                    });
-                    Events.Add(new PlaneEvent(PlaneEventType.MobNoticed, at, Vector2.Zero));
-                    spawned++;
-                    break;
-                }
-            }
-            ambush.Spawned = spawned;
-            Events.Add(new PlaneEvent(PlaneEventType.AmbushSprung, ambush.Center, Vector2.Zero));
-        }
-    }
 
     /// <summary>She ran out of HP: the run is over and the world no longer steps.</summary>
     public bool Defeated { get; private set; }
@@ -418,7 +350,6 @@ public sealed partial class PlaneWorld
             Run.Hp = p.Hp;
         }
 
-        StepAmbushes();
         StepActive(input);
 
         // Clementine's shots, toward her aim while fire is held, shaped by her pearls. Firefly Squid pours them out as
@@ -731,6 +662,7 @@ public sealed partial class PlaneWorld
             return false;
         }
         if (p.DashInvulnerableTimer > 0f || p.HurtTimer > 0f) return false;
+        damage *= HurtScale;
         p.Hp -= damage;
         Stats.DamageTaken += damage;
         p.HurtTimer = PlaneCombatTuning.PlayerHurtGrace;
@@ -738,6 +670,12 @@ public sealed partial class PlaneWorld
         Events.Add(new PlaneEvent(PlaneEventType.PlayerHit, at ?? p.Position, dir, damage, source));
         return true;
     }
+
+    /// <summary>How much harder what hurts her is at this level's Menace.</summary>
+    float HurtScale => 1f + PlaneCombatTuning.HurtPerMenace * Menace;
+
+    /// <summary>How much of a plain shot's light this shot carries (at most all of it): what a vent or a seal counts.</summary>
+    float ShotLight(PlaneShot shot) => MathF.Min(shot.Damage / (PlaneCombatTuning.ShotDamage * DamageScale), 1f);
 
     /// <summary>Her damage stat as a factor on a bubble's damage (1 with no pearls; Shark Tooth and Coral Crown raise it).</summary>
     float DamageScale => Run.Loadout.Stats.Damage / MathF.Max(Tuning.Damage, 0.01f);
@@ -766,9 +704,9 @@ public sealed partial class PlaneWorld
         LastVolleyDamage = 0f;
         var p = Player;
         var spec = Run.Loadout.Shot;
-        int count = Math.Max(1, spec.Multishot);
+        int count = Math.Max(1, spec.Multishot) + (int)Run.Loadout.Stats[Stat.BubblesPerThrow] - 1;
         float speed = PlaneCombatTuning.ShotSpeed * ShotSpeedScale;
-        float damage = PlaneCombatTuning.ShotDamage * spec.DamageMult * DamageScale * (1f + (PlaneCombatTuning.ChargeDamage - 1f) * charge);
+        float damage = PlaneCombatTuning.ShotDamage * PlaneCombatTuning.VolleyShot(count) * spec.DamageMult * DamageScale * (1f + (PlaneCombatTuning.ChargeDamage - 1f) * charge);
         float radius = PlaneCombatTuning.ShotRadius * spec.SizeMult * Run.Loadout.Stats[Stat.ShotSize] * (1f + (PlaneCombatTuning.ChargeSize - 1f) * charge);
         bool minigun = Run.Loadout.Flags.Contains("minigun"), cavitation = Run.Loadout.Flags.Contains("cavitation");
         // Sardine Run: the stream strays a little off her aim, shot by shot.
@@ -1125,10 +1063,10 @@ public sealed partial class PlaneWorld
             if (!shot.SealStruck && _rocks.Any(r => r.Contains(next)))
             {
                 shot.SealStruck = true;
-                StrikeSeal(next);
+                StrikeSeal(next, ShotLight(shot));
             }
             // ...and a vent's mouth adds its light to the vent.
-            if (shot.FromPlayer && !shot.VentStruck && Vents.Count > 0 && StrikeVent(next)) shot.VentStruck = true;
+            if (shot.FromPlayer && !shot.VentStruck && Vents.Count > 0 && StrikeVent(next, ShotLight(shot))) shot.VentStruck = true;
             // A returning boomerang passes back over what it cleared.
             if (!(shot.Boomerang && shot.Returning))
             {

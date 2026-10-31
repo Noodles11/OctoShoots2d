@@ -56,7 +56,7 @@ public class ItemTests
     {
         var tuning = new Tuning();
         var loadout = Loadout.Build(Catalog, new[] { "pufferfish_pout", "shark_tooth" }, tuning);
-        Assert.Equal((3.5f + 0.5f) * 1.5f, loadout.Stats.Damage, 4);
+        Assert.Equal((3.5f + 0.5f) * 1.35f, loadout.Stats.Damage, 4);
         // Order of pickup doesn't matter.
         var reversed = Loadout.Build(Catalog, new[] { "shark_tooth", "pufferfish_pout" }, tuning);
         Assert.Equal(loadout.Stats.Damage, reversed.Stats.Damage);
@@ -76,7 +76,7 @@ public class ItemTests
         var loadout = Loadout.Build(Catalog, new[] { "triple_tentacle", "double_helix", "anglerfish_lure", "swordfish_bill" }, new Tuning());
         Assert.Equal(4, loadout.Shot.Multishot);
         Assert.True(loadout.Shot.Wave && loadout.Shot.Homing && loadout.Shot.Pierce);
-        Assert.Equal(0.8f, loadout.Shot.DamageMult, 4);
+        Assert.Equal(1f, loadout.Shot.DamageMult, 4);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class ItemTests
     }
 
     [Theory]
-    [InlineData("pufferfish_pout", "+50% damage")]
+    [InlineData("pufferfish_pout", "+35% damage")]
     [InlineData("pufferfish_pout", "−20% shot speed")]
     [InlineData("shark_tooth", "+14% damage")]
     [InlineData("squid_ink_espresso", "+30% swim speed")]
@@ -123,7 +123,7 @@ public class ItemTests
     [InlineData("conch_horn", "Recharges in 30s")]
     [InlineData("lamprey_mouth", "Kills heal 3 HP")]
     [InlineData("whale_lung", "+30% shot size")]
-    [InlineData("hammerhead", "Fires a 5-pellet cone")]
+    [InlineData("hammerhead", "Fires a 5-pellet cone, each 32% of a shot")]
     [InlineData("barnacle_armor", "+30 foam HP")]
     public void CaptionsListRealNumbers(string item, string line)
     {

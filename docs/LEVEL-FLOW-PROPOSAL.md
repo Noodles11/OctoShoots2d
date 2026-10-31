@@ -67,10 +67,9 @@ Each level is stocked from its own roll, at most **5 POIs**, not counting the st
 | Curse den | 0–1 (**30%**) | 0–1 (**30%**) | |
 | Shop | never | **45%** | 2 pearls at 15 shells each, plus a health top-up. |
 | Shell cache (today's item cache) | see Q1 | see Q1 | 6–9 shells, guarded. |
-| Ambush | 0–2 | 0–2 | Rolled last; dropped first when over the cap. |
 | Boss arena | — | level 4: **50%**; level 5: **100%** if 4 had none | Counts toward the 5. Its Crack is the exit. |
 
-- **Over the cap,** POIs are dropped in this order until 5 remain: ambushes, then the curse den, then the secret, then
+- **Over the cap,** POIs are dropped in this order until 5 remain: the curse den, then the secret, then
   the 2nd treasure. The boss, the shop and the first treasure are never dropped.
 - **The roll happens before generation and is part of the level's identity** (`LevelPlan`, §6.1).
 - **All the percentages are data in one table** (`LevelStocking`), not code. Q3 explains how to settle them.
@@ -163,7 +162,6 @@ inside the same ring of rock.
   stops stepping that level.
 - **No diving in an active battle.** The dive is refused while any of these holds:
   - a creature that has noticed her is within ~12 m;
-  - an ambush is sprung;
   - the arena is sealed.
 
   The prompt then reads "Not while fighting". The Crack works only after the boss is freed.
@@ -249,7 +247,7 @@ inside the same ring of rock.
 |---|---|---|
 | §4.0 | A static 150×150 m footprint | 125×125 m |
 | §4.0 / §4.4 | Two outcomes: descend through the rift (after the boss) or perish | Dive through the level's one hole, or through the Crack on a boss level; or perish |
-| §4.1 Stage 1 | Start on the sunlit border; shop always; 1–2 secrets; 1 treasure; 2–4 ambushes; a guaranteed item cache | Start anywhere at its stamp; per-level roll (§4); ≤ 5 POIs |
+| §4.1 Stage 1 | Start on the sunlit border; shop always; 1–2 secrets; 1 treasure; a guaranteed item cache | Start anywhere at its stamp; per-level roll (§4); ≤ 5 POIs |
 | §4.1 | Rift ≥ 130 m geodesic | Exit ≥ 90 m |
 | §4.1, §4.5 | Trenches 8–14 m wide, −4…−8 m | No trenches |
 | §4.4 / §8 | Entering over a light-shaft; sucked down the Crack, then a comic-panel tunnel | A seamless dive down a shaft, every level |

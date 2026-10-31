@@ -26,7 +26,7 @@ public static class WardenTuning
     /// <summary>Waking with the level (roamers): this far from her start, and apart.</summary>
     public const float FromStart = 20f, Spacing = 12f;
     /// <summary>Its corruption meter: 60 (+20% per Menace), regrowing at Regen once Delay passes without a hit.</summary>
-    public const float Meter = 60f, MeterPerMenace = 0.2f, Regen = 10f, Delay = 1f;
+    public const float Meter = 60f, MeterPerMenace = 1.2f, Regen = 10f, Delay = 1f;
     /// <summary>Freed: its light washes this wide, and it leaves ShellsMin–Max shells.</summary>
     public const float BurstRadius = 3f;
     public const int ShellsMin = 1, ShellsMax = 2;

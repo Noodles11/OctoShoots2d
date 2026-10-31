@@ -10,7 +10,7 @@ using Xunit;
 
 namespace OctoShoots.Core.Tests;
 
-/// <summary>Her luck (LuckTuning): clam rooms, ambushes, bonus shells, light springs.</summary>
+/// <summary>Her luck (LuckTuning): clam rooms, bonus shells, light springs.</summary>
 public class LuckTests
 {
     static readonly Lazy<ItemCatalog> Catalog = new(() =>
@@ -25,23 +25,21 @@ public class LuckTests
         {
             var a = LevelPlan.For(TestLevels.Seed, id);
             var b = LevelPlan.For(TestLevels.Seed, id, 0f);
-            Assert.Equal((a.Treasures, a.Ambushes, a.Secrets, a.Shops, a.Caches, a.Curses), (b.Treasures, b.Ambushes, b.Secrets, b.Shops, b.Caches, b.Curses));
+            Assert.Equal((a.Treasures, a.Secrets, a.Shops, a.Caches, a.Curses), (b.Treasures, b.Secrets, b.Shops, b.Caches, b.Curses));
         }
     }
 
     [Fact]
-    public void Luck_brings_more_clam_rooms_and_fewer_ambushes()
+    public void Luck_brings_more_clam_rooms()
     {
         int Treasures(float luck) => Levels.Sum(id => LevelPlan.For(TestLevels.Seed, id, luck).Treasures);
-        int Ambushes(float luck) => Levels.Sum(id => LevelPlan.For(TestLevels.Seed, id, luck).Ambushes);
         Assert.True(Treasures(4f) > Treasures(0f), $"{Treasures(4f)} clam rooms with luck against {Treasures(0f)}");
-        Assert.True(Ambushes(4f) < Ambushes(0f), $"{Ambushes(4f)} ambushes with luck against {Ambushes(0f)}");
-        // It never takes a clam room away, nor adds an ambush.
+        // It never takes a clam room away.
         foreach (var id in Levels)
         {
             var plain = LevelPlan.For(TestLevels.Seed, id);
             var lucky = LevelPlan.For(TestLevels.Seed, id, 4f);
-            Assert.True(lucky.Treasures >= plain.Treasures && lucky.Ambushes <= plain.Ambushes);
+            Assert.True(lucky.Treasures >= plain.Treasures);
         }
     }
 

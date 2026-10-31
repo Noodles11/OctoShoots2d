@@ -1,27 +1,40 @@
 using System.Collections.Generic;
 using Godot;
+using OctoShoots.Game.Fx;
 
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
 /// A dark screen between rooms: after the rift (what Clementine did in the room she left, and where she goes next) and
-/// on her death (how far the run got). It shows "working…" while a room is generated, then a pulsing prompt to go on.
-/// Its opacity is set by the caller (brief fades in and out).
+/// on her death (how far the run got). It shows "working…" and the loader (GonadLoader) while a room is generated, then a
+/// pulsing prompt to go on.
+/// Its opacity is set by the caller (brief fades in and out). <see cref="OverTheSea"/> leaves out its dark ground: the
+/// title shows the page over Clementine swimming off.
 /// </summary>
 public partial class LoadingSplash : Control
 {
     Label _title = null!, _next = null!, _working = null!;
     GridContainer _stats = null!;
+    Control? _ground;
+    Control _box = null!;
+    GonadLoader _loader = null!;
+    TextureRect? _frame;
     float _time;
     string _status = "";
     bool _prompt;
 
+    public bool OverTheSea { get; init; }
+
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        MouseFilter = MouseFilterEnum.Stop;
+        MouseFilter = OverTheSea ? MouseFilterEnum.Ignore : MouseFilterEnum.Stop;
         Visible = false;
-        AddChild(new ColorRect { Color = new Color(0.01f, 0.025f, 0.035f), AnchorRight = 1f, AnchorBottom = 1f, MouseFilter = MouseFilterEnum.Ignore });
+        if (!OverTheSea)
+        {
+            _ground = new ColorRect { Color = new Color(0.01f, 0.025f, 0.035f), AnchorRight = 1f, AnchorBottom = 1f, MouseFilter = MouseFilterEnum.Ignore };
+            AddChild(_ground);
+        }
 
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -42,6 +55,9 @@ public partial class LoadingSplash : Control
         box.AddChild(_next);
         _working = Text(18, new Color(0.5f, 0.62f, 0.66f));
         box.AddChild(_working);
+        _box = center;
+        _loader = new GonadLoader();
+        AddChild(_loader);
     }
 
     static Label Text(int size, Color color)
@@ -49,6 +65,14 @@ public partial class LoadingSplash : Control
         var l = new Label { HorizontalAlignment = HorizontalAlignment.Center };
         l.AddThemeFontSizeOverride("font_size", size);
         l.AddThemeColorOverride("font_color", color);
+        return Outlined(l);
+    }
+
+    /// <summary>A dark edge, so the words read over the sea.</summary>
+    static Label Outlined(Label l)
+    {
+        l.AddThemeColorOverride("font_outline_color", new Color(0.01f, 0.05f, 0.07f, 0.85f));
+        l.AddThemeConstantOverride("outline_size", 6);
         return l;
     }
 
@@ -59,16 +83,34 @@ public partial class LoadingSplash : Control
         foreach (var child in _stats.GetChildren()) child.QueueFree();
         foreach (var (label, value) in stats)
         {
-            var l = new Label { Text = label };
+            var l = Outlined(new Label { Text = label });
             l.AddThemeColorOverride("font_color", new Color(0.62f, 0.72f, 0.75f));
             _stats.AddChild(l);
-            var v = new Label { Text = value, HorizontalAlignment = HorizontalAlignment.Right, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            var v = Outlined(new Label { Text = value, HorizontalAlignment = HorizontalAlignment.Right, SizeFlagsHorizontal = SizeFlags.ExpandFill });
             v.AddThemeColorOverride("font_color", new Color(1f, 0.95f, 0.88f));
             _stats.AddChild(v);
         }
         _next.Text = next;
         _time = 0f;
+        _frame?.QueueFree();
+        _frame = null;
+        if (_ground is not null) _ground.Visible = true;
+        _box.Visible = true;
         Working("Shaping the reef");
+    }
+
+    /// <summary>
+    /// The title's loading screen goes on: its last frame (the sea, its page and its loader in it) stands in for this page
+    /// while the game is put together, so there is only the one screen.
+    /// </summary>
+    public void Over(Texture2D frame)
+    {
+        _frame = new TextureRect { Texture = frame, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.Scale, MouseFilter = MouseFilterEnum.Ignore };
+        _frame.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_frame);
+        if (_ground is not null) _ground.Visible = false;
+        _box.Visible = false;
+        _loader.Visible = false;
     }
 
     /// <summary>Something is under way: the status line with animated dots.</summary>
@@ -76,6 +118,7 @@ public partial class LoadingSplash : Control
     {
         _status = text;
         _prompt = false;
+        _loader.Visible = true;
     }
 
     /// <summary>Ready: the status line becomes a pulsing prompt.</summary>
@@ -83,6 +126,7 @@ public partial class LoadingSplash : Control
     {
         _status = text;
         _prompt = true;
+        _loader.Visible = false;
     }
 
     public override void _Process(double delta)

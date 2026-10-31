@@ -81,12 +81,17 @@ What changes is the protagonist's skin:
   contraction. Swimming, she tips almost onto her side, apex first (about 70°
   at her cruise), on a critically damped spring.
 - **Strands**, as a moon jelly's: a fringe of about 140 fine hairs round the
-  margin, short (0.08–0.15 m) and nearly invisible; four **oral arms** from
-  round her mouth, one between each pair of gonads — long ribbons of thin cloth
+  margin, short (0.08–0.15 m) and nearly invisible; three **oral arms** from
+  round her mouth — long ribbons of thin cloth
   (their lengths about her arm's: 3.2 m, 0.2 m more for every skill point she
   spends, at most 6 m — always longer than the fibres), twisting freely, nearly see-through, their ruffled
   margins glowing, a faint current down their middles with a brighter impulse
-  now and then; and eight long **fibre tentacles** (1.8–2.6 m) from the margin,
+  now and then, and along one edge of each a thin glowing line, one arm's red, one
+  green, one blue. Where two lines cross (as the eye sees them) they strike tiny
+  sparks of their colours added together, red and green yellow, red and blue
+  magenta, green and blue cyan, all three white: stardust on her tail as she swims,
+  and hardly any at rest, for a crossing sparks again only once it has moved 0.1 m
+  or 0.35 s have passed (`BellView.ShedStardust`). And eight long **fibre tentacles** (1.8–2.6 m) from the margin,
   hair-thin like optical fibres, beads of light running down them to a tip
   twinkling in random colours, as an optical fibre's. All on **verlet chains** with a fixed 120 Hz step:
   they stream behind her in travelling S-waves while she swims, swing through
@@ -268,8 +273,10 @@ of the corrupted (`PlaneExperience.cs`, `PlaneRun`).
     nothing twice.
   - **Freeing a fish** (a lesser murkling turned back): 6.
   - **Freeing a boss**: 120.
-- **Levels:** from level 1 to 2 takes 60, and every level after it 30 more
-  (90, 120, …). Each level is one **skill point**.
+- **Levels:** from level 1 to 2 takes 240, and every level after it 1.35 times the
+  one before (324, 437, 590, 797, 1076, …). Each level is one **skill point**. Her
+  first level-up never comes on a run's first level: there her experience stops just
+  short of it, and the rest of what she earned there is lost.
 - **Skill points** go to one modifier of her choice, each point adding a fixed
   step (before any pearl's multiplier, so pearls scale it too): max HP +10
   (and the new HP comes filled), damage +6%, fire rate +5%, shot speed +6%,
@@ -399,7 +406,7 @@ its own.
   (rooms ≥ 20 m), ≥ 30 m from the way down and ≥ 30 m from the start; exactly
   one sits "early", 30–38 m from the start — the shop if the level has one (usually;
   to teach the economy), else a clam room, else another place. Open places
-  (ambushes, the shell cache) take a chamber or a tunnel wide enough, a nave
+  (the shell cache) take a chamber or a tunnel wide enough, a nave
   first (§4.9); the
   shell cache keeps to the middle of the way (30–70% along start → way down),
   off the main tunnels, and never sits early.
@@ -411,11 +418,10 @@ its own.
   | Curse den | 30% | 30% |
   | Shop | never | 45% |
   | Shell cache | never | 60% |
-  | Ambush | 0–2 | 0–2 |
   | Boss arena | — | level 4 at 50%, else level 5 |
 
   At most **5** places besides the start and the exit (the boss arena counts);
-  over the cap they are dropped in the order ambushes, curse den, secret,
+  over the cap they are dropped in the order curse den, secret,
   shell cache (clam rooms stay). The tutorial (Depth 0, §8) sets its places
   rather than rolling them.
 - **The way down:** on most levels a **blue hole**: its whole 10.5 m chamber
@@ -586,8 +592,8 @@ Running after the checks, it never changes what she can reach.
     a level's template seals (its `pathSeals` rule);
   - **a sword**, on **every way into the boss's arena** (each opening in its rim found by rays out from its middle, a
     wall across it from the rock on one side to the rock on the other), its crimson smouldering faintly in the groove.
-    It takes no light while a vent on the level stands open (`SealRefused`): her shots knock dully on it, and she is told
-    how many still pour. No vent lies behind it.
+    It takes no light until 3 of the level's vents are sealed (`SealRefused`): her shots knock dully on it, and she is
+    told how many more to seal. No vent lies behind it.
   Each of her shots that strikes the wall within 2.2 m of its carving fills it with her light (a sixth of an X, an
   eighth of the sword; damage does not matter, a merged or bouncing bubble counts once), from its heart outward (the
   X's crossing, the sword's guard), with a flash and a chime rising as it fills. **The hits must come one after
@@ -631,8 +637,7 @@ Running after the checks, it never changes what she can reach.
   - No creatures live in it. Nothing teleports her.
 - **Landmark light language** inherited: gold (clam rooms), green (shop),
   red (curse), violet (secret, **no beacon** — found, not advertised),
-  orange (the Crack); and white (the start), teal (the shell cache), coral (ambushes; warm but not gold, so
-  they never read as treasure). In dark depths these lights are the level's signage —
+  orange (the Crack); and white (the start), teal (the shell cache). In dark depths these lights are the level's signage —
   Below's campfire principle.
 - **Sealed pockets** (2–4/level) and **buried coins** (4–7/level, scratched
   X marks) inherited (DESIGN-2D §26, DESIGN-3D §6.3) — bomb the floor, loot
@@ -644,6 +649,25 @@ Running after the checks, it never changes what she can reach.
 - The floor Clementine swims over is **solid seabed**: nothing of the levels
   below shows through it. The only view down is the shaft (§4.6), through
   which she sees the level below in plain water.
+- **The reef is one colour at every height** (`topdown_post.gdshader`): it is all underwater, so rock over her plane and
+  floor under it are seen through the same even water (`reef_water`, 3 m of it, in each depth's own water colour). Height
+  is told by focus alone: what lies under her plane blurs gradually, gaining a little at first and its full blur by
+  14 m down, and rock over it blurs too. Only what lies past 28 m under her plane, which is no reef of this level (the
+  level below, down the shaft), sinks into the water.
+- **Balance:** a plain shot is 10, about 45 a second if every shot lands.
+  - **A volley shares her light** (`PlaneCombatTuning.VolleyPower`): the whole volley's power is its count to the power
+    0.3 (2 shots ×1.23, 3 ×1.39, 5 ×1.62, 7 ×1.79), however many pearls gave the shots, so a spread is wider and surer,
+    never several times stronger. Each shot carries its share.
+  - **Vents and seals count light, not hits:** a shot adds its share of a plain shot's light, so a small shot is only
+    part of a hit.
+  - **The creatures keep up:** every corrupted creature's meter is its own × (1 + 1.2 × Menace), a boss's × (1 + 1.5 ×
+    Menace), and all that hurts her is × (1 + 0.75 × Menace), but the curse den's dark. Menace is 0 at Depth 1, 1 at Depth 6.
+- **Fish far below** (`DeepShoals`, `topdown_post.gdshader`): vague shadows of fish swim under her plane, on the title
+  screen too: two great loners (5–8 m long, 11–16 m down), two middling ones (2–4 m) and two small schools (of 5 and 7,
+  about 1 m each, 4–8 m down), all one soft shape, a long body bending as it swims and a fanned tail beating behind it,
+  softer the deeper it is. Each keeps its own slow course round her and comes back from out of sight once it is 20 m off.
+  They darken only what lies below her plane (by up to about 60% at their heart), never the rock over it, and only for the eye:
+  nothing in the game knows of them.
 - Depth is told by the light, the palette and the murk of each depth (§5.1),
   and by the dive itself.
 
@@ -702,8 +726,7 @@ levels: ~4–5 min rushed, ~25 min explored.
   the shaft; the level she leaves is freed when she has dived. Continue
   regenerates only the saved level and the one below.
 - **The dive: Shift** over the shaft. Not in an active battle — while a
-  creature that has noticed her is within 12 m, an ambush is fighting her or
-  a boss battle runs, the prompt reads "Not while fighting"; the Crack opens
+  creature that has noticed her is within 12 m or a boss battle runs, the prompt reads "Not while fighting"; the Crack opens
   only when the boss is freed ("The Crack is sealed").
 - **The animation (1.6 s, input locked):** she gathers (a flare, a small rise);
   a hard stroke turns her head-first and she sinks the 8 m down the shaft in
@@ -762,7 +785,7 @@ everything scattered. A template:
   - `springs`: so many light springs.
   - `fish`: more reef fish.
   - `wardenFor`: Inkwardens stand by that kind.
-  - `quiet`: no ambush springs, no Blotter is born.
+  - `quiet`: no Blotter is born.
 
 **Rolling.** A depth's templates are rolled together from their own stream, so any level's is known on its own:
 - Each level draws by weight among the templates that fit its shown depth and its slot: the first level, a middle
@@ -784,13 +807,13 @@ everything scattered. A template:
 
 | Template | Slots, depths | Places | Cast | Rules |
 |---|---|---|---|---|
-| The Hoard | first, middle; 1–6 | clam room, secret, curse den required; cache 30%; no shop or ambush | 2 Blightroots by the clam room and the secret; 1–2 Inkwardens by the clam room | a prime by the clam room, which the guardians bud round; cap +2 |
-| The Long Haul | middle, before boss; 2–6 | shop required; cache 40%, secret 20%; no curse den or ambush | 2–3 Thumpsquirts in the tunnels, 2–3 Blotters on the path, 1 Blightroot in a dead end | small chambers (×0.6), narrow long tunnels (×0.8, ×1.4), no loops; budding ×0.6 |
-| The Open Grotto | first, middle; 3–6 | an ambush; cache 60%, secret 30% | 2–3 (+1 per Menace) Lashjaws in the walls, 2–3 Blightroots and 0–1 Blotter in the chambers | wide chambers (×1.4), loops ×1.5 |
-| The Ink Fields | middle; 1–6 | cache 50%, curse den 30%, shop 30%, secret 20%; no ambush | 4–5 Blightroots, 3–4 Blotters, 0–1 Inkwarden | ink +0.15; 2 light springs |
+| The Hoard | first, middle; 1–6 | clam room, secret, curse den required; cache 30%; no shop | 2 Blightroots by the clam room and the secret; 1–2 Inkwardens by the clam room | a prime by the clam room, which the guardians bud round; cap +2 |
+| The Long Haul | middle, before boss; 2–6 | shop required; cache 40%, secret 20%; no curse den | 2–3 Thumpsquirts in the tunnels, 2–3 Blotters on the path, 1 Blightroot in a dead end | small chambers (×0.6), narrow long tunnels (×0.8, ×1.4), no loops; budding ×0.6 |
+| The Open Grotto | first, middle; 3–6 | cache 60%, secret 30% | 2–3 (+1 per Menace) Lashjaws in the walls, 2–3 Blightroots and 0–1 Blotter in the chambers | wide chambers (×1.4), loops ×1.5 |
+| The Ink Fields | middle; 1–6 | cache 50%, curse den 30%, shop 30%, secret 20% | 4–5 Blightroots, 3–4 Blotters, 0–1 Inkwarden | ink +0.15; 2 light springs |
 | The Warden Garden | middle, before boss; 2–6 | secret 50%, cache 40% | 3–4 Inkwardens, 2 Thumpsquirts, 2 Blightroots in the chambers | the wardens stand by the Thumpsquirts |
-| The Ambush Run | middle; 3–6 | 2 ambushes and a cache required; secret 30%; no shop or curse den | 1–2 Lashjaws, 1–2 Blightroots on the path | tunnels ×0.9 |
-| The Quiet Reach | middle, before boss (×4); 1–6; once a depth | shop required; clam room 30%, cache 50%; no curse den or ambush | 1 Blightroot in a dead end | quiet; 1 light spring; fish ×2; budding ×0.5 |
+| The Cache Run | middle; 3–6 | a cache required; secret 30%; no shop or curse den | 1–2 Lashjaws, 1–2 Blightroots on the path | tunnels ×0.9 |
+| The Quiet Reach | middle, before boss (×4); 1–6; once a depth | shop required; clam room 30%, cache 50%; no curse den | 1 Blightroot in a dead end | quiet; 1 light spring; fish ×2; budding ×0.5 |
 | The Approach | boss; 1–6 | shop 50%, cache 30%; nothing else | 1–2 Blightroots and 0–1 Blotter on the path | quiet |
 | Default | every slot | the general rolls | the general rules | — |
 
@@ -801,7 +824,7 @@ as the level's title when she arrives (§9; the default has none).
 
 Every chamber off the main route (a side branch or a dead end; `LevelMap.Naves`) holds something, so clearing it
 pays (the main route's chambers are the way through):
-- **A place** in it or opening off it: an open place (an ambush, the shell cache) whose clearing lies in it (open
+- **A place** in it or opening off it: an open place (the shell cache) whose clearing lies in it (open
   places take a nave first), or a room whose tunnel leaves from it (the rooms — shop, clam room, secret, curse den —
   are themselves dead-end chambers of their own). One place to a nave.
 - **Else a den** (`PlaneDens.cs`, docs/CORRUPTION.md), a knot of the corruption:
@@ -957,7 +980,7 @@ exactly and cheaply, and the water glows where light passes through it.
   her to the creature for a hit without one, such as the surge's). How much of each scales with the share of the
   creature's whole health that one hit took (the boss's: its health): 6 of each for a graze, up to 40 for a hit that
   takes it all (6 + 34 × √share), thrown harder the bigger the share. No ink drops, no torn holes, and for now no
-  flash on the struck creature (no hit outline, no white flash on a pufferling, no brightening of the boss). A
+  flash on the struck creature (no hit outline, no white flash on a pufferling, no brightening of the boss), and no white flash where the shot lands: a burst of steam shows the hit (`CombatView.Steam`). A
   murkling's or a Blightroot's liquid body still dents where it struck (`BlightView.Struck`).
 - **Her glow in the water**: the water her light passes through scatters it toward the eye, integrated along every
   pixel's view ray. For a point light that integral has a closed form, (I / h)·(θb − θa) with h the ray's closest
@@ -1121,8 +1144,8 @@ The FP staging ("look up through the surface") is replaced:
 - **The tutorial (Depth 0, the Sunlit Shallows):** where new players learn the
   ropes, alone — the game says nothing to guide them (it has no hint messages
   anywhere). Two levels, set rather than rolled, holding every kind of place
-  between them: level 1 a clam room, a secret, a shell cache and an ambush;
-  level 2 a shop, a curse den, an ambush and the **open rift** — the arena round
+  between them: level 1 a clam room, a secret and a shell cache;
+  level 2 a shop, a curse den and the **open rift** — the arena round
   the Crack with no boss in it, the Crack standing open from the start and the
   arena not condensed. Menace 0. Diving the rift passes the tutorial (saved on
   the profile, `TutorialPassed`) and starts the run proper in Depth 1: the run's
@@ -1317,8 +1340,7 @@ at mist distance (inherited fade rule).
    bare dot): a badge in its landmark colour with its sign — the start a pennant, the shop a "$", a clam room a
    pearl in an open clam, the shell cache the HUD's shell, the curse den a spider, a secret a "?" —
    and the way down the evacuation sign (a white figure running out of a door, on a green plate). The Tab map's
-   legend shows the same emblems (the Tab map draws them half again as large). There are no hints for places not yet found. The maps never show enemies: no creatures, and no ambush (it
-   springs unannounced, even once she has been there), nor the corruption. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
+   legend shows the same emblems (the Tab map draws them half again as large). There are no hints for places not yet found. The maps never show enemies: no creatures, nor the corruption. With the **Brass Compass** every place shows from the start, except secret rooms. Her arrow is large and warm-coloured. The Tab map keeps the full chart, without fog. Entering a place
    names it for a moment on the minimap's lower rim (all but the start); there are no beacons.
 3. **Ninja respawn:** §6.3 carries the ninja over "intact (… nest respawn)"; the inherited Ink Deep rules
    (DESIGN-2D §1, DEPTH1-BESTIARY §8) free a defeated ninja into its school for good, and the current Core does that.
@@ -1404,9 +1426,6 @@ at mist distance (inherited fade rule).
   one anemone, 1–2 tangs and at most one school of 30–45; Depth 3 the same with a school of 25–40; Depth 4 at most one
   anemone, up to 2 tangs and at most one school of 20–35; Depth 5 at most one tang and one school of 20–30; Depth 6
   none.
-- **Ambushes:** the first time she enters an ambush clearing, 3–4 pufferlings appear in a ring about 5.5 m around
-  her (closer in where rock is near), already facing her; the first may blow up after 0.9 s, the others 0.6 s apart. They are ordinary
-  mobs from then on: she may swim away, and they stay. An ambush springs once.
 - **Clam rooms (look)** (`ClamRoomView`): a chamber like any other, the dead end of its spur, and in its middle a giant
   clam lying open on the sand — three times the pearl's width, bone-cream, ribbed — its mouth turned to the chamber's
   entrance, the hinge behind, its soft flesh inside and the pearl lying on its lower valve. **The pearl's light comes out
@@ -1488,7 +1507,7 @@ at mist distance (inherited fade rule).
     and spines are turned away; it wobbles when struck and flickers before it goes). **Whale Song** (40 s): heals 35 HP,
     three rings of sound swelling out from her; not usable at full HP ("Already at full health"). **Tide Pulse**
     (60 s; every run starts with it): three waves of water push everything loose away from her, leaving the water
-    clear 3.3 m round her bell (docs/PEARLS.md, `PlanePushWave.cs`). A new active pearl takes the old one's place.
+    clear 6.6 m round her bell (docs/PEARLS.md, `PlanePushWave.cs`). A new active pearl takes the old one's place.
 - **Sunken amphorae (`PlaneVases.cs`, `VaseView`):** breakable pots on the seabed. Each level has 5–7 groups of
   1–3, seeded, by the walls where the seabed lies 0.3–1.6 m under her swim plane (so they stand up into it), clear of
   the start (20 m), the way down and the places: a tall two-handled amphora, a round jar or a squat pot, terracotta
@@ -1532,7 +1551,7 @@ at mist distance (inherited fade rule).
   `src/Game/TopDown/Bosses`): the boss generator (docs/BOSS-GENERATOR.md) is parked until the hand-made roster grows.
   For now **every depth's boss is Drippus Prime** (docs/CORRUPTION.md, "Drippus Prime": a murkling prime grown huge
   whose every birth costs it some of its own body), in the adventure too, tougher the deeper it is met and on later
-  loops: its health ×(1 + 0.6 × Menace) and its damage ×(1 + 0.4 × Menace) (Menace 0 at Depth 1, 1 at Depth 6 of the
+  loops: its health ×(1 + 1.5 × Menace), and its blows harder as all that hurts her (Menace 0 at Depth 1, 1 at Depth 6 of the
   first loop). The arena is the exit's flat 15 m disc, and it bars it (§6.4, §4.2). Queen Clam (below, her numbers at
   Depth 1) stays in the code as the boss generator's reference roll; no depth meets her.
   - **Entering.** The first time Clementine is wholly inside the disc, the battle begins: the sword walls rise behind
@@ -1572,9 +1591,9 @@ at mist distance (inherited fade rule).
   leads to the next (§4.6). She keeps her pearls, shells and HP through it; a new seed starts a fresh run. A new run
   starts on a random seed unless she types one on the title screen.
 - **Title screen** (docs/TITLE-MENU-PROPOSAL.md has the full layout and motion):
-  - **The backdrop.** The game boots into a menu over the live sea. Clementine swims slowly back and forth along a
-    canyon of a fixed seed (KELP 7Q2Z), the camera keeping her in the middle of the screen; the sea is dimmed a
-    little, more toward the edges. The logo sits at the top left.
+  - **The backdrop.** The game boots into a menu over the live sea. Clementine swims slowly back and forth along the
+    west end of the longest straight channel of a fixed seed's reef (KELP 7Q2Z), the camera keeping her in the middle
+    of the screen; the sea is dimmed a little, more toward the edges. The logo sits at the top left.
   - **The menu** stands in a ring round her (an oval 860 × 600 on the 1600 × 900 page), evenly spaced from the top,
     clockwise: Continue (only with a saved run), New run, Seeded run, Sea-pedia, Statistics, Save & load, Settings,
     Quit. Each item is its word with its detail line under it; the one in focus swells a little and turns coral. W/S
@@ -1604,8 +1623,17 @@ at mist distance (inherited fade rule).
     (view option MaxRenderHeight, 0 = native) and FSR upscales it to the window; the HUD draws at full size. The
     reef's skin works out only the looks a pixel shows (sand or rock), not both. Measured on a
     3840-wide window: about 12–25 ms of GPU a frame before, 3–5 ms after.
-  - **Motion.** Sub-screens are pearl cards that surface from the bottom right and dive away, and starting a run
-    fades into the loading splash.
+  - **Motion.** Sub-screens are pearl cards that surface from the bottom right and dive away.
+  - **Starting a run** (New run, a seed, Continue): the menu, the logo and the footer fade (0.4 s) and she swims off to
+    the right along the channel, facing where she goes, the camera easing ahead of her until she sits 30% across the
+    screen. The loading page ("The new dive", or "Back into the sea" for a saved run, with its seed and level, "Shaping
+    the reef" and the loader) fades up over that shot while the first level is shaped: the one loading screen a run
+    starts with. Once the level is ready and at least 2.4 s have passed, the game takes over, holding the shot's last
+    frame up while it is put together, and fades from it to the level (0.35 s). With reduced motion she keeps her slow
+    swim, the camera stays and the page shows for at least 0.5 s.
+  - **The loader** (`GonadLoader`): on every loading screen (this one, the title's while its sea is made, and the
+    splash between rooms while a room is made), her crosshair turning at the bottom right, once in 1.4 s, 32 px in
+    from the corner, at its own 32 px whatever the window.
   - **The interface** is laid out on a 1600×900 page and scaled to the window.
 - **Saves:**
   - **One profile and one run** (the save file, version 2, written atomically).

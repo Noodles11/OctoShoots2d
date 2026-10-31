@@ -23,7 +23,7 @@ namespace OctoShoots.Game.TopDown;
 /// screen (RunLaunch); run directly with verification flags, it starts a run on its own and saves nothing.
 /// WASD swims (north is up), Space dashes, Shift dives (InputSetup), the mouse aims, F1 opens the debug menu (any
 /// level, any pearls), F3 toggles the debug map, R regenerates from the seed field.
-/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|arch-near|cave|exit|hole|kelp|shop|shop-out|cache|cache-near|secret|secret-in|treasure|treasure-out|clam-pearl|ambush|mob|boss|spring|spring-in,
+/// Verification flags: --seed=, --cycle=, --depth=, --level=, --at=start|arch|arch-near|cave|exit|hole|kelp|shop|shop-out|cache|cache-near|secret|secret-in|treasure|treasure-out|clam-pearl|mob|boss|spring|spring-in,
 /// --autopilot, --dive (dives whenever it can), --dbg-pad (on the controller from the start), --calm (no creatures), --fire, --pearls=, --hp=, --luck=, --boss-hp=, --paused, --map, --f3, --no-focus, --dbg-nofog (no floor fog),
 /// --capture=dir --frames=a,b, --dbg-say=text (a message banner, a second in), --at=gate (swims into the boss arena through its
 /// opened way in), --dbg-free=seconds (the boss freed that long after it lands), --dbg-steer=x,y (she swims that way;
@@ -184,6 +184,7 @@ public partial class TopDownMain : Node3D
     BlightView _blight = null!;
     AdventureView _adventure = null!;
     readonly OctoShoots.Game.Fx.WaterSwells _swells = new();
+    readonly OctoShoots.Game.Fx.DeepShoals _shoals = new();
     SpringView _springs = null!;
     InkVapour _vapour = null!;
     /// <summary>Her health last frame: a rise is corruption cleared, which steams off her.</summary>
@@ -315,7 +316,7 @@ public partial class TopDownMain : Node3D
         AddChild(_corruption);
         _blight = new BlightView { Swells = _swells };
         AddChild(_blight);
-        _adventure = new AdventureView();
+        _adventure = new AdventureView { Steam = (at, dir, radius, k) => _combat.Steam(at, dir, radius, k) };
         AddChild(_adventure);
         _springs = new SpringView();
         AddChild(_springs);
@@ -435,7 +436,7 @@ public partial class TopDownMain : Node3D
         {
             _seed = seed;
             _customSeed = saved.CustomSeed;
-            _id = new LevelId(Math.Max(1, saved.Cycle), Math.Clamp(saved.Depth, 1, LevelPlan.Depths), Math.Clamp(saved.Level, 1, 5));
+            _id = RunLaunch.Start(saved);
             _resume = saved;
             return;
         }
@@ -444,12 +445,7 @@ public partial class TopDownMain : Node3D
         _id = RunStart();
     }
 
-    /// <summary>
-    /// Where a new run starts: in the tutorial (Depth 0) until she has passed it once, then in Depth 1 — unless the
-    /// settings ask to replay the tutorial.
-    /// </summary>
-    LevelId RunStart() =>
-        _recorder.Profile.TutorialPassed && !(_view ?? SettingsStore.LoadView()).ReplayTutorial ? LevelId.FirstRun : LevelId.First;
+    LevelId RunStart() => RunLaunch.Start(_recorder.Profile, _view ?? SettingsStore.LoadView());
 
     /// <summary>Verification: the options with the boss `--boss=` names (null: the game's own).</summary>
     PlaneOptions? DebugBoss()
@@ -504,12 +500,22 @@ public partial class TopDownMain : Node3D
 
     void StartFirstLevel()
     {
-        var stats = new List<(string, string)> { ("Seed", _seed.ToString() + (_customSeed ? "  (seeded)" : "")) };
-        if (_resume is { } saved) stats.Add(("Carrying", $"{saved.Items.Count} pearls · {saved.Shells} shells · {CorruptionText(saved.Hp, saved.Items)}"));
-        _splash.Fill(_resume is not null ? "Back into the sea" : "A new dive", stats, _id.ToString());
+        FillFirstSplash(_splash, _seed, _customSeed, _id, _resume, _catalog, _tuning);
+        if (RunLaunch.Frame is { } frame) _splash.Over(frame);
+        RunLaunch.Frame = null;
         _splash.Modulate = Colors.White;
         _splash.Visible = true;
-        _firstMap = Shape(_id);
+        // The title has it under way when it started the run.
+        _firstMap = RunLaunch.Shaping is { } made && made.Seed.Equals(_seed) && made.Id == _id && made.Luck == Luck ? made.Shape : Shape(_id);
+        RunLaunch.Shaping = null;
+    }
+
+    /// <summary>The loading page of a run's first level.</summary>
+    public static void FillFirstSplash(LoadingSplash splash, SeedCode seed, bool custom, LevelId id, SuspendedRun? resume, ItemCatalog? catalog, Tuning tuning)
+    {
+        var stats = new List<(string, string)> { ("Seed", seed.ToString() + (custom ? "  (seeded)" : "")) };
+        if (resume is { } saved) stats.Add(("Carrying", $"{saved.Items.Count} pearls · {saved.Shells} shells · {CorruptionText(saved.Hp, saved.Items, catalog, tuning)}"));
+        splash.Fill(resume is not null ? "Back into the sea" : "The new dive", stats, id.ToString());
     }
 
     /// <summary>
@@ -522,10 +528,11 @@ public partial class TopDownMain : Node3D
     /// <summary>The adventure's levels are abyss reefs (AbyssReef): no seabed outside the caves and tunnels.</summary>
     static LevelMap Abyss(LevelMap map) => PlaneOptions.Default.Adventure ? AbyssReef.Apply(map) : map;
 
-    Task<LevelShape> Shape(LevelId id, bool background = false)
+    Task<LevelShape> Shape(LevelId id, bool background = false) => Shape(_seed, id, Luck, background);
+
+    public static Task<LevelShape> Shape(SeedCode seed, LevelId id, float luck, bool background = false)
     {
-        var streams = new RunStreams(_seed);
-        float luck = Luck;
+        var streams = new RunStreams(seed);
         return Task.Run(() => LevelShape.Prepare(Abyss(TopDownGenerator.Generate(streams, id, background: background, luck: luck))));
     }
 
@@ -1100,7 +1107,6 @@ public partial class TopDownMain : Node3D
         if (_calm)
         {
             _world.Mobs.Clear();
-            _world.Ambushes.Clear();
         }
         if (_dbgSurge) InjectSurge();
         // Verification: the level's first geyser sprays a second from now (8 s).
@@ -1384,7 +1390,6 @@ public partial class TopDownMain : Node3D
                 .Select(q => (System.Numerics.Vector2?)q).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
             // A few metres south of the first pot, in water that sees it.
             "vase" => _world.Vases.Select(v => (System.Numerics.Vector2?)(v.Position + new System.Numerics.Vector2(0f, 4f))).FirstOrDefault(q => q is { } v && _world.Clear(v, 0.6f)),
-            "ambush" => _map.Pois.Where(p => p.Kind == PoiKind.Ambush).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
             "treasure" => _map.Caves.Where(c => _map.Pois[c.Poi].Kind == PoiKind.TreasureCave).Select(c => (System.Numerics.Vector2?)(c.Mouth - c.Facing * 2.5f)).FirstOrDefault(),
             // On a clam room's pearl: it is touched at once.
             "clam-pearl" => _map.Pois.Where(p => p.Kind == PoiKind.TreasureCave).Select(p => (System.Numerics.Vector2?)p.Position).FirstOrDefault(),
@@ -1784,7 +1789,6 @@ public partial class TopDownMain : Node3D
                     _hud.CollectShell(shownAt / HudScale, across / HudScale, lie);
                 }
                 else if (e.Type == PlaneEventType.CannotAfford) Say("Not enough shells");
-                else if (e.Type == PlaneEventType.AmbushSprung) Say("Ambush!");
                 else if (e.Type == PlaneEventType.PlayerDrained)
                 {
                     _damage.Show(e);
@@ -1838,7 +1842,7 @@ public partial class TopDownMain : Node3D
                     if (_levelTime - _sealToldAt > 4f)
                     {
                         _sealToldAt = _levelTime;
-                        Say(e.Size == 1f ? "It will not open: one vent still pours" : $"It will not open: {(int)e.Size} vents still pour");
+                        Say(e.Size == 1f ? "It will not open: seal one more vent" : $"It will not open: seal {(int)e.Size} more vents");
                     }
                 }
                 else if (e.Type == PlaneEventType.PushWave)
@@ -1939,6 +1943,8 @@ public partial class TopDownMain : Node3D
             // Where she is in the world (the level is drawn off its map's origin), so the post pass finds it.
             _swells.Watch(new Vector2(_bell.GlobalPosition.X, _bell.GlobalPosition.Z), new Vector2(pl.Velocity.X, pl.Velocity.Y), pl.DashTimer > 0f, dt);
             _camera.SetSwells(_swells);
+            _shoals.Step(new Vector2(_bell.GlobalPosition.X, _bell.GlobalPosition.Z), dt);
+            _camera.SetDeepFish(_shoals);
         }
         Guard("kelp", () => _kelp.Sync(_world, dt, _bell.GlobalPosition, _swells, _camera.Camera));
         // Behind a blade, she wears a thin outline.
@@ -2394,9 +2400,9 @@ public partial class TopDownMain : Node3D
     }
 
     /// <summary>A saved run's corruption, from its health and the pearls it carries (they set her meter's size).</summary>
-    string CorruptionText(float hp, System.Collections.Generic.IEnumerable<string> items)
+    static string CorruptionText(float hp, System.Collections.Generic.IEnumerable<string> items, ItemCatalog? catalog, Tuning tuning)
     {
-        float max = Loadout.Build(_catalog, items.ToList(), _tuning).Stats.MaxHp;
+        float max = Loadout.Build(catalog, items.ToList(), tuning).Stats.MaxHp;
         return $"{Mathf.RoundToInt(Mathf.Clamp(1f - hp / Mathf.Max(max, 1f), 0f, 1f) * 100f)}% corrupted";
     }
 
@@ -2459,7 +2465,7 @@ public partial class TopDownMain : Node3D
                 _haptics.Pulse(0.7f, 0.5f, 0.4f);
                 _sfx.PlayPitched("pop", 0.35f, -2f);
                 _sfx.PlayPitched("bell_ring", 0.85f, -6f);
-                Say(e.Size > 0 ? $"Vent sealed · {(int)e.Size} left" : "Every vent sealed");
+                Say(e.Size > 0 ? $"Vent sealed · {(int)e.Size} to go" : _world.VentsOpen == 0 ? "Every vent sealed" : "Vent sealed");
                 break;
             case PlaneEventType.ExitOpened:
                 _sfx.PlayPitched("bell_ring", 0.6f, -4f);

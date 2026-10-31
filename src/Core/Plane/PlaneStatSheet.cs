@@ -26,10 +26,10 @@ public static class PlaneStatSheet
         bare.Apply(Array.Empty<StatMod>());
         float Share(float now, float was) => was > 0f ? now / was - 1f : 0f;
 
-        float damage = PlaneCombatTuning.ShotDamage * shot.DamageMult * stats.Damage / MathF.Max(t.Damage, 0.01f);
+        int shots = Math.Max(1, shot.Multishot) + (int)stats[Stat.BubblesPerThrow] - 1;
+        float damage = PlaneCombatTuning.ShotDamage * PlaneCombatTuning.VolleyShot(shots) * shot.DamageMult * stats.Damage / MathF.Max(t.Damage, 0.01f);
         float rate = stats.FireRate / MathF.Max(t.FireRate, 0.01f) / PlaneCombatTuning.ShotInterval;
         float baseRate = 1f / PlaneCombatTuning.ShotInterval;
-        int shots = Math.Max(1, shot.Multishot);
         float speed = PlaneCombatTuning.ShotSpeed * stats.ShotSpeed / MathF.Max(t.ShotSpeed, 0.01f);
         float range = PlaneCombatTuning.BubbleRange * stats.Range / MathF.Max(t.Range, 0.01f);
         float size = shot.SizeMult * stats[Stat.ShotSize];

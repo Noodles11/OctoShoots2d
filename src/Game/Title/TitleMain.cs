@@ -18,13 +18,15 @@ using OctoShoots.Game.TopDown;
 namespace OctoShoots.Game.Title;
 
 /// <summary>
-/// The title screen (docs/TITLE-MENU-PROPOSAL.md): a menu over the live sea. Clementine swims slowly along a canyon of a
-/// fixed seed in the middle of the screen, the camera following her, and the menu's items stand in a ring round her:
+/// The title screen (docs/TITLE-MENU-PROPOSAL.md): a menu over the live sea. Clementine swims slowly up and down the longest
+/// straight channel of a fixed seed's reef in the middle of the screen, the camera following her, and the menu's items stand
+/// in a ring round her:
 /// Continue, New run, Seeded run, Sea-pedia, Statistics, Save &amp; load, Settings and Quit. She turns to face the
 /// pointer (her crosshair, GonadCursor), or with the controller the item in focus, her first gonad toward it, as in the
 /// game. With the controller the left stick points from her: her crosshair stands round her the way it is pushed and the
-/// item that way takes the focus (the D-pad still steps round the ring); choosing an item, she shoots her light at it, and what it does happens as the shot strikes it. Run with game
-/// flags (--seed=, --at=, …) it skips straight to a run.
+/// item that way takes the focus (the D-pad still steps round the ring); choosing an item, she shoots her light at it, and what it does happens as the shot strikes it.
+/// Starting a run, the menu fades and she swims off to the right, the camera after her, the loading page over that shot
+/// while the first level is shaped. Run with game flags (--seed=, --at=, …) it skips straight to a run.
 /// Review flags: --title-sample (an example profile, never saved), --title-card=stats|pedia|creatures|save|settings|seed,
 /// --title-pick=id (that item focused, then chosen: her shot at it), --dbg-stick=x,y (the left stick held that way),
 /// --title-launch=new|continue (starts that run after a moment; the game then takes --capture), --capture=dir --frames=a,b.
@@ -32,8 +34,12 @@ namespace OctoShoots.Game.Title;
 public partial class TitleMain : Node3D
 {
     const string BackdropSeed = "KELP7Q2Z";
-    /// <summary>Clementine's idle swim along the canyon: a fraction of her cruise (about 0.7 m/s).</summary>
+    /// <summary>Clementine's idle swim along the channel: a fraction of her cruise (about 0.7 m/s).</summary>
     const float SwimInput = 0.12f;
+    /// <summary>Starting a run: how hard she swims off, where she sits across the screen as she goes, and the least the shot lasts (seconds).</summary>
+    const float LaunchSwim = 0.75f, LaunchAt = 0.3f, LaunchLeast = 2.4f, LaunchLeastReduced = 0.5f;
+    /// <summary>The menu's fade, how long the loading page waits (she is clear of it by then), and its fade.</summary>
+    const float MenuFade = 0.4f, PageWait = 0.55f, PageFade = 0.45f;
 
     ItemCatalog? _catalog;
     Tuning _tuning = null!;
@@ -47,10 +53,13 @@ public partial class TitleMain : Node3D
     CameraRig _camera = null!;
     MarineSnow _snow = null!;
     SunLight _sun = null!;
+    readonly DeepShoals _shoals = new();
     Task<LevelShape>? _backdrop;
     PlaneWorld? _world;
     List<System.Numerics.Vector2> _route = new();
     int _routeAt, _routeDir = 1, _routeEnd;
+    /// <summary>Where the channel's clear water ends: she stops there if the level takes that long.</summary>
+    float _channelEnd;
     double _accumulator;
 
     // The menu.
@@ -72,7 +81,12 @@ public partial class TitleMain : Node3D
     Control? _inline;
     Control? _card;
     ColorRect _fade = null!;
-    bool _launching;
+    Control _footer = null!;
+    LoadingSplash _splash = null!;
+    /// <summary>Turning while the sea is made, before there is anything to see.</summary>
+    GonadLoader? _bootLoader;
+    bool _launching, _leaving;
+    float _launchTime, _lead;
 
     // Review.
     string? _captureDir;
@@ -210,18 +224,43 @@ public partial class TitleMain : Node3D
         _level.Show(shape);
         _world = new PlaneWorld(map, _tuning, new PlaneRun(_catalog, _tuning));
         _world.Mobs.Clear();
-        _world.Ambushes.Clear();
         _puffers.Show(_world);
-        _route = LevelValidator.ShortestPath(map, map.Start.Position, map.Exit.Position, clearance: 1.5f);
-        // Back and forth along the first part of the way, well clear of the rift's arena.
-        _routeEnd = Math.Max(2, (int)(_route.Count * 0.55f));
+        // Back and forth along the west end of the channel, all of it still clear to the east for when she leaves.
+        var (from, length) = LongWayEast(map);
+        _channelEnd = from.X + length - 3f;
+        const float Step = 3f, Stay = 0.3f;
+        _route = Enumerable.Range(0, (int)(length * Stay / Step) + 1).Select(i => from + new System.Numerics.Vector2(i * Step, 0f)).ToList();
+        _routeEnd = Math.Max(2, _route.Count - 1);
+        _world.Player.Position = _world.Player.PrevPosition = _route[0];
         _camera.Track(Focus(1f), 0f, snap: true);
+    }
+
+    /// <summary>The longest straight run of open water from west to east across a reef, with room to swim either side of it.</summary>
+    static (System.Numerics.Vector2 From, float Length) LongWayEast(LevelMap map)
+    {
+        const float Room = 2.5f;
+        bool Clear(int x, int y) => new[] { -Room, 0f, Room }.All(d => map.IsOpen(new System.Numerics.Vector2(x, y + d)));
+        (System.Numerics.Vector2 From, float Length) best = (map.Start.Position, 0f);
+        for (int y = 0; y <= LevelMap.Size; y++)
+        {
+            int start = -1;
+            for (int x = 0; x <= LevelMap.Size + 1; x++)
+            {
+                bool clear = x <= LevelMap.Size && Clear(x, y);
+                if (clear && start < 0) start = x;
+                if (clear || start < 0) continue;
+                if (x - start > best.Length) best = (new System.Numerics.Vector2(start, y), x - start);
+                start = -1;
+            }
+        }
+        return best;
     }
 
     System.Numerics.Vector2 SwimInputNow()
     {
         if (_world is null || _route.Count < 3) return default;
         var pos = _world.Player.Position;
+        if (_launching && !Reduced) return pos.X < _channelEnd ? new System.Numerics.Vector2(LaunchSwim, 0f) : default;
         // Advance (or back up) the target once she is near it.
         var target = _route[Math.Clamp(_routeAt, 0, _route.Count - 1)];
         if (System.Numerics.Vector2.Distance(target, pos) < 1.2f)
@@ -249,6 +288,8 @@ public partial class TitleMain : Node3D
     System.Numerics.Vector2 AimNow()
     {
         if (_world is null) return -System.Numerics.Vector2.UnitY;
+        // Swimming off, she looks where she goes.
+        if (_launching && !Reduced) return System.Numerics.Vector2.UnitX;
         Vector2? screen = null;
         if (_byPad)
         {
@@ -282,6 +323,8 @@ public partial class TitleMain : Node3D
             if (task.IsFaulted) GD.PushError(task.Exception?.ToString());
             else ShowBackdrop(task.Result);
             // The sea fades up once there is something to see.
+            _bootLoader?.QueueFree();
+            _bootLoader = null;
             var t = CreateTween();
             t.TweenProperty(_fade, "color:a", 0f, Reduced ? 0.3f : 0.8f);
         }
@@ -299,13 +342,18 @@ public partial class TitleMain : Node3D
             float alpha = (float)(_accumulator / PlaneWorld.Dt);
             _bell.Sync(_world, alpha, dt);
             _puffers.Sync(_world, dt);
-            _camera.Track(Focus(alpha), dt);
+            // Swimming off, the camera eases ahead of her, the water she is going to in the shot.
+            if (_launching && !Reduced) _lead = Mathf.Lerp(_lead, LaunchLead(), 1f - Mathf.Exp(-2.8f * dt));
+            _camera.Track(Focus(alpha), dt, look: new Vector3(_lead, 0f, 0f));
+            _shoals.Step(new Vector2(_bell.GlobalPosition.X, _bell.GlobalPosition.Z), dt);
+            _camera.SetDeepFish(_shoals);
             _snow.Tick(dt, Focus(alpha) + Vector3.Up * 6f, _camera.Camera.GlobalBasis);
             _level.UpdateCanopy(_world.Player.Position, dt, _camera.Camera.GlobalPosition);
         }
         LayoutRing();
         PadPoint(dt);
         _shots.From = HerOnPage();
+        StepLaunch(dt);
         Capture();
     }
 
@@ -369,6 +417,7 @@ public partial class TitleMain : Node3D
         footer.Position -= new Vector2(24f, 30f);
         footer.GrowHorizontal = Control.GrowDirection.Begin;
         _ui.AddChild(footer);
+        _footer = footer;
 
         _ui.AddChild(_shots);
 
@@ -387,6 +436,14 @@ public partial class TitleMain : Node3D
         _fade = new ColorRect { Color = new Color(0f, 0f, 0f, 1f), MouseFilter = Control.MouseFilterEnum.Ignore };
         _fade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _ui.AddChild(_fade);
+
+        // The loading page over the sea, and the loader before there is a sea: neither scaled with the menu.
+        var pageLayer = new CanvasLayer { Layer = 4 };
+        AddChild(pageLayer);
+        _splash = new LoadingSplash { OverTheSea = true };
+        pageLayer.AddChild(_splash);
+        _bootLoader = new GonadLoader();
+        pageLayer.AddChild(_bootLoader);
 
         // After the first layout pass, so the motions start from where the containers put things.
         GetTree().CreateTimer(0.05).Timeout += Intro;
@@ -611,22 +668,65 @@ public partial class TitleMain : Node3D
         GameSave.Write();
     }
 
-    /// <summary>Clementine jets down and the sea fades to the game, which starts the run.</summary>
+    /// <summary>
+    /// The menu fades and Clementine swims off to the right, the camera after her and the loading page over the shot, the
+    /// first level being shaped meanwhile.
+    /// </summary>
     void Launch(LaunchMode mode, SeedCode seed)
     {
         if (_launching) return;
         _launching = true;
         RunLaunch.Pending = mode;
         RunLaunch.Seed = seed;
-        var t = CreateTween();
-        if (!Reduced && _world is not null)
+        // The run as the game will take it.
+        SuspendedRun? saved = null;
+        if (mode == LaunchMode.Continue && GameSave.Current.Run is { } run && SeedCode.TryParse(run.Seed, out var kept))
         {
-            // A jet downward (south), then the dive into the dark.
-            _world.Player.Velocity += new System.Numerics.Vector2(0f, 9f);
-            t.TweenInterval(0.25f);
+            saved = run;
+            seed = kept;
         }
-        t.TweenProperty(_fade, "color:a", 1f, Reduced ? 0.2f : 0.55f).SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.In);
-        t.TweenCallback(Callable.From(() => GetTree().ChangeSceneToFile(RunLaunch.GameScene)));
+        var id = saved is not null ? RunLaunch.Start(saved) : RunLaunch.Start(GameSave.Current.Profile, _view);
+        float luck = saved?.Luck ?? 0f;
+        RunLaunch.Shaping = (seed, id, luck, TopDownMain.Shape(seed, id, luck));
+        TopDownMain.FillFirstSplash(_splash, seed, saved?.CustomSeed ?? mode == LaunchMode.Seeded, id, saved, _catalog, _tuning);
+
+        Input.MouseMode = Input.MouseModeEnum.Hidden;
+        CloseInline();
+        CloseCard();
+        GetViewport().GuiReleaseFocus();
+        float fade = Reduced ? 0.15f : MenuFade;
+        var menu = CreateTween().SetParallel();
+        foreach (var part in new[] { _ring, _logo, _footer })
+            menu.TweenProperty(part, "modulate:a", 0f, fade).SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Sine);
+        menu.Chain().TweenCallback(Callable.From(() => _ring.Visible = false));
+        _splash.Modulate = new Color(1f, 1f, 1f, 0f);
+        _splash.Visible = true;
+        var page = CreateTween();
+        page.TweenInterval(Reduced ? 0f : PageWait);
+        page.TweenProperty(_splash, "modulate:a", 1f, Reduced ? 0.15f : PageFade);
+    }
+
+    /// <summary>How far east of her the camera looks to keep her at LaunchAt across the screen (metres).</summary>
+    float LaunchLead()
+    {
+        var cam = _camera.Camera;
+        float distance = (cam.GlobalPosition - Focus(1f)).Length();
+        var size = GetViewport().GetVisibleRect().Size;
+        return (0.5f - LaunchAt) * 2f * distance * Mathf.Tan(Mathf.DegToRad(cam.Fov) * 0.5f) * size.X / Mathf.Max(size.Y, 1f);
+    }
+
+    /// <summary>
+    /// The shot has run long enough and the level is shaped: the game takes over, holding this frame up until it is ready
+    /// and fading from it to the level, so the one loading screen runs straight into the run.
+    /// </summary>
+    void StepLaunch(float dt)
+    {
+        if (!_launching || _leaving) return;
+        _launchTime += dt;
+        if (_launchTime < (Reduced ? LaunchLeastReduced : LaunchLeast) || RunLaunch.Shaping is not { Shape.IsCompleted: true }) return;
+        _leaving = true;
+        RunLaunch.Frame = ImageTexture.CreateFromImage(GetViewport().GetTexture().GetImage());
+        GetTree().ChangeSceneToFile(RunLaunch.GameScene);
     }
 
     // ───────────────────────── the seed box ─────────────────────────
@@ -761,7 +861,7 @@ public partial class TitleMain : Node3D
             return;
         }
         // W/S move through the menu like the arrow keys.
-        if (_card is null && key.PhysicalKeycode is Key.W or Key.S or Key.A or Key.D && GetViewport().GuiGetFocusOwner() is not LineEdit)
+        if (_card is null && !_launching && key.PhysicalKeycode is Key.W or Key.S or Key.A or Key.D && GetViewport().GuiGetFocusOwner() is not LineEdit)
         {
             // Round the ring: S and D on clockwise, W and A back.
             var visible = _items.Where(it => it.Button.GetParent<Control>().Visible).Select(it => it.Button).ToList();

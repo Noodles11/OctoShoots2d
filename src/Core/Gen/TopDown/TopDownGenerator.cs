@@ -84,7 +84,7 @@ public static class TopDownGenerator
 
     /// <param name="cosmeticSalt">Test hook: changes only the cosmetic stream (decoration), to prove it never touches gameplay.</param>
     /// <param name="background">Made while she plays (the level below): on one thread, leaving the rest to the game.</param>
-    /// <param name="luck">Her luck as she comes to the level (LuckTuning): it may add a clam room, drop ambushes, bring a spring.</param>
+    /// <param name="luck">Her luck as she comes to the level (LuckTuning): it may add a clam room, bring a spring.</param>
     public static LevelMap Generate(RunStreams streams, LevelId id, Action<string>? log = null, string cosmeticSalt = "", bool background = false, float luck = 0f)
     {
         var plan = LevelPlan.For(streams.Seed, id, luck);
@@ -185,7 +185,6 @@ public static class TopDownGenerator
         for (int i = 0; i < plan.Treasures; i++) kinds.Add(PoiKind.TreasureCave);
         for (int i = 0; i < plan.Secrets; i++) kinds.Add(PoiKind.Secret);
         for (int i = 0; i < plan.Curses; i++) kinds.Add(PoiKind.CurseDen);
-        for (int i = 0; i < plan.Ambushes; i++) kinds.Add(PoiKind.Ambush);
         for (int i = 0; i < plan.Caches; i++) kinds.Add(PoiKind.ShellCache);
         if (kinds.Count > 0)
         {

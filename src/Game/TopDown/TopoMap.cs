@@ -255,12 +255,11 @@ public partial class TopoMap : Control
             DrawString(font, P(at) + new Vector2(-6f, 4f), $"{depth:0}", HorizontalAlignment.Left, -1, 10, Pebble);
 
         // Places: nothing until Clementine has been there (no hints), then its emblem — never a bare coloured dot. With
-        // the Brass Compass every place shows from the start, except secret rooms. Ambushes never show: the map tells
-        // nothing of enemies (nor of the corruption).
+        // the Brass Compass every place shows from the start, except secret rooms. The map tells nothing of enemies (nor
+        // of the corruption).
         for (int i = 0; i < map.Pois.Count; i++)
         {
             var poi = map.Pois[i];
-            if (poi.Kind == PoiKind.Ambush) continue;
             bool shown = Visited.Contains(i) || Landmarks && poi.Kind != PoiKind.Secret;
             if (!shown) continue;
             Vector2 p = P(poi.Position);
@@ -347,7 +346,7 @@ public partial class TopoMap : Control
     /// <summary>
     /// A place's emblem: a badge in its landmark colour, ink-rimmed, with its sign — the start a pennant, the way down
     /// the evacuation sign (a figure running out of a door, on a green plate), the shop a dollar, a clam room a pearl in
-    /// an open clam, a shell cache a shell, a curse den a spider, a secret a question mark, an ambush a warning.
+    /// an open clam, a shell cache a shell, a curse den a spider, a secret a question mark.
     /// </summary>
     void DrawEmblem(PoiKind kind, Vector2 p, Font font, float k)
     {

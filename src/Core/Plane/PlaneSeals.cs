@@ -30,6 +30,8 @@ public sealed class SecretSeal
     /// <summary>Out toward the side it is met from, and the carving's place on that face.</summary>
     public Vector2 Facing, Emblem;
     public int Hits;
+    /// <summary>Light short of a whole hit (a small shot is only part of one).</summary>
+    public float Credit;
     public bool Open;
     /// <summary>Shut by a barred boss arena while its fight runs (it cannot be lit meanwhile); whether it stood open before.</summary>
     public bool Barred, WasOpen;
@@ -72,18 +74,21 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>One of her shots struck rock here: on a seal's emblem it adds its light; full, the seal crumbles.</summary>
-    void StrikeSeal(Vector2 at)
+    void StrikeSeal(Vector2 at, float light = 1f)
     {
         foreach (var seal in Seals)
         {
             if (seal.Open || seal.Barred || !seal.Rock.Contains(at, 0.3f) || Vector2.Distance(at, seal.Emblem) > SealTuning.Reach) continue;
-            if (seal.Kind == SealKind.Boss && VentsOpen > 0)
+            if (seal.Kind == SealKind.Boss && VentsLeft > 0)
             {
-                Events.Add(new PlaneEvent(PlaneEventType.SealRefused, seal.Emblem, seal.Facing, VentsOpen));
+                Events.Add(new PlaneEvent(PlaneEventType.SealRefused, seal.Emblem, seal.Facing, VentsLeft));
                 return;
             }
-            seal.Hits++;
             seal.Since = seal.DrainClock = 0f;
+            seal.Credit += light;
+            if (seal.Credit < 0.999f) return;
+            seal.Credit -= 1f;
+            seal.Hits++;
             Events.Add(new PlaneEvent(PlaneEventType.SealLit, seal.Emblem, seal.Facing, seal.Glow));
             if (seal.Hits < seal.Needed) return;
             seal.Open = true;

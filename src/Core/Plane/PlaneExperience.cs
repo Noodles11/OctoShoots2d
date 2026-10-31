@@ -18,15 +18,16 @@ public static class ExperienceTuning
     public const int CleanseXp = 10;
     /// <summary>A fish freed (a lesser murkling turned back), and a boss freed.</summary>
     public const int FishXp = 6, BossXp = 120;
-    /// <summary>From level 1 to 2 takes FirstLevel; every level after it PerLevel more.</summary>
-    public const int FirstLevel = 60, PerLevel = 30;
+    /// <summary>From level 1 to 2 takes FirstLevel; every level after it Growth times the one before.</summary>
+    public const int FirstLevel = 240;
+    public const float Growth = 1.35f;
     /// <summary>A level-up waits until she has been out of the fight (Calm) this long.</summary>
     public const float CalmSeconds = 1.5f;
     /// <summary>Calm: no corrupted creature this close to her.</summary>
     public const float CalmDistance = 12f;
 
     /// <summary>The experience it takes to go from this level to the next.</summary>
-    public static int Need(int level) => FirstLevel + PerLevel * Math.Max(level - 1, 0);
+    public static int Need(int level) => (int)MathF.Round(FirstLevel * MathF.Pow(Growth, Math.Max(level - 1, 0)));
 }
 
 /// <summary>
@@ -81,6 +82,9 @@ public sealed partial class PlaneWorld
         return true;
     }
 
+    /// <summary>The first level of a run: her first level-up waits for the next one, however much she does here.</summary>
+    public bool OpeningLevel => Map.Cycle == 1 && Map.Level == 1 && Map.Depth <= Gen.TopDown.LevelId.FirstRun.Depth;
+
     void PlaceExperience() => _cleanseMarks = Corruption is { } field ? Marks(field.Cleansed) : 0;
 
     static int Marks(float cleansed) => (int)(cleansed / ExperienceTuning.CleanseStep + 1e-4f);
@@ -108,7 +112,7 @@ public sealed partial class PlaneWorld
         }
         if (gained > 0)
         {
-            int levels = Run.Gain(gained);
+            int levels = Run.Gain(gained, hold: OpeningLevel);
             Events.Add(new PlaneEvent(PlaneEventType.XpGained, Player.Position, Vector2.Zero, gained));
             for (int i = 0; i < levels; i++) Events.Add(new PlaneEvent(PlaneEventType.LevelUp, Player.Position, Vector2.Zero, Run.XpLevel));
         }

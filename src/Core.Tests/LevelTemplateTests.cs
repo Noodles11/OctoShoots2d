@@ -75,7 +75,7 @@ public class LevelTemplateTests
                 var counts = new Dictionary<PoiKind, int>
                 {
                     [PoiKind.Secret] = plan.Secrets, [PoiKind.CurseDen] = plan.Curses, [PoiKind.Shop] = plan.Shops,
-                    [PoiKind.ShellCache] = plan.Caches, [PoiKind.Ambush] = plan.Ambushes, [PoiKind.TreasureCave] = plan.Treasures,
+                    [PoiKind.ShellCache] = plan.Caches, [PoiKind.TreasureCave] = plan.Treasures,
                 };
                 foreach (var (kind, rule) in t.Places)
                 {

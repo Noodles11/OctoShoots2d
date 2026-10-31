@@ -23,7 +23,7 @@ public class TutorialTests
         Assert.False(one.HasBoss);
         Assert.True(two.HasBoss && two.Rift);
         Assert.True(one.Treasures + two.Treasures > 0 && one.Secrets + two.Secrets > 0 && one.Curses + two.Curses > 0
-                    && one.Shops + two.Shops > 0 && one.Caches + two.Caches > 0 && one.Ambushes + two.Ambushes > 0);
+                    && one.Shops + two.Shops > 0 && one.Caches + two.Caches > 0);
         Assert.Equal(0f, one.Menace);
         Assert.Equal(0f, two.Menace);
         // Out of the rift: the first real depth, as gentle as runs have always started.

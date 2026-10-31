@@ -60,8 +60,6 @@ public sealed partial class PlaneWorld
     void PlaceCurse()
     {
         Visited = new bool[Map.Pois.Count];
-        // The adventure's curse dens are switched off.
-        if (Options.Adventure) return;
         int pi = Map.Pois.FindIndex(p => p.Kind == PoiKind.CurseDen && p.Cave >= 0 && Map.Caves[p.Cave].Kind == CaveKind.Tunnel);
         if (pi < 0) return;
         var cave = Map.Caves[Map.Pois[pi].Cave];

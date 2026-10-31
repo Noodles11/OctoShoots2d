@@ -292,10 +292,9 @@ The title uses the **surface & dive** language of the banner prototype, so every
 - Tabs switch with a horizontal slide of the grid (200 ms) and a cross-fade of the detail pane.
 
 **Starting a run**
-- Clementine jets downward out of frame, leaving a bubble trail.
-- The screen tilts slightly as the camera "dives" and fades into the existing loading splash.
-- The splash shows "Depth 1 · Room 1" and the seed.
-- Total time to the splash: about 0.9 s.
+- The menu fades and Clementine swims off to the right, the camera following her.
+- The loading splash, with its seed and level, shows over that shot while the level is made.
+- The game takes over at least 2.4 s in, fading from that shot to the level.
 
 **Pearl tiles in the Sea-pedia**
 - Tiles turn slowly; on focus they grow 8% and catch a glint.

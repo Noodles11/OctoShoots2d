@@ -10,10 +10,9 @@ namespace OctoShoots.Core.Gen.TopDown;
 
 /// <summary>
 /// A named place on the level (DESIGN-TOPDOWN §4.1 stage 1). Exit: the way down — a blue hole, or on a boss level the
-/// boss arena with the Crack across its floor. ShellCache: a guarded clearing of shells. Ambush: an open clearing where,
-/// the first time Clementine enters, mobs spawn around her and attack.
+/// boss arena with the Crack across its floor. ShellCache: a guarded clearing of shells.
 /// </summary>
-public enum PoiKind { Start, ShellCache, Exit, Shop, Secret, CurseDen, TreasureCave, Ambush }
+public enum PoiKind { Start, ShellCache, Exit, Shop, Secret, CurseDen, TreasureCave }
 
 public sealed class Poi
 {

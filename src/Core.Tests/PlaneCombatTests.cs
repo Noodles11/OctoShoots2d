@@ -15,8 +15,6 @@ namespace OctoShoots.Core.Tests;
 public class PlaneCombatTests
 {
     static readonly Lazy<LevelMap> Shared = new(() => TopDownGenerator.Generate(new RunStreams(SeedCode.Parse("KELP7Q2Z")), new LevelId(1, 2, 3)));
-    /// <summary>A level on the general rules with an ambush (a template may forbid them).</summary>
-    static readonly Lazy<LevelMap> WithAmbush = new(() => TestLevels.Get(TestLevels.Find(p => TestLevels.General(p) && p.Ambushes > 0 && !p.HasBoss && p.Id.Depth > LevelPlan.Tutorial)));
 
     static PlaneWorld World() => new(Shared.Value, new Tuning());
 
@@ -296,33 +294,6 @@ public class PlaneCombatTests
         w.Step(new PlaneInput { Move = Vector2.UnitX });
         Assert.Equal(at, w.Player.Position);
         Assert.Empty(w.Events);
-    }
-
-    [Fact]
-    public void AnAmbushSpringsOnceAroundHer()
-    {
-        var w = new PlaneWorld(WithAmbush.Value, new Tuning());
-        var ambush = w.Ambushes.First();
-        int before = w.Mobs.Count;
-        w.Player.Position = w.Player.PrevPosition = ambush.Center;
-        w.Step(default);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.AmbushSprung);
-        Assert.True(ambush.Sprung);
-        var sprung = w.Mobs.Skip(before).ToList();
-        Assert.InRange(sprung.Count, 3, PlaneCombatTuning.AmbushMax);
-        Assert.All(sprung, m =>
-        {
-            Assert.True(m.Aggro, "they attack at once");
-            Assert.InRange(Vector2.Distance(m.Position, ambush.Center), 1f, PlaneCombatTuning.AmbushRing + 1f);
-        });
-
-        // She swims off and comes back: nothing more spawns, and the ambushers are still there.
-        w.Player.Position = w.Player.PrevPosition = w.Map.Start.Position;
-        w.Step(default);
-        w.Player.Position = w.Player.PrevPosition = ambush.Center;
-        w.Step(default);
-        Assert.DoesNotContain(w.Events, e => e.Type == PlaneEventType.AmbushSprung);
-        Assert.Equal(before + sprung.Count, w.Mobs.Count);
     }
 
     [Fact]

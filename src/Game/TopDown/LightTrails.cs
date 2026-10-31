@@ -13,7 +13,8 @@ namespace OctoShoots.Game.TopDown;
 /// A shot's afterlight is never a straight line: each point is thrown aside and a kink struck into every segment, the
 /// kinks re-striking a dozen times a second and growing as the light ages, so it crackles. Its shape follows the
 /// shot's pearls (<see cref="Style"/>): a lance stays straight and long, a wave or helix shot trails a second strand,
-/// a fuse fizzes wider.
+/// a fuse fizzes wider. Both its ends are smooth: it narrows to a single pixel at the end nearest her, and past the shot it
+/// closes in a round, fading head, every pass of it, so its light is never cut off square.
 /// </para>
 /// <para>
 /// A hit charges the struck body like a coil for a moment: bolts of lightning crackle straight out of its own outline
@@ -25,8 +26,13 @@ namespace OctoShoots.Game.TopDown;
 /// </summary>
 public partial class LightTrails : Node3D
 {
-    /// <summary>How long a point of afterlight lasts, how far apart points are laid, and the body's width.</summary>
-    const float Life = 0.32f, Spacing = 0.3f, Width = 0.26f;
+    /// <summary>How far apart points of afterlight are laid, and the body's width.</summary>
+    const float Spacing = 0.3f, Width = 0.26f;
+    /// <summary>
+    /// How long a point of afterlight lasts: this share of the shot's flight, so its tail is half gone as it reaches its far
+    /// end (light is quick), and never longer than Longest (a slow shot).
+    /// </summary>
+    const float FlightShare = 0.5f, Longest = 0.32f;
     /// <summary>The wash and the core, as shares of the body's width.</summary>
     const float WashWidth = 3.4f, CoreWidth = 0.32f;
     /// <summary>A hit's charge: how long it crackles (a plain hit's, longer for a harder one), its bolts' width at the outline, how often they re-strike, and how many at once.</summary>
@@ -34,6 +40,9 @@ public partial class LightTrails : Node3D
     const int MaxFlares = 12;
     /// <summary>Jitter: aside at the head, aside when old, and how often it re-strikes.</summary>
     const float JitterNew = 0.03f, JitterOld = 0.2f, Strikes = 13f;
+    /// <summary>The end nearest her narrows over this much of the afterlight, at most this many metres; its head closes in this many steps.</summary>
+    const float TailShare = 0.7f, TailLength = 3f;
+    const int HeadSteps = 8;
 
     /// <summary>How a shot's afterlight is drawn, from its pearls.</summary>
     public readonly struct Style
@@ -52,6 +61,7 @@ public partial class LightTrails : Node3D
         public Color Color;
         public float Strength;
         public Style Style = Style.Plain;
+        public float Life;
         public bool Fed;
         public int Seed;
     }
@@ -74,6 +84,8 @@ public partial class LightTrails : Node3D
     FxParticles _sparks = null!;
     float _time;
     int _ids;
+    /// <summary>One pixel on the swim band, in metres: no stroke is drawn thinner.</summary>
+    float _pixel = 0.02f;
 
     /// <summary>Reused each frame: the wash (a glaze, mixed over the scene) and the light (added to it), each one surface.</summary>
     sealed class Layer
@@ -106,7 +118,7 @@ public partial class LightTrails : Node3D
     /// <summary>One of her shots this frame: where it is drawn, how warm and how bright its light is, and its pearls' style.</summary>
     public void Feed(PlaneShot shot, Vector3 at, float warmth, float strength, Style style)
     {
-        if (!_live.TryGetValue(shot, out var trail)) _live[shot] = trail = new Trail { Seed = _ids++ * 17 };
+        if (!_live.TryGetValue(shot, out var trail)) _live[shot] = trail = new Trail { Seed = _ids++ * 17, Life = LifeOf(shot) };
         trail.Fed = true;
         // (Prism Pearl: a third of her split light keeps its own colour.)
         trail.Color = CombatView.LightOf(shot.Hue).Lerp(new Color(1f, 0.95f, 0.84f), shot.Hue == OctoShoots.Core.Plane.PrismHue.None ? warmth : warmth * 0.3f);
@@ -115,6 +127,12 @@ public partial class LightTrails : Node3D
         var pts = trail.Points;
         if (pts.Count == 0 || pts[^1].At.DistanceTo(at) >= Spacing) pts.Add((at, _time, _ids++));
         else pts[^1] = (at, pts[^1].Born, pts[^1].Id);
+    }
+
+    static float LifeOf(PlaneShot shot)
+    {
+        float range = shot.Range > 0f ? shot.Range : PlaneCombatTuning.BubbleRange;
+        return Mathf.Min(FlightShare * range / Mathf.Max(shot.Velocity.Length(), 1f), Longest);
     }
 
     /// <summary>
@@ -165,6 +183,11 @@ public partial class LightTrails : Node3D
     public void Step(float dt, float time, Camera3D? camera)
     {
         _time = time;
+        if (camera is not null)
+        {
+            float distance = (camera.GlobalPosition.Y - OctoShoots.Core.Gen.TopDown.LevelMap.SwimBand) / Mathf.Max(camera.GlobalBasis.Z.Y, 0.1f);
+            _pixel = 2f * distance * Mathf.Tan(Mathf.DegToRad(camera.Fov) * 0.5f) / Mathf.Max(camera.GetViewport().GetVisibleRect().Size.Y, 1f);
+        }
         var gone = new List<PlaneShot>();
         foreach (var (shot, trail) in _live)
         {
@@ -211,7 +234,7 @@ public partial class LightTrails : Node3D
     bool Build(Trail trail)
     {
         var st = trail.Style;
-        float life = Life * st.Life;
+        float life = trail.Life * st.Life;
         var pts = trail.Points;
         while (pts.Count > 0 && _time - pts[0].Born > life) pts.RemoveAt(0);
         if (pts.Count < 2) return pts.Count > 0;
@@ -245,9 +268,24 @@ public partial class LightTrails : Node3D
                 }
             }
             float strength = trail.Strength * (strand == 1 ? 0.7f : 1f);
-            Strokes(_path, fades, trail.Color, strength, trail.Seed + strand * 13);
+            NarrowTail(_path);
+            Strokes(_path, fades, trail.Color, strength, trail.Seed + strand * 13, roundHead: true);
         }
         return true;
+    }
+
+    /// <summary>Draws the end nearest her in to nothing (Strokes keeps it a pixel wide).</summary>
+    static void NarrowTail(List<(Vector3 At, float Width)> path)
+    {
+        float length = 0f;
+        for (int k = 1; k < path.Count; k++) length += path[k - 1].At.DistanceTo(path[k].At);
+        float over = Mathf.Min(length * TailShare, TailLength);
+        float from = 0f;
+        for (int k = 0; k < path.Count && from < over; k++)
+        {
+            if (k > 0) from += path[k - 1].At.DistanceTo(path[k].At);
+            path[k] = (path[k].At, path[k].Width * Mathf.Min(from / Mathf.Max(over, 1e-4f), 1f));
+        }
     }
 
     // ───────────────────────── a hit's lightning ─────────────────────────
@@ -331,9 +369,9 @@ public partial class LightTrails : Node3D
 
     /// <summary>
     /// A painted stroke along a path (each point with its width, and its strength's share: null for all of it): the
-    /// wash, the body and the core, one over the other.
+    /// wash, the body and the core, one over the other, each with a round head past the path's end if asked.
     /// </summary>
-    void Strokes(List<(Vector3 At, float Width)> path, List<float>? fades, Color color, float strength, int seed)
+    void Strokes(List<(Vector3 At, float Width)> path, List<float>? fades, Color color, float strength, int seed, bool roundHead = false)
     {
         if (path.Count < 2) return;
         float s0 = (seed & 255) * 0.37f;
@@ -354,10 +392,33 @@ public partial class LightTrails : Node3D
                 float fa = (fades?[k - 1] ?? 1f) * strength, fb = (fades?[k] ?? 1f) * strength;
                 var ca = color with { A = fa };
                 var cb = color with { A = fb };
-                float ha = wa * scale * 0.5f, hb = wb * scale * 0.5f;
+                float ha = Mathf.Max(wa * scale, _pixel) * 0.5f, hb = Mathf.Max(wb * scale, _pixel) * 0.5f;
                 Quad(a - sa * ha, a + sa * ha, b - sb * hb, b + sb * hb, ca, cb, along, along + len, pass, s0);
                 along += len;
             }
+            if (roundHead) Head(path, (fades?[^1] ?? 1f) * strength, color, scale, along, pass, s0);
+        }
+    }
+
+    /// <summary>A stroke's head: past the path's end it closes in a half circle as wide as the stroke, fading out to its tip.</summary>
+    void Head(List<(Vector3 At, float Width)> path, float fade, Color color, float scale, float along, int pass, float seed)
+    {
+        var (tip, width) = path[^1];
+        float radius = Mathf.Max(width * scale, _pixel) * 0.5f;
+        var side = Side(path, path.Count - 1);
+        var ahead = new Vector3(side.Z, 0f, -side.X);
+        Vector3 at = tip;
+        float half = radius, share = fade;
+        for (int i = 1; i <= HeadSteps; i++)
+        {
+            float u = i / (float)HeadSteps;
+            var to = tip + ahead * radius * u;
+            float h = radius * Mathf.Sqrt(1f - u * u), f = fade * (1f - u) * (1f - u);
+            Quad(at - side * half, at + side * half, to - side * h, to + side * h, color with { A = share }, color with { A = f }, along, along + radius / HeadSteps, pass, seed);
+            at = to;
+            half = h;
+            share = f;
+            along += radius / HeadSteps;
         }
     }
 

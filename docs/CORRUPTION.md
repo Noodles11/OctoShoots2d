@@ -10,8 +10,7 @@ Implementation Instruction". The simulation is in `src/Core/Plane/PlaneCorruptio
 `PlaneOptions`) and `src/Core/Plane/PlaneBlight.cs` (Blightroots, murklings, the arena). The
 presentation is in `src/Game/TopDown/BlightView.cs`, `CorruptionView.cs` (the field's
 texture) and `CleanseMeter.cs`, and in the shaders
-named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed, and ambush
-clearings bud murklings instead. The healthy fish still swim the reef, and the murklings hunt them (see Lesser
+named below. The pufferling enemies are retracted (`PlaneOptions.Pufferlings = false`): none are placed. The healthy fish still swim the reef, and the murklings hunt them (see Lesser
 murklings).
 
 ## The field
@@ -44,8 +43,8 @@ murklings).
   very cells it drinks (as many from each as its share), are lifted off the floor, creep, then whoosh in, stretching
   along their flight and arcing over any rock in the way, into a blob of darkness swelling low over the floor as they
   arrive. Once all the ink is in, the blob rises to her plane as the creature. The dots are drawn after the water
-  pass, like the ink, so they stay sharp. The creatures that wake with the level, ambush buds (the trap's
-  own ink) and lesser murklings (turned fish) drink nothing.
+  pass, like the ink, so they stay sharp. The creatures that wake with the level and lesser murklings
+  (turned fish) drink nothing.
 - Totals are kept as cells change, so the level's cleanse share (`PlaneWorld.Cleansed`) costs nothing to read. It
   counts the ink on the ground and the ink the living creatures hold, so a birth never makes the level cleaner: only
   her light and freeing them do.
@@ -83,7 +82,7 @@ away.
   are 3 + 1.5 × Menace of them, at most 6. A level's template (DESIGN-TOPDOWN §4.8) may cast them otherwise: so many,
   at its anchors (by a place it guards, in dead ends…), or none; and every corrupted kind below likewise.
 - **Regrowth:** it restores its 9 m reach toward the starting density at 0.1/s, strongest at the octopus.
-- **Shot down:** its corruption meter (see "Corruption meters" below) is 125 × (1 + 0.2 × Menace), so it takes 13
+- **Shot down:** its corruption meter (see "Corruption meters" below) is 125 × (1 + 1.2 × Menace), so it takes 13
   default shots on its 0.9 m mantle in the Shallows, more deeper down. It re-corrupts quickly: 30/s (more with
   Menace) once 0.5 s pass without a hit. Emptied, it is freed (above; its ink pops, see evaporation below). A wave of
   cleansing runs through its whole reach in 0.7 s. Cleansing the ground round it no longer harms it.
@@ -94,7 +93,7 @@ away.
   her for 0.5 s, its pole drawing up to 1.3 times its height, its aim following her; then its head comes down at her
   in 0.14 s, ever faster as a hammer falls, its pole drawn out as far as it needs to reach. If she is still within
   4.6 m and in front of it as it lands, it lands on top of her (drawn over her, as above), corrupts her
-  for 10 + 3 × Menace and knocks her away at 9 m/s; else it strikes the sand as far as it reaches her way. Where it
+  for 10 (harder with Menace, as all that hurts her) and knocks her away at 9 m/s; else it strikes the sand as far as it reaches her way. Where it
   lands: its liquid head flattens on the blow and rings back, 16–22 drops of it are torn off and flung out round it
   (slowed hard by the water, sinking a little), 3–5 chunks of it are ripped away, and the water is shoved out in two
   rings of refraction (the swells' distortion, `WaterSwells.AddRing`: a quick wide one and a closer one); a thud and
@@ -105,7 +104,7 @@ away.
   it, and it stretches up a little; then it squashes all the way down to the sand in 0.07 s as a ring of ink runs out
   at 10 m/s, and springs back up. The ring
   stains cleansed ground back to 0.35 and snuffs out each of her shots it crosses. Passing over her, it corrupts her
-  for 6 + 2 × Menace (once per ring). Dashing through it takes nothing.
+  for 6 (harder with Menace) (once per ring). Dashing through it takes nothing.
 
 ## Blotters (`Blotter`)
 
@@ -121,7 +120,7 @@ Hermit crabs the corruption took over: a small crab under a huge shell of ink, s
   in sight 4–20 m off, the nearer the better, avoiding safe places and the arena. It re-picks a target on arrival,
   after 10 s, when stuck for 2.5 s, or once its target has been corrupted.
 - **Spreading:** it smears ink over a 2.6 m disc beneath it, toward density 0.9.
-- **Tough:** its corruption meter is 100 (+25% per Menace), about ten default shots in the Shallows. It regrows
+- **Tough:** its corruption meter is 100 (+120% per Menace), about ten default shots in the Shallows. It regrows
   slowly (5/s) after 2 s without a hit. Each shot bursts on it. Emptied, its shell pops (see evaporation below) and it
   cleanses a 5 m disc.
 - **Body:** one round shell, 1.9 m in radius (`BlotterTuning.ShellRadius`, `Blotter.Touches`), takes her hits and hurts
@@ -160,7 +159,7 @@ stolen ember. It stands on the floor where the floor comes near her plane and ha
   ground where it will land. In the air it cannot be harmed: her light passes it by. It lands squashed and rebounds
   (0.35 s).
   - **Landing on her:** 14 and a hard shove (12 m/s).
-  - **Every landing:** a ring of ink runs out to 4 m at 12 m/s: passing over her it corrupts her for 6 + 2 × Menace
+  - **Every landing:** a ring of ink runs out to 4 m at 12 m/s: passing over her it corrupts her for 6 (harder with Menace)
     and shoves her off (8 m/s), a dash slipping through it; it stains cleansed ground it crosses back to 0.35, as a
     Blightroot's pulse does.
   - **Landing on uncorrupted ground** stains 2 m of it toward 0.7.
@@ -168,7 +167,7 @@ stolen ember. It stands on the floor where the floor comes near her plane and ha
   (she cruises at 6), turning at most 2.2 rad/s, so she can sidestep it; it inks a 1 m trail behind it. Rolling into
   her: 10 and a shove. Then it rights itself (0.4 s).
 - **The rest:** 2.5 s upright, heaving: the best moment to strike it.
-- **Freeing it:** its corruption meter is 90 × (1 + 0.2 × Menace) (about 9 default shots), regrowing 20/s after 1 s
+- **Freeing it:** its corruption meter is 90 × (1 + 1.2 × Menace) (about 9 default shots), regrowing 20/s after 1 s
   without a hit; anything but the leap can be struck (her shots, pops, surges, bursts; homing bubbles seek it). Freed,
   its ink pops off it (see evaporation below), cleansing 4 m; it leaves 2–3 shells, and a pale, translucent sea squirt is left settled on the
   floor where it was.
@@ -189,7 +188,7 @@ it guards, always (nothing marks its reach itself).
   violet, the hit counts 0 and a dull knock sounds. Inkwardens never guard each other and bosses are never guarded, so
   the wardens are always the way in. The ground round them can still be cleansed.
 - **Passive:** it never attacks and does not hurt to touch.
-- **Freeing it:** its corruption meter is 60 × (1 + 0.2 × Menace) (about 6 default shots), regrowing 10/s after 1 s
+- **Freeing it:** its corruption meter is 60 × (1 + 1.2 × Menace) (about 6 default shots), regrowing 10/s after 1 s
   without a hit. Freed, its tethers snap and its ink pops off it (see evaporation below); it cleanses 3 m and leaves
   1–2 shells, and a healthy
   pale-pink anemone is left on the floor.
@@ -265,8 +264,7 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   15 s / (1 + 0.6 × Menace), while the level holds ink enough for it. The bud takes 0.8 s. **It is made of ink:**
   over the bud it drinks 3.6 (about a 1.2 m disc of thick ink, the nearest first and further out where it is thin),
   leaving that floor dark and empty, and holds it until freed (see the field above). The ink is sucked into it and it
-  rises as the murkling (see the look of a birth above). Guard buds drink the same way. Ambush buds gather a 1.2 m
-  disc of dots but drink nothing: they are the trap's own ink.
+  rises as the murkling (see the look of a birth above). Guard buds drink the same way.
 - **Cap:** 2 + 1.5 × Menace per area. An area cleansed past 80% stops budding for good.
 - **The arena** never buds: its only murklings are Drippus Prime's brood (below).
 - **Movement:** 2.6 + 0.4 × Menace m/s (she cruises at 6), toward the brightest light within 14 m, her or one of her hanging bubbles (a merged one
@@ -292,7 +290,7 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
   as one corruption number a second, summed over it. A dash bursts her light: each clinging murkling is thrown off
   (9 m/s), losing one default shot's worth (10) of its meter, and is dazed for 0.7 s. Then it chases her again. One
   already worn down bursts. The dash shows as a small light burst, not an ink cloud.
-- **Killed by light:** its corruption meter is 36 × (1 + 0.2 × Menace), so four default shots in a row burst it in
+- **Killed by light:** its corruption meter is 36 × (1 + 1.2 × Menace), so four default shots in a row burst it in
   the Shallows. It regrows at 14/s (more
   with Menace) after 0.8 s without a hit, and one strong (merged) shot empties it at once. Each shot bursts on it, and
   a piercing one flies on. Passing through a throw halves a shot's light. A murkling burst over cleansed ground drops
@@ -302,12 +300,12 @@ it `PlaneHeart`. She takes one only when corrupted at all; otherwise it waits.
 
 - **Rare:** an area's bud is a prime with a chance of 6% + 4% × Menace, where it has room, she is over 10 m off and
   the level still holds a prime's ink (else it buds a murkling). At most one is alive per area and two bud a level;
-  ambushes and guards never bud one.
+  guards never bud one.
 - **Its bud** takes 2 s and drinks twelve murklings' worth of ink (43.2), about a 3.7 m disc of thick ink and further
   out where it is thin: a great stream of ink sucked in from all round into it.
 - **Size:** five times a murkling's: a 2.25 m radius (4.5 m across, against her 0.84 m) to see and to hit; it moves as
   a 1.4 m body, so it squeezes through the passes.
-- **Every stat scaled:** its corruption meter is ten times a murkling's (360 × (1 + 0.2 × Menace)); its sense and
+- **Every stat scaled:** its corruption meter is ten times a murkling's (360 × (1 + 1.2 × Menace)); its sense and
   throw range 1.5 times (21 m and 13.5 m); its throws 2.5 times as big and as hard (17.5 damage, radius 0.25 m,
   splashing 2 m on fish, staining 2.25 m where they fall), after a 1 s slingshot wind-up (shorter with Menace). It
   moves at 0.7 times a murkling's pace. It hunts fish as a murkling does.

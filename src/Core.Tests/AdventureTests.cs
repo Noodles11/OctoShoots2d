@@ -66,7 +66,7 @@ public class AdventureTests
         foreach (bool boss in new[] { false, true })
         {
             var w = World(boss);
-            Assert.InRange(w.Vents.Count, AdventureTuning.VentsMin, AdventureTuning.VentsMax);
+            Assert.Equal(AdventureTuning.LevelVents, w.Vents.Count);
             Assert.False(w.ExitOpen);
             Assert.Empty(w.Murklings);
             Assert.Empty(w.Blightroots);
@@ -197,6 +197,56 @@ public class AdventureTests
             if (ventsFirst) continue;
             foreach (var v in w.Vents) w.DebugSealVent(v);
             Assert.True(w.ExitOpen);
+        }
+    }
+
+    [Fact]
+    public void Every_level_has_five_vents_and_three_sealed_open_the_way_on()
+    {
+        foreach (var id in TestLevels.All(_ => true))
+        {
+            var w = new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(Catalog.Value, new Tuning()), Adventure);
+            Assert.True(w.Vents.Count == AdventureTuning.LevelVents, $"{id}: {w.Vents.Count} vents");
+        }
+        var plain = World();
+        for (int i = 0; i < AdventureTuning.VentsToClear; i++)
+        {
+            Assert.False(plain.ExitOpen);
+            plain.DebugSealVent();
+        }
+        Assert.True(plain.ExitOpen);
+        Assert.Equal(AdventureTuning.LevelVents - AdventureTuning.VentsToClear, plain.VentsOpen);
+    }
+
+    [Fact]
+    public void A_vent_counts_a_shots_light_not_the_shots()
+    {
+        var w = World();
+        var v = w.Vents[0];
+        for (int i = 0; i < 3; i++) w.DebugStrikeVent(v, 0.3f);
+        Assert.Equal(0, v.Hits);
+        w.DebugStrikeVent(v, 0.3f);
+        Assert.Equal(1, v.Hits);
+    }
+
+    [Fact]
+    public void A_volley_shares_her_light()
+    {
+        Assert.Equal(1f, PlaneCombatTuning.VolleyPower(1), 3);
+        Assert.Equal(1.62f, PlaneCombatTuning.VolleyPower(5), 2);
+        Assert.Equal(PlaneCombatTuning.VolleyPower(5), PlaneCombatTuning.VolleyShot(5) * 5f, 3);
+    }
+
+    [Fact]
+    public void Each_vent_sealed_throws_shells_out_of_its_mouth()
+    {
+        var w = World();
+        foreach (var v in w.Vents.ToList())
+        {
+            int before = w.Shells.Count;
+            w.DebugSealVent(v);
+            Assert.Equal(before + AdventureTuning.VentShells, w.Shells.Count);
+            Assert.All(w.Shells.Skip(before), s => Assert.True(Vector2.Dot(s.Velocity, v.Facing) > 0f, "out into the water"));
         }
     }
 
@@ -605,7 +655,7 @@ public class AdventureTests
             Assert.False(seal.Open);
             Assert.Equal(0, seal.Hits);
             Assert.Contains(w.Events, e => e.Type == PlaneEventType.SealRefused);
-            foreach (var v in w.Vents) w.DebugSealVent(v);
+            for (int k = 0; k < AdventureTuning.VentsToClear; k++) w.DebugSealVent();
             for (int k = 0; k < 60 && !seal.Open; k++) w.DebugStrikeSeal(seal);
             Assert.True(seal.Open);
         }

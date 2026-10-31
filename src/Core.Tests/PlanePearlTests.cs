@@ -72,7 +72,7 @@ public class PlanePearlTests
         w.Step(new PlaneInput { Aim = Vector2.UnitX, Fire = true });
         var shots = w.Shots.Where(s => s.FromPlayer).ToList();
         Assert.Equal(3, shots.Count);
-        Assert.All(shots, s => Assert.Equal(PlaneCombatTuning.ShotDamage * 0.8f, s.Damage, 3));
+        Assert.All(shots, s => Assert.Equal(PlaneCombatTuning.ShotDamage * PlaneCombatTuning.VolleyShot(3), s.Damage, 3));
         // A fan: three different directions.
         Assert.Equal(3, shots.Select(s => MathF.Round(MathF.Atan2(s.Velocity.Y, s.Velocity.X), 3)).Distinct().Count());
     }

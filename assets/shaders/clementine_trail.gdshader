@@ -1,13 +1,14 @@
 // Clementine's strands: camera-facing ribbons along verlet chains (BellView), three kinds, as a moon jelly's.
 //   Fringe hairs: short fine pale hairs round the margin, barely there (an accent).
 //   Oral arms: long ribbons of thin cloth twisting freely in the water — nearly see-through, their ruffled margins
-//   glowing, a faint current down their middle with a brighter impulse now and then.
+//   glowing, a faint current down their middle with a brighter impulse now and then, and along one edge a thin glowing
+//   line, red, green or blue, each arm its own (where they cross, BellView strikes the stardust).
 //   Fibre tentacles: long and hair-thin, like optical fibres — a glowing thread with beads of light running down it
 //   to a tip twinkling in random colours.
 //   UV: x along the strand (0 at the bell → 1 at the tip), y across (0..1). UV2.x: 0 fringe, 1 oral arm, 2 fibre;
 //   UV2.y: the strand's own seed (0..1).
 //   COLOR.a: the strand's own opacity (hurt and ink are applied through uniforms); COLOR.r on an oral arm: how face-on
-//   its twist is there (1 face-on, 0 edge-on).
+//   its twist is there (1 face-on, 0 edge-on); COLOR.g: which arm it is (0, 0.5, 1: its line red, green, blue).
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_mix, depth_draw_never, depth_test_disabled;
 
@@ -85,6 +86,17 @@ void fragment() {
 		col = mix(col, gold * 1.2 + vec3(0.2, 0.25, 0.3) * spark, core * clamp(0.2 + spark * 1.5, 0.0, 1.0));
 		a = max(a, core * (0.12 + 0.45 * clamp(spark, 0.0, 1.0)));
 		a *= 1.0 - smoothstep(0.78, 1.0, t);
+		// The line along its one edge: about a pixel wide however wide the ribbon, with a soft glow round it.
+		if (UV.y < 0.5) {
+			float px = max(fwidth(s), 1e-4);
+			float off = abs(s - edge);
+			float thread = 1.0 - smoothstep(px * 0.5, px * 1.4, off);
+			float halo = exp(-off / (px * 3.0)) * 0.2;
+			vec3 line_col = COLOR.g < 0.25 ? vec3(1.0, 0.12, 0.1) : COLOR.g < 0.75 ? vec3(0.1, 1.0, 0.2) : vec3(0.15, 0.35, 1.0);
+			float ends = smoothstep(0.03, 0.1, t) * (1.0 - smoothstep(0.92, 1.0, t));
+			col = mix(col, line_col * 1.1, max(thread, halo) * ends);
+			a = max(a, max(thread, halo) * ends);
+		}
 	} else {
 		// A hair: pale, near white with a breath of her colour, fading toward the tip.
 		a = 1.0 - smoothstep(0.35, 1.0, s);

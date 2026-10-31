@@ -103,6 +103,10 @@ public partial class CombatView : Node3D
         AddChild(_afterimages);
         _wake = new FxParticles(400, additive: false, FxParticles.Bubble());
         AddChild(_wake);
+        _steam = new FxParticles(1536, additive: false);
+        AddChild(_steam);
+        _steamBubbles = new FxParticles(768, additive: false, FxParticles.Bubble());
+        AddChild(_steamBubbles);
         _theirShot = Glow(new Color(1f, 0.25f, 0.3f));
         var orb = GD.Load<Shader>("res://assets/shaders/corruption_orb.gdshader");
         _clamPearl = new ShaderMaterial { Shader = orb };
@@ -311,6 +315,8 @@ public partial class CombatView : Node3D
         _fireworks.Clear();
         _dust.Clear();
         _ink.Clear();
+        _steam.Clear();
+        _steamBubbles.Clear();
         foreach (var q in _pearls) q.QueueFree();
         _shots.Clear();
         _halos.Clear();
@@ -503,6 +509,8 @@ void fragment() {
     MagicParticles _ink = null!;
     /// <summary>The light her shots shed as they fly (afterimage bursts), and Pistol Shrimp's cavitation bubbles in their wake.</summary>
     FxParticles _afterimages = null!, _wake = null!;
+    /// <summary>The steam her light boils out of what it strikes (HitBurst): billows, and the bubbles bursting in them.</summary>
+    FxParticles _steam = null!, _steamBubbles = null!;
     /// <summary>Per shot: when it next sheds a burst of light, and how many bounces it had left (a bounce glints).</summary>
     Dictionary<PlaneShot, (float Next, int Bounces)> _shed = new(), _shedNext = new();
     readonly RandomNumberGenerator _rng = new();
@@ -816,9 +824,9 @@ void fragment() {
 
     /// <summary>
     /// Her light struck a creature (its middle and the radius of its outline; the way the light went through it, from her;
-    /// the share of its whole health the hit took): the light bounces back off it — magic particles burst from where it
-    /// struck back toward her — and its corruption is knocked out through the far side, violet brackets splattering on
-    /// away from her. The bigger the share, the more of each and the harder thrown; even a graze shows a few.
+    /// the share of its whole health the hit took): steam bursts from where it struck, the light bounces back off it — magic
+    /// particles burst from there back toward her — and its corruption is knocked out through the far side, violet brackets
+    /// splattering on away from her. The bigger the share, the more of each and the harder thrown; even a graze shows a few.
     /// </summary>
     public void HitBurst(System.Numerics.Vector2 at, float radius, System.Numerics.Vector2 through, float share)
     {
@@ -830,6 +838,7 @@ void fragment() {
         float push = 1f + 0.7f * k;
         // The light bouncing back: from the struck side, fanned wide, back toward her.
         var front = mid - dir * radius;
+        Steam(front, dir, radius, k);
         for (int i = 0; i < count; i++)
         {
             float fan = _dust.RandRange(-0.75f, 0.75f);
@@ -852,9 +861,44 @@ void fragment() {
     const int HitBurstLeast = 6, HitBurstMost = 40;
 
     /// <summary>
-    /// Her light bursts like a small firework: a white flash, sparks flung out (more and faster for a bigger, merged
-    /// shot) that drag to a stop and cool from white-gold to ember orange, a few slower ones drifting up, and a ring of
-    /// glints flung back the way it came.
+    /// Her light boils the ink where it struck, the hit plain to see: a bubble of steam swells out and bursts (its film gone
+    /// in a blink, small bubbles flung off it), and pale billows roll out of it, rising and spreading as they thin. k: how
+    /// hard the hit was (0 a graze, 1 a whole creature); the more of it, the bigger.
+    /// </summary>
+    public void Steam(Vector3 at, Vector3 dir, float radius, float k)
+    {
+        var on = at + Vector3.Up * 0.45f;
+        float grow = 1f + 0.6f * k;
+        var film = new Color(0.72f, 0.76f, 0.8f, 0.9f);
+        // The bubble: swelling to a little wider than the body, and gone.
+        float wide = Mathf.Max(radius * 2.6f, 1.5f) * grow;
+        _steamBubbles.Emit(on, Vector3.Zero, 0.2f, wide * 0.3f, wide, film, film with { A = 0f }, drag: 0f);
+        // The small ones flung off as it bursts.
+        int small = 8 + Mathf.RoundToInt(12f * k);
+        for (int i = 0; i < small; i++)
+        {
+            var d = _steam.RandDir();
+            d.Y = Mathf.Abs(d.Y) * 0.5f + 0.1f;
+            float size = _steam.RandRange(0.1f, 0.24f) * grow;
+            _steamBubbles.Emit(on + d * radius * 0.3f, d * _steam.RandRange(2f, 5f) * grow, _steam.RandRange(0.3f, 0.55f), size, size * 0.6f, film, film with { A = 0f }, drag: 4f, buoyancy: 0.8f);
+        }
+        // The billows: rolling out of the burst, back toward her more than on through it, thinning as they rise.
+        int billows = 6 + Mathf.RoundToInt(6f * k);
+        var pale = new Color(0.4f, 0.44f, 0.48f, 0.34f);
+        var thin = new Color(0.3f, 0.33f, 0.38f, 0f);
+        for (int i = 0; i < billows; i++)
+        {
+            var d = (_steam.RandDir() - dir * 0.5f).Normalized();
+            d.Y = Mathf.Abs(d.Y) * 0.4f + 0.15f;
+            float size = _steam.RandRange(0.22f, 0.36f) * grow;
+            _steam.Emit(on + d * radius * 0.6f, d * _steam.RandRange(1.6f, 3.6f) * grow, _steam.RandRange(0.3f, 0.55f), size, size * 2.2f, pale, thin, drag: 3.5f, buoyancy: 0.9f);
+        }
+    }
+
+    /// <summary>
+    /// Her light bursts like a small firework: sparks flung out (more and faster for a bigger, merged shot) that drag to a
+    /// stop and cool from white-gold to ember orange, a few slower ones drifting up, and a ring of glints flung back the way
+    /// it came.
     /// </summary>
     void Firework(System.Numerics.Vector2 at, int bubbles, System.Numerics.Vector2 toward)
     {
@@ -863,7 +907,6 @@ void fragment() {
         var hot = new Color(1.6f, 1.45f, 1.1f);
         var gold = new Color(1.3f, 0.82f, 0.32f);
         var ember = new Color(1f, 0.35f, 0.08f, 0f);
-        _fireworks.Emit(p, Vector3.Zero, 0.14f, 0.9f + 1.2f * k, 0.2f, hot, gold with { A = 0f }, drag: 0f);
         int sparks = Mathf.Min(16 + 3 * bubbles, 60);
         float speed = 4.5f + 4f * k;
         var back = new Vector3(-toward.X, 0f, -toward.Y);
@@ -1071,6 +1114,8 @@ void fragment() {
             _fireworks.Tick(dt, camera.GlobalBasis);
             _dust.Tick(dt, camera.GlobalBasis);
             _ink.Tick(dt, camera.GlobalBasis);
+            _steam.Tick(dt, camera.GlobalBasis);
+            _steamBubbles.Tick(dt, camera.GlobalBasis);
         }
 
         // Popping bubbles: the tear opens from the struck point and sweeps the film away; droplets break off the rim

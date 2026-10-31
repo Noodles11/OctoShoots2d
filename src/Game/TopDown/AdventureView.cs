@@ -7,8 +7,8 @@ using OctoShoots.Game.Fx;
 namespace OctoShoots.Game.TopDown;
 
 /// <summary>
-/// The adventure on screen (docs/ADVENTURE.md), presentation only: the ink dots floating at her plane (ink_dot.gdshader,
-/// one MultiMesh) — a rim dot of a fed patch winding up and snapping back as it splits, the new dot sliding out of it,
+/// The adventure on screen (docs/ADVENTURE.md), presentation only: the ink dots floating at her plane, each three violet
+/// marks twitching between "×" and "+" (ink_dot.gdshader, one MultiMesh) — a rim dot of a fed patch winding up and snapping back as it splits, the new dot sliding out of it,
 /// and violet bracket marks hopping out from the vents to the rim dot by dot; the vents in the walls (a jagged gash torn
 /// along the wall at her plane, its torn rock lips standing out, plugged by a blister of iridescent ink goo bulging out
 /// into the water — vent_goo.gdshader: an oily film over the reef's inside, where a current pushes corruption along the
@@ -55,6 +55,12 @@ public partial class AdventureView : Node3D
         public float Ooze;
     }
 
+    /// <summary>A dot's marks: how many, how big (metres across, as the ink's particles are), and how far out from its middle.</summary>
+    const int Marks = 3;
+    const float MarkSize = 0.17f, MarkOut = 0.19f;
+    /// <summary>Floats per mark in the buffer: its transform and its seed.</summary>
+    const int MarkFloats = 16;
+
     MultiMeshInstance3D _dotsView = null!;
     MultiMesh _dots = null!;
     float[] _buffer = System.Array.Empty<float>();
@@ -76,8 +82,9 @@ public partial class AdventureView : Node3D
         _dots = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
-            Mesh = new SphereMesh { Radius = 1f, Height = 2f, RadialSegments = 14, Rings = 7, Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_dot.gdshader") } },
-            InstanceCount = AdventureTuning.MaxDots,
+            UseCustomData = true,
+            Mesh = new QuadMesh { Size = Vector2.One, Material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ink_dot.gdshader") } },
+            InstanceCount = AdventureTuning.MaxDots * Marks,
             VisibleInstanceCount = 0,
         };
         _dotsView = new MultiMeshInstance3D
@@ -87,7 +94,7 @@ public partial class AdventureView : Node3D
             CustomAabb = new Aabb(new Vector3(-10f, -10f, -10f), new Vector3(LevelMap.Size + 20f, 30f, LevelMap.Size + 20f)),
         };
         AddChild(_dotsView);
-        _buffer = new float[AdventureTuning.MaxDots * 12];
+        _buffer = new float[AdventureTuning.MaxDots * Marks * MarkFloats];
         _brackets = new MagicParticles(1200);
         AddChild(_brackets);
         _magic = new MagicParticles(2400);
@@ -324,13 +331,20 @@ public partial class AdventureView : Node3D
                 float e = 1f - (1f - age) * (1f - age);
                 c = System.Numerics.Vector2.Lerp(InkDots.Centre(_parent[i]), c, e);
             }
-            int o = k * 12;
-            _buffer[o] = s; _buffer[o + 1] = 0f; _buffer[o + 2] = 0f; _buffer[o + 3] = c.X;
-            _buffer[o + 4] = 0f; _buffer[o + 5] = s; _buffer[o + 6] = 0f; _buffer[o + 7] = LevelMap.SwimBand;
-            _buffer[o + 8] = 0f; _buffer[o + 9] = 0f; _buffer[o + 10] = s; _buffer[o + 11] = c.Y;
+            // Its marks round its middle, each dot's triangle turned its own way, all sized as the dot is.
+            float share = s / AdventureTuning.DotRadius, size = MarkSize * share, turn = i * 2.399963f;
+            for (int m = 0; m < Marks; m++)
+            {
+                float a = turn + m * Mathf.Tau / Marks;
+                int o = (k * Marks + m) * MarkFloats;
+                _buffer[o] = size; _buffer[o + 1] = 0f; _buffer[o + 2] = 0f; _buffer[o + 3] = c.X + Mathf.Cos(a) * MarkOut * share;
+                _buffer[o + 4] = 0f; _buffer[o + 5] = size; _buffer[o + 6] = 0f; _buffer[o + 7] = LevelMap.SwimBand;
+                _buffer[o + 8] = 0f; _buffer[o + 9] = 0f; _buffer[o + 10] = size; _buffer[o + 11] = c.Y + Mathf.Sin(a) * MarkOut * share;
+                _buffer[o + 12] = ((i * Marks + m) * 0.7548777f) % 1f;
+            }
         }
         _dots.Buffer = _buffer;
-        _dots.VisibleInstanceCount = n;
+        _dots.VisibleInstanceCount = n * Marks;
         Hop(world, dots, (float)GetProcessDeltaTime());
     }
 
@@ -535,6 +549,11 @@ public partial class AdventureView : Node3D
         return null;
     }
 
+    /// <summary>Her light's steam where it struck (CombatView.Steam): the place, the way the light went, the body's radius, how hard.</summary>
+    public System.Action<Vector3, Vector3, float, float>? Steam;
+    /// <summary>A vent's width for the steam, how hard a hit on it is, and how hard its sealing.</summary>
+    const float VentSteamRadius = 0.6f, VentSteamHit = 0.3f, VentSteamSealed = 1f;
+
     /// <summary>The adventure's events: dots cleared (or decayed on their own) go up in magic particles; a vent sealed puffs them out.</summary>
     public void OnEvent(PlaneWorld world, in PlaneEvent e)
     {
@@ -562,6 +581,7 @@ public partial class AdventureView : Node3D
                 var hitAt = GooPoint(node, node.HitAt, 1f);
                 Splash(node, hitAt, 16, 2.8f);
                 var f = new Vector3(e.Direction.X, 0f, e.Direction.Y);
+                Steam?.Invoke(hitAt + f * 0.4f, -f, VentSteamRadius, VentSteamHit);
                 for (int i = 0; i < 7; i++)
                     _magic.Emit(hitAt, (f * _rng.RandfRange(0.8f, 2.2f) + new Vector3(_rng.RandfRange(-1f, 1f), _rng.RandfRange(0.4f, 1.4f), _rng.RandfRange(-1f, 1f))), _rng.RandfRange(0.45f, 0.8f), _rng.RandfRange(0.14f, 0.22f), drag: 3f);
                 break;
@@ -574,6 +594,7 @@ public partial class AdventureView : Node3D
                 if (VentAt(world, e.Position) is { } sealedNode) Splash(sealedNode, GooPoint(sealedNode, 0.5f, 0.8f), 30, 3.5f);
                 var f = new Vector3(e.Direction.X, 0f, e.Direction.Y);
                 var side = new Vector3(-f.Z, 0f, f.X);
+                Steam?.Invoke(at + f * 0.6f, -f, VentSteamRadius, VentSteamSealed);
                 for (int i = 0; i < 40; i++)
                 {
                     float a = _rng.RandfRange(-1.4f, 1.4f);

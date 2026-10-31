@@ -68,9 +68,8 @@ public partial class LevelView : Node3D
         PoiKind.CurseDen => new Color(1f, 0.25f, 0.25f),       // red
         PoiKind.Secret => new Color(0.7f, 0.4f, 1f),           // violet (no beacon)
         PoiKind.Exit => new Color(1f, 0.55f, 0.15f),           // orange (the Crack, the way down)
-        PoiKind.Start => new Color(0.95f, 0.95f, 0.95f),       // white
         PoiKind.ShellCache => new Color(0.3f, 0.9f, 0.85f),    // teal (the treasure pool's colour)
-        _ => new Color(1f, 0.45f, 0.3f),                       // ambushes: coral, warm but not gold
+        _ => new Color(0.95f, 0.95f, 0.95f),                   // the start: white
     };
 
 
@@ -1239,7 +1238,6 @@ public partial class LevelView : Node3D
         PoiKind.ShellCache => "Shell cache",
         PoiKind.TreasureCave => "Clam room",
         PoiKind.CurseDen => "Curse den",
-        PoiKind.Ambush => "Ambush",
         PoiKind.Exit => "Blue hole",
         _ => kind.ToString(),
     };

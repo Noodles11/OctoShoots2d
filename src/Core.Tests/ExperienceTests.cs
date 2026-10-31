@@ -16,6 +16,19 @@ public class ExperienceTests
         new(TestLevels.Get(TestLevels.Find(p => !p.HasBoss && p.Id.Level > 1)), new Tuning(), new PlaneRun(null, new Tuning()), War);
 
     [Fact]
+    public void HerFirstLevelUpCannotComeOnARunsFirstLevel()
+    {
+        var run = new PlaneRun(null, new Tuning());
+        Assert.Equal(0, run.Gain(ExperienceTuning.FirstLevel * 3, hold: true));
+        Assert.Equal(1, run.XpLevel);
+        Assert.Equal(ExperienceTuning.FirstLevel - 1, run.Xp);
+        Assert.Equal(1, run.Gain(1));
+        foreach (var id in new[] { OctoShoots.Core.Gen.TopDown.LevelId.First, OctoShoots.Core.Gen.TopDown.LevelId.FirstRun })
+            Assert.True(new PlaneWorld(TestLevels.Get(id), new Tuning(), new PlaneRun(null, new Tuning()), new PlaneOptions { Adventure = true }).OpeningLevel);
+        Assert.False(Level().OpeningLevel);
+    }
+
+    [Fact]
     public void LevelsTakeMoreEachTimeAndEachIsASkillPoint()
     {
         var run = new PlaneRun(null, new Tuning());
@@ -24,7 +37,8 @@ public class ExperienceTests
         Assert.Equal(1, run.Gain(1));
         Assert.Equal(2, run.XpLevel);
         Assert.Equal(1, run.Points);
-        Assert.Equal(ExperienceTuning.FirstLevel + ExperienceTuning.PerLevel, run.XpNeeded);
+        Assert.Equal(ExperienceTuning.Need(2), run.XpNeeded);
+        Assert.True(ExperienceTuning.Need(3) - ExperienceTuning.Need(2) > ExperienceTuning.Need(2) - ExperienceTuning.Need(1), "each harder by more");
         // Enough for two levels at once.
         Assert.Equal(2, run.Gain(ExperienceTuning.Need(2) + ExperienceTuning.Need(3) + 5));
         Assert.Equal(4, run.XpLevel);

@@ -108,7 +108,6 @@ public class TopDownGenTests
             Assert.InRange(boss, 4, 5);
             Assert.Equal(id.Level == boss, plan.HasBoss);
             Assert.True(plan.Places <= LevelStocking.MaxPlaces, $"{id}: {plan.Places} places");
-            Assert.True(plan.Ambushes <= LevelStocking.MaxAmbushes);
             if (id.Level == 1)
             {
                 Assert.Equal(1, plan.Treasures);
@@ -451,7 +450,6 @@ public class TopDownGenTests
             Assert.Equal(plan.Curses, Count(PoiKind.CurseDen));
             Assert.Equal(plan.Shops, Count(PoiKind.Shop));
             Assert.Equal(plan.Caches, Count(PoiKind.ShellCache));
-            Assert.Equal(plan.Ambushes, Count(PoiKind.Ambush));
 
             var start = map.Start.Position;
             var exit = map.Exit.Position;

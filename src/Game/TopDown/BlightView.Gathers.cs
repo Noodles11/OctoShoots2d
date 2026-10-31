@@ -31,8 +31,7 @@ public partial class BlightView
     readonly SphereMesh _dot = new() { Radius = 1f, Height = 2f, RadialSegments = 8, Rings = 4 };
 
     /// <summary>
-    /// A birth begins at <paramref name="at"/>: the cells it drinks (null: a disc of the given radius, an ambush's own
-    /// ink), how inked they are (0..1), how long it takes and how big the blob it swells into is.
+    /// A birth begins at <paramref name="at"/>: the cells it drinks (null: a disc of the given radius), how inked they are (0..1), how long it takes and how big the blob it swells into is.
     /// </summary>
     void StartGather(System.Numerics.Vector2 at, float radius, float ink, float life, bool big, InkDraw? draw, float blob)
     {

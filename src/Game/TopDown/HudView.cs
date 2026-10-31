@@ -307,7 +307,8 @@ public partial class HudView : Control
             SyncBell();
             if (_shells > 0) _shellsSeen = true;
             _vents.Clear();
-            foreach (var v in world.Vents) _vents.Add(v.Sealed);
+            int ventsSealed = world.Vents.Count - world.VentsOpen;
+            for (int i = 0; i < world.Vents.Count; i++) _vents.Add(i < ventsSealed);
         }
         _titleAge += dt;
         _titleShown = _titleAge < TitleIn ? _titleAge / TitleIn : _titleAge < TitleIn + TitleStay ? 1f : Mathf.Max(0f, 1f - (_titleAge - TitleIn - TitleStay) / TitleOut);
@@ -548,15 +549,19 @@ public partial class HudView : Control
         DrawCircle(c + new Vector2(-1.4f, -1.4f), 1.4f, new Color(1f, 1f, 1f, 0.8f));
     }
 
-    /// <summary>The vents, top centre: a dot each, dark with a violet glint while it pours, gold once sealed.</summary>
+    /// <summary>
+    /// The vents, top centre: a dot each, dark with a violet glint while it pours, gold once sealed, filling from the left.
+    /// The ones she must seal to go on are full size, the ones she may leave smaller.
+    /// </summary>
     void DrawVents()
     {
         if (_vents.Count == 0) return;
-        const float gap = 22f, r = 6.5f;
+        const float gap = 22f, big = 6.5f, small = 4.5f;
         float x0 = Size.X * 0.5f - (_vents.Count - 1) * gap * 0.5f;
         for (int i = 0; i < _vents.Count; i++)
         {
             var at = new Vector2(x0 + i * gap, Margin + 6f);
+            float r = i < OctoShoots.Core.Plane.AdventureTuning.VentsToClear ? big : small;
             DrawCircle(at, r + 2.5f, new Color(0f, 0f, 0f, 0.5f));
             if (_vents[i])
             {

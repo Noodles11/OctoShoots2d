@@ -27,15 +27,8 @@ public class CorruptionTests
     [Fact]
     public void ThePufferlingsAreRetracted()
     {
-        var w = Level(p => TestLevels.General(p) && p.Ambushes > 0 && !p.HasBoss);
+        var w = Level(p => TestLevels.General(p) && !p.HasBoss);
         Assert.Empty(w.Mobs);
-        // An ambush buds murklings instead.
-        var ambush = w.Ambushes[0];
-        w.Player.Position = w.Player.PrevPosition = ambush.Center;
-        w.Step(default);
-        Assert.True(ambush.Sprung);
-        Assert.Empty(w.Mobs);
-        Assert.Contains(w.Events, e => e.Type == PlaneEventType.MurklingBud);
     }
 
     [Fact]
@@ -853,7 +846,7 @@ public class CorruptionTests
     }
 
     [Fact]
-    public void ABudReachesAsFarAsItMustNothingBudsOnADrainedLevelAndAnAmbushBudsOfItsOwn()
+    public void ABudReachesAsFarAsItMustNothingBudsOnADrainedLevelAndOneMadeOfNothingDrinksNothing()
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
@@ -866,7 +859,7 @@ public class CorruptionTests
         System.Array.Clear(w.Corruption.Density);
         Assert.Null(BudAt(w, w.Player.Position, prime: false));
         Assert.Null(BudAt(w, w.Player.Position, prime: true));
-        // An ambush's bud is the trap's own ink: it drinks nothing and holds nothing.
+        // A bud made of nothing drinks nothing and holds nothing.
         float total = w.Corruption.Total;
         var m = BudAt(w, w.Player.Position + new Vector2(0f, 4f), prime: false, drink: false)!;
         for (int i = 0; i < (int)(BlightTuning.BudSeconds * 60f) + 2; i++) w.Step(default);
@@ -1105,6 +1098,8 @@ public class CorruptionTests
     {
         var w = Level(p => TestLevels.General(p) && !p.HasBoss && p.Id.Level > 1);
         Quiet(w);
+        // No Blightroot by the spot to slam her out of the lash's way.
+        foreach (var root in w.Blightroots) root.Alive = false;
         for (int c = 0; c < w.Corruption!.Density.Length; c += 13)
         {
             var at = CellAt(c);

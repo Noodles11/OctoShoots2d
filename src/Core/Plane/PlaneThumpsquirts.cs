@@ -20,7 +20,7 @@ public static class ThumpTuning
     /// <summary>Waking with the level: this far from her start, and apart.</summary>
     public const float FromStart = 20f, Spacing = 18f;
     /// <summary>Its corruption meter: 90 (+20% per Menace); it regrows at Regen once Delay passes without a hit.</summary>
-    public const float Meter = 90f, MeterPerMenace = 0.2f, Regen = 20f, Delay = 1f;
+    public const float Meter = 90f, MeterPerMenace = 1.2f, Regen = 20f, Delay = 1f;
 
     /// <summary>
     /// A leap: it contracts for Windup (the telegraph), locks onto where she is then (at most Range away), flies
@@ -34,7 +34,7 @@ public static class ThumpTuning
     /// The landing's ring: out to Reach at RingSpeed; passing over her it corrupts her for RingDamage (+ per Menace) and
     /// shoves her off at RingKnock (a dash slips through it); it stains cleansed ground it crosses back to RingStain.
     /// </summary>
-    public const float Reach = 4f, RingSpeed = 12f, RingBand = 0.9f, RingDamage = 6f, RingDamagePerMenace = 2f, RingKnock = 8f, RingStain = 0.35f;
+    public const float Reach = 4f, RingSpeed = 12f, RingBand = 0.9f, RingDamage = 6f, RingKnock = 8f, RingStain = 0.35f;
     /// <summary>Landing on uncorrupted ground stains StainRadius of it toward StainInk.</summary>
     public const float StainRadius = 2f, StainInk = 0.7f;
 
@@ -274,7 +274,7 @@ public sealed partial class PlaneWorld
             {
                 _ringHit = t.RingId;
                 var away = SafeNormalize(p.Position - t.Position);
-                if (HurtPlayer(ThumpTuning.RingDamage + ThumpTuning.RingDamagePerMenace * Menace, away, DamageSource.Thumpsquirt)) p.Velocity += away * ThumpTuning.RingKnock;
+                if (HurtPlayer(ThumpTuning.RingDamage, away, DamageSource.Thumpsquirt)) p.Velocity += away * ThumpTuning.RingKnock;
             }
         }
         if (r1 >= ThumpTuning.Reach) t.Ring = -1f;

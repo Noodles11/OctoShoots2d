@@ -162,7 +162,7 @@ public class PlanePearlEffectTests
         w.Shots.Add(new PlaneShot { Position = at, Line = at, Velocity = Vector2.UnitX, Life = 1f, FromPlayer = true, Damage = 10f, Explosive = true });
         w.Step(default);
         Assert.Contains(w.Events, e => e.Type == PlaneEventType.LightBurst);
-        Assert.True(a.Hp <= PlaneCombatTuning.MobHp - 10f - 6f + 0.01f, $"hit and blast: {a.Hp}");
+        Assert.True(a.Hp <= PlaneCombatTuning.MobHp - 10f - 10f * PlaneCombatTuning.BurstDamage + 0.01f, $"hit and blast: {a.Hp}");
         Assert.True(b.Hp < PlaneCombatTuning.MobHp, "the blast reaches the one beside it");
     }
 

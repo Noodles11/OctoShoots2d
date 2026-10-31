@@ -29,7 +29,7 @@ public readonly record struct LevelId(int Cycle, int Depth, int Level)
 /// <summary>
 /// What a level holds (DESIGN-TOPDOWN §4.1 stage 1): rolled per level from the run seed, before the level is shaped.
 /// At most <see cref="MaxPlaces"/> places besides the start and the exit; over the cap, places are dropped in the order
-/// ambushes, curse den, secret, shell cache.
+/// curse den, secret, shell cache.
 /// </summary>
 public static class LevelStocking
 {
@@ -42,9 +42,8 @@ public static class LevelStocking
     public const float Secret = 0.4f, Curse = 0.3f;
     /// <summary>From level 2 of a depth: a shop, and a guarded shell cache.</summary>
     public const float Shop = 0.45f, Cache = 0.6f;
-    public const int MaxAmbushes = 2;
-    /// <summary>The tutorial's two levels, between them every kind of place: level 1 a clam room, a secret, a shell cache
-    /// and an ambush; level 2 a shop, a curse den, an ambush and the open rift (the arena with no boss).</summary>
+    /// <summary>The tutorial's two levels, between them every kind of place: level 1 a clam room, a secret and a shell
+    /// cache; level 2 a shop, a curse den and the open rift (the arena with no boss).</summary>
     public const int TutorialLevels = 2;
     /// <summary>A depth's levels (DESIGN-TOPDOWN §8): the boss stands on the last.</summary>
     public const int LevelsPerDepth = 5;
@@ -72,7 +71,6 @@ public sealed class LevelPlan
     public int Curses { get; init; }
     public int Shops { get; init; }
     public int Caches { get; init; }
-    public int Ambushes { get; init; }
     /// <summary>The rock around the start: the same stamp as the exit of the level above.</summary>
     public ulong EntryStamp { get; init; }
     /// <summary>The level above was a boss level: she arrives on its arena's floor.</summary>
@@ -86,7 +84,7 @@ public sealed class LevelPlan
     public float Menace { get; init; }
     public LevelId Next { get; init; }
 
-    public int Places => Treasures + Secrets + Curses + Shops + Caches + Ambushes + (HasBoss ? 1 : 0);
+    public int Places => Treasures + Secrets + Curses + Shops + Caches + (HasBoss ? 1 : 0);
     /// <summary>The level's template (docs/LEVEL-TEMPLATES-PROPOSAL.md): null in the tutorial.</summary>
     public LevelTemplate? Template { get; init; }
 
@@ -124,7 +122,7 @@ public sealed class LevelPlan
     public static float MenaceOf(LevelId id) =>
         id.Depth == Tutorial ? 0f : ((id.Cycle - 1) * (Depths - 1) + id.Depth - Tutorial - 1) / (float)(Depths - Tutorial - 1);
 
-    /// <param name="luck">Her luck (LuckTuning): a chance of a clam room on a level without one, and of each ambush dropped.</param>
+    /// <param name="luck">Her luck (LuckTuning): a chance of a clam room on a level without one.</param>
     public static LevelPlan For(SeedCode seed, LevelId id, float luck = 0f)
     {
         var streams = new RunStreams(seed);
@@ -139,7 +137,6 @@ public sealed class LevelPlan
         int curses = rng.NextFloat() < LevelStocking.Curse ? 1 : 0;
         int shops = !first && rng.NextFloat() < LevelStocking.Shop ? 1 : 0;
         int caches = !first && rng.NextFloat() < LevelStocking.Cache ? 1 : 0;
-        int ambushes = rng.Int(LevelStocking.MaxAmbushes + 1);
 
         // The template's places over the general roll: required, a chance, or none (treasure rooms keep the depth's rule).
         var required = new HashSet<PoiKind>();
@@ -158,30 +155,24 @@ public sealed class LevelPlan
         curses = Apply(PoiKind.CurseDen, curses);
         shops = Apply(PoiKind.Shop, shops);
         caches = Apply(PoiKind.ShellCache, caches);
-        ambushes = Apply(PoiKind.Ambush, ambushes);
         // The general rule wins: a depth's first level has no shop and no shell cache.
         if (first) shops = caches = 0;
-        // Her luck: a clam room where there was none (unless the template forbids one), and ambushes dropped.
+        // Her luck: a clam room where there was none (unless the template forbids one).
         if (luck > 0f)
         {
             var lucky = streams.Luck(id);
             if (treasures == 0 && !(template?.Forbids(PoiKind.TreasureCave) ?? false) && lucky.NextFloat() < OctoShoots.Core.Items.LuckTuning.ClamChance(luck))
                 treasures = 1;
-            int kept = 0;
-            for (int i = 0; i < ambushes; i++)
-                if (required.Contains(PoiKind.Ambush) || lucky.NextFloat() >= OctoShoots.Core.Items.LuckTuning.AmbushDrop(luck)) kept++;
-            ambushes = kept;
         }
 
-        // Over the cap: drop ambushes, then the curse den, the secret, the shell cache — what the template requires last.
+        // Over the cap: drop the curse den, then the secret, the shell cache — what the template requires last.
         // Treasure rooms stay.
-        int Total() => treasures + secrets + curses + shops + caches + ambushes + (boss ? 1 : 0);
+        int Total() => treasures + secrets + curses + shops + caches + (boss ? 1 : 0);
         for (int pass = 0; pass < 2 && Total() > LevelStocking.MaxPlaces; pass++)
             while (Total() > LevelStocking.MaxPlaces)
             {
                 bool Free(PoiKind k) => pass == 1 || !required.Contains(k);
-                if (ambushes > 0 && Free(PoiKind.Ambush)) ambushes--;
-                else if (curses > 0 && Free(PoiKind.CurseDen)) curses--;
+                if (curses > 0 && Free(PoiKind.CurseDen)) curses--;
                 else if (secrets > 0 && Free(PoiKind.Secret)) secrets--;
                 else if (caches > 0 && Free(PoiKind.ShellCache)) caches--;
                 else break;
@@ -198,7 +189,6 @@ public sealed class LevelPlan
             Curses = curses,
             Shops = shops,
             Caches = caches,
-            Ambushes = ambushes,
             EntryStamp = streams.StampSeed(id),
             EntryFromArena = previous is { } prev && prev.Level == BossLevel(seed, prev.Cycle, prev.Depth),
             ExitStamp = streams.StampSeed(next),
@@ -282,7 +272,6 @@ public sealed class LevelPlan
             Caches = rift ? 0 : 1,
             Shops = rift ? 1 : 0,
             Curses = rift ? 1 : 0,
-            Ambushes = 1,
             EntryStamp = streams.StampSeed(id),
             EntryFromArena = false,
             ExitStamp = streams.StampSeed(next),

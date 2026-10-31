@@ -71,11 +71,15 @@ public sealed class PlaneRun
     /// <summary>The experience it takes to reach the next level.</summary>
     public int XpNeeded => ExperienceTuning.Need(XpLevel);
 
-    /// <summary>Gains experience; every level it reaches is a skill point. Returns how many levels.</summary>
-    public int Gain(int xp)
+    /// <summary>
+    /// Gains experience; every level it reaches is a skill point. Returns how many levels. Held, her first level-up cannot
+    /// come yet: it stops just short of it.
+    /// </summary>
+    public int Gain(int xp, bool hold = false)
     {
         int levels = 0;
         Xp += xp;
+        if (hold && XpLevel == 1) Xp = System.Math.Min(Xp, XpNeeded - 1);
         while (Xp >= XpNeeded)
         {
             Xp -= XpNeeded;

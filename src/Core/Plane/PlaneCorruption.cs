@@ -11,7 +11,7 @@ public sealed class PlaneOptions
 {
     /// <summary>The corruption war (docs/CORRUPTION.md): the field, Blightroots, murklings, the arena.</summary>
     public bool Corruption = true;
-    /// <summary>The pufferling enemies (retracted for now: none are placed and ambushes bud murklings instead).</summary>
+    /// <summary>The pufferling enemies (retracted for now: none are placed).</summary>
     public bool Pufferlings = false;
     /// <summary>Sunken pots with loot (retracted with the corruption on: loot lies buried under the ink instead).</summary>
     public bool Vases = false;

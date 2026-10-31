@@ -28,12 +28,8 @@ void vertex() {
 
 // An art direction under study (reef_art.gdshaderinc): the reef painted another way.
 void art(inout ReefSkin s, vec3 local, float hw, float px) {
+	if (reef_art <= 0) return;
 	vec3 w = lf_pattern(local);
-	if (reef_art <= 0) {
-		// The game's own look: its shade stippled in a deeper shade of its own colour.
-		s.albedo = mix(s.albedo, art_dot_colour(s.albedo, reef_water_deep), 0.7 * art_dots(w, local, s.normal));
-		return;
-	}
 	s.albedo = art_paint(s.albedo, w, local, s.normal, reef_water_deep, reef_rock, reef_sand);
 	s.albedo = mix(s.albedo, s.albedo * 0.4 + vec3(0.85, 0.82, 0.74) * 0.6, art_rim(local, s.normal, hw));
 	vec2 ink = art_ink(w, local, s.normal, hw, px);

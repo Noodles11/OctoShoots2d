@@ -1,7 +1,8 @@
 // The water (THEME-BIBLE Â§6.1 depth focus, Â§6.2 light, Â§6.9 post stack), drawn over the reef as one full-screen pass.
 // Everything is judged by its height against the swim level (0), where Clementine floats; that layer stays sharp.
-//   Below it the world blurs and sinks into the depth's water colour, turquoise in the Shallows, murk further down.
-//   Above it rock blurs into soft foreground silhouettes, tinted by the water rather than blackened.
+//   Below it the world blurs, more the deeper it lies; above it rock blurs into soft foreground silhouettes. The reef's
+//   colour is the same at every height, over the layer and under it, seen through one even water (turquoise in the
+//   Shallows, murk further down).
 //   God rays rake across the view: shafts of sunlight marched along each view ray through the water column, parallel
 //   to the sun, ending in the caustics they make below, cut off where the reef shades the water (SunMap). Never into
 //   the lens: the camera looks down.
@@ -16,7 +17,6 @@ render_mode unshaded, depth_test_disabled, depth_draw_never, cull_disabled, fog_
 #include "res://assets/shaders/sunlight.gdshaderinc"
 #include "res://assets/shaders/light_field.gdshaderinc"
 
-global uniform vec3 reef_water_shallow;
 global uniform vec3 reef_water_deep;
 global uniform vec3 reef_murk;
 global uniform vec3 reef_sun;
@@ -42,6 +42,11 @@ uniform float focus_below = 0.6;
 uniform float below_blur = 5.2;
 uniform float above_blur = 3.4;
 uniform float deep_fog = 0.06;
+/// One reef at every height (the game's own look): all of it is seen through this many metres of water, its colour the
+/// same over her plane and under it, and only its blur tells how deep it lies. What lies past far_water under her plane
+/// is no reef of this level (the level below, down the shaft): it sinks into the water as far things do.
+uniform float reef_water = 3.0;
+uniform float far_water = 28.0;
 // Debug (F1 "Floor fog", --dbg-nofog): off, the floor below her plane is seen clear — no murk, no depth blur.
 uniform bool floor_fog = true;
 // Prism Pearl's split (CameraRig.Aberrate): the picture's red and blue pulled apart from its middle for a moment, 0..1.
@@ -50,12 +55,11 @@ uniform float aberration = 0.0;
 // water, not by a lens's blur (look 4: by felt-tip stippling, the water a light veil; 0 and 5: the game's own water).
 global uniform int reef_art;
 // The mountains' tall tops (DESIGN-TOPDOWN §4.1): above peak_from metres over her plane, rock softens further out of
-// focus and fades toward the water's blue, rising to full over peak_span — so the range reads as distant and calm, and
-// the floor she plays on stays the sharpest thing on screen.
+// focus, rising to full over peak_span — so the range reads as distant and calm, and the floor she plays on stays the
+// sharpest thing on screen.
 uniform float peak_from = 4.0;
 uniform float peak_span = 6.0;
 uniform float peak_blur = 2.2;
-uniform float peak_blue = 0.6;
 /// Where the camera follows her (the swim layer the bubbles' halos lie on).
 uniform vec3 player_pos = vec3(0.0);
 /// The bubbles' halos' strength (her own glow in the water is light_field's in-scatter).
@@ -70,6 +74,12 @@ uniform int clam_count = 0;
 // Each glow in the colour of the pearl lying in its room.
 uniform vec3 clam_colors[6];
 uniform int bubble_count = 0;
+// Fish far under her plane (DeepShoals): x, z (world), how far under it, length; their heading (xy), tail's beat, softness.
+uniform vec4 deep_fish[16];
+uniform vec4 deep_fish_ways[16];
+uniform int deep_fish_count = 0;
+/// How much a fish's shadow darkens what lies under it.
+uniform float deep_fish_shade = 0.65;
 /// Her bubbles in flight as lenses (CombatView.Lenses): x, height, z (world) and radius.
 uniform vec4 lenses[12];
 uniform int lens_count = 0;
@@ -131,6 +141,22 @@ float value_noise(vec2 p) {
 	vec2 i = floor(p), f = fract(p);
 	vec2 u = f * f * (3.0 - 2.0 * f);
 	return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+// A fish's vague shadow at this point of its own depth, 0..1: one soft shape for them all, a long body bending as it swims
+// and a fanned tail beating behind it, in units of its length (nose +0.5).
+float fish_shadow(vec2 p, vec4 fish, vec4 way) {
+	vec2 o = (p - fish.xy) / fish.w;
+	float u = dot(o, way.xy), v = dot(o, vec2(-way.y, way.x));
+	if (abs(u) > 1.3 || abs(v) > 0.9) return 0.0;
+	float soft = way.w * way.w;
+	float aft = clamp(0.5 - u, 0.0, 1.3);
+	v += sin(aft * 5.0 - way.z) * 0.07 * aft * aft;
+	float body = exp(-(u * u / 0.11 + v * v / 0.012) / soft);
+	float t = u + 0.5;
+	float fan = 0.05 + 0.4 * max(-t, 0.0);
+	float tail = exp(-(v * v) / (fan * fan * soft)) * smoothstep(-0.44, -0.16, t) * (1.0 - smoothstep(-0.06, 0.08, t));
+	return max(body, tail * 0.8) / sqrt(way.w);
 }
 
 void fragment() {
@@ -240,26 +266,40 @@ void fragment() {
 		}
 	}
 
+	// How much water this pixel is seen through (the painted looks: as deep as it lies).
+	bool one_reef = (reef_art == 0 || reef_art == 5) && !open_deep;
+	float seen = !floor_fog ? 0.0 : one_reef ? mix(reef_water, below, smoothstep(far_water, far_water + 6.0, below)) : layered;
 	// Everything is seen through water: reds fade and a turquoise in-scatter rises with the water between the sea
-	// surface and what this pixel shows (rock tops near the surface keep more of their colour).
-	float column_in = clamp((sea_surface_y - (open_deep ? -40.0 : world.y)) / 20.0, 0.0, 1.5);
+	// surface and what this pixel shows.
+	float column_in = clamp((sea_surface_y - (open_deep ? -40.0 : one_reef ? swim_level - seen : world.y)) / 20.0, 0.0, 1.5);
 	// What her own light falls on keeps its warmth: her light travels a few metres, not down from the surface.
 	float lit = open_deep ? 0.0 : her_clear(world);
 	col *= mix(vec3(1.0), vec3(0.64, 0.9, 1.05), column_in * (1.0 - 0.85 * lit));
 	col = mix(col, reef_water_deep * 0.7, 0.13 * column_in);
 
-	// The deeps sink into the water: turquoise just under the layer, the depth's murk far below. Clear water in the
-	// Shallows (a light veil), thick murk deeper down (reef_fog).
-	vec3 water = mix(reef_water_deep, reef_murk, smoothstep(2.0, 16.0, layered));
+	// The water over it: clear in the Shallows (a light veil), thick murk deeper down (reef_fog); and past the reef, the
+	// deeps sink into it, the depth's murk far below.
+	vec3 water = mix(reef_water_deep, reef_murk, smoothstep(2.0, 16.0, seen));
 	float veil = mix(0.18, 0.5, reef_fog) * (reef_art > 0 && reef_art != 5 ? 0.7 : 1.0);
-	float fog = smoothstep(0.0, 1.8, layered) * (veil + (0.85 - veil) * (1.0 - exp(-layered * deep_fog * (0.6 + reef_fog))));
+	float fog = smoothstep(0.0, 1.8, seen) * (veil + (0.85 - veil) * (1.0 - exp(-seen * deep_fog * (0.6 + reef_fog))));
 	// Drawn in felt tip (look 4), the water a lighter veil, so the stippling under it still reads.
 	if (reef_art == 4) fog *= 0.55;
 	// The water she lights is not a veil of murk over what she shows.
 	col = mix(col, water, fog * (1.0 - 0.7 * lit));
-	// Tall tops take on the water's blue (the shallow turquoise toward the depth's own deep water).
-	vec3 haze = mix(reef_water_shallow, reef_water_deep, 0.45) * 1.05;
-	col = mix(col, haze, peak * peak_blue);
+	// Fish far under her plane: their vague shadows on all that lies below it, where this pixel's ray crosses their depth (over the
+	// water's veil, which would wash them away).
+	if (deep_fish_count > 0 && below > 0.0) {
+		vec4 fm = INV_PROJECTION_MATRIX * vec4(uv * 2.0 - 1.0, 0.5, 1.0);
+		vec3 fray = normalize((INV_VIEW_MATRIX * vec4(fm.xyz / fm.w, 0.0)).xyz);
+		vec3 fcam = INV_VIEW_MATRIX[3].xyz;
+		float down = 1.0 / min(fray.y, -1e-3);
+		float shadow = 0.0;
+		for (int i = 0; i < deep_fish_count; i++) {
+			vec2 at = fcam.xz + fray.xz * (swim_level - deep_fish[i].z - fcam.y) * down;
+			shadow = max(shadow, fish_shadow(at, deep_fish[i], deep_fish_ways[i]));
+		}
+		col *= 1.0 - deep_fish_shade * shadow * smoothstep(0.0, 1.5, below);
+	}
 	// Her swells thicken the water a shade where they pass.
 	col = mix(col, reef_water_deep, clamp(swell_density, 0.0, 1.0) * 0.05);
 
@@ -374,10 +414,6 @@ void fragment() {
 	}
 	// (Gently: lifted hard, the room and its pearl wash out and the pearl's pattern is lost.)
 	col = col * (1.0 + clam * 0.45) + clam * 0.1;
-
-	// Rock rising toward the camera: a soft silhouette in the water's colour, darker as the depths darken.
-	vec3 shade = mix(reef_murk * 0.45, vec3(0.01, 0.015, 0.02), reef_menace);
-	col = mix(col, shade, smoothstep(0.0, 9.0, above) * mix(0.42, 0.6, reef_menace));
 
 	// Grade: the depth's saturation; shadows cooled toward the water, highlights a touch of sun.
 	float luma = dot(col, vec3(0.299, 0.587, 0.114));

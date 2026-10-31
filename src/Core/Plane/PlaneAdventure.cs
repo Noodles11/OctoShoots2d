@@ -34,18 +34,20 @@ public static class AdventureTuning
     public static float DecayAfter(float menace) => DecayMin + DecayPerMenace * menace;
 
     /// <summary>
-    /// The vents: VentsMin–VentsMax a level on the walls' faces, VentSpacing apart and VentFromStart from her start. Open,
-    /// each pours a dot every VentEvery seconds (÷ 1 + VentPerMenace × Menace) into the nearest empty cell before it.
+    /// The vents: LevelVents a level on the walls' faces, VentSpacing apart and VentFromStart from her start (closer if the
+    /// level has no room). Sealing VentsToClear of them opens the way on. Open, each pours a dot every VentEvery seconds
+    /// (÷ 1 + VentPerMenace × Menace) into the nearest empty cell before it.
     /// </summary>
-    public const int VentsMin = 3, VentsMax = 5;
+    public const int LevelVents = 5, VentsToClear = 3;
     public const float VentSpacing = 30f, VentFromStart = 24f, VentEvery = 1.6f, VentPerMenace = 0.5f;
     /// <summary>Sealed, a vent sends out a ring of light that clears the ink round it: out to SealWave metres in SealWaveSeconds.</summary>
     public const float SealWave = 6f, SealWaveSeconds = 0.6f;
     /// <summary>
     /// Sealing: VentHits shots (+ VentHitsPerMenace × Menace) striking the wall within VentReach of its mouth, one after
-    /// another — VentHold seconds after the last, a hit drains away every VentDrain seconds. Each sealed is worth VentXp.
+    /// another — VentHold seconds after the last, a hit drains away every VentDrain seconds. Each sealed is worth VentXp,
+    /// and throws VentShells shells out of its mouth.
     /// </summary>
-    public const int VentHits = 8, VentXp = 25;
+    public const int VentHits = 8, VentXp = 25, VentShells = 5;
     public const float VentHitsPerMenace = 2f, VentReach = 1.6f, VentHold = 1.4f, VentDrain = 0.3f;
     /// <summary>
     /// The deeper the level, the longer its vents have been pouring: each starts with a puddle of PuddlePerMenace ×
@@ -321,6 +323,8 @@ public sealed class PlaneVent
     /// <summary>Its mouth in the water before the wall, the way it faces (out into the water), and the rock it opens in.</summary>
     public Vector2 Position, Facing, Wall;
     public int Hits, Needed;
+    /// <summary>Light short of a whole hit (a small shot is only part of one).</summary>
+    public float Credit;
     public bool Sealed;
     /// <summary>Since the last hit that counted (its light drains once VentHold has passed), the drain's clock, the stream's clock.</summary>
     public float Since, DrainClock, StreamTimer;
@@ -336,6 +340,8 @@ public sealed partial class PlaneWorld
     public InkDots? Dots { get; private set; }
     public List<PlaneVent> Vents { get; } = new();
     public int VentsOpen => Vents.Count(v => !v.Sealed);
+    /// <summary>How many more vents she must seal before the way on opens.</summary>
+    public int VentsLeft => Math.Max(Math.Min(AdventureTuning.VentsToClear, Vents.Count) - (Vents.Count - VentsOpen), 0);
 
     Rng _inkRng = null!;
     readonly List<Vector2> _cleared = new();
@@ -361,6 +367,20 @@ public sealed partial class PlaneWorld
             for (int i = 0; i < c.Points.Count; i += 3) candidates.Add(c.Points[i]);
         candidates.AddRange(Map.Plazas.Select(z => z.Center));
         foreach (var ch in Map.Chambers) candidates.Add(ch.At);
+        int needed = AdventureTuning.VentHits + (int)MathF.Round(AdventureTuning.VentHitsPerMenace * Menace);
+        PlaceVents(candidates, reach, safes, needed);
+        if (Vents.Count >= AdventureTuning.LevelVents) return;
+        // Wide chambers can hold their walls out of reach of those spots: look from all the water she can swim.
+        candidates.Clear();
+        for (int y = 2; y < LevelMap.Size; y += 3)
+            for (int x = 2; x < LevelMap.Size; x += 3)
+                if (!float.IsPositiveInfinity(LevelValidator.DistanceAt(reach, new Vector2(x, y)))) candidates.Add(new Vector2(x, y));
+        PlaceVents(candidates, reach, safes, needed);
+    }
+
+    /// <summary>Opens vents on the wall faces round these spots, until the level has its number of them.</summary>
+    void PlaceVents(List<Vector2> candidates, float[] reach, List<(Vector2 Centre, float Radius)> safes, int needed)
+    {
         // Each spot looks round for the nearest wall face in a few directions: a vent may open there.
         var faces = new List<(Vector2 Mouth, Vector2 Facing, Vector2 Wall)>();
         foreach (var from in candidates)
@@ -384,15 +404,14 @@ public sealed partial class PlaneWorld
             }
         }
         Shuffle(faces, _inkRng);
-        int want = AdventureTuning.VentsMin + _inkRng.Int(AdventureTuning.VentsMax - AdventureTuning.VentsMin + 1);
-        int needed = AdventureTuning.VentHits + (int)MathF.Round(AdventureTuning.VentHitsPerMenace * Menace);
+        int want = AdventureTuning.LevelVents;
         // Far apart if the level allows it, closer if it must.
-        for (float spacing = AdventureTuning.VentSpacing; spacing > 8f && Vents.Count < want; spacing *= 0.75f)
+        for (float spacing = AdventureTuning.VentSpacing; spacing > 3.5f && Vents.Count < want; spacing *= 0.75f)
             foreach (var (mouth, facing, wall) in faces)
             {
                 if (Vents.Count >= want) break;
                 if (float.IsPositiveInfinity(LevelValidator.DistanceAt(reach, mouth))) continue;
-                if (Vector2.Distance(mouth, Map.Start.Position) < AdventureTuning.VentFromStart) continue;
+                if (Vector2.Distance(mouth, Map.Start.Position) < MathF.Min(AdventureTuning.VentFromStart, spacing)) continue;
                 if (Vector2.Distance(mouth, Map.Exit.Position) < Map.Exit.Radius + 6f || Map.Shaft.Contains(mouth, 4f)) continue;
                 if (safes.Any(s => Vector2.Distance(mouth, s.Centre) < s.Radius + 4f)) continue;
                 if (Vents.Any(v => Vector2.Distance(v.Position, mouth) < spacing)) continue;
@@ -491,15 +510,18 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>One of her shots struck rock here: on an open vent's mouth it adds its light; full, the vent seals. True if it counted.</summary>
-    bool StrikeVent(Vector2 at)
+    bool StrikeVent(Vector2 at, float light = 1f)
     {
         foreach (var v in Vents)
         {
             if (v.Sealed || Vector2.Distance(at, v.Wall) > AdventureTuning.VentReach) continue;
             // An Inkwarden in reach guards it: her light is turned aside.
             if (Ward(v, v.Position, 1f) <= 0f) return true;
-            v.Hits++;
             v.Since = v.DrainClock = 0f;
+            v.Credit += light;
+            if (v.Credit < 0.999f) return true;
+            v.Credit -= 1f;
+            v.Hits++;
             Events.Add(new PlaneEvent(PlaneEventType.VentLit, v.Position, v.Facing, v.Glow));
             if (v.Hits >= v.Needed) SealVent(v);
             return true;
@@ -512,9 +534,13 @@ public sealed partial class PlaneWorld
         v.Sealed = true;
         v.Hits = v.Needed;
         v.Wave = 0f;
-        Events.Add(new PlaneEvent(PlaneEventType.VentSealed, v.Position, v.Facing, VentsOpen));
+        Events.Add(new PlaneEvent(PlaneEventType.VentSealed, v.Position, v.Facing, VentsLeft));
+        // Her reward: shells burst out of its mouth into the water before it.
+        var across = new Vector2(-v.Facing.Y, v.Facing.X);
+        for (int i = 0; i < AdventureTuning.VentShells; i++)
+            Shells.Add(new PlaneShell { Position = v.Position, Velocity = SafeNormalize(v.Facing + across * _drops.Range(-0.9f, 0.9f)) * _drops.Range(3f, 6f) });
         // A boss level's way down waits for its boss too (PlaneBoss's Release opens it once both are done).
-        if (VentsOpen > 0 || ExitOpen || Boss is { Freed: false }) return;
+        if (VentsLeft > 0 || ExitOpen || Boss is { Freed: false }) return;
         ExitOpen = true;
         Events.Add(new PlaneEvent(PlaneEventType.ExitOpened, Map.Exit.Position, Vector2.Zero));
     }
@@ -526,7 +552,7 @@ public sealed partial class PlaneWorld
     }
 
     /// <summary>Tests: one of her shots striking this vent's mouth.</summary>
-    public void DebugStrikeVent(PlaneVent v) => StrikeVent(v.Wall);
+    public void DebugStrikeVent(PlaneVent v, float light = 1f) => StrikeVent(v.Wall, light);
 
     /// <summary>Verification and tests: a dot at a point (false where none may lie or one already does).</summary>
     public bool DebugDot(Vector2 at) => Dots?.Add(InkDots.CellOf(at)) ?? false;

@@ -12,8 +12,7 @@
         "secret": { "required": 1 },
         "curseDen": { "required": 1 },
         "shop": { "none": true },
-        "shellCache": { "chance": 0.3 },
-        "ambush": { "none": true }
+        "shellCache": { "chance": 0.3 }
       },
       "layout": { "chamberRadius": 1.0 },
       "cast": {
@@ -36,8 +35,7 @@
         "shop": { "required": 1 },
         "shellCache": { "chance": 0.4 },
         "secret": { "chance": 0.2 },
-        "curseDen": { "none": true },
-        "ambush": { "none": true }
+        "curseDen": { "none": true }
       },
       "layout": { "chamberRadius": 0.6, "tunnelWidth": 0.8, "tunnelLength": 1.4, "loops": 0.0 },
       "cast": {
@@ -52,12 +50,11 @@
     {
       "id": "open_grotto",
       "name": "The Open Grotto",
-      "summary": "Wide chambers where Lashjaws wait in the walls; an ambush in the middle.",
+      "summary": "Wide chambers where Lashjaws wait in the walls.",
       "weight": 3,
       "depths": [3, 6],
       "slots": ["first", "middle"],
       "places": {
-        "ambush": { "required": 1 },
         "shellCache": { "chance": 0.6 },
         "secret": { "chance": 0.3 }
       },
@@ -81,8 +78,7 @@
         "shellCache": { "chance": 0.5 },
         "curseDen": { "chance": 0.3 },
         "shop": { "chance": 0.3 },
-        "secret": { "chance": 0.2 },
-        "ambush": { "none": true }
+        "secret": { "chance": 0.2 }
       },
       "layout": { "chamberRadius": 1.2 },
       "cast": {
@@ -115,14 +111,13 @@
       "rules": { "wardenFor": "thumpsquirt" }
     },
     {
-      "id": "ambush_run",
-      "name": "The Ambush Run",
-      "summary": "Two ambush clearings on the way to a shell cache that lures her in; Lashjaws on the tunnel walls between.",
+      "id": "cache_run",
+      "name": "The Cache Run",
+      "summary": "A shell cache that lures her in; Lashjaws on the tunnel walls on the way.",
       "weight": 2,
       "depths": [3, 6],
       "slots": ["middle"],
       "places": {
-        "ambush": { "required": 2 },
         "shellCache": { "required": 1 },
         "secret": { "chance": 0.3 },
         "shop": { "none": true },
@@ -150,8 +145,7 @@
         "shop": { "required": 1 },
         "treasureCave": { "chance": 0.3 },
         "shellCache": { "chance": 0.5 },
-        "curseDen": { "none": true },
-        "ambush": { "none": true }
+        "curseDen": { "none": true }
       },
       "layout": { "chamberRadius": 1.1, "loops": 1.0 },
       "cast": {
@@ -175,7 +169,6 @@
         "shellCache": { "chance": 0.3 },
         "secret": { "none": true },
         "curseDen": { "none": true },
-        "ambush": { "none": true },
         "treasureCave": { "none": true }
       },
       "cast": {

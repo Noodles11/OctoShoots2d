@@ -70,7 +70,7 @@ Templates are data (`data/level_templates.json`, loaded by Core like the pearls)
 - `springs: n`: light springs.
 - `fish: ×x`: reef fish.
 - `wardenFor: <kind>`: Inkwardens stand guard by that kind instead of by Blightroots.
-- `quiet`: no ambush and no Blotter birth all level.
+- `quiet`: no Blotter birth all level.
 
 ## 4. How it is rolled
 
@@ -90,7 +90,7 @@ Templates are data (`data/level_templates.json`, loaded by Core like the pearls)
 ### 5.1 The Hoard
 *A treasure room, a secret and a curse den, guarded by a murkling host led by a prime, with a few wardens.*
 
-- **Places:** clam room required; secret required; curse den required; shop none; shell cache 30%; ambush none.
+- **Places:** clam room required; secret required; curse den required; shop none; shell cache 30%.
 - **Layout:** chambers ×1, branches ×1.2 (the rooms sit on branches off one shared hub chamber).
 - **Cast:**
   - Blightroots 2, anchor `place:TreasureCave` and `place:Secret`.
@@ -103,7 +103,7 @@ Templates are data (`data/level_templates.json`, loaded by Core like the pearls)
 ### 5.2 The Long Haul
 *A shop at the end of long, narrow tunnels with no open fields, patrolled by Thumpsquirts and Blotters.*
 
-- **Places:** shop required; shell cache 40%; secret 20%; clam room none (unless level 1); curse den none; ambush none.
+- **Places:** shop required; shell cache 40%; secret 20%; clam room none (unless level 1); curse den none.
 - **Layout:** chamberRadius ×0.6, tunnelWidth ×0.8, tunnelLength ×1.4, branches ×0.6, loops ×0.
 - **Cast:**
   - Thumpsquirts 2–3, anchor `tunnels`.
@@ -115,9 +115,9 @@ Templates are data (`data/level_templates.json`, loaded by Core like the pearls)
 - **Feel:** a march: bumps and leaps in the dark tunnels, the slugs smearing the way ahead, the shop as the reward.
 
 ### 5.3 The Open Grotto
-*Wide chambers where Lashjaws wait in the walls; an ambush in the middle.*
+*Wide chambers where Lashjaws wait in the walls.*
 
-- **Places:** ambush required; shell cache 60%; secret 30%; the rest by the general roll.
+- **Places:** shell cache 60%; secret 30%; the rest by the general roll.
 - **Layout:** chamberRadius ×1.4, tunnelLength ×0.8, branches ×0.8, loops ×1.5.
 - **Cast:**
   - Lashjaws 2–4, anchor `walls`.
@@ -131,7 +131,7 @@ Templates are data (`data/level_templates.json`, loaded by Core like the pearls)
 *A level drowning in ink: many Blightroots and Blotters spreading it; cleansing it is the whole job (and pays the most
 experience).*
 
-- **Places:** shell cache 50%; curse den 30%; shop 30%; secret 20%; ambush none.
+- **Places:** shell cache 50%; curse den 30%; shop 30%; secret 20%.
 - **Layout:** chamberRadius ×1.2, branches ×1.
 - **Cast:**
   - Blightroots 4–5, anchor `spread`.
@@ -156,10 +156,10 @@ experience).*
 - **Slots:** middle, beforeBoss. Depths 2–6.
 - **Feel:** a puzzle of order: free the wardens first, or fight through their shield.
 
-### 5.6 The Ambush Run
-*Two ambush clearings on the way to a shell cache that lures her in; Lashjaws on the tunnel walls between.*
+### 5.6 The Cache Run
+*A shell cache that lures her in; Lashjaws on the tunnel walls on the way.*
 
-- **Places:** ambush 2 required; shell cache required; secret 30%; shop none; curse den none.
+- **Places:** shell cache required; secret 30%; shop none; curse den none.
 - **Layout:** tunnelWidth ×0.9, branches ×0.8.
 - **Cast:**
   - Lashjaws 1–2, anchor `walls`.
@@ -171,7 +171,7 @@ experience).*
 ### 5.7 The Quiet Reach
 *A breather: a shop, a light spring and the reef's healthy fish; only a single Blightroot.*
 
-- **Places:** shop required; clam room 30% (or required on level 1); shell cache 50%; curse den none; ambush none.
+- **Places:** shop required; clam room 30% (or required on level 1); shell cache 50%; curse den none.
 - **Layout:** chambers ×1.1, loops ×1.
 - **Cast:**
   - Blightroots 1, anchor `deadEnds`.
@@ -205,7 +205,7 @@ experience).*
 - **Cave generator:** `CaveLayout` takes the layout multipliers (its step, radius, width, branch and loop ranges).
 - **World:** `PlaneWorld`'s placements (`PlaceBlightroots`, `PlaceBlotters`, `PlaceThumpsquirts`, `PlaceInkwardens`,
   `PlaceLashjaws`, the springs, the reef fish) read their count and anchor from the template, falling back to their
-  general rules. The extra rules are a handful of checks in budding, ambushes and placement.
+  general rules. The extra rules are a handful of checks in budding and placement.
 - **Tests:**
   - Every template generates on many seeds.
   - Its required places and casts appear, its forbidden ones don't.

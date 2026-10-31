@@ -30,7 +30,7 @@ public static class LashTuning
     /// <summary>A fish caught is reeled in at FishReel m/s and swallowed; it chews it Chew seconds.</summary>
     public const float FishReel = 8f;
     /// <summary>Its meter: Meter (+20% per Menace), regrowing Regen/s after Delay without a hit. Emptied the first time it is stunned Stun seconds.</summary>
-    public const float Meter = 50f, MeterPerMenace = 0.2f, Regen = 15f, Delay = 1.5f, Stun = 3f;
+    public const float Meter = 50f, MeterPerMenace = 1.2f, Regen = 15f, Delay = 1.5f, Stun = 3f;
     /// <summary>Freed: it leaves ShellsMin–Max shells, and its light washes Burst metres.</summary>
     public const int ShellsMin = 3, ShellsMax = 4;
     public const float Burst = 3f;
@@ -83,7 +83,7 @@ public sealed partial class PlaneWorld
             if (!Anchored(cast, Lashjaws.Count, at)) continue;
             if (Map.HasBoss && Vector2.Distance(at, ArenaCenter) < ArenaRadius + 6f) continue;
             if (Map.Shaft.Contains(at, 4f) || float.IsPositiveInfinity(Gen.TopDown.LevelValidator.DistanceAt(reach, at))) continue;
-            if (Map.Pois.Any(p => p.Kind != Gen.TopDown.PoiKind.Ambush && Vector2.Distance(p.Position, at) < p.Radius + LashTuning.FromPlaces)) continue;
+            if (Map.Pois.Any(p => Vector2.Distance(p.Position, at) < p.Radius + LashTuning.FromPlaces)) continue;
             if (Lashjaws.Any(l => Vector2.Distance(l.Position, at) < LashTuning.Spacing)) continue;
             // Never under an arch or overhang (it would be hidden), nor in a cave.
             if (Map.Canopies.Any(c => c.Contains(at))) continue;

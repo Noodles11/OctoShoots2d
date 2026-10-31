@@ -94,6 +94,20 @@ public class CurseDenTests
     }
 
     [Fact]
+    public void TheAdventureHasCurseDensAndTheirCurseDrainsHer()
+    {
+        var w = new PlaneWorld(Level.Value, new Tuning(), new PlaneRun(null, new Tuning()), new PlaneOptions { Adventure = true });
+        w.Mobs.Clear();
+        var den = w.Curse!;
+        Hold(w, den.End, 1);
+        Assert.True(den.Reached && den.Dark);
+        float hp = w.Player.Hp;
+        Hold(w, den.Line[den.Line.Count / 2], 60);
+        Assert.True(w.CurseDarkDepth > 5f);
+        Assert.True(w.Player.Hp < hp, "the way back drains her");
+    }
+
+    [Fact]
     public void ClearedItNeverDarkensAgainNorGivesMore()
     {
         var w = World();
